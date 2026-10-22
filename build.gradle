@@ -1,5 +1,20 @@
+// Standalone builds own their toolchain. Reverb subproject builds inherit its
+// existing classloader, avoiding a second Android/Kotlin plugin runtime.
+buildscript {
+    if (project == rootProject) {
+        repositories { google(); mavenCentral(); gradlePluginPortal() }
+        dependencies {
+            classpath 'com.android.tools.build:gradle:9.4.0'
+            classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.0'
+        }
+    }
+}
+
 apply plugin: 'com.android.library'
 repositories { google(); mavenCentral() }
+
+group = 'app.smallthingz'
+version = '0.1.0'
 
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 kotlin { compilerOptions { jvmTarget = JvmTarget.JVM_17; freeCompilerArgs.add('-jvm-default=no-compatibility') } }
