@@ -1,4 +1,4 @@
-# Native UI
+# smallthingz.ui
 
 Reusable Kotlin primitives and an inline construction DSL for ordinary Android
 Views. The library supplies geometry, text/font layout, animation math and
@@ -21,20 +21,49 @@ the minimum Android API is 28.
 
 The wrapper pins Gradle 9.7.1; the standalone build pins Android Gradle Plugin
 9.4.0 and Kotlin 2.3.0. Reverb includes this checkout as `:native-ui` and shares
-its matching toolchain classloader. The namespace remains
-`app.smallthingz.nativeui` in either build.
+its matching toolchain classloader. The Android namespace and Kotlin package root
+are `smallthingz.ui` in either build. The standalone project is `kotlin-ui`, with
+Gradle group `smallthingz`.
+Consumers import the direct View DSL from `smallthingz.ui.dsl`.
+
+## Procedural background grain
+
+```kotlin
+import smallthingz.ui.graphics.NoiseDrawable
+import smallthingz.ui.graphics.NoiseTexture
+
+NoiseTexture.prepare() // Optional asynchronous warmup; construction also starts it.
+view.background = NoiseDrawable(
+    backgroundColor = surfaceColor, // ARGB Int; null draws grain alone.
+    seed = NoiseDrawable.SEED_BACKGROUND, // SEED_TOP_BAR uses the other standard phase.
+)
+```
+
+Grain uses a fixed deterministic algorithm and a 1024 × 1024 repeating tile,
+generated once per process. Its ARGB bitmap has a 4 MiB pixel payload; generation
+temporarily uses another 4 MiB pixel array, excluding allocator/object overhead.
+There is no bundled raster or disk cache. One background worker generates the tile;
+drawables initially show their supplied fill and invalidate when generation finishes.
+Only the two standard phase shaders are cached. Ordinary drawing reuses each
+drawable's paints and shader; optional alpha/filter composition still has a layer cost.
+Callers using `NoiseTexture.shader()` must not mutate the shared standard-phase
+shader matrices. Disable platform force-dark on the owning View when exact supplied
+colors must be preserved.
 
 ## Integration and provenance
 
 This is an independent Git repository, extracted with its module-only history
 from Reverb. `ORIGIN.json` records the exact source snapshot and split commit.
 Reverb pins a Git submodule commit and supplies a compact offline Git bundle plus
-bootstrap script; no remote publication or network checkout is required.
+bootstrap script; an offline checkout does not require network access.
 
 `SOURCE-foundation.json`, `SOURCE-motion.json`, `SOURCE-motion.md`,
 `SOURCE-text.json`, and `src/main/resource-provenance/` retain the original
 upstream attribution and historical qualification records. Their `native-ui/`
-target paths are relative to the original Reverb checkout. Old temporary source
+target paths are relative to the original Reverb checkout. The package migration
+from `app.smallthingz.nativeui` to `smallthingz.ui` also moved the corresponding
+source directories from `app/smallthingz/nativeui/` to `smallthingz/ui/`; the
+historical manifests retain their original paths and hashes. Old temporary source
 paths are historical provenance, not current build inputs. Historical validation
 statements are not a claim that a new checkout has passed current tests.
 

@@ -13,13 +13,13 @@ buildscript {
 apply plugin: 'com.android.library'
 repositories { google(); mavenCentral() }
 
-group = 'app.smallthingz'
+group = 'smallthingz'
 version = '0.1.0'
 
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 kotlin { compilerOptions { jvmTarget = JvmTarget.JVM_17; freeCompilerArgs.add('-jvm-default=no-compatibility') } }
 android {
-    namespace = 'app.smallthingz.nativeui'
+    namespace = 'smallthingz.ui'
     compileSdk = 37
     defaultConfig { minSdk = 28 }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
