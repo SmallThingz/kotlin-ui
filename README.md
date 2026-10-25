@@ -62,7 +62,8 @@ view.background = NoiseDrawable(
 
 Grain uses a fixed deterministic algorithm and a 1024 × 1024 repeating tile,
 generated once per process. Its ARGB bitmap has a 4 MiB pixel payload; generation
-temporarily uses another 4 MiB pixel array, excluding allocator/object overhead.
+reuses one 64 KiB pixel array across 64 strips, excluding allocator/object overhead.
+These payload sizes do not measure total process memory or generation time.
 There is no bundled raster or disk cache. One background worker generates the tile;
 drawables initially show their supplied fill and invalidate when generation finishes.
 Only the two standard phase shaders are cached. Ordinary drawing reuses each
