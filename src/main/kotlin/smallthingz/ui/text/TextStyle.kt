@@ -59,20 +59,33 @@ data class TextStyle(
 
 data class PlatformTextStyle(val includeFontPadding: Boolean = false)
 
+private val defaultPlatformTextStyle = PlatformTextStyle(includeFontPadding = false)
+
+private fun TextStyle.hasResolvedDefaults(): Boolean =
+    color != Color.Unspecified && fontSize != TextUnit.Unspecified &&
+        fontWeight != null && fontStyle != null && fontSynthesis != null &&
+        fontFamily != null && letterSpacing != TextUnit.Unspecified &&
+        platformStyle != null && lineHeightStyle != null &&
+        textDecoration != null && layoutDirection != null
+
 /** Resolve once at a configuration boundary, retaining explicit role values. */
-fun resolveDefaults(style: TextStyle, layoutDirection: LayoutDirection): TextStyle = style.copy(
-    color = if (style.color == Color.Unspecified) Color.Black else style.color,
-    fontSize = if (style.fontSize == TextUnit.Unspecified) 14.sp else style.fontSize,
-    fontWeight = style.fontWeight ?: FontWeight.Normal,
-    fontStyle = style.fontStyle ?: FontStyle.Normal,
-    fontSynthesis = style.fontSynthesis ?: FontSynthesis.All,
-    fontFamily = style.fontFamily ?: FontFamily.Default,
-    letterSpacing = if (style.letterSpacing == TextUnit.Unspecified) 0.sp else style.letterSpacing,
-    platformStyle = style.platformStyle ?: PlatformTextStyle(),
-    lineHeightStyle = style.lineHeightStyle ?: LineHeightStyle.Default,
-    textDecoration = style.textDecoration ?: TextDecoration.None,
-    layoutDirection = style.layoutDirection ?: layoutDirection,
-)
+fun resolveDefaults(style: TextStyle, layoutDirection: LayoutDirection): TextStyle {
+    // Paragraph callers may already have resolved the immutable style at their layout boundary.
+    if (style.hasResolvedDefaults()) return style
+    return style.copy(
+        color = if (style.color == Color.Unspecified) Color.Black else style.color,
+        fontSize = if (style.fontSize == TextUnit.Unspecified) 14.sp else style.fontSize,
+        fontWeight = style.fontWeight ?: FontWeight.Normal,
+        fontStyle = style.fontStyle ?: FontStyle.Normal,
+        fontSynthesis = style.fontSynthesis ?: FontSynthesis.All,
+        fontFamily = style.fontFamily ?: FontFamily.Default,
+        letterSpacing = if (style.letterSpacing == TextUnit.Unspecified) 0.sp else style.letterSpacing,
+        platformStyle = style.platformStyle ?: defaultPlatformTextStyle,
+        lineHeightStyle = style.lineHeightStyle ?: LineHeightStyle.Default,
+        textDecoration = style.textDecoration ?: TextDecoration.None,
+        layoutDirection = style.layoutDirection ?: layoutDirection,
+    )
+}
 
 /** Plain text only: application spans and inline content have separate native owners. */
 data class AnnotatedString(val text: String) : CharSequence {
