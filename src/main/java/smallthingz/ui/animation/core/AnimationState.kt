@@ -17,9 +17,6 @@
 package smallthingz.ui.animation.core
 
 import smallthingz.ui.runtime.State
-import smallthingz.ui.runtime.getValue
-import smallthingz.ui.runtime.mutableStateOf
-import smallthingz.ui.runtime.setValue
 
 public class AnimationState<T, V : AnimationVector>(
     public val typeConverter: TwoWayConverter<T, V>,
@@ -30,8 +27,10 @@ public class AnimationState<T, V : AnimationVector>(
     isRunning: Boolean = false,
 ) : State<T> {
     
-    override var value: T by mutableStateOf(initialValue)
-        internal set
+    override var value: T = initialValue
+        internal set(next) {
+            if (field != next) field = next
+        }
 
     
     public var velocityVector: V =
@@ -86,8 +85,10 @@ internal constructor(
 ) {
     // Externally immutable fields
     
-    public var value: T by mutableStateOf(initialValue)
-        internal set
+    public var value: T = initialValue
+        internal set(next) {
+            if (field != next) field = next
+        }
 
     
     public var velocityVector: V = initialVelocityVector.copy()
@@ -104,7 +105,7 @@ internal constructor(
         internal set
 
     
-    public var isRunning: Boolean by mutableStateOf(isRunning)
+    public var isRunning: Boolean = isRunning
         internal set
 
     

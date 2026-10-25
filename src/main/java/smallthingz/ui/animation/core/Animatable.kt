@@ -19,9 +19,6 @@ package smallthingz.ui.animation.core
 import smallthingz.ui.animation.core.AnimationEndReason.BoundReached
 import smallthingz.ui.animation.core.AnimationEndReason.Finished
 import smallthingz.ui.runtime.State
-import smallthingz.ui.runtime.getValue
-import smallthingz.ui.runtime.mutableStateOf
-import smallthingz.ui.runtime.setValue
 import smallthingz.ui.foundation.MutatorMutex
 import kotlinx.coroutines.CancellationException
 
@@ -64,12 +61,14 @@ constructor(
         get() = typeConverter.convertFromVector(velocityVector)
 
     
-    public var isRunning: Boolean by mutableStateOf(false)
+    public var isRunning: Boolean = false
         private set
 
     
-    public var targetValue: T by mutableStateOf(initialValue)
-        private set
+    public var targetValue: T = initialValue
+        private set(next) {
+            if (field != next) field = next
+        }
 
     
     public var lowerBound: T? = null
