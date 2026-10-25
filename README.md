@@ -26,6 +26,27 @@ are `smallthingz.ui` in either build. The standalone project is `kotlin-ui`, wit
 Gradle group `smallthingz`.
 Consumers import the direct View DSL from `smallthingz.ui.dsl`.
 
+## Animation owners
+
+`smallthingz.ui.animation` supplies `SpringValue`, `AnimatedValue`,
+`TransitionValue`, and `UpdatableScrollAnimation`. The first two preserve typed
+velocity on interruption, including Color and IntSize conversion; transition
+channels retain raw vector momentum. Callers supply their own tween durations,
+visibility policies, and final paint/property updates.
+
+The main-thread owners in `smallthingz.ui.animation.view` connect those samplers
+to frames. `ViewFrameLoop` uses an attached View and the caller's window clock;
+`AttachedFrameLoop` has explicit attach/detach/close boundaries on that clock.
+Both inherit its pause and duration-scale behavior. `ViewSpringDriver` is the
+optional direct Choreographer driver; close it when its logical owner retires.
+Use one driver per animation and serialize sampler updates on its owner.
+`SOURCE-view-animation.json` records the extracted sources and lifecycle fixes.
+
+Sampler and clock-owner tests run with the unit suite. The separate
+`scripts/test_view_animation_host.py` runner accepts compiler/test classpaths and
+uses `src/testViewHost` to check View owner cancellation against a narrow host
+fixture. This verifies production control flow, not Android rendering or timing.
+
 ## Procedural background grain
 
 ```kotlin

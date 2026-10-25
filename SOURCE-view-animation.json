@@ -1,0 +1,47 @@
+{
+  "source_repository": "https://github.com/SmallThingz/reverb",
+  "source_commit": "8c08c8c1b87fc915612f07a9d9f5b4037b4c97a8",
+  "source_directory": "app/src/main/java/app/smallthingz/reverb/nativeui",
+  "files": {
+    "ReleasedSpringValue.kt": {
+      "source_sha256": "d85adeaa5a83757b7e5d48f052efa6c146b58c33b9b889c6cf6f5be1cd5e16f6",
+      "targets": [
+        "src/main/kotlin/smallthingz/ui/animation/SpringValue.kt",
+        "src/main/kotlin/smallthingz/ui/animation/view/ViewSpringDriver.kt"
+      ]
+    },
+    "HomeFrameLoop.kt": {
+      "source_sha256": "a3c4b863d09f1f822d94a5a96425edfb8d149719dab6f0671fa4a093aa6efb1d",
+      "target": "src/main/kotlin/smallthingz/ui/animation/view/ViewFrameLoop.kt"
+    },
+    "SettingsExpansionFrames.kt": {
+      "source_sha256": "8877b0a41b6ca0901b5a58db750fadb06da829f5a3a489cf20da4cd6d4bc6216",
+      "target": "src/main/kotlin/smallthingz/ui/animation/view/AttachedFrameLoop.kt"
+    },
+    "NativeUpdatableScrollAnimation.kt": {
+      "source_sha256": "99acfd0843db0b3deb0209e8899d1fa7a48f91c040755907eb824dc816c2af2e",
+      "target": "src/main/kotlin/smallthingz/ui/animation/UpdatableScrollAnimation.kt"
+    },
+    "LibraryRowMotion.kt": {
+      "source_sha256": "f892110cc6402c8df4407e9a754832520d98425e65999f26e307cd19a02ac0a8",
+      "targets": [
+        "src/main/kotlin/smallthingz/ui/animation/AnimatedValue.kt",
+        "src/main/kotlin/smallthingz/ui/animation/TransitionValue.kt"
+      ],
+      "scope": "Only generic LibraryTweenValue and LibraryTransitionValue; timing/visibility policy stays in the app."
+    }
+  },
+  "upstream_provenance": [
+    "motion/PROVENANCE.json",
+    "motion/SOURCE.md",
+    "library/MOTION-SOURCE.md",
+    "scroll/PROVENANCE.json"
+  ],
+  "license": "Apache-2.0; upstream notices retained",
+  "notes": [
+    "Typed velocity round-trips and raw-vector transition momentum remain separate contracts.",
+    "ViewFrameLoop rejects captured callbacks after cancellation or owner replacement; AttachedFrameLoop rejects them after scope cancellation.",
+    "UpdatableScrollAnimation checks its captured coroutine context before either captured-frame mutation or delivery.",
+    "Other sampling algorithms are extracted without behavior changes; app-specific durations remain app policy."
+  ]
+}
