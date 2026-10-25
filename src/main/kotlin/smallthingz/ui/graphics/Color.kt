@@ -128,9 +128,9 @@ value class Color(val value: ULong) {
      * @return A non-null color instance in the specified color space
      */
     fun convert(colorSpace: ColorSpace): Color {
-        // If the destination color space is the same as this color's color space,
-        // the connector we get will be the identity connector
-        val connector = this.colorSpace.connect(colorSpace)
+        val source = this.colorSpace
+        if (source === colorSpace) return this
+        val connector = source.connect(colorSpace)
         return connector.transformToColor(this)
     }
 
@@ -560,6 +560,7 @@ fun Color.luminance(): Float {
 
 @ColorInt
 fun Color.toArgb(): Int {
+    if ((value and 0x3fUL) == 0UL) return (value shr 32).toInt()
     return (convert(ColorSpaces.Srgb).value shr 32).toInt()
 }
 
