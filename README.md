@@ -67,7 +67,7 @@ historical manifests retain their original paths and hashes. Old temporary sourc
 paths are historical provenance, not current build inputs. Historical validation
 statements are not a claim that a new checkout has passed current tests.
 
-First-party code retains Reverb's GPL-3.0-only license in `LICENSE.txt`.
-Upstream-derived files retain their existing Apache-2.0 notices and provenance;
-the extraction does not relicense them. Dependencies remain AndroidX annotation
+First-party code is licensed under Apache-2.0; see `LICENSE.txt`.
+Upstream-derived files retain their existing Apache-2.0 notices and provenance.
+Dependencies remain AndroidX annotation
 and emoji2 internally, with coroutines exposed in the existing public API.

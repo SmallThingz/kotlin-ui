@@ -6,7 +6,7 @@
   "split_commit": "1b323a56309032141bc5c519bb677f77cefefdcc",
   "extraction": "git subtree split, retaining module-only author/history records",
   "source_files": 195,
-  "first_party_license": "GPL-3.0-only",
+  "first_party_license": "Apache-2.0",
   "upstream_licenses": "Existing file notices and SOURCE-* records retained unchanged",
   "publication": "Local extraction only; the snapshot and new library have not been published by this operation"
 }
