@@ -173,6 +173,7 @@ open class Paragraph(
     }
     private var layout = createLayout(text, maxLines)
     private var effectiveMaxLines = maxLines
+    private val ellipsisOffsets: NativeEllipsisOffsets?
 
     init {
         if (Build.VERSION.SDK_INT < 35 && paint.letterSpacing != 0f &&
@@ -180,8 +181,11 @@ open class Paragraph(
             layout.getEllipsisCount(0) > 0) {
             val before = layout.getEllipsisStart(0)
             val after = before + layout.getEllipsisCount(0)
+            ellipsisOffsets = NativeEllipsisOffsets(before, after)
             layout = createLayout(TextUtils.concat(text.subSequence(0, before), "\u2026",
                 text.subSequence(after, text.length)), maxLines)
+        } else {
+            ellipsisOffsets = null
         }
         if (overflow == TextOverflow.Ellipsis && maxLines > 1) {
             val count = min(layout.lineCount, maxLines)
@@ -208,9 +212,10 @@ open class Paragraph(
     }
 
     val lineCount: Int = min(layout.lineCount, effectiveMaxLines)
-    val didExceedMaxLines: Boolean = lineCount >= effectiveMaxLines &&
+    private val layoutExceedsMaxLines: Boolean = lineCount >= effectiveMaxLines &&
         (layout.getEllipsisCount(lineCount - 1) > 0 ||
             layout.getLineEnd(lineCount - 1) != layout.text.length)
+    val didExceedMaxLines: Boolean = ellipsisOffsets != null || layoutExceedsMaxLines
     private val lineHeightSpan = findLineHeightSpan(layout)
     private val verticalPadding: Pair<Int, Int> = computeVerticalPadding()
     private val topPadding = verticalPadding.first
@@ -226,7 +231,8 @@ open class Paragraph(
         get() = cachedPositions ?: NativeTextPositions(layout).also { cachedPositions = it }
 
     val width: Float get() = constraints.maxWidth.toFloat()
-    val height: Float get() = ((if (didExceedMaxLines) layout.getLineBottom(lineCount - 1) else layout.height) +
+    // Offset restoration must not change the workaround layout's height or drawing clip.
+    val height: Float get() = ((if (layoutExceedsMaxLines) layout.getLineBottom(lineCount - 1) else layout.height) +
         topPadding + bottomPadding + lastLineExtra).toFloat()
     val firstBaseline: Float get() = getLineBaseline(0)
     val lastBaseline: Float get() = getLineBaseline(lineCount - 1)
@@ -361,33 +367,41 @@ open class Paragraph(
     fun getLineLeft(lineIndex: Int): Float = layout.getLineLeft(lineIndex)
     fun getLineRight(lineIndex: Int): Float = layout.getLineRight(lineIndex)
     fun getLineHeight(lineIndex: Int): Float = getLineBottom(lineIndex) - getLineTop(lineIndex)
-    fun getLineStart(lineIndex: Int): Int = layout.getLineStart(lineIndex)
-    fun getLineEnd(lineIndex: Int, visibleEnd: Boolean = false): Int =
+    private fun layoutOffset(offset: Int): Int = ellipsisOffsets?.toLayoutOffset(offset) ?: offset
+    private fun sourceOffset(offset: Int): Int = ellipsisOffsets?.toSourceOffset(offset) ?: offset
+    private fun layoutCharacter(offset: Int): Int = ellipsisOffsets?.toLayoutCharacter(offset) ?: offset
+
+    fun getLineStart(lineIndex: Int): Int = sourceOffset(layout.getLineStart(lineIndex))
+    fun getLineEnd(lineIndex: Int, visibleEnd: Boolean = false): Int = sourceOffset(
         if (layout.getEllipsisCount(lineIndex) > 0 && ellipsize == TextUtils.TruncateAt.END) {
             if (visibleEnd) layout.getLineStart(lineIndex) + layout.getEllipsisStart(lineIndex) else layout.text.length
-        } else if (visibleEnd) positions.visibleEnd(lineIndex) else layout.getLineEnd(lineIndex)
-    fun getLineForOffset(offset: Int): Int = layout.getLineForOffset(offset)
+        } else if (visibleEnd) positions.visibleEnd(lineIndex) else layout.getLineEnd(lineIndex))
+    fun getLineForOffset(offset: Int): Int = layout.getLineForOffset(layoutOffset(offset))
     fun getLineForVerticalPosition(vertical: Float): Int =
         layout.getLineForVertical(vertical.toInt() - topPadding)
     fun getOffsetForPosition(position: Offset): Int =
-        layout.getOffsetForHorizontal(getLineForVerticalPosition(position.y), position.x)
+        sourceOffset(layout.getOffsetForHorizontal(getLineForVerticalPosition(position.y), position.x))
     fun getParagraphDirection(offset: Int): ResolvedTextDirection =
         if (layout.getParagraphDirection(getLineForOffset(offset)) == Layout.DIR_LEFT_TO_RIGHT)
             ResolvedTextDirection.Ltr else ResolvedTextDirection.Rtl
     fun getBidiRunDirection(offset: Int): ResolvedTextDirection =
-        if (layout.isRtlCharAt(offset)) ResolvedTextDirection.Rtl else ResolvedTextDirection.Ltr
+        if (layout.isRtlCharAt(layoutCharacter(offset))) ResolvedTextDirection.Rtl else ResolvedTextDirection.Ltr
     fun getHorizontalPosition(offset: Int, usePrimaryDirection: Boolean): Float =
-        positions.horizontal(offset, usePrimaryDirection, upstream = false)
-    fun isLineEllipsized(lineIndex: Int): Boolean = layout.getEllipsisCount(lineIndex) > 0
+        positions.horizontal(layoutOffset(offset), usePrimaryDirection, upstream = false)
+    fun isLineEllipsized(lineIndex: Int): Boolean =
+        (lineIndex == 0 && ellipsisOffsets != null) || layout.getEllipsisCount(lineIndex) > 0
 
     fun getBoundingBox(offset: Int): Rect {
         require(offset in paragraphIntrinsics.text.indices)
-        val line = getLineForOffset(offset)
+        val character = layoutCharacter(offset)
+        val line = layout.getLineForOffset(character)
         val ltr = layout.getParagraphDirection(line) == Layout.DIR_LEFT_TO_RIGHT
-        val rtlChar = layout.isRtlCharAt(offset)
+        val rtlChar = layout.isRtlCharAt(character)
         val primary = ltr != rtlChar
-        val a = positions.horizontal(offset, primary, false)
-        val b = positions.horizontal(offset + 1, primary, true)
+        val start = layoutOffset(offset)
+        val end = layoutOffset(offset + 1)
+        val a = positions.horizontal(start, primary, false)
+        val b = if (start == end) a else positions.horizontal(end, primary, true)
         return if (rtlChar) Rect(b, getLineTop(line), a, getLineBottom(line))
             else Rect(a, getLineTop(line), b, getLineBottom(line))
     }
@@ -407,7 +421,7 @@ open class Paragraph(
         paint.isStrikeThruText = TextDecoration.LineThrough in decoration
         val saved = canvas.save()
         try {
-            if (didExceedMaxLines) canvas.clipRect(0f, 0f, width, height)
+            if (layoutExceedsMaxLines) canvas.clipRect(0f, 0f, width, height)
             canvas.translate(0f, topPadding.toFloat())
             ParagraphCanvas.draw(layout, canvas)
         } finally { canvas.restoreToCount(saved) }
