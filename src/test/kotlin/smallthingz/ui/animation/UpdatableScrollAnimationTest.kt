@@ -99,7 +99,11 @@ class UpdatableScrollAnimationTest {
             yield()
             clock.frame(1L); yield()
             try { failed.await(); fail("Failure was swallowed") }
-            catch (actual: IllegalStateException) { assertSame(failure, actual) }
+            catch (actual: IllegalStateException) {
+                // Coroutine stack-trace recovery may copy the exception and retain the original
+                // as its cause. The callback failure itself must survive either execution mode.
+                assertSame(failure, if (actual === failure) actual else actual.cause)
+            }
             animation.value = 3f
             var delivered = false
             val next = scope.launch { animation.animateToZero({ delivered = true }, {}) }
