@@ -98,6 +98,7 @@ class UpdatableScrollAnimation(animationSpec: AnimationSpec<Float>) {
             // value could be updated after each frame, and if that happens we need to continue
             // running the animation.
             while (!value.isZeroish()) {
+                animationContext.ensureActive()
                 withFrameNanos { frameTime ->
                     // A frame already dequeued by the window clock can outlive cancellation.
                     animationContext.ensureActive()
@@ -140,6 +141,8 @@ class UpdatableScrollAnimation(animationSpec: AnimationSpec<Float>) {
                     value = newValue
                     beforeFrame(delta)
                 }
+                // A supplied clock may return normally after beforeFrame cancels this job.
+                animationContext.ensureActive()
                 afterFrame()
 
                 if (durationScale == 0f) {
@@ -151,6 +154,7 @@ class UpdatableScrollAnimation(animationSpec: AnimationSpec<Float>) {
             // The last iteration of the loop may have called block with a non-zero value due to
             // the visibility threshold, so ensure it gets called one last time with actual zero.
             if (value.absoluteValue != 0f) {
+                animationContext.ensureActive()
                 withFrameNanos {
                     animationContext.ensureActive()
                     val delta = value
@@ -159,6 +163,7 @@ class UpdatableScrollAnimation(animationSpec: AnimationSpec<Float>) {
                     value = 0f
                     beforeFrame(delta)
                 }
+                animationContext.ensureActive()
                 afterFrame()
             }
         } finally {
