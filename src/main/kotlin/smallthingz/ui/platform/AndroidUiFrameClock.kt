@@ -36,7 +36,10 @@ internal constructor(
             // Important: this callback won't throw, and AndroidUiDispatcher counts on it.
             val callback =
                 Choreographer.FrameCallback { frameTimeNanos ->
-                    co.resumeWith(runCatching { onFrame(frameTimeNanos) })
+                    // Removing a cancelled waiter cannot retract an already captured frame batch.
+                    if (co.isActive) {
+                        co.resumeWith(runCatching { onFrame(frameTimeNanos) })
+                    }
                 }
 
             // If we're on an AndroidUiDispatcher then we post callback to happen *after*
