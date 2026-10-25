@@ -8,6 +8,50 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ProceduralNoiseTest {
+    @Test fun stripsReuseBoundedScratchAndPreserveEveryPixel() {
+        val expected = generateNoisePixels()
+        var scratch: IntArray? = null
+        var nextY = 0
+        var writes = 0
+        val digest = MessageDigest.getInstance("SHA-256")
+        val bytes = ByteBuffer.allocate(NOISE_TILE_SIZE * NOISE_STRIP_HEIGHT * 4)
+        writeNoiseStrips { y, pixels ->
+            assertEquals(nextY, y)
+            assertEquals(1024 * 16, pixels.size)
+            if (scratch == null) scratch = pixels else assertSame(scratch, pixels)
+            for (index in pixels.indices) assertEquals(expected[y * NOISE_TILE_SIZE + index], pixels[index])
+            bytes.asIntBuffer().put(pixels)
+            digest.update(bytes.array())
+            nextY += NOISE_STRIP_HEIGHT
+            writes++
+        }
+        assertEquals(64, writes)
+        assertEquals(NOISE_TILE_SIZE, nextY)
+        assertEquals("04bafc239a3167b4169e12ac5b3d4b402024bc9bf76256226fd928c7e210420a",
+            digest.digest().joinToString("") { "%02x".format(it) })
+    }
+
+    @Test fun interruptedStripWriteCannotPublishPartialTileOrRetryGeneration() {
+        val failure = IllegalStateException("pixel write failed")
+        var writes = 0
+        var attempts = 0
+        var completions = 0
+        val cache = NoiseTileCache {
+            attempts++
+            writeNoiseStrips { y, _ ->
+                writes++
+                if (y == NOISE_STRIP_HEIGHT * 3) throw failure
+            }
+            Any()
+        }
+        repeat(2) { cache.start({ it() }, { completions++ }) }
+        assertEquals(4, writes)
+        assertEquals(1, attempts)
+        assertEquals(1, completions)
+        assertNull(cache.valueOrNull())
+        assertSame(failure, cache.failureOrNull())
+    }
+
     @Test fun grainHasStableFullTileAndReleasedPalette() {
         val pixels = generateNoisePixels()
         assertEquals(1024 * 1024, pixels.size)

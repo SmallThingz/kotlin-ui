@@ -14,13 +14,27 @@ import java.lang.ref.WeakReference
  * Process-shared deterministic grain: one 1024-square ARGB bitmap and at most two cached shaders.
  *
  * [prepare] schedules at most one background daemon, including on failure; it never blocks drawing.
- * Generation temporarily uses one equally sized pixel array. There is no disk cache or asset copy.
+ * Generation reuses one 64 KiB pixel strip. There is no disk cache or asset copy.
  * Pending drawables are weakly held and invalidated on the main thread after generation settles.
  */
 object NoiseTexture {
     private val tile = NoiseTileCache {
-        Bitmap.createBitmap(generateNoisePixels(), NOISE_TILE_SIZE, NOISE_TILE_SIZE,
-            Bitmap.Config.ARGB_8888).apply { density = Bitmap.DENSITY_NONE }
+        val bitmap = Bitmap.createBitmap(NOISE_TILE_SIZE, NOISE_TILE_SIZE, Bitmap.Config.ARGB_8888)
+        try {
+            bitmap.density = Bitmap.DENSITY_NONE
+            writeNoiseStrips { y, pixels ->
+                bitmap.setPixels(pixels, 0, NOISE_TILE_SIZE, 0, y, NOISE_TILE_SIZE, NOISE_STRIP_HEIGHT)
+            }
+            bitmap
+        } catch (failure: Throwable) {
+            // No observer can own this bitmap until every strip has been written successfully.
+            try {
+                bitmap.recycle()
+            } catch (cleanup: Throwable) {
+                failure.addSuppressed(cleanup)
+            }
+            throw failure
+        }
     }
     private val main = Handler(Looper.getMainLooper())
     private val pending = mutableListOf<WeakReference<NoiseDrawable>>()
