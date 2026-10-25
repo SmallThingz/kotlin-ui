@@ -44,7 +44,7 @@ internal class SpringSimulation(var finalPosition: Float) {
     
     var stiffness: Float
         set(value) {
-            if (stiffness <= 0) {
+            if (value <= 0) {
                 throwIllegalArgumentException("Spring stiffness constant must be positive.")
             }
             naturalFreq = sqrt(value.toDouble())
