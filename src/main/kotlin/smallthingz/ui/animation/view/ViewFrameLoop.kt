@@ -30,7 +30,8 @@ class ViewFrameLoop(
         lateinit var next: Job
         next = scope.launch(start = CoroutineStart.LAZY) {
             try {
-                while (view.isAttachedToWindow && running()) {
+                while (next.isActive && owner == generation && job === next &&
+                    view.isAttachedToWindow && running()) {
                     frames.withFrameNanos { nanos ->
                         // A frame already taken by the dispatcher can outlive cancellation.
                         if (owner == generation && job === next && next.isActive &&
