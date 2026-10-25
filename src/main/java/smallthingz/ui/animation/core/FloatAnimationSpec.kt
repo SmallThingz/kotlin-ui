@@ -138,6 +138,14 @@ public class FloatTweenSpec(
         initialVelocity: Float,
     ): Float {
         val clampedPlayTimeNanos = clampPlayTimeNanos(playTimeNanos)
+        return getValueFromClampedNanos(clampedPlayTimeNanos, initialValue, targetValue)
+    }
+
+    private fun getValueFromClampedNanos(
+        clampedPlayTimeNanos: Long,
+        initialValue: Float,
+        targetValue: Float,
+    ): Float {
         val rawFraction = if (duration == 0) 1f else clampedPlayTimeNanos / durationNanos.toFloat()
         val fraction = easing.transform(rawFraction)
         return lerp(initialValue, targetValue, fraction)
@@ -169,15 +177,15 @@ public class FloatTweenSpec(
         if (clampedPlayTimeNanos == 0L) {
             return initialVelocity
         }
+        // Both samples are already on the delayed tween's local timeline.
         val startNum =
-            getValueFromNanos(
-                clampedPlayTimeNanos - MillisToNanos,
+            getValueFromClampedNanos(
+                (clampedPlayTimeNanos - MillisToNanos).coerceAtLeast(0L),
                 initialValue,
                 targetValue,
-                initialVelocity,
             )
         val endNum =
-            getValueFromNanos(clampedPlayTimeNanos, initialValue, targetValue, initialVelocity)
+            getValueFromClampedNanos(clampedPlayTimeNanos, initialValue, targetValue)
         return (endNum - startNum) * 1000f
     }
 }
