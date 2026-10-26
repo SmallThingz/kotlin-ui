@@ -101,19 +101,22 @@ class MutableRect(var left: Float, var top: Float, var right: Float, var bottom:
         this.bottom = min(bottom, this.bottom)
     }
 
-    /** Whether `other` has a nonzero area of overlap with this rectangle. */
+    /**
+     * Whether `other` has a nonzero area of overlap with this rectangle.
+     * Empty or inverted rectangles, or rectangles with NaN coordinates, do not overlap.
+     */
     fun overlaps(other: Rect): Boolean {
-        return (left < other.right) and
-            (other.left < right) and
-            (top < other.bottom) and
-            (other.top < bottom)
+        return max(left, other.left) < min(right, other.right) &&
+            max(top, other.top) < min(bottom, other.bottom)
     }
 
-    /** Whether `other` has a nonzero area of overlap with this rectangle. */
+    /**
+     * Whether `other` has a nonzero area of overlap with this rectangle.
+     * Empty or inverted rectangles, or rectangles with NaN coordinates, do not overlap.
+     */
     fun overlaps(other: MutableRect): Boolean {
-        if (right <= other.left || other.right <= left) return false
-        if (bottom <= other.top || other.bottom <= top) return false
-        return true
+        return max(left, other.left) < min(right, other.right) &&
+            max(top, other.top) < min(bottom, other.bottom)
     }
 
     /** The lesser of the magnitudes of the [width] and the [height] of this rectangle. */

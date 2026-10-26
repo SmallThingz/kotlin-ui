@@ -108,11 +108,13 @@ data class IntRect(
         )
     }
 
-    /** Whether `other` has a nonzero area of overlap with this rectangle. */
+    /**
+     * Whether `other` has a nonzero area of overlap with this rectangle.
+     * Empty or inverted rectangles do not overlap.
+     */
     fun overlaps(other: IntRect): Boolean {
-        if (right <= other.left || other.right <= left) return false
-        if (bottom <= other.top || other.bottom <= top) return false
-        return true
+        return kotlin.math.max(left, other.left) < kotlin.math.min(right, other.right) &&
+            kotlin.math.max(top, other.top) < kotlin.math.min(bottom, other.bottom)
     }
 
     /** The lesser of the magnitudes of the [width] and the [height] of this rectangle. */

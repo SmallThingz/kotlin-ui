@@ -5,7 +5,8 @@
     "Own package",
     "Remove Compose stability/compiler annotations",
     "Android-only actual bodies",
-    "SparseArray platform cache"
+    "SparseArray platform cache",
+    "Local overlaps contract correction in Rect, MutableRect and IntRect: empty or inverted bounds do not overlap; NaN coordinates return false; positive ordered finite/infinite bounds retain upstream results. This intentionally corrects the documented nonzero-area API contract and is not an exact upstream edge-case behavior claim."
   ],
   "files": [
     {
