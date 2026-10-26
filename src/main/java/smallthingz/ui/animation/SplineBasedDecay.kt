@@ -63,36 +63,34 @@ internal object AndroidFlingSpline {
     }
 
     
-    fun flingPosition(time: Float): FlingResult {
-        // We clamp the time to prevent crashes from a clock providing playTime values lower than
-        // the start time, which leads to an IOO here. See b/313685022.
+    fun distanceCoefficient(time: Float): Float {
+        // Clamp clocks before the start, matching the released spline behavior. See b/313685022.
         val clampedTime = time.coerceIn(0f, 1f)
         val index = (NbSamples * clampedTime).toInt()
-        var distanceCoef = 1f
-        var velocityCoef = 0f
-        if (index < NbSamples) {
-            val tInf = index.toFloat() / NbSamples
-            val tSup = (index + 1).toFloat() / NbSamples
-            val dInf = SplinePositions[index]
-            val dSup = SplinePositions[index + 1]
-            velocityCoef = (dSup - dInf) / (tSup - tInf)
-            distanceCoef = dInf + (clampedTime - tInf) * velocityCoef
-        }
-        return FlingResult(distanceCoefficient = distanceCoef, velocityCoefficient = velocityCoef)
+        if (index >= NbSamples) return 1f
+        val velocityCoef = slope(index)
+        val tInf = index.toFloat() / NbSamples
+        val dInf = SplinePositions[index]
+        return dInf + (clampedTime - tInf) * velocityCoef
+    }
+
+    fun velocityCoefficient(time: Float): Float {
+        val index = (NbSamples * time.coerceIn(0f, 1f)).toInt()
+        return if (index < NbSamples) slope(index) else 0f
+    }
+
+    private fun slope(index: Int): Float {
+        val tInf = index.toFloat() / NbSamples
+        val tSup = (index + 1).toFloat() / NbSamples
+        val dInf = SplinePositions[index]
+        val dSup = SplinePositions[index + 1]
+        return (dSup - dInf) / (tSup - tInf)
     }
 
     
     fun deceleration(velocity: Float, friction: Float): Double =
         ln(Inflection * abs(velocity) / friction.toDouble())
 
-    
-    // TODO: pack this into an inline class
-    data class FlingResult(
-        
-        val distanceCoefficient: Float,
-        
-        val velocityCoefficient: Float,
-    )
 }
 
 public fun <T> splineBasedDecay(density: Density): DecayAnimationSpec<T> =

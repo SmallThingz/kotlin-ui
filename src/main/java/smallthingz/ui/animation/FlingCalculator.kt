@@ -59,13 +59,13 @@ internal class FlingCalculator(private val friction: Float, density: Density) {
             val splinePos = if (duration > 0) time / duration.toFloat() else 1f
             return distance *
                 sign(initialVelocity) *
-                AndroidFlingSpline.flingPosition(splinePos).distanceCoefficient
+                AndroidFlingSpline.distanceCoefficient(splinePos)
         }
 
         fun velocity(time: Long): Float {
             if (duration <= 0) return 0f
             val splinePos = time / duration.toFloat()
-            return AndroidFlingSpline.flingPosition(splinePos).velocityCoefficient *
+            return AndroidFlingSpline.velocityCoefficient(splinePos) *
                 sign(initialVelocity) *
                 distance / duration * 1000.0f
         }
