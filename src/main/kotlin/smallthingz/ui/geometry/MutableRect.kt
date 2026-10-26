@@ -18,6 +18,7 @@
 
 package smallthingz.ui.geometry
 
+import smallthingz.ui.util.midpoint
 import kotlin.math.absoluteValue
 import kotlin.math.max
 import kotlin.math.min
@@ -133,7 +134,7 @@ class MutableRect(var left: Float, var top: Float, var right: Float, var bottom:
 
     /** The offset to the center of the top edge of this rectangle. */
     val topCenter: Offset
-        get() = Offset(left + width / 2.0f, top)
+        get() = Offset(midpoint(left, right), top)
 
     /** The offset to the intersection of the top and right edges of this rectangle. */
     val topRight: Offset
@@ -141,7 +142,7 @@ class MutableRect(var left: Float, var top: Float, var right: Float, var bottom:
 
     /** The offset to the center of the left edge of this rectangle. */
     val centerLeft: Offset
-        get() = Offset(left, top + height / 2.0f)
+        get() = Offset(left, midpoint(top, bottom))
 
     /**
      * The offset to the point halfway between the left and right and the top and bottom edges of
@@ -150,11 +151,11 @@ class MutableRect(var left: Float, var top: Float, var right: Float, var bottom:
      * See also [Size.center].
      */
     val center: Offset
-        get() = Offset(left + width / 2.0f, top + height / 2.0f)
+        get() = Offset(midpoint(left, right), midpoint(top, bottom))
 
     /** The offset to the center of the right edge of this rectangle. */
     val centerRight: Offset
-        get() = Offset(right, top + height / 2.0f)
+        get() = Offset(right, midpoint(top, bottom))
 
     /** The offset to the intersection of the bottom and left edges of this rectangle. */
     val bottomLeft: Offset
@@ -163,7 +164,7 @@ class MutableRect(var left: Float, var top: Float, var right: Float, var bottom:
     /** The offset to the center of the bottom edge of this rectangle. */
     val bottomCenter: Offset
         get() {
-            return Offset(left + width / 2.0f, bottom)
+            return Offset(midpoint(left, right), bottom)
         }
 
     /** The offset to the intersection of the bottom and right edges of this rectangle. */

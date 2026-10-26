@@ -22,6 +22,7 @@ import smallthingz.ui.geometry.Offset
 import smallthingz.ui.geometry.Rect
 import smallthingz.ui.util.fastRoundToInt
 import smallthingz.ui.util.lerp
+import smallthingz.ui.util.midpoint
 import kotlin.math.absoluteValue
 
 /**
@@ -131,7 +132,7 @@ data class IntRect(
 
     /** The offset to the center of the top edge of this rectangle. */
     val topCenter: IntOffset
-        get() = IntOffset(left + width / 2, top)
+        get() = IntOffset(midpoint(left, right), top)
 
     /** The offset to the intersection of the top and right edges of this rectangle. */
     val topRight: IntOffset
@@ -139,7 +140,7 @@ data class IntRect(
 
     /** The offset to the center of the left edge of this rectangle. */
     val centerLeft: IntOffset
-        get() = IntOffset(left, top + height / 2)
+        get() = IntOffset(left, midpoint(top, bottom))
 
     /**
      * The offset to the point halfway between the left and right and the top and bottom edges of
@@ -148,11 +149,11 @@ data class IntRect(
      * See also [IntSize.center].
      */
     val center: IntOffset
-        get() = IntOffset(left + width / 2, top + height / 2)
+        get() = IntOffset(midpoint(left, right), midpoint(top, bottom))
 
     /** The offset to the center of the right edge of this rectangle. */
     val centerRight: IntOffset
-        get() = IntOffset(right, top + height / 2)
+        get() = IntOffset(right, midpoint(top, bottom))
 
     /** The offset to the intersection of the bottom and left edges of this rectangle. */
     val bottomLeft: IntOffset
@@ -161,7 +162,7 @@ data class IntRect(
     /** The offset to the center of the bottom edge of this rectangle. */
     val bottomCenter: IntOffset
         get() {
-            return IntOffset(left + width / 2, bottom)
+            return IntOffset(midpoint(left, right), bottom)
         }
 
     /** The offset to the intersection of the bottom and right edges of this rectangle. */
