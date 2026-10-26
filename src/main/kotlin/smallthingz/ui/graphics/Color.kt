@@ -39,7 +39,7 @@ import kotlin.math.min
  *
  *     // from 4 separate [Float] components. Alpha and ColorSpace are optional
  *     val rgbaWhiteFloat = Color(red = 1f, green = 1f, blue = 1f, alpha = 1f,
- *         ColorSpace.get(ColorSpaces.Srgb))
+ *         colorSpace = ColorSpaces.Srgb)
  *     // from a 32-bit SRGB color integer
  *     val fromIntWhite = Color(android.graphics.Color.WHITE)
  *     val fromLongBlue = Color(0xFF0000FF)
@@ -55,7 +55,7 @@ import kotlin.math.min
  *
  * **Component ranges:** the ranges defined in the tables below indicate the ranges that can be
  * encoded in a color long. They do not represent the actual ranges as they may differ per color
- * space. For instance, the RGB components of a color in the [Display P3][ColorSpaces.DisplayP3]
+ * space. For instance, the RGB components of a color in the [sRGB][ColorSpaces.Srgb]
  * color space use the `[0..1]` range. Please refer to the documentation of the various
  * [color spaces][ColorSpaces] to find their respective ranges.
  *
@@ -69,7 +69,7 @@ import kotlin.math.min
  * ```
  * | Component | Name        | Size    | Range                 |
  * |-----------|-------------|---------|-----------------------|
- * | [RGB][ColorSpace.Model.Rgb] color model                   |
+ * | [RGB][ColorModel.Rgb] color model                   |
  * | R         | Red         | 16 bits | `[-65504.0, 65504.0]` |
  * | G         | Green       | 16 bits | `[-65504.0, 65504.0]` |
  * | B         | Blue        | 16 bits | `[-65504.0, 65504.0]` |
@@ -81,13 +81,13 @@ import kotlin.math.min
  * | G         | Green       | 8 bits  | `[0..255]`            |
  * | B         | Blue        | 8 bits  | `[0..255]`            |
  * | X         | Unused      | 32 bits | `[0]`                 |
- * | [XYZ][ColorSpace.Model.Xyz] color model                   |
+ * | [XYZ][ColorModel.Xyz] color model                   |
  * | X         | X           | 16 bits | `[-65504.0, 65504.0]` |
  * | Y         | Y           | 16 bits | `[-65504.0, 65504.0]` |
  * | Z         | Z           | 16 bits | `[-65504.0, 65504.0]` |
  * | A         | Alpha       | 10 bits | `[0..1023]`           |
  * |           | Color space | 6 bits  | `[0..63]`             |
- * | [Lab][ColorSpace.Model.Lab] color model                   |
+ * | [Lab][ColorModel.Lab] color model                   |
  * | L         | L           | 16 bits | `[-65504.0, 65504.0]` |
  * | a         | a           | 16 bits | `[-65504.0, 65504.0]` |
  * | b         | b           | 16 bits | `[-65504.0, 65504.0]` |
@@ -100,8 +100,7 @@ import kotlin.math.min
  * colors).
  *
  * The color encoding relies on half-precision float values (fp16). If you wish to know more about
- * the limitations of half-precision float values, please refer to the documentation of the
- * [Float16] class.
+ * the limitations of half-precision float values, refer to the IEEE 754 binary16 format.
  *
  * The values returned by these methods depend on the color space encoded in the color long. The
  * values are however typically in the `[0..1]` range for RGB colors. Please refer to the

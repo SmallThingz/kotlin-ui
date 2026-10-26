@@ -36,11 +36,11 @@ import smallthingz.ui.util.unpackFloat2
  * the documentation of [Adaptation], using the CIE standard illuminant [D50][Illuminant.D50] as the
  * target white point.
  *
- * Example of conversion from [sRGB][ColorSpaces.Srgb] to [DCI-P3][ColorSpaces.DciP3]:
+ * Example of conversion from [sRGB][ColorSpaces.Srgb] to [Oklab][ColorSpaces.Oklab]:
  *
- *     val connector = ColorSpaces.Srgb.connect(ColorSpaces.DciP3);
- *     val p3 = connector.transform(1.0f, 0.0f, 0.0f);
- *     // p3 contains { 0.9473, 0.2740, 0.2076 }
+ *     val connector = ColorSpaces.Srgb.connect(ColorSpaces.Oklab)
+ *     val oklab = connector.transform(1.0f, 0.0f, 0.0f)
+ *     // oklab contains the L, a, and b components of sRGB red.
  *
  * @see Adaptation
  * @see ColorSpace.adapt

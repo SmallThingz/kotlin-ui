@@ -58,20 +58,18 @@ import kotlin.math.withSign
  *
  * Here is an example of how to convert from a color space to another:
  *
- *     // Convert from DCI-P3 to Rec.2020
- *     val connector = ColorSpaces.DciP3.connect(ColorSpaces.BT2020)
- *     val bt2020Values = connector.transform(p3r, p3g, p3b);
+ *     // Convert sRGB red to Oklab.
+ *     val connector = ColorSpaces.Srgb.connect(ColorSpaces.Oklab)
+ *     val oklabValues = connector.transform(1f, 0f, 0f)
  *
  * You can easily convert to [sRGB][ColorSpaces.Srgb] by omitting the color space parameter:
  *
- *     // Convert from DCI-P3 to sRGB
- *     val connector = ColorSpaces.DciP3.connect()
- *     val sRGBValues = connector.transform(p3r, p3g, p3b);
+ *     // Convert an Oklab color to sRGB.
+ *     val connector = ColorSpaces.Oklab.connect()
+ *     val sRGBValues = connector.transform(0.5f, 0f, 0f)
  *
- * Conversions also work between color spaces with different color models:
- *
- *     // Convert from CIE L*a*b* (color model Lab) to Rec.709 (color model RGB)
- *     val connector = ColorSpaces.CieLab.connect(ColorSpaces.Bt709)
+ * These examples connect different color models: Oklab uses [ColorModel.Lab], while sRGB uses
+ * [ColorModel.Rgb]. The built-in public spaces are [ColorSpaces.Srgb] and [ColorSpaces.Oklab].
  *
  * ### Color spaces and multi-threading
  *
@@ -92,9 +90,9 @@ internal constructor(
      * Color space names are recommended to be unique but are not guaranteed to be. There is no
      * defined format but the name usually falls in one of the following categories:
      * * Generic names used to identify color spaces in non-RGB color models. For instance:
-     *   [Generic L*a*b*][ColorSpaces.CieLab].
+     *   [Oklab][ColorSpaces.Oklab].
      * * Names tied to a particular specification. For instance:
-     *   [sRGB IEC61966-2.1][ColorSpaces.Srgb] or [SMPTE ST 2065-1:2012 ACES][ColorSpaces.Aces].
+     *   [sRGB IEC61966-2.1][ColorSpaces.Srgb].
      * * Ad-hoc names, often generated procedurally or by the user during a calibration workflow.
      *   These names often contain the make and model of the display.
      *
@@ -141,7 +139,7 @@ internal constructor(
     /**
      * Returns whether this color space is a wide-gamut color space. An RGB color space is
      * wide-gamut if its gamut entirely contains the [sRGB][ColorSpaces.Srgb] gamut and if the area
-     * of its gamut is 90% of greater than the area of the [NTSC][ColorSpaces.Ntsc1953] gamut.
+     * of its gamut is 90% or greater than the area of the NTSC 1953 gamut.
      *
      * @return True if this color space is a wide-gamut color space, false otherwise
      */
