@@ -143,6 +143,12 @@ public class VectorizedInfiniteRepeatableSpec<V : AnimationVector>(
     internal val durationNanos: Long =
         (animation.delayMillis.toLong() + animation.durationMillis) * MillisToNanos
 
+    init {
+        require(durationNanos != 0L) {
+            "Animation to be infinitely repeated cannot have a 0-duration"
+        }
+    }
+
     private val initialOffsetNanos = initialStartOffset.value * MillisToNanos
 
     private fun repetitionPlayTimeNanos(playTimeNanos: Long): Long {

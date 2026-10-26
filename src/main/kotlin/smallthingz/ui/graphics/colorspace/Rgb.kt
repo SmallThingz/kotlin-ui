@@ -97,7 +97,7 @@ import kotlin.math.pow
  * defined in ICC.1:2004-10, the numeric parameters can be retrieved from [transferParameters]. This
  * can be useful to match color spaces for instance.
  *
- * Some RGB color spaces, such as [ColorSpaces.Aces] and [scRGB][ColorSpaces.LinearExtendedSrgb],
+ * Some RGB color spaces, such as ACES and linear scRGB,
  * are said to be linear because their transfer functions are the identity function: `f(x) = x`. If
  * the source and/or destination are known to be linear, it is not necessary to invoke the transfer
  * functions.
@@ -105,8 +105,8 @@ import kotlin.math.pow
  * ### Range
  *
  * Most RGB color spaces allow RGB values in the range `[0..1]`. There are however a few RGB color
- * spaces that allow much larger ranges. For instance, [scRGB][ColorSpaces.ExtendedSrgb] is used to
- * manipulate the range `[-0.5..7.5]` while [ACES][ColorSpaces.Aces] can be used throughout the
+ * spaces that allow much larger ranges. For instance, extended sRGB is used to
+ * manipulate the range `[-0.5..7.5]` while ACES can be used throughout the
  * range `[-65504, 65504]`.
  *
  * [Extended sRGB and its large
@@ -136,17 +136,8 @@ class Rgb
 /**
  * Creates a new RGB color space using a specified set of primaries and a specified white point.
  *
- * The primaries and white point can be specified in the CIE xyY space or in CIE XYZ. The length of
- * the arrays depends on the chosen space:
- * ```
- * | Spaces | Primaries length | White point length |
- * |--------|------------------|--------------------|
- * | xyY    | 6                | 2                  |
- * | XYZ    | 9                | 3                  |
- * ```
- *
- * When the primaries and/or white point are specified in xyY, the Y component does not need to be
- * specified and is assumed to be 1.0. Only the xy components are required.
+ * The primaries can be specified as 6 CIE xy coordinates (with Y assumed to be 1.0)
+ * or 9 CIE XYZ coordinates. The reference white is supplied as a [WhitePoint].
  *
  * @param name Name of the color space, cannot be null, its length must be >= 1
  * @param primaries RGB primaries as an array of 6 (xy) or 9 (XYZ) floats
@@ -162,7 +153,6 @@ class Rgb
  * @throws IllegalArgumentException If any of the following conditions is met:
  *     * The name is null or has a length of 0.
  *     * The primaries array is null or has a length that is neither 6 or 9.
- *     * The white point array is null or has a length that is neither 2 or 3.
  *     * The OETF is null or the EOTF is null.
  *     * The minimum valid value is >= the maximum valid value.
  *     * The ID is not between [ColorSpace.MinId] and [ColorSpace.MaxId].
@@ -282,7 +272,7 @@ internal constructor(
      * assumed to be 1 and is therefore not copied into the destination. The x and y components of
      * the first primary are written in the array at positions 0 and 1 respectively.
      *
-     * @return A new non-null array of 2 floats
+     * @return A new non-null array of 6 floats
      * @see whitePoint
      */
     @Size(6) fun getPrimaries(): FloatArray = primaries.copyOf()
@@ -348,21 +338,12 @@ internal constructor(
     /**
      * Creates a new RGB color space using a specified set of primaries and a specified white point.
      *
-     * The primaries and white point can be specified in the CIE xyY space or in CIE XYZ. The length
-     * of the arrays depends on the chosen space:
-     * ```
-     * | Spaces | Primaries length | White point length |
-     * |--------|------------------|--------------------|
-     * | xyY    | 6                | 2                  |
-     * | XYZ    | 9                | 3                  |
-     * ```
-     *
-     * When the primaries and/or white point are specified in xyY, the Y component does not need to
-     * be specified and is assumed to be 1.0. Only the xy components are required.
+     * The primaries can be specified as 6 CIE xy coordinates (with Y assumed to be 1.0)
+     * or 9 CIE XYZ coordinates. The reference white is supplied as a [WhitePoint].
      *
      * @param name Name of the color space, cannot be null, its length must be >= 1
      * @param primaries RGB primaries as an array of 6 (xy) or 9 (XYZ) floats
-     * @param whitePoint Reference white as an array of 2 (xy) or 3 (XYZ) floats
+     * @param whitePoint Reference white as a [WhitePoint]
      * @param oetf Opto-electronic transfer function, cannot be null
      * @param eotf Electro-optical transfer function, cannot be null
      * @param min The minimum valid value in this color space's RGB range
@@ -370,7 +351,6 @@ internal constructor(
      * @throws IllegalArgumentException If any of the following conditions is met:
      *     * The name is null or has a length of 0.
      *     * The primaries array is null or has a length that is neither 6 or 9.
-     *     * The white point array is null or has a length that is neither 2 or 3.
      *     * The OETF is null or the EOTF is null.
      *     * The minimum valid value is >= the maximum valid value.
      */
@@ -418,26 +398,16 @@ internal constructor(
     /**
      * Creates a new RGB color space using a specified set of primaries and a specified white point.
      *
-     * The primaries and white point can be specified in the CIE xyY space or in CIE XYZ. The length
-     * of the arrays depends on the chosen space:
-     * ```
-     * | Spaces | Primaries length | White point length |
-     * |--------|------------------|--------------------|
-     * | xyY    | 6                | 2                  |
-     * | XYZ    | 9                | 3                  |
-     * ```
-     *
-     * When the primaries and/or white point are specified in xyY, the Y component does not need to
-     * be specified and is assumed to be 1.0. Only the xy components are required.
+     * The primaries can be specified as 6 CIE xy coordinates (with Y assumed to be 1.0)
+     * or 9 CIE XYZ coordinates. The reference white is supplied as a [WhitePoint].
      *
      * @param name Name of the color space, cannot be null, its length must be >= 1
      * @param primaries RGB primaries as an array of 6 (xy) or 9 (XYZ) floats
-     * @param whitePoint Reference white as an array of 2 (xy) or 3 (XYZ) floats
+     * @param whitePoint Reference white as a [WhitePoint]
      * @param function Parameters for the transfer functions
      * @throws IllegalArgumentException If any of the following conditions is met:
      *     * The name is null or has a length of 0.
      *     * The primaries array is null or has a length that is neither 6 or 9.
-     *     * The white point array is null or has a length that is neither 2 or 3.
      *     * The transfer parameters are invalid.
      */
     constructor(
@@ -450,32 +420,21 @@ internal constructor(
     /**
      * Creates a new RGB color space using a specified set of primaries and a specified white point.
      *
-     * The primaries and white point can be specified in the CIE xyY space or in CIE XYZ. The length
-     * of the arrays depends on the chosen space:
-     * ```
-     * | Spaces | Primaries length | White point length |
-     * |--------|------------------|--------------------|
-     * | xyY    | 6                | 2                  |
-     * | XYZ    | 9                | 3                  |
-     * ```
-     *
-     * When the primaries and/or white point are specified in xyY, the Y component does not need to
-     * be specified and is assumed to be 1.0. Only the xy components are required.
+     * The primaries can be specified as 6 CIE xy coordinates (with Y assumed to be 1.0)
+     * or 9 CIE XYZ coordinates. The reference white is supplied as a [WhitePoint].
      *
      * @param name Name of the color space, cannot be null, its length must be >= 1
      * @param primaries RGB primaries as an array of 6 (xy) or 9 (XYZ) floats
-     * @param whitePoint Reference white as an array of 2 (xy) or 3 (XYZ) floats
+     * @param whitePoint Reference white as a [WhitePoint]
      * @param function Parameters for the transfer functions
      * @param id ID of this color space as an integer between [ColorSpace.MinId] and
      *   [ColorSpace.MaxId]
      * @throws IllegalArgumentException If any of the following conditions is met:
      *     * The name is null or has a length of 0.
      *     * The primaries array is null or has a length that is neither 6 or 9.
-     *     * The white point array is null or has a length that is neither 2 or 3.
      *     * The ID is not between [ColorSpace.MinId] and [ColorSpace.MaxId].
      *     * The transfer parameters are invalid.
      *
-     * @see get
      */
     internal constructor(
         name: String,
@@ -510,7 +469,6 @@ internal constructor(
      *     * The name is null or has a length of 0.
      *     * Gamma is negative.
      *
-     * @see get
      */
     constructor(
         @Size(min = 1) name: String,
@@ -521,29 +479,18 @@ internal constructor(
     /**
      * Creates a new RGB color space using a specified set of primaries and a specified white point.
      *
-     * The primaries and white point can be specified in the CIE xyY space or in CIE XYZ. The length
-     * of the arrays depends on the chosen space:
-     * ```
-     * | Spaces | Primaries length | White point length |
-     * |--------|------------------|--------------------|
-     * | xyY    | 6                | 2                  |
-     * | XYZ    | 9                | 3                  |
-     * ```
-     *
-     * When the primaries and/or white point are specified in xyY, the Y component does not need to
-     * be specified and is assumed to be 1.0. Only the xy components are required.
+     * The primaries can be specified as 6 CIE xy coordinates (with Y assumed to be 1.0)
+     * or 9 CIE XYZ coordinates. The reference white is supplied as a [WhitePoint].
      *
      * @param name Name of the color space, cannot be null, its length must be >= 1
      * @param primaries RGB primaries as an array of 6 (xy) or 9 (XYZ) floats
-     * @param whitePoint Reference white as an array of 2 (xy) or 3 (XYZ) floats
+     * @param whitePoint Reference white as a [WhitePoint]
      * @param gamma Gamma to use as the transfer function
      * @throws IllegalArgumentException If any of the following conditions is met:
      *     * The name is null or has a length of 0.
      *     * The primaries array is null or has a length that is neither 6 or 9.
-     *     * The white point array is null or has a length that is neither 2 or 3.
      *     * Gamma is negative.
      *
-     * @see get
      */
     constructor(
         @Size(min = 1) name: String,
@@ -555,21 +502,12 @@ internal constructor(
     /**
      * Creates a new RGB color space using a specified set of primaries and a specified white point.
      *
-     * The primaries and white point can be specified in the CIE xyY space or in CIE XYZ. The length
-     * of the arrays depends on the chosen space:
-     * ```
-     * | Spaces | Primaries length | White point length |
-     * |--------|------------------|--------------------|
-     * | xyY    | 6                | 2                  |
-     * | XYZ    | 9                | 3                  |
-     * ```
-     *
-     * When the primaries and/or white point are specified in xyY, the Y component does not need to
-     * be specified and is assumed to be 1.0. Only the xy components are required.
+     * The primaries can be specified as 6 CIE xy coordinates (with Y assumed to be 1.0)
+     * or 9 CIE XYZ coordinates. The reference white is supplied as a [WhitePoint].
      *
      * @param name Name of the color space, cannot be null, its length must be >= 1
      * @param primaries RGB primaries as an array of 6 (xy) or 9 (XYZ) floats
-     * @param whitePoint Reference white as an array of 2 (xy) or 3 (XYZ) floats
+     * @param whitePoint Reference white as a [WhitePoint]
      * @param gamma Gamma to use as the transfer function
      * @param min The minimum valid value in this color space's RGB range
      * @param max The maximum valid value in this color space's RGB range
@@ -578,12 +516,10 @@ internal constructor(
      * @throws IllegalArgumentException If any of the following conditions is met:
      *     * The name is null or has a length of 0.
      *     * The primaries array is null or has a length that is neither 6 or 9.
-     *     * The white point array is null or has a length that is neither 2 or 3.
      *     * The minimum valid value is >= the maximum valid value.
      *     * The ID is not between [ColorSpace.MinId] and [ColorSpace.MaxId].
      *     * Gamma is negative.
      *
-     * @see get
      */
     internal constructor(
         name: String,
@@ -1095,7 +1031,7 @@ internal constructor(
          * matrix. This method assumes that the range of the color space is [0..1].
          *
          * @param toXYZ The color space's 3x3 transform matrix to XYZ
-         * @return A new array of 2 floats containing the color space's white point in CIE xyY
+         * @return A new [WhitePoint] containing the color space's white point in CIE xyY
          */
         private fun computeWhitePoint(toXYZ: FloatArray): WhitePoint {
             val w = mul3x3Float3(toXYZ, floatArrayOf(1.0f, 1.0f, 1.0f))

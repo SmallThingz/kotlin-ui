@@ -44,6 +44,24 @@ class AnimationNumericContractsTest {
         assertEquals(0f, repeated.getValueFromNanos(expected, zero, AnimationVector1D(1f), zero).value, 0f)
     }
 
+    @Test fun directInfiniteRepeatRejectsZeroDurationTweenAndSnap() {
+        val animations = listOf<VectorizedDurationBasedAnimationSpec<AnimationVector1D>>(
+            VectorizedTweenSpec(durationMillis = 0),
+            VectorizedSnapSpec(delayMillis = 0),
+        )
+        for (animation in animations) {
+            try {
+                VectorizedInfiniteRepeatableSpec(animation)
+                fail("Accepted a zero-duration infinite animation")
+            } catch (expected: IllegalArgumentException) {
+                assertEquals(
+                    "Animation to be infinitely repeated cannot have a 0-duration",
+                    expected.message,
+                )
+            }
+        }
+    }
+
     @Test fun genericStateCopyOwnsItsVelocity() {
         data class Value(val value: Float)
         val converter = TwoWayConverter<Value, AnimationVector1D>({ AnimationVector1D(it.value) }, { Value(it.value) })
