@@ -14,6 +14,15 @@ SOURCES = [
     'src/main/kotlin/smallthingz/ui/platform/AndroidUiFrameClock.kt',
     'src/main/kotlin/smallthingz/ui/platform/AndroidUiDispatcher.kt',
 ]
+# Other host suites have separate production dependencies and runners.
+FIXTURES = [
+    'src/testHost/java/android/os/Handler.java',
+    'src/testHost/java/android/os/Looper.java',
+    'src/testHost/java/android/view/Choreographer.java',
+]
+TESTS = [
+    'src/testHost/kotlin/smallthingz/ui/platform/AndroidUiFrameClockHostTest.kt',
+]
 
 
 def main():
@@ -34,8 +43,8 @@ def main():
     java = str(args.java_home / 'bin/java') if args.java_home else 'java'
     javac = str(args.java_home / 'bin/javac') if args.java_home else 'javac'
     sources = [args.source_root.resolve() / name for name in SOURCES]
-    fixtures = sorted((ROOT / 'src/testHost').rglob('*.java'))
-    tests = sorted((ROOT / 'src/testHost').rglob('*.kt'))
+    fixtures = [ROOT / name for name in FIXTURES]
+    tests = [ROOT / name for name in TESTS]
     files = sources + fixtures + tests
     before = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in files}
     results = []
