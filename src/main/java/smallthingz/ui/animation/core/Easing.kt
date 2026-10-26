@@ -92,7 +92,7 @@ public class CubicBezierEasing(
     }
 
     override fun hashCode(): Int {
-        return ((a.hashCode() * 31 + b.hashCode()) * 31 + c.hashCode()) * 31 + d.hashCode()
+        return ((a.animationFloatHashCode() * 31 + b.animationFloatHashCode()) * 31 + c.animationFloatHashCode()) * 31 + d.animationFloatHashCode()
     }
 
     override fun toString(): String = "CubicBezierEasing(a=$a, b=$b, c=$c, d=$d)"

@@ -20,7 +20,6 @@ import smallthingz.ui.animation.core.AnimationEndReason.BoundReached
 import smallthingz.ui.animation.core.AnimationEndReason.Finished
 import smallthingz.ui.runtime.State
 import smallthingz.ui.foundation.MutatorMutex
-import kotlinx.coroutines.CancellationException
 
 @Suppress("NotCloseable")
 public class Animatable<T, V : AnimationVector>
@@ -201,12 +200,9 @@ constructor(
                     }
                 }
                 val endReason = if (clampingNeeded) BoundReached else Finished
-                endAnimation()
                 AnimationResult(endState, endReason)
-            } catch (e: CancellationException) {
-                // Clean up internal states first, then throw.
+            } finally {
                 endAnimation()
-                throw e
             }
         }
     }
@@ -238,6 +234,8 @@ constructor(
         internalState.apply {
             velocityVector.reset()
             lastFrameTimeNanos = AnimationConstants.UnspecifiedTime
+            isRunning = false
+            activeScope = null
         }
         isRunning = false
     }

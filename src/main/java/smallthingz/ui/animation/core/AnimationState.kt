@@ -52,6 +52,9 @@ public class AnimationState<T, V : AnimationVector>(
         internal set
 
     
+    // Frame timestamps can coincide across runs; cleanup must identify the actual last writer.
+    internal var activeScope: AnimationScope<T, V>? = null
+
     public val velocity: T
         get() = typeConverter.convertFromVector(velocityVector)
 
@@ -132,7 +135,7 @@ internal constructor(
 
 public fun <T, V : AnimationVector> AnimationState<T, V>.copy(
     value: T = this.value,
-    velocityVector: V? = this.velocityVector.copy(),
+    velocityVector: V? = this.velocityVector,
     lastFrameTimeNanos: Long = this.lastFrameTimeNanos,
     finishedTimeNanos: Long = this.finishedTimeNanos,
     isRunning: Boolean = this.isRunning,

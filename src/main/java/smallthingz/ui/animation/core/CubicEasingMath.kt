@@ -180,7 +180,7 @@ internal fun computeCubicVerticalBounds(
     var maxY = max(p0y, p3y)
 
     for (i in 0 until count) {
-        val t = roots[i]
+        val t = roots[index + i]
         val y = evaluateCubic(p0y, p1y, p2y, p3y, t)
         minY = min(minY, y)
         maxY = max(maxY, y)

@@ -38,7 +38,8 @@ object NoiseTexture {
     }
     private val main = Handler(Looper.getMainLooper())
     private val pending = mutableListOf<WeakReference<NoiseDrawable>>()
-    private val shaders = mutableMapOf<Int, BitmapShader>()
+    private var backgroundShader: BitmapShader? = null
+    private var topBarShader: BitmapShader? = null
 
     fun prepare() {
         tile.start(execute = { work ->
@@ -84,7 +85,10 @@ object NoiseTexture {
                 }
             }
         // Only the two standard phases occupy the process cache; arbitrary callers own their shader.
-        if (seed == NoiseDrawable.SEED_BACKGROUND || seed == NoiseDrawable.SEED_TOP_BAR)
-            shaders.getOrPut(seed, ::createShader) else createShader()
+        when (seed) {
+            NoiseDrawable.SEED_BACKGROUND -> backgroundShader ?: createShader().also { backgroundShader = it }
+            NoiseDrawable.SEED_TOP_BAR -> topBarShader ?: createShader().also { topBarShader = it }
+            else -> createShader()
+        }
     }
 }

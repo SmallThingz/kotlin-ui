@@ -22,27 +22,35 @@ class AnimatedValue<T, V : AnimationVector>(
     val running get() = animation != null
     private var animation: TargetBasedAnimation<T, V>? = null
     private var velocity = zero()
-    private var startFrame: Long? = null
-    private var lastFrame: Long? = null
+    private var startFrame = 0L
+    private var lastFrame = 0L
+    private var hasStartFrame = false
+    private var hasLastFrame = false
 
     fun target(next: T, scale: Float) {
         if (target == next && (running || value == next)) return
         val previousFrame = lastFrame
+        val hadPreviousFrame = hasLastFrame
         // Animatable.animateTo defaults initialVelocity to velocity:T. This conversion matters for
         // Color (Oklab -> packed Color -> Oklab) and IntSize (integer quantization) on interruption.
         animation = TargetBasedAnimation(spec, converter, value, next,
             initialVelocity = converter.convertFromVector(velocity))
         target = next
         startFrame = previousFrame
-        if (previousFrame != null) frame(previousFrame, scale)
+        hasStartFrame = hadPreviousFrame
+        if (hadPreviousFrame) frame(previousFrame, scale)
     }
 
     fun frame(time: Long, scale: Float) {
         val active = animation ?: return
         require(scale >= 0f) { "negative scale factor" }
-        val start = startFrame ?: time.also { startFrame = it }
+        val start = if (hasStartFrame) startFrame else time.also {
+            startFrame = it
+            hasStartFrame = true
+        }
         val play = if (scale == 0f) active.durationNanos else ((time - start) / scale).toLong()
         lastFrame = time
+        hasLastFrame = true
         value = active.getValueFromNanos(play)
         velocity = active.getVelocityVectorFromNanos(play)
         if (active.isFinishedFromNanos(play)) stop()
@@ -51,8 +59,8 @@ class AnimatedValue<T, V : AnimationVector>(
     fun stop() {
         animation = null
         velocity = zero()
-        startFrame = null
-        lastFrame = null
+        hasStartFrame = false
+        hasLastFrame = false
     }
 
     fun snap(next: T) { stop(); value = next; target = next }

@@ -82,7 +82,9 @@ public class SpringSpec<T>(
         VectorizedSpringSpec(dampingRatio, stiffness, converter.convert(visibilityThreshold))
 
     override fun equals(other: Any?): Boolean =
-        if (other is SpringSpec<*>) {
+        if (this === other) {
+            true
+        } else if (other is SpringSpec<*>) {
             other.dampingRatio == this.dampingRatio &&
                 other.stiffness == this.stiffness &&
                 other.visibilityThreshold == this.visibilityThreshold
@@ -91,7 +93,7 @@ public class SpringSpec<T>(
         }
 
     override fun hashCode(): Int =
-        (visibilityThreshold.hashCode() * 31 + dampingRatio.hashCode()) * 31 + stiffness.hashCode()
+        (visibilityThreshold.hashCode() * 31 + dampingRatio.animationFloatHashCode()) * 31 + stiffness.animationFloatHashCode()
 }
 
 private fun <T, V : AnimationVector> TwoWayConverter<T, V>.convert(data: T?): V? {

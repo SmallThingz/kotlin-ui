@@ -25,11 +25,21 @@ public class SplineBasedFloatDecayAnimationSpec(density: Density) : FloatDecayAn
     private val flingCalculator =
         FlingCalculator(friction = platformFlingScrollFriction, density = density)
 
+    @Volatile private var cachedFling: FlingCalculator.FlingInfo? = null
+
+    private fun flingInfo(velocity: Float): FlingCalculator.FlingInfo {
+        val cached = cachedFling
+        if (cached != null && cached.initialVelocity.toRawBits() == velocity.toRawBits()) return cached
+        // The calculator captures immutable friction and density coefficients. Concurrent misses
+        // may duplicate calculation, but each caller uses its own coherent immutable result.
+        return flingCalculator.flingInfo(velocity).also { cachedFling = it }
+    }
+
     override val absVelocityThreshold: Float
         get() = 0f
 
     private fun flingDistance(startVelocity: Float): Float =
-        flingCalculator.flingDistance(startVelocity) * sign(startVelocity)
+        flingInfo(startVelocity).distance * sign(startVelocity)
 
     override fun getTargetValue(initialValue: Float, initialVelocity: Float): Float =
         initialValue + flingDistance(initialVelocity)
@@ -41,12 +51,12 @@ public class SplineBasedFloatDecayAnimationSpec(density: Density) : FloatDecayAn
         initialVelocity: Float,
     ): Float {
         val playTimeMillis = playTimeNanos / 1_000_000L
-        return initialValue + flingCalculator.flingInfo(initialVelocity).position(playTimeMillis)
+        return initialValue + flingInfo(initialVelocity).position(playTimeMillis)
     }
 
     @Suppress("MethodNameUnits")
     override fun getDurationNanos(initialValue: Float, initialVelocity: Float): Long =
-        flingCalculator.flingDuration(initialVelocity) * 1_000_000L
+        flingInfo(initialVelocity).duration * 1_000_000L
 
     @Suppress("MethodNameUnits")
     override fun getVelocityFromNanos(
@@ -55,7 +65,7 @@ public class SplineBasedFloatDecayAnimationSpec(density: Density) : FloatDecayAn
         initialVelocity: Float,
     ): Float {
         val playTimeMillis = playTimeNanos / 1_000_000L
-        return flingCalculator.flingInfo(initialVelocity).velocity(playTimeMillis)
+        return flingInfo(initialVelocity).velocity(playTimeMillis)
     }
 }
 

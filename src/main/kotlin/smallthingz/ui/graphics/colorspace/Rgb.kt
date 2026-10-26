@@ -842,8 +842,8 @@ internal constructor(
         if (!(primaries contentEquals rgb.primaries)) return false
         if (transferParameters != null) {
             return transferParameters == rgb.transferParameters
-        } else if (rgb.transferParameters == null) {
-            return true
+        } else if (rgb.transferParameters != null) {
+            return false
         }
 
         return if (oetfOrig != rgb.oetfOrig) false else eotfOrig == rgb.eotfOrig

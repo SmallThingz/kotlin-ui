@@ -26,14 +26,29 @@ fun lerp(start: Float, stop: Float, fraction: Float): Float {
     return (1 - fraction) * start + fraction * stop
 }
 
-/** Linearly interpolate between [start] and [stop] with [fraction] fraction between them. */
+/**
+ * Linearly interpolate between [start] and [stop] with [fraction] fraction between them.
+ * The difference is widened before scaling; the final Int result retains wrapping on overflow.
+ */
 fun lerp(start: Int, stop: Int, fraction: Float): Int {
-    return start + ((stop - start) * fraction.toDouble()).fastRoundToInt()
+    return start + ((stop.toLong() - start.toLong()) * fraction.toDouble()).fastRoundToInt()
 }
 
-/** Linearly interpolate between [start] and [stop] with [fraction] fraction between them. */
+/**
+ * Linearly interpolate between [start] and [stop] with [fraction] fraction between them.
+ * Fractions 0 and 1 return their exact endpoints. Interior spans wider than a [Long] use Double
+ * precision and stay within the endpoint range; extrapolation retains integer overflow behavior.
+ */
 fun lerp(start: Long, stop: Long, fraction: Float): Long {
-    return start + ((stop - start) * fraction.toDouble()).roundToLong()
+    if (fraction == 0f) return start
+    if (fraction == 1f) return stop
+    val difference = stop - start
+    if (((stop xor start) and (stop xor difference)) < 0L && fraction > 0f && fraction < 1f) {
+        val amount = fraction.toDouble()
+        return ((1.0 - amount) * start.toDouble() + amount * stop.toDouble())
+            .roundToLong().coerceIn(minOf(start, stop), maxOf(start, stop))
+    }
+    return start + (difference * fraction.toDouble()).roundToLong()
 }
 
 /**

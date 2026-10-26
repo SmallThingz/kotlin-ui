@@ -23,6 +23,8 @@ import android.text.TextPaint
 import android.text.TextUtils
 import android.text.style.MetricAffectingSpan
 import android.graphics.text.LineBreakConfig
+import androidx.annotation.DoNotInline
+import androidx.annotation.RequiresApi
 import smallthingz.ui.geometry.Offset
 import smallthingz.ui.geometry.Rect
 import smallthingz.ui.graphics.Color
@@ -266,9 +268,7 @@ open class Paragraph(
             .setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE)
             .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
             .setJustificationMode(Layout.JUSTIFICATION_MODE_NONE)
-        if (Build.VERSION.SDK_INT >= 33) builder.setLineBreakConfig(LineBreakConfig.Builder()
-            .setLineBreakStyle(LineBreakConfig.LINE_BREAK_STYLE_NONE)
-            .setLineBreakWordStyle(LineBreakConfig.LINE_BREAK_WORD_STYLE_NONE).build())
+        if (Build.VERSION.SDK_INT >= 33) ParagraphApi33.setLineBreakConfig(builder)
         if (Build.VERSION.SDK_INT >= 35) {
             builder.setUseBoundsForWidth(false)
             builder.setShiftDrawingOffsetForStartOverhang(false)
@@ -425,6 +425,20 @@ open class Paragraph(
             canvas.translate(0f, topPadding.toFloat())
             ParagraphCanvas.draw(layout, canvas)
         } finally { canvas.restoreToCount(saved) }
+    }
+}
+
+/** Initialized only behind the SDK guard; no API 33 type enters Paragraph's fields. */
+@RequiresApi(33)
+private object ParagraphApi33 {
+    private val lineBreakConfig = LineBreakConfig.Builder()
+        .setLineBreakStyle(LineBreakConfig.LINE_BREAK_STYLE_NONE)
+        .setLineBreakWordStyle(LineBreakConfig.LINE_BREAK_WORD_STYLE_NONE)
+        .build()
+
+    @DoNotInline
+    fun setLineBreakConfig(builder: StaticLayout.Builder) {
+        builder.setLineBreakConfig(lineBreakConfig)
     }
 }
 

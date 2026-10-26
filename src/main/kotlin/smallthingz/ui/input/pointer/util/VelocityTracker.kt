@@ -106,8 +106,10 @@ internal constructor(
     }
 
     // Circular buffer; current sample at index.
-    private val samples: Array<DataPointAtTime?> = arrayOfNulls(HistorySize)
+    private val sampleTimes = LongArray(HistorySize)
+    private val sampleData = FloatArray(HistorySize)
     private var index: Int = 0
+    private var historyCount: Int = 0
 
     // Reusable arrays to avoid allocation inside calculateVelocity.
     private val reusableDataPointsArray = FloatArray(HistorySize)
@@ -115,6 +117,7 @@ internal constructor(
 
     // Reusable array to minimize allocations inside calculateLeastSquaresVelocity.
     private val reusableVelocityCoefficients = FloatArray(3)
+    private var leastSquaresWorkspace: LeastSquaresWorkspace? = null
 
     /**
      * Adds a data point for velocity calculation at a given time, [timeMillis]. The data ponit
@@ -129,7 +132,9 @@ internal constructor(
      */
     fun addDataPoint(timeMillis: Long, dataPoint: Float) {
         index = (index + 1) % HistorySize
-        samples.set(index, timeMillis, dataPoint)
+        sampleTimes[index] = timeMillis
+        sampleData[index] = dataPoint
+        if (historyCount < HistorySize) historyCount++
     }
 
     /**
@@ -146,34 +151,32 @@ internal constructor(
         var sampleCount = 0
         var index: Int = index
 
-        // The sample at index is our newest sample.  If it is null, we have no samples so return.
-        val newestSample: DataPointAtTime = samples[index] ?: return 0f
-
-        var previousSample: DataPointAtTime = newestSample
+        if (historyCount == 0) return 0f
+        val newestTime = sampleTimes[index]
+        var previousTime = newestTime
 
         // Starting with the most recent PointAtTime sample, iterate backwards while
         // the samples represent continuous motion.
         do {
-            val sample: DataPointAtTime = samples[index] ?: break
-
-            val age: Float = (newestSample.time - sample.time).toFloat()
-            val delta: Float = abs(sample.time - previousSample.time).toFloat()
-            previousSample =
+            val sampleTime = sampleTimes[index]
+            val age: Float = (newestTime - sampleTime).toFloat()
+            val delta: Float = abs(sampleTime - previousTime).toFloat()
+            previousTime =
                 if (strategy == Strategy.Lsq2 || isDataDifferential) {
-                    sample
+                    sampleTime
                 } else {
-                    newestSample
+                    newestTime
                 }
             if (age > HorizonMilliseconds || delta > AssumePointerMoveStoppedMilliseconds) {
                 break
             }
 
-            dataPoints[sampleCount] = sample.dataPoint
+            dataPoints[sampleCount] = sampleData[index]
             time[sampleCount] = -age
             index = (if (index == 0) HistorySize else index) - 1
 
             sampleCount += 1
-        } while (sampleCount < HistorySize)
+        } while (sampleCount < historyCount)
 
         if (sampleCount >= minSampleSize) {
             // Choose computation logic based on strategy.
@@ -221,7 +224,7 @@ internal constructor(
 
     /** Clears data points added by [addDataPoint]. */
     fun resetTracking() {
-        samples.fill(element = null)
+        historyCount = 0
         index = 0
     }
 
@@ -239,30 +242,14 @@ internal constructor(
         // x = 0, and that happens to be the last timestamp that we end up
         // passing to polyFitLeastSquares.
         return try {
-            polyFitLeastSquares(time, dataPoints, sampleCount, 2, reusableVelocityCoefficients)[1]
+            val workspace = leastSquaresWorkspace
+                ?: LeastSquaresWorkspace().also { leastSquaresWorkspace = it }
+            polyFitLeastSquares(time, dataPoints, sampleCount, 2, reusableVelocityCoefficients, workspace)[1]
         } catch (exception: IllegalArgumentException) {
             0f
         }
     }
 }
-
-/**
- * Extension to simplify either creating a new [DataPointAtTime] at an array index (if the index was
- * never populated), or to update an existing [DataPointAtTime] (if the index had an existing
- * element). This helps to have zero allocations on average, and avoid performance hit that can be
- * caused by creating lots of objects.
- */
-private fun Array<DataPointAtTime?>.set(index: Int, time: Long, dataPoint: Float) {
-    val currentEntry = this[index]
-    if (currentEntry == null) {
-        this[index] = DataPointAtTime(time, dataPoint)
-    } else {
-        currentEntry.time = time
-        currentEntry.dataPoint = dataPoint
-    }
-}
-
-internal data class DataPointAtTime(var time: Long, var dataPoint: Float)
 
 /**
  * TODO (shepshapard): If we want to support varying weights for each position, we could accept a
@@ -293,6 +280,21 @@ internal fun polyFitLeastSquares(
     sampleCount: Int,
     degree: Int,
     coefficients: FloatArray = FloatArray((degree + 1).coerceAtLeast(0)),
+): FloatArray = polyFitLeastSquares(x, y, sampleCount, degree, coefficients, null)
+
+private class LeastSquaresWorkspace {
+    val a = Matrix(3, HistorySize)
+    val q = Matrix(3, HistorySize)
+    val r = Matrix(3, 3)
+}
+
+private fun polyFitLeastSquares(
+    x: FloatArray,
+    y: FloatArray,
+    sampleCount: Int,
+    degree: Int,
+    coefficients: FloatArray,
+    workspace: LeastSquaresWorkspace?,
 ): FloatArray {
     if (degree < 1) {
         throwIllegalArgumentException("The degree must be at positive integer")
@@ -313,7 +315,7 @@ internal fun polyFitLeastSquares(
     val n = truncatedDegree + 1
 
     // Expand the X vector to a matrix A, pre-multiplied by the weights.
-    val a = Matrix(n, m)
+    val a = workspace?.a ?: Matrix(n, m)
     for (h in 0 until m) {
         a[0, h] = DefaultWeight
         for (i in 1 until n) {
@@ -324,29 +326,29 @@ internal fun polyFitLeastSquares(
     // Apply the Gram-Schmidt process to A to obtain its QR decomposition.
 
     // Orthonormal basis, column-major order.
-    val q = Matrix(n, m)
+    val q = workspace?.q ?: Matrix(n, m)
     // Upper triangular matrix, row-major order.
-    val r = Matrix(n, n)
+    val r = workspace?.r ?: Matrix(n, n)
     for (j in 0 until n) {
         val w = q[j]
         a[j].copyInto(w, 0, 0, m)
 
         for (i in 0 until j) {
             val z = q[i]
-            val dot = w.dot(z)
+            val dot = w.dot(z, m)
             for (h in 0 until m) {
                 w[h] -= dot * z[h]
             }
         }
 
-        val inverseNorm = 1.0f / w.norm().fastCoerceAtLeast(1e-6f)
+        val inverseNorm = 1.0f / w.norm(m).fastCoerceAtLeast(1e-6f)
         for (h in 0 until m) {
             w[h] *= inverseNorm
         }
 
         val v = r[j]
         for (i in 0 until n) {
-            v[i] = if (i < j) 0.0f else w.dot(a[i])
+            v[i] = if (i < j) 0.0f else w.dot(a[i], m)
         }
     }
 
@@ -368,7 +370,7 @@ internal fun polyFitLeastSquares(
     }
 
     for (i in n - 1 downTo 0) {
-        var c = q[i].dot(wy)
+        var c = q[i].dot(wy, m)
         val ri = r[i]
         for (j in n - 1 downTo i + 1) {
             c -= ri[j] * coefficients[j]
@@ -481,15 +483,16 @@ private inline fun kineticEnergyToVelocity(kineticEnergy: Float): Float {
 
 private typealias Vector = FloatArray
 
-private fun FloatArray.dot(a: FloatArray): Float {
+private fun FloatArray.dot(a: FloatArray, sampleCount: Int): Float {
     var result = 0.0f
-    for (i in indices) {
+    for (i in 0 until sampleCount) {
         result += this[i] * a[i]
     }
     return result
 }
 
-@Suppress("NOTHING_TO_INLINE") private inline fun FloatArray.norm(): Float = sqrt(this.dot(this))
+@Suppress("NOTHING_TO_INLINE") private inline fun FloatArray.norm(sampleCount: Int): Float =
+    sqrt(this.dot(this, sampleCount))
 
 private typealias Matrix = Array<FloatArray>
 

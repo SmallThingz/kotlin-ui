@@ -82,7 +82,7 @@ public interface VectorizedDurationBasedAnimationSpec<V : AnimationVector> :
 
     @Suppress("MethodNameUnits")
     override fun getDurationNanos(initialValue: V, targetValue: V, initialVelocity: V): Long =
-        (delayMillis + durationMillis) * MillisToNanos
+        (delayMillis.toLong() + durationMillis) * MillisToNanos
 }
 
 internal fun VectorizedDurationBasedAnimationSpec<*>.clampPlayTime(playTime: Long): Long {
@@ -141,7 +141,7 @@ public class VectorizedInfiniteRepeatableSpec<V : AnimationVector>(
 
     
     internal val durationNanos: Long =
-        (animation.delayMillis + animation.durationMillis) * MillisToNanos
+        (animation.delayMillis.toLong() + animation.durationMillis) * MillisToNanos
 
     private val initialOffsetNanos = initialStartOffset.value * MillisToNanos
 

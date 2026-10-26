@@ -19,7 +19,6 @@ package smallthingz.ui.graphics.colorspace
 import smallthingz.ui.graphics.Color
 import smallthingz.ui.util.fastCbrt
 import smallthingz.ui.util.fastCoerceIn
-import smallthingz.ui.util.packFloats
 
 /** Implementation of the Oklab color space. Oklab uses a D65 white point. */
 internal class Oklab(name: String, id: Int) : ColorSpace(name, ColorModel.Lab, id) {
@@ -49,7 +48,9 @@ internal class Oklab(name: String, id: Int) : ColorSpace(name, ColorModel.Lab, i
         return v
     }
 
-    override fun toXy(v0: Float, v1: Float, v2: Float): Long {
+    internal fun toConnectorColor(
+        v0: Float, v1: Float, v2: Float, a: Float, connector: Connector,
+    ): Color {
         val v00 = v0.fastCoerceIn(0f, 1f)
         val v10 = v1.fastCoerceIn(-0.5f, 0.5f)
         val v20 = v2.fastCoerceIn(-0.5f, 0.5f)
@@ -64,26 +65,8 @@ internal class Oklab(name: String, id: Int) : ColorSpace(name, ColorModel.Lab, i
 
         val v03 = mul3x3Float3_0(InverseM1, v02, v12, v22)
         val v13 = mul3x3Float3_1(InverseM1, v02, v12, v22)
-
-        return packFloats(v03, v13)
-    }
-
-    override fun toZ(v0: Float, v1: Float, v2: Float): Float {
-        val v00 = v0.fastCoerceIn(0f, 1f)
-        val v10 = v1.fastCoerceIn(-0.5f, 0.5f)
-        val v20 = v2.fastCoerceIn(-0.5f, 0.5f)
-
-        val v01 = mul3x3Float3_0(InverseM2, v00, v10, v20)
-        val v11 = mul3x3Float3_1(InverseM2, v00, v10, v20)
-        val v21 = mul3x3Float3_2(InverseM2, v00, v10, v20)
-
-        val v02 = v01 * v01 * v01
-        val v12 = v11 * v11 * v11
-        val v22 = v21 * v21 * v21
-
         val v23 = mul3x3Float3_2(InverseM1, v02, v12, v22)
-
-        return v23
+        return connector.xyzToColor(v03, v13, v23, a)
     }
 
     override fun xyzaToColor(

@@ -89,9 +89,9 @@ public class AnimationVector1D(initVal: Float) : AnimationVector() {
         return "AnimationVector1D: value = $value"
     }
 
-    override fun equals(other: Any?): Boolean = other is AnimationVector1D && other.value == value
+    override fun equals(other: Any?): Boolean = this === other || (other is AnimationVector1D && other.value == value)
 
-    override fun hashCode(): Int = value.hashCode()
+    override fun hashCode(): Int = value.animationFloatHashCode()
 }
 
 public class AnimationVector2D(v1: Float, v2: Float) : AnimationVector() {
@@ -133,9 +133,9 @@ public class AnimationVector2D(v1: Float, v2: Float) : AnimationVector() {
     }
 
     override fun equals(other: Any?): Boolean =
-        other is AnimationVector2D && other.v1 == v1 && other.v2 == v2
+        this === other || (other is AnimationVector2D && other.v1 == v1 && other.v2 == v2)
 
-    override fun hashCode(): Int = v1.hashCode() * 31 + v2.hashCode()
+    override fun hashCode(): Int = v1.animationFloatHashCode() * 31 + v2.animationFloatHashCode()
 }
 
 public class AnimationVector3D(v1: Float, v2: Float, v3: Float) : AnimationVector() {
@@ -185,9 +185,9 @@ public class AnimationVector3D(v1: Float, v2: Float, v3: Float) : AnimationVecto
     }
 
     override fun equals(other: Any?): Boolean =
-        other is AnimationVector3D && other.v1 == v1 && other.v2 == v2 && other.v3 == v3
+        this === other || (other is AnimationVector3D && other.v1 == v1 && other.v2 == v2 && other.v3 == v3)
 
-    override fun hashCode(): Int = (v1.hashCode() * 31 + v2.hashCode()) * 31 + v3.hashCode()
+    override fun hashCode(): Int = (v1.animationFloatHashCode() * 31 + v2.animationFloatHashCode()) * 31 + v3.animationFloatHashCode()
 }
 
 public class AnimationVector4D(v1: Float, v2: Float, v3: Float, v4: Float) : AnimationVector() {
@@ -243,12 +243,15 @@ public class AnimationVector4D(v1: Float, v2: Float, v3: Float, v4: Float) : Ani
     }
 
     override fun equals(other: Any?): Boolean =
-        other is AnimationVector4D &&
+        this === other || (other is AnimationVector4D &&
             other.v1 == v1 &&
             other.v2 == v2 &&
             other.v3 == v3 &&
-            other.v4 == v4
+            other.v4 == v4)
 
     override fun hashCode(): Int =
-        ((v1.hashCode() * 31 + v2.hashCode()) * 31 + v3.hashCode()) * 31 + v4.hashCode()
+        ((v1.animationFloatHashCode() * 31 + v2.animationFloatHashCode()) * 31 + v3.animationFloatHashCode()) * 31 + v4.animationFloatHashCode()
 }
+
+// Primitive Float equality treats both zero signs as equal.
+internal fun Float.animationFloatHashCode(): Int = if (this == 0f) 0 else hashCode()

@@ -40,8 +40,10 @@ class SpringValue<T, V : AnimationVector> private constructor(
 
     private var animation: TargetBasedAnimation<T, V>? = null
     private var velocityVector: V = zeroVector()
-    private var startFrameNanos: Long? = null
-    private var lastFrameNanos: Long? = null
+    private var startFrameNanos = 0L
+    private var lastFrameNanos = 0L
+    private var hasStartFrame = false
+    private var hasLastFrame = false
 
     /**
      * Retarget from the last delivered value/frame, not an extrapolation to event wall time.
@@ -50,6 +52,7 @@ class SpringValue<T, V : AnimationVector> private constructor(
     fun retarget(next: T, durationScale: Float = 1f): Boolean {
         if (next == targetValue) return false
         val previousFrame = lastFrameNanos
+        val hadPreviousFrame = hasLastFrame
 
         // Animatable.animateTo's default initialVelocity is velocity: T, NOT its raw vector.
         // Color.VectorConverter therefore clamps/quantizes velocity through Color on interruption.
@@ -64,10 +67,11 @@ class SpringValue<T, V : AnimationVector> private constructor(
         )
         targetValue = next
         startFrameNanos = previousFrame
+        hasStartFrame = hadPreviousFrame
 
         // A running Animatable reuses lastFrameTimeNanos and delivers its zero-time
         // restarted frame immediately. A stopped one waits for the next frame clock.
-        if (previousFrame != null) frame(previousFrame, durationScale)
+        if (hadPreviousFrame) frame(previousFrame, durationScale)
         return true
     }
 
@@ -75,7 +79,10 @@ class SpringValue<T, V : AnimationVector> private constructor(
     fun frame(frameTimeNanos: Long, durationScale: Float = 1f) {
         val current = animation ?: return
         require(durationScale >= 0f) { "negative scale factor" }
-        val start = startFrameNanos ?: frameTimeNanos.also { startFrameNanos = it }
+        val start = if (hasStartFrame) startFrameNanos else frameTimeNanos.also {
+            startFrameNanos = it
+            hasStartFrame = true
+        }
         val playTimeNanos = if (durationScale == 0f) {
             current.durationNanos
         } else {
@@ -83,6 +90,7 @@ class SpringValue<T, V : AnimationVector> private constructor(
             ((frameTimeNanos - start) / durationScale).toLong()
         }
         lastFrameNanos = frameTimeNanos
+        hasLastFrame = true
         value = current.getValueFromNanos(playTimeNanos)
         velocityVector = current.getVelocityVectorFromNanos(playTimeNanos)
         if (current.isFinishedFromNanos(playTimeNanos)) clearMotion()
@@ -100,8 +108,8 @@ class SpringValue<T, V : AnimationVector> private constructor(
     private fun clearMotion() {
         animation = null
         velocityVector = zeroVector()
-        lastFrameNanos = null
-        startFrameNanos = null
+        hasLastFrame = false
+        hasStartFrame = false
     }
 
     companion object {

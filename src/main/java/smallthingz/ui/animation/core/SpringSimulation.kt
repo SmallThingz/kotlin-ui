@@ -96,29 +96,35 @@ internal class SpringSimulation(var finalPosition: Float) {
             val coeffB =
                 (gammaMinus * adjustedDisplacement - lastVelocity) / (gammaMinus - gammaPlus)
             val coeffA = adjustedDisplacement - coeffB
-            displacement = (coeffA * exp(gammaMinus * deltaT) + coeffB * exp(gammaPlus * deltaT))
+            val expMinus = exp(gammaMinus * deltaT)
+            val expPlus = exp(gammaPlus * deltaT)
+            displacement = (coeffA * expMinus + coeffB * expPlus)
             currentVelocity =
-                (coeffA * gammaMinus * exp(gammaMinus * deltaT) +
-                    coeffB * gammaPlus * exp(gammaPlus * deltaT))
+                (coeffA * gammaMinus * expMinus +
+                    coeffB * gammaPlus * expPlus)
         } else if (dampingRatio == 1.0f) {
             // Critically damped
             val coeffA = adjustedDisplacement
             val coeffB = lastVelocity + naturalFreq * adjustedDisplacement
             val nFdT = -naturalFreq * deltaT
-            displacement = (coeffA + coeffB * deltaT) * exp(nFdT)
+            val decay = exp(nFdT)
+            displacement = (coeffA + coeffB * deltaT) * decay
             currentVelocity =
-                (((coeffA + coeffB * deltaT) * exp(nFdT) * (-naturalFreq)) + coeffB * exp(nFdT))
+                (((coeffA + coeffB * deltaT) * decay * (-naturalFreq)) + coeffB * decay)
         } else {
             val dampedFreq = naturalFreq * sqrt(1 - dampingRatioSquared)
             // Underdamped
             val cosCoeff = adjustedDisplacement
             val sinCoeff = ((1 / dampedFreq) * (((-r * adjustedDisplacement) + lastVelocity)))
             val dFdT = dampedFreq * deltaT
-            displacement = (exp(r * deltaT) * ((cosCoeff * cos(dFdT) + sinCoeff * sin(dFdT))))
+            val decay = exp(r * deltaT)
+            val cosine = cos(dFdT)
+            val sine = sin(dFdT)
+            displacement = (decay * ((cosCoeff * cosine + sinCoeff * sine)))
             currentVelocity =
                 (displacement * r +
-                    (exp(r * deltaT) *
-                        ((-dampedFreq * cosCoeff * sin(dFdT) + dampedFreq * sinCoeff * cos(dFdT)))))
+                    (decay *
+                        ((-dampedFreq * cosCoeff * sine + dampedFreq * sinCoeff * cosine))))
         }
 
         val newValue = (displacement + finalPosition).toFloat()

@@ -46,7 +46,7 @@ class Shadow(
     override fun hashCode(): Int {
         var result = color.hashCode()
         result = 31 * result + offset.hashCode()
-        result = 31 * result + blurRadius.hashCode()
+        result = 31 * result + (if (blurRadius == 0f) 0 else blurRadius.hashCode())
         return result
     }
 

@@ -123,21 +123,16 @@ object FontScaleConverterFactory {
         if (!isNonLinearFontScalingActive(fontScale)) {
             return null
         }
-        val lookupTable = FontScaleConverterFactory[fontScale]
-        if (lookupTable != null) {
-            return lookupTable
-        }
-
-        // Didn't find an exact match: interpolate between two existing tables
-        val index = sLookupTables.indexOfKey(getKey(fontScale))
+        // Keep indices and values on the same copy while other threads publish new tables.
+        val lookupTables = sLookupTables
+        val index = lookupTables.indexOfKey(getKey(fontScale))
         if (index >= 0) {
-            // This should never happen, should have been covered by get() above.
-            return sLookupTables.valueAt(index)
+            return lookupTables.valueAt(index)
         }
         // Didn't find an exact match: interpolate between two existing tables
         val lowerIndex = -(index + 1) - 1
         val higherIndex = lowerIndex + 1
-        return if (higherIndex >= sLookupTables.size()) {
+        return if (higherIndex >= lookupTables.size()) {
             // We have gone beyond our bounds and have nothing to interpolate between. Just give
             // them a straight linear table instead.
             // This works because when FontScaleConverter encounters a size beyond its bounds, it
@@ -156,10 +151,10 @@ object FontScaleConverterFactory {
                 startScale = 1f
                 startTable = FontScaleConverterTable(CommonFontSizes, CommonFontSizes)
             } else {
-                startScale = getScaleFromKey(sLookupTables.keyAt(lowerIndex))
-                startTable = sLookupTables.valueAt(lowerIndex)
+                startScale = getScaleFromKey(lookupTables.keyAt(lowerIndex))
+                startTable = lookupTables.valueAt(lowerIndex)
             }
-            val endScale = getScaleFromKey(sLookupTables.keyAt(higherIndex))
+            val endScale = getScaleFromKey(lookupTables.keyAt(higherIndex))
             val interpolationPoint =
                 MathUtils.constrainedMap(
                     rangeMin = 0f,
@@ -171,7 +166,7 @@ object FontScaleConverterFactory {
             val converter =
                 createInterpolatedTableBetween(
                     startTable,
-                    sLookupTables.valueAt(higherIndex),
+                    lookupTables.valueAt(higherIndex),
                     interpolationPoint,
                 )
 
@@ -221,7 +216,4 @@ object FontScaleConverterFactory {
         table.put(getKey(scaleKey), fontScaleConverter)
     }
 
-    private operator fun get(scaleKey: Float): FontScaleConverter? {
-        return sLookupTables[getKey(scaleKey)]
-    }
 }

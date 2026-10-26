@@ -20,7 +20,6 @@ import smallthingz.ui.runtime.withFrameNanos
 import smallthingz.ui.MotionDurationScale
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
-import kotlinx.coroutines.CancellationException
 
 public suspend fun animate(
     initialValue: Float,
@@ -118,71 +117,61 @@ internal suspend fun <T, V : AnimationVector> AnimationState<T, V>.animate(
 ) {
     val initialValue = animation.getValueFromNanos(0)
     val initialVelocityVector = animation.getVelocityVectorFromNanos(0)
-    var lateInitScope: AnimationScope<T, V>? = null
+    var scope: AnimationScope<T, V>? = null
+    val onCancel = {
+        if (activeScope === scope) {
+            isRunning = false
+            activeScope = null
+        }
+    }
     try {
         if (startTimeNanos == AnimationConstants.UnspecifiedTime) {
             val durationScale = coroutineContext.durationScale
-            animation.callWithFrameNanos {
-                lateInitScope =
-                    AnimationScope(
-                            initialValue = initialValue,
-                            typeConverter = animation.typeConverter,
-                            initialVelocityVector = initialVelocityVector,
-                            lastFrameTimeNanos = it,
-                            targetValue = animation.targetValue,
-                            startTimeNanos = it,
-                            isRunning = true,
-                            onCancel = { isRunning = false },
-                        )
-                        .apply {
-                            // First frame
-                            doAnimationFrameWithScale(
-                                it,
-                                durationScale,
-                                animation,
-                                this@animate,
-                                block,
-                            )
-                        }
+            animation.callWithFrameNanos { frameTime ->
+                val firstScope = AnimationScope(
+                    initialValue = initialValue,
+                    typeConverter = animation.typeConverter,
+                    initialVelocityVector = initialVelocityVector,
+                    lastFrameTimeNanos = frameTime,
+                    targetValue = animation.targetValue,
+                    startTimeNanos = frameTime,
+                    isRunning = true,
+                    onCancel = onCancel,
+                )
+                scope = firstScope
+                firstScope.doAnimationFrameWithScale(frameTime, durationScale, animation, this, block)
             }
         } else {
-            lateInitScope =
-                AnimationScope(
-                        initialValue = initialValue,
-                        typeConverter = animation.typeConverter,
-                        initialVelocityVector = initialVelocityVector,
-                        lastFrameTimeNanos = startTimeNanos,
-                        targetValue = animation.targetValue,
-                        startTimeNanos = startTimeNanos,
-                        isRunning = true,
-                        onCancel = { isRunning = false },
-                    )
-                    .apply {
-                        // First frame
-                        doAnimationFrameWithScale(
-                            startTimeNanos,
-                            coroutineContext.durationScale,
-                            animation,
-                            this@animate,
-                            block,
-                        )
-                    }
+            val firstScope = AnimationScope(
+                initialValue = initialValue,
+                typeConverter = animation.typeConverter,
+                initialVelocityVector = initialVelocityVector,
+                lastFrameTimeNanos = startTimeNanos,
+                targetValue = animation.targetValue,
+                startTimeNanos = startTimeNanos,
+                isRunning = true,
+                onCancel = onCancel,
+            )
+            scope = firstScope
+            firstScope.doAnimationFrameWithScale(
+                startTimeNanos, coroutineContext.durationScale, animation, this, block,
+            )
         }
-        // Subsequent frames
-        while (lateInitScope!!.isRunning) {
+        val animationScope = scope!!
+        while (animationScope.isRunning) {
             val durationScale = coroutineContext.durationScale
             animation.callWithFrameNanos {
-                lateInitScope!!.doAnimationFrameWithScale(it, durationScale, animation, this, block)
+                animationScope.doAnimationFrameWithScale(it, durationScale, animation, this, block)
             }
         }
-        // End of animation
-    } catch (e: CancellationException) {
-        lateInitScope?.isRunning = false
-        if (lateInitScope?.lastFrameTimeNanos == lastFrameTimeNanos) {
-            // There hasn't been another animation.
-            isRunning = false
+    } finally {
+        scope?.let { finishedScope ->
+            finishedScope.isRunning = false
+            if (activeScope === finishedScope) {
+                isRunning = false
+                activeScope = null
+            }
         }
-        throw e
     }
 }
 
@@ -214,6 +203,7 @@ internal fun <T, V : AnimationVector> AnimationScope<T, V>.updateState(
     state.finishedTimeNanos = finishedTimeNanos
     state.lastFrameTimeNanos = lastFrameTimeNanos
     state.isRunning = isRunning
+    state.activeScope = this
 }
 
 private fun <T, V : AnimationVector> AnimationScope<T, V>.doAnimationFrameWithScale(

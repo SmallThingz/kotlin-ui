@@ -134,7 +134,7 @@ internal constructor(
     private var initialValueVector = typeConverter.convertToVector(initialValue)
     private var targetValueVector = typeConverter.convertToVector(targetValue)
     private val initialVelocityVector =
-        initialVelocityVector?.copy() ?: typeConverter.convertToVector(initialValue).newInstance()
+        initialVelocityVector?.copy() ?: initialValueVector.newInstance()
 
     override val isInfinite: Boolean
         get() = animationSpec.isInfinite

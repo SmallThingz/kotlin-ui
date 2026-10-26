@@ -30,11 +30,9 @@ private const val P2 = 1.0f - EndTension * (1.0f - Inflection)
 
 private fun computeSplineInfo(
     splinePositions: FloatArray,
-    splineTimes: FloatArray,
     nbSamples: Int,
 ) {
     var xMin = 0.0f
-    var yMin = 0.0f
     for (i in 0 until nbSamples) {
         val alpha = i.toFloat() / nbSamples
         var xMax = 1.0f
@@ -49,31 +47,19 @@ private fun computeSplineInfo(
             if (tx > alpha) xMax = x else xMin = x
         }
         splinePositions[i] = coef * ((1.0f - x) * StartTension + x) + x * x * x
-        var yMax = 1.0f
-        var y: Float
-        var dy: Float
-        while (true) {
-            y = yMin + (yMax - yMin) / 2.0f
-            coef = 3.0f * y * (1.0f - y)
-            dy = coef * ((1.0f - y) * StartTension + y) + y * y * y
-            if (abs(dy - alpha) < 1E-5) break
-            if (dy > alpha) yMax = y else yMin = y
-        }
-        splineTimes[i] = coef * ((1.0f - y) * P1 + y * P2) + y * y * y
+
     }
-    splineTimes[nbSamples] = 1.0f
-    splinePositions[nbSamples] = splineTimes[nbSamples]
+    splinePositions[nbSamples] = 1.0f
 }
 
 internal object AndroidFlingSpline {
     private const val NbSamples = 100
     private val SplinePositions = FloatArray(NbSamples + 1)
-    private val SplineTimes = FloatArray(NbSamples + 1)
 
     init {
         // TODO This function used to be directly implemented in this init block, but it causes a
         // crash in the IR compiler.
-        computeSplineInfo(SplinePositions, SplineTimes, NbSamples)
+        computeSplineInfo(SplinePositions, NbSamples)
     }
 
     

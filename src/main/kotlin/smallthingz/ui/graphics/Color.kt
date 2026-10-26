@@ -19,7 +19,6 @@ package smallthingz.ui.graphics
 import androidx.annotation.ColorInt
 import androidx.annotation.FloatRange
 import androidx.annotation.IntRange
-import androidx.annotation.Size
 import smallthingz.ui.graphics.colorspace.ColorModel
 import smallthingz.ui.graphics.colorspace.ColorSpace
 import smallthingz.ui.graphics.colorspace.ColorSpaces
@@ -515,15 +514,6 @@ fun Color.compositeOver(background: Color): Color {
 @Suppress("NOTHING_TO_INLINE")
 private inline fun compositeComponent(fgC: Float, bgC: Float, fgA: Float, bgA: Float, a: Float) =
     if (a == 0f) 0f else ((fgC * fgA) + ((bgC * bgA) * (1f - fgA))) / a
-
-/**
- * Returns this color's components as a new array. The last element of the array is always the alpha
- * component.
- *
- * @return A new, non-null array whose size is 4
- */
-@Size(value = 4)
-private fun Color.getComponents(): FloatArray = floatArrayOf(red, green, blue, alpha)
 
 /**
  * Returns the relative luminance of this color.

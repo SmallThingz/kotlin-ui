@@ -4,7 +4,7 @@
     <string msgid="8038256446254964252" name="default_error_message">"अमान्य इनपुट"</string>
     <string msgid="6312721426453364202" name="default_popup_window_title">"पॉप-अप विंडो"</string>
     <string msgid="6827826412747255547" name="in_progress">"जारी है"</string>
-    <string msgid="4139871816613051306" name="state_empty">"कोई भी तार नहीं लगा है"</string>
+    <string msgid="4139871816613051306" name="state_empty">"खाली"</string>
     <string msgid="5834637030682409883" name="state_off">"बंद है"</string>
     <string msgid="1490883874751719580" name="state_on">"चालू है"</string>
     <string msgid="2561197295334830845" name="switch_role">"स्विच करें"</string>

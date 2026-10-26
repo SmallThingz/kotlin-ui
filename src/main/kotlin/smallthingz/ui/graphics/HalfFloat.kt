@@ -25,10 +25,6 @@ private const val Fp16ExponentShift = 10
 private const val Fp16ExponentMask = 0x1f
 private const val Fp16SignificandMask = 0x3ff
 private const val Fp16ExponentBias = 15
-private const val Fp16Combined = 0x7fff
-private const val Fp16ExponentMax = 0x7c00
-private const val Fp16One = 0x3c00
-private const val Fp16TheNaN = 0x7e00
 
 private const val Fp32SignShift = 31
 private const val Fp32ExponentShift = 23
@@ -39,15 +35,6 @@ private const val Fp32QNaNMask = 0x400000
 
 private const val Fp32DenormalMagic = 126 shl 23
 private val Fp32DenormalFloat = floatFromBits(Fp32DenormalMagic)
-
-@Suppress("NOTHING_TO_INLINE")
-private inline fun toCompareValue(value: Short): Int {
-    return if (value.toInt() and Fp16SignMask != 0) {
-        0x8000 - (value.toInt() and 0xffff)
-    } else {
-        value.toInt() and 0xffff
-    }
-}
 
 /**
  * Convert a single-precision float to a half-precision float, stored as [Short] data type to hold
@@ -69,7 +56,7 @@ internal inline fun floatToHalf(f: Float): Short {
     } else {
         e = e - Fp32ExponentBias + Fp16ExponentBias
         if (e >= 0x1f) { // Overflow
-            outE = 0x31
+            outE = Fp16ExponentMask
         } else if (e <= 0) { // Underflow
             if (e < -10) {
                 // The absolute fp32 value is less than MIN_VALUE, flush to +/-0

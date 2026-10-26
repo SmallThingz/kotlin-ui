@@ -144,14 +144,33 @@ internal constructor(
 
     internal open fun transformToColor(color: Color): Color {
         val (r, g, b, a) = color
+        if (transformSource is Oklab) {
+            return transformSource.toConnectorColor(r, g, b, a, this)
+        }
+        // Custom transfer callbacks may be stateful: retain their original invocation count.
+        if (transformSource is Rgb && transformSource.transferParameters != null) {
+            val v0 = transformSource.eotfFunc(r.toDouble()).toFloat()
+            val v1 = transformSource.eotfFunc(g.toDouble()).toFloat()
+            val v2 = transformSource.eotfFunc(b.toDouble()).toFloat()
+            val matrix = transformSource.transform
+            return xyzToColor(
+                mul3x3Float3_0(matrix, v0, v1, v2),
+                mul3x3Float3_1(matrix, v0, v1, v2),
+                mul3x3Float3_2(matrix, v0, v1, v2),
+                a,
+            )
+        }
         val packed = transformSource.toXy(r, g, b)
-        var x = unpackFloat1(packed)
-        var y = unpackFloat2(packed)
-        var z = transformSource.toZ(r, g, b)
+        return xyzToColor(
+            unpackFloat1(packed), unpackFloat2(packed), transformSource.toZ(r, g, b), a,
+        )
+    }
+
+    internal fun xyzToColor(x: Float, y: Float, z: Float, a: Float): Color {
         if (transform != null) {
-            x *= transform[0]
-            y *= transform[1]
-            z *= transform[2]
+            return transformDestination.xyzaToColor(
+                x * transform[0], y * transform[1], z * transform[2], a, destination,
+            )
         }
         return transformDestination.xyzaToColor(x, y, z, a, destination)
     }

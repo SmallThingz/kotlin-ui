@@ -94,15 +94,17 @@ object ColorSpaces {
         val e = -params.e
         val f = 1.0 / params.c
 
-        val tmp = max(a + b * absX.pow(c), 0.0)
-        return sign * (tmp / (d + e * absX.pow(c))).pow(f)
+        val powered = absX.pow(c)
+        val tmp = max(a + b * powered, 0.0)
+        return sign * (tmp / (d + e * powered)).pow(f)
     }
 
     internal fun transferSt2048Eotf(pq: TransferParameters, x: Double): Double {
         val sign = if (x < 0) -1.0 else 1.0
         val absX = x * sign
 
-        val tmp = (pq.a + pq.b * absX.pow(pq.c)).coerceAtLeast(0.0)
-        return sign * (tmp / (pq.d + pq.e * absX.pow(pq.c))).pow(pq.f)
+        val powered = absX.pow(pq.c)
+        val tmp = (pq.a + pq.b * powered).coerceAtLeast(0.0)
+        return sign * (tmp / (pq.d + pq.e * powered)).pow(pq.f)
     }
 }
