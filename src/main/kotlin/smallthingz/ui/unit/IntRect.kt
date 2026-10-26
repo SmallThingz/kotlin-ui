@@ -65,7 +65,7 @@ data class IntRect(
     val size: IntSize
         get() = IntSize(width, height)
 
-    /** Whether this rectangle encloses a non-zero area. Negative areas are considered empty. */
+    /** Whether `left >= right` or `top >= bottom` (coincident or reversed edges). */
     val isEmpty: Boolean
         get() = left >= right || top >= bottom
 

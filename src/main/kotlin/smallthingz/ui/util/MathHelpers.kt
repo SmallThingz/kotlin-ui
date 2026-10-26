@@ -315,7 +315,7 @@ fun fastCbrt(x: Float): Float {
  * - [Float.NaN], returns [Float.NaN]
  * - [Float.POSITIVE_INFINITY], returns [Float.NaN]
  * - [Float.NEGATIVE_INFINITY], returns [Float.NaN]
- * - 0f, 0.25f, 0.5f, 0.75f, or 1.0f (0, 90, 180, 360 degrees), the returned value is exact
+ * - 0f, 0.25f, 0.5f, 0.75f, or 1.0f (0, 90, 180, 270, 360 degrees), the returned value is exact
  */
 inline fun normalizedAngleSin(normalizedDegrees: Float): Float {
     val degrees = normalizedDegrees - floor(normalizedDegrees + 0.5f)
@@ -325,8 +325,8 @@ inline fun normalizedAngleSin(normalizedDegrees: Float): Float {
 }
 
 /**
- * Fast, approximate sine function. Returns the sine of the angle [normalizedDegrees] expressed in
- * normalized degrees. For instance, to compute the sine of 180 degrees, you should pass `0.5f`
+ * Fast, approximate cosine function. Returns the cosine of the angle [normalizedDegrees] expressed in
+ * normalized degrees. For instance, to compute the cosine of 180 degrees, you should pass `0.5f`
  * (`180.0f/360.0f`). To compute the cosine of any angle in degrees, call the function this way:
  * ```
  * val c = normalizedAngleCos(angleInDegrees * (1.0f / 360.0f))
@@ -347,7 +347,7 @@ inline fun normalizedAngleSin(normalizedDegrees: Float): Float {
  * - [Float.NaN], returns [Float.NaN]
  * - [Float.POSITIVE_INFINITY], returns [Float.NaN]
  * - [Float.NEGATIVE_INFINITY], returns [Float.NaN]
- * - 0f, 0.25f, 0.5f, 0.75f, or 1.0f (0, 90, 180, 360 degrees), the returned value is exact
+ * - 0f, 0.25f, 0.5f, 0.75f, or 1.0f (0, 90, 180, 270, 360 degrees), the returned value is exact
  */
 inline fun normalizedAngleCos(normalizedDegrees: Float): Float =
     normalizedAngleSin(normalizedDegrees + 0.25f)

@@ -62,7 +62,7 @@ class MutableRect(var left: Float, var top: Float, var right: Float, var bottom:
                 ((right.toRawBits() and 0x7fffffff) < FloatInfinityBase) and
                 ((bottom.toRawBits() and 0x7fffffff) < FloatInfinityBase)
 
-    /** Whether this rectangle encloses a non-zero area. Negative areas are considered empty. */
+    /** Whether `left >= right` or `top >= bottom` (coincident or reversed edges). */
     val isEmpty: Boolean
         get() = (left >= right) or (top >= bottom)
 
