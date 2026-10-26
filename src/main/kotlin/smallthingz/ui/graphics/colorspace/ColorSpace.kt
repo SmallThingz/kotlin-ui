@@ -620,8 +620,7 @@ internal fun mul3x3Float3(lhs: FloatArray, rhs: FloatArray): FloatArray {
 }
 
 /**
- * Multiplies a vector of 3 components by a 3x3 matrix and returns the first element. If [lhs] does
- * not contain at least 9 elements, returns [r0].
+ * Multiplies a vector of 3 components by a 3x3 matrix and returns the first element.
  *
  * @param lhs 3x3 matrix, as a non-null array of 9 floats
  * @param r0: The first element of the vector
@@ -635,8 +634,7 @@ internal inline fun mul3x3Float3_0(lhs: FloatArray, r0: Float, r1: Float, r2: Fl
 }
 
 /**
- * Multiplies a vector of 3 components by a 3x3 matrix and returns the second element. If [lhs] does
- * not contain at least 9 elements, returns [r0].
+ * Multiplies a vector of 3 components by a 3x3 matrix and returns the second element.
  *
  * @param lhs 3x3 matrix, as a non-null array of 9 floats
  * @param r0: The first element of the vector
@@ -650,8 +648,7 @@ internal inline fun mul3x3Float3_1(lhs: FloatArray, r0: Float, r1: Float, r2: Fl
 }
 
 /**
- * Multiplies a vector of 3 components by a 3x3 matrix and returns the third element. If [lhs] does
- * not contain at least 9 elements, returns [r0].
+ * Multiplies a vector of 3 components by a 3x3 matrix and returns the third element.
  *
  * @param lhs 3x3 matrix, as a non-null array of 9 floats
  * @param r0: The first element of the vector

@@ -8,15 +8,16 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 class PausableMonotonicFrameClock(private val clock: MonotonicFrameClock) : MonotonicFrameClock {
     private val lock = Any()
     private var paused = false
-    private var waiting = ArrayList<CancellableContinuation<Unit>>()
+    private var waiting: ArrayList<CancellableContinuation<Unit>>? = null
     val isPaused get() = synchronized(lock) { paused }
     fun pause() { synchronized(lock) { paused = true } }
     fun resume() {
         val ready = synchronized(lock) {
             if (!paused) return
             paused = false
-            waiting.also { waiting = ArrayList() }
-        }
+            // Release capacity even if cancellation already removed every waiter.
+            waiting.also { waiting = null }
+        } ?: return
         for (continuation in ready) continuation.resume(Unit)
     }
     override suspend fun <R> withFrameNanos(onFrame: (Long) -> R): R {
@@ -24,10 +25,14 @@ class PausableMonotonicFrameClock(private val clock: MonotonicFrameClock) : Mono
         if (!isPaused) return clock.withFrameNanos(onFrame)
         suspendCancellableCoroutine<Unit> { continuation ->
             val immediate = synchronized(lock) {
-                if (paused) { waiting.add(continuation); false } else true
+                if (paused) {
+                    val waiters = waiting ?: ArrayList<CancellableContinuation<Unit>>().also { waiting = it }
+                    waiters.add(continuation)
+                    false
+                } else true
             }
             if (immediate) continuation.resume(Unit)
-            else continuation.invokeOnCancellation { synchronized(lock) { waiting.remove(continuation) } }
+            else continuation.invokeOnCancellation { synchronized(lock) { waiting?.remove(continuation) } }
         }
         return clock.withFrameNanos(onFrame)
     }
