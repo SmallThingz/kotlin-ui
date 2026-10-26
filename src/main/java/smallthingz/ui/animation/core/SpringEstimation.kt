@@ -191,12 +191,10 @@ private fun estimateCriticallyDamped(
     while (tDelta > 0.001 && iterations < 100) {
         iterations++
         val tLast = tCurr
-        tCurr =
-            iterateNewtonsMethod(
-                tCurr,
-                { t -> (c1 + c2 * t) * exp(r * t) + signedDelta },
-                { t -> (c2 * (r * t + 1) + c1 * r) * exp(r * t) },
-            )
+        val decay = exp(r * tCurr)
+        val value = (c1 + c2 * tCurr) * decay + signedDelta
+        val derivative = (c2 * (r * tCurr + 1) + c1 * r) * decay
+        tCurr = tCurr - value / derivative
         tDelta = abs(tLast - tCurr)
     }
 
@@ -267,12 +265,11 @@ private fun estimateOverDamped(
     while (tDelta > 0.001 && iterations < 100) {
         iterations++
         val tLast = tCurr
-        tCurr =
-            iterateNewtonsMethod(
-                tCurr,
-                { t -> c1 * exp(r1 * t) + c2 * exp(r2 * t) + signedDelta },
-                { t -> c1 * r1 * exp(r1 * t) + c2 * r2 * exp(r2 * t) },
-            )
+        val decay1 = exp(r1 * tCurr)
+        val decay2 = exp(r2 * tCurr)
+        val value = c1 * decay1 + c2 * decay2 + signedDelta
+        val derivative = c1 * r1 * decay1 + c2 * r2 * decay2
+        tCurr = tCurr - value / derivative
         tDelta = abs(tLast - tCurr)
     }
 
@@ -311,14 +308,6 @@ private fun estimateDurationInternal(
             else -> estimateCriticallyDamped(firstRootReal, p0 = p0, v0 = v0, delta = delta)
         } * 1000.0)
         .toLong()
-}
-
-private inline fun iterateNewtonsMethod(
-    x: Double,
-    fn: (Double) -> Double,
-    fnPrime: (Double) -> Double,
-): Double {
-    return x - fn(x) / fnPrime(x)
 }
 
 @Suppress("NOTHING_TO_INLINE") private inline fun Double.isNotFinite() = !fastIsFinite()
