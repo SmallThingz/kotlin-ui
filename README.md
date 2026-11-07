@@ -52,6 +52,27 @@ mask renderer with exact Float fitting, per-drawable cache ownership and SrcIn
 tint. Each host owns its drawable; do not fit its bounds a second time.
 `SOURCE-theme.json` records the unchanged glyph provenance and extraction.
 
+## Phase input for concrete Views
+
+`smallthingz.ui.input.phase.PhasePointerRoot` is a concrete `FrameLayout` for
+window owners with source-ordered pointer dispatch. Supply one retained
+`NativeViewPointerHitLayout`, authoritative `NativePointerCoordinates` for each
+participating View, and a per-event coordinate preparation callback.
+`NativeWindowPointerCoordinates` supplies the shared transform snapshot.
+Each new pointer is hit-tested once; movement and release retain that node path.
+Initial/Main/Final passes share the same consumption and dispatch-state objects.
+A handled Android event does not by itself consume movement.
+
+Use `NativeClickPhaseNode` with `ViewClickPhaseEndpoint` to bind an existing
+`ViewClickController`, or `NativeAndroidInteropNode` for a real Android child.
+The child parent forwards interception requests through the existing
+`NativeAndroidInteropHost`; close the interop node when its logical owner retires.
+The root cancels retained paths on detach; window owners may explicitly call
+`cancelPointerInput`. Callers own shapes, minimum targets, sibling hit order,
+clipping, nested scroll policy, frame clocks, accessibility and window lifetime.
+Do not also route the same stream through platform `ScrollView` interception.
+There is no intrinsic visible text in this input layer.
+
 ## Animation owners
 
 `smallthingz.ui.animation` supplies `SpringValue`, `AnimatedValue`,
