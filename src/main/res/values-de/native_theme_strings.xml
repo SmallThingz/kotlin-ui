@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_theme_title">Design</string>
+    <string name="native_theme_system">System</string>
+    <string name="native_theme_light">Hell</string>
+    <string name="native_theme_dark">Dunkel</string>
+</resources>

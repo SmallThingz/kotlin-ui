@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_theme_title">پوسته</string>
+    <string name="native_theme_system">سیستم</string>
+    <string name="native_theme_light">روشن</string>
+    <string name="native_theme_dark">تیره</string>
+</resources>

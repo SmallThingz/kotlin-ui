@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_theme_title">테마</string>
+    <string name="native_theme_system">시스템</string>
+    <string name="native_theme_light">라이트</string>
+    <string name="native_theme_dark">다크</string>
+</resources>

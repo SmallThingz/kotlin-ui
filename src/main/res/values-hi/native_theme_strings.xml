@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_theme_title">थीम</string>
+    <string name="native_theme_system">सिस्टम</string>
+    <string name="native_theme_light">हल्की</string>
+    <string name="native_theme_dark">गहरी</string>
+</resources>

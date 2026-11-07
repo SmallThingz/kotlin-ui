@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_theme_title">テーマ</string>
+    <string name="native_theme_system">システム</string>
+    <string name="native_theme_light">ライト</string>
+    <string name="native_theme_dark">ダーク</string>
+</resources>

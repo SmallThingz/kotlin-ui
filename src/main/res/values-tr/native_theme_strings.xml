@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_theme_title">Tema</string>
+    <string name="native_theme_system">Sistem</string>
+    <string name="native_theme_light">Açık</string>
+    <string name="native_theme_dark">Koyu</string>
+</resources>

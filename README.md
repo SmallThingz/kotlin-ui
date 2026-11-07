@@ -26,6 +26,32 @@ are `smallthingz.ui` in either build. The standalone project is `kotlin-ui`, wit
 Gradle group `smallthingz`.
 Consumers import the direct View DSL from `smallthingz.ui.dsl`.
 
+## Localized theme selector
+
+`smallthingz.ui.components.NativeThemeSelector` owns its Theme/Auto/Light/Dark
+copy, translations, icons and radio-row geometry. Supply a `ControlPalette`, a
+`NativeThemeMode`, and an `onSelectionRequest` callback; the owner binds the
+authoritative selection through `bind`. Persisted theme codes remain the
+application's responsibility. Call `close` when the logical owner retires.
+The optional `NativeThemePresentation` adapts retained title/surface rendering
+without supplying or replacing intrinsic copy; the default uses `NativeText`
+and `NativeSurface`. `inputAllowed` adds the host's admission policy to the
+component's attachment, visibility, focus and enabled checks.
+
+Both Theme and app-defined options use `NativeSegmentedControl`: bind retained
+`NativeChoice` values and the authoritative selected ID, and provide a Boolean
+selection callback. `NativeSegmentedPresentation` optionally adapts the capsule
+surface; the default uses `NativeSurface`. Theme adds only localized options,
+icons and title layout to this same capsule.
+
+The segmented row's immediate parent implements
+`smallthingz.ui.input.NativeAndroidInteropHost`, preserving one owner-scoped
+interception-request route for hosts with custom pointer dispatch.
+`NativeThemeIconDrawable` and `CachedPathIconDrawable` share a software ALPHA_8
+mask renderer with exact Float fitting, per-drawable cache ownership and SrcIn
+tint. Each host owns its drawable; do not fit its bounds a second time.
+`SOURCE-theme.json` records the unchanged glyph provenance and extraction.
+
 ## Animation owners
 
 `smallthingz.ui.animation` supplies `SpringValue`, `AnimatedValue`,

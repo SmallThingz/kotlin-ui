@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_theme_title">主题</string>
+    <string name="native_theme_system">跟随系统</string>
+    <string name="native_theme_light">浅色</string>
+    <string name="native_theme_dark">深色</string>
+</resources>

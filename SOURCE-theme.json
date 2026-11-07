@@ -1,0 +1,48 @@
+{
+  "extracted_from_app_commit": "86d4d0ec0cd1e6b49a6228e2898b0471bacbb9f8",
+  "baseline": "3e16f8ddb78dca15df4b436d34d330801ce83ffd",
+  "appIconsSha256": "baeb2191e2c0e3c98de368c2ab112044abc719f2888fe5527c23d3fab4643273",
+  "generatorSha256": "1664cf0de7c12d4ab62079760cb1e7c9ac66b339bb4e24a349270df43d48ec8a",
+  "artifacts": [
+    {
+      "url": "https://dl.google.com/dl/android/maven2/androidx/compose/material/material-icons-core-android/1.7.8/material-icons-core-android-1.7.8-sources.jar",
+      "sha256": "14db888d2f698178799a4c18a58bb134b3e98063c6748c443b339044e0145432",
+      "bytes": 284036
+    },
+    {
+      "url": "https://dl.google.com/dl/android/maven2/androidx/compose/material/material-icons-extended-android/1.7.8/material-icons-extended-android-1.7.8-sources.jar",
+      "sha256": "77b7e782a519a3e074fc91e09d59334ac1b815edd87d2e89c0c9ca7c95678e93",
+      "bytes": 12086044
+    }
+  ],
+  "sources": [
+    {
+      "glyph": "themeSystem",
+      "artifact": "extended",
+      "path": "commonMain/androidx/compose/material/icons/rounded/Devices.kt",
+      "sha256": "f104d9fec546f387558cc6f07b1a07b66f7ff8306e48dd910d06f6dcc6f00e1e",
+      "paths": 1,
+      "commands": 32
+    },
+    {
+      "glyph": "themeLight",
+      "artifact": "extended",
+      "path": "commonMain/androidx/compose/material/icons/rounded/LightMode.kt",
+      "sha256": "52686725250b4b9d6a49c5f838ed45402f75acf56bdd86c82c15368326719203",
+      "paths": 1,
+      "commands": 71
+    },
+    {
+      "glyph": "themeDark",
+      "artifact": "extended",
+      "path": "commonMain/androidx/compose/material/icons/rounded/DarkMode.kt",
+      "sha256": "01ae3303519c48a829b9604369a4d0de23e5a42deb42c0bcf16cdef2a90facbd",
+      "paths": 1,
+      "commands": 10
+    }
+  ],
+  "unchanged_path_block_sha256": "e0aec1e18127224ba6e935baab4cfdab1ef8ab64105db1662bcea1ce76839a73",
+  "cached_renderer_source_sha256": "a4267e7885604fccc5f1974e49a57de8d9f71ddeb439d6c40f554137ccd4c306",
+  "geometry_policy": "Unchanged Float32 Path commands; cached software ALPHA_8/SrcIn renderer shared with app glyphs.",
+  "qualification": "Source extraction only; existing 32-glyph parity probe remains required for current rendered parity."
+}

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_theme_title">السمة</string>
+    <string name="native_theme_system">النظام</string>
+    <string name="native_theme_light">فاتح</string>
+    <string name="native_theme_dark">داكن</string>
+</resources>

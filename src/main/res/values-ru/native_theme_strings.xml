@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="native_theme_title">Тема</string>
+    <string name="native_theme_system">Системная</string>
+    <string name="native_theme_light">Светлая</string>
+    <string name="native_theme_dark">Тёмная</string>
+</resources>
