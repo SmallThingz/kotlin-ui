@@ -73,6 +73,29 @@ clipping, nested scroll policy, frame clocks, accessibility and window lifetime.
 Do not also route the same stream through platform `ScrollView` interception.
 There is no intrinsic visible text in this input layer.
 
+## Vertical viewport and window scroll events
+
+`smallthingz.ui.scroll.NativeVerticalViewport` is one concrete single-child
+viewport. Supply retained `NativeVerticalScrollState`, immutable `Density`, the
+window frame clock/scope, and a `NativeVerticalNestedHost`; call `setContent` with
+the actual View. It measures natural content height within a finite viewport and
+owns focus/rectangle reveal, scroll mutation, fling and overscroll lifetimes.
+It does not intercept touch or install a second detector: insert
+`NativeVerticalPhaseBinding.nodes` into the existing phase hit layout, with the
+same viewport clipping and child order. Close that binding when the node retires.
+Mutate phase-tree membership between dispatches; during callbacks only the
+implemented deferred cancellation path is supported, not arbitrary tree mutation
+or nested dispatch.
+
+Create one `NativeWindowScrollAccessibilityEvents` per window; use
+`NativeVerticalScrollAccessibilityBinding` for each attached viewport. Provide
+actual source-presence and semantic geometry, and close the window queue on
+window disposal. All registered horizontal/vertical sources share its 100 ms
+batch boundary; geometry and range are sampled at delivery. App navigation,
+refresh, edge dismissal and visibility policy remain caller-owned. The viewport
+has no intrinsic visible text. Its density/configuration owner recreates it when
+those immutable inputs change; palette updates alone do not require recreation.
+
 ## Animation owners
 
 `smallthingz.ui.animation` supplies `SpringValue`, `AnimatedValue`,
