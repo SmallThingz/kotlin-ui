@@ -1,0 +1,1821 @@
+package smallthingz.ui.components
+
+import android.content.Context
+import android.content.res.Configuration
+import android.content.res.ColorStateList
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.ColorFilter
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.PixelFormat
+import android.graphics.Rect
+import android.graphics.RectF
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.DrawableWrapper
+import android.os.Bundle
+import android.os.SystemClock
+import android.text.TextUtils
+import android.util.TypedValue
+import android.view.Gravity
+import android.view.KeyEvent
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
+import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.CheckBox
+import android.widget.CompoundButton
+import android.widget.RadioButton
+import android.widget.Switch
+import android.widget.TextView
+import smallthingz.ui.animation.view.ViewColorTransition
+import smallthingz.ui.controls.ControlPalette
+import smallthingz.ui.controls.StateColorSurface
+import smallthingz.ui.controls.ControlStyle
+import smallthingz.ui.controls.selectionForeground
+import smallthingz.ui.controls.selectionIndication
+import smallthingz.ui.graphics.compositeOver
+import smallthingz.ui.graphics.toArgb
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
+
+/** Geometry is explicit so a consumer can retain its established design. */
+data class NativeChoiceStyle(
+    val radiusDp: Float = 12f,
+    val minHeightDp: Float = 48f,
+    val textSizeSp: Float = 14f,
+    val horizontalPaddingDp: Float = 12f,
+    val verticalPaddingDp: Float = 8f,
+    val outlined: Boolean = true,
+    val iconSizeDp: Float = 18f,
+    val iconGapDp: Float = 8f,
+    val iconAbove: Boolean = false,
+    val selectedFill: Boolean = true,
+    val indicatorHeightDp: Float = 0f,
+    val indicatorInsetDp: Float = 0f,
+    val indicatorWidthDp: Float? = null,
+    val indicatorColor: Int? = null,
+    val selectedOutlined: Boolean? = null,
+    val unselectedOutlined: Boolean? = null,
+    val selectedOutlineRole: NativeChoiceOutlineRole = NativeChoiceOutlineRole.ACCENT,
+    val textStyle: NativeTextStyle? = null,
+    val selectedTextStyle: NativeTextStyle? = null,
+    val visualMinHeightDp: Float? = null,
+    val normalTextRole: NativeTextRole? = null,
+    val selectedTextRole: NativeTextRole? = null,
+    val normalIconRole: NativeTextRole? = null,
+    val selectedIconRole: NativeTextRole? = null,
+    val disabledSelectedFill: NativeChoiceColor? = null,
+    val disabledSelectedOutline: NativeChoiceColor? = null,
+    val disabledOutline: NativeChoiceColor? = null,
+    val disabledContent: NativeChoiceColor? = null,
+    val disabledSelectedContent: NativeChoiceColor? = null,
+    val retainContentColorsWhenDisabled: Boolean = false,
+    val startPaddingDp: Float? = null,
+    val endPaddingDp: Float? = null,
+    val trailingIconSizeDp: Float = 18f,
+    /** Shared color timing by default; false snaps state changes while palette changes still animate. */
+    val animateSelection: Boolean = true,
+) {
+    init {
+        require(listOf(radiusDp, minHeightDp, textSizeSp, horizontalPaddingDp,
+            verticalPaddingDp, iconSizeDp, iconGapDp, indicatorHeightDp,
+            indicatorInsetDp, trailingIconSizeDp).all { it.isFinite() && it >= 0f })
+        require(indicatorWidthDp == null || indicatorWidthDp.isFinite() && indicatorWidthDp >= 0f)
+        require(visualMinHeightDp == null || visualMinHeightDp.isFinite() && visualMinHeightDp > 0f)
+        require(startPaddingDp == null || startPaddingDp.isFinite() && startPaddingDp >= 0f)
+        require(endPaddingDp == null || endPaddingDp.isFinite() && endPaddingDp >= 0f)
+    }
+}
+
+enum class ChoiceArrangement { EqualWidth, Wrap }
+
+enum class NativeChoiceOutlineRole { ACCENT, OUTLINE }
+
+enum class NativeChoiceSemantics { RADIO, CHECKBOX, TAB, BUTTON }
+
+/** A theme-reactive color; alpha multiplies the palette color's original alpha. */
+data class NativeChoiceColor(val role: NativeTextRole, val alpha: Float = 1f) {
+    init { require(alpha.isFinite() && alpha in 0f..1f) }
+
+    internal fun resolve(palette: ControlPalette): Int {
+        val color = when (role) {
+            NativeTextRole.CONTENT -> palette.content
+            NativeTextRole.MUTED -> palette.muted
+            NativeTextRole.ACCENT -> palette.accent
+            NativeTextRole.ON_ACCENT -> palette.onAccent
+        }
+        return (color and 0x00ffffff) or ((Color.alpha(color) * alpha).roundToInt() shl 24)
+    }
+}
+
+data class NativeChoice(
+    val id: String,
+    val label: CharSequence,
+    val icon: Drawable? = null,
+    val enabled: Boolean = true,
+    val contentDescription: CharSequence? = null,
+    val semantics: NativeChoiceSemantics? = null,
+)
+
+private class CheckedEvents(private val userChanged: (Boolean) -> Unit) {
+    var listener: CompoundButton.OnCheckedChangeListener? = null
+    private var binding = 0
+    private var interaction = 0
+
+    fun changed(button: CompoundButton, checked: Boolean) {
+        if (binding == 0) listener?.onCheckedChanged(button, checked)
+    }
+
+    fun bind(block: () -> Unit) {
+        binding++
+        try { block() } finally { binding-- }
+    }
+
+    fun click(button: CompoundButton, action: () -> Boolean): Boolean {
+        val before = button.isChecked
+        val outermost = interaction++ == 0
+        val result: Boolean
+        try {
+            result = action()
+        } finally {
+            interaction--
+        }
+        if (outermost && binding == 0 && before != button.isChecked) userChanged(button.isChecked)
+        return result
+    }
+}
+
+private enum class ChoiceRole { CheckBox, Radio, Tab, Button }
+
+private fun NativeChoiceSemantics.choiceRole(): ChoiceRole = when (this) {
+    NativeChoiceSemantics.CHECKBOX -> ChoiceRole.CheckBox
+    NativeChoiceSemantics.RADIO -> ChoiceRole.Radio
+    NativeChoiceSemantics.TAB -> ChoiceRole.Tab
+    NativeChoiceSemantics.BUTTON -> ChoiceRole.Button
+}
+
+private class ChoiceConfiguration(context: Context) {
+    private var density = context.resources.displayMetrics.density
+    private var scaledDensity = context.resources.displayMetrics.scaledDensity
+    private var fontScale = context.resources.configuration.fontScale
+
+    fun changed(context: Context): Boolean {
+        val metrics = context.resources.displayMetrics
+        val scale = context.resources.configuration.fontScale
+        if (density == metrics.density && scaledDensity == metrics.scaledDensity && fontScale == scale) return false
+        density = metrics.density
+        scaledDensity = metrics.scaledDensity
+        fontScale = scale
+        return true
+    }
+}
+
+/** Restores the original native typography when an optional selected override stops applying. */
+private class ChoiceTypography(private val view: TextView, private val style: NativeChoiceStyle) {
+    private val typeface = view.typeface
+    private val letterSpacing = view.letterSpacing
+    private val lineExtra = view.lineSpacingExtra
+    private val lineMultiplier = view.lineSpacingMultiplier
+    private val fontPadding = view.includeFontPadding
+    private var initialized = false
+    private var applied: NativeTextStyle? = null
+    private var density = Float.NaN
+    private var scaledDensity = Float.NaN
+    private var fontScale = Float.NaN
+    private var textScaleX = Float.NaN
+
+    fun apply(checked: Boolean) {
+        val next = if (checked) style.selectedTextStyle ?: style.textStyle else style.textStyle
+        val metrics = view.resources.displayMetrics
+        val scale = view.resources.configuration.fontScale
+        if (initialized && applied == next && density == metrics.density &&
+            scaledDensity == metrics.scaledDensity && fontScale == scale && textScaleX == view.textScaleX) return
+        initialized = true
+        applied = next
+        density = metrics.density
+        scaledDensity = metrics.scaledDensity
+        fontScale = scale
+        textScaleX = view.textScaleX
+        if (next != null) view.componentTypography(next) else {
+            view.setTextSize(TypedValue.COMPLEX_UNIT_PX, view.context.componentSp(style.textSizeSp))
+            view.typeface = typeface
+            view.letterSpacing = letterSpacing
+            view.includeFontPadding = fontPadding
+            view.setLineSpacing(lineExtra, lineMultiplier)
+            view.applyComponentLineHeight(null, null)
+        }
+    }
+}
+
+/** A real checked control; state binding is silent and does not recreate its View. */
+class NativeChip(
+    context: Context,
+    palette: ControlPalette,
+    style: NativeChoiceStyle = NativeChoiceStyle(),
+    semantics: NativeChoiceSemantics = NativeChoiceSemantics.CHECKBOX,
+) : CheckBox(context), NativeInputGate, AutoCloseable {
+    override val acceptsNativeInput: Boolean get() = !selectionClosed
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
+        if (bubblesPlainControlEscape(keyCode, event)) false else super.onKeyDown(keyCode, event)
+
+    val choiceStyle = style
+    var onCheckedChange: ((Boolean) -> Unit)? = null
+    internal var exclusive = semantics == NativeChoiceSemantics.RADIO || semantics == NativeChoiceSemantics.TAB
+    var onActivationRequest: (() -> Boolean)? = null
+    internal var preserveIconColors = false
+    private var dispatchingControlledClick = false
+    private var role = semantics.choiceRole()
+    private var buttonSelected = false
+    private val paintSelected: Boolean
+        get() = if (role == ChoiceRole.Button) buttonSelected else isChecked
+    private var relay: CheckedEvents? = null
+    private var ready = false
+    private var currentPalette = palette
+    private var palettePaint = ControlStyle(context, palette)
+    private var normalIcon: Drawable? = null
+    private var checkedIcon: Drawable? = null
+    private var trailingIcon: Drawable? = null
+    private var measuredTopIconWidth: Int? = null
+    internal var stretchTopIconToWidth = false
+        set(value) {
+            if (field == value) return
+            field = value
+            measuredTopIconWidth = null
+            applyIcon()
+            requestLayout()
+        }
+    private val density: Float get() = resources.displayMetrics.density
+    private val configuration = ChoiceConfiguration(context)
+    private val indicatorPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var typography: ChoiceTypography? = null
+    private var visualInsetPx = 0
+    private var selectionAnimation: StateColorSurface? = null
+    private var visualBackground: Drawable? = null
+    private var indicatorColor = style.indicatorColor ?: palette.accent
+    private var selectionClosed = false
+    private var boundTextColors: ColorStateList? = null
+    private var boundIconColors: ColorStateList? = null
+
+    init {
+        relay = CheckedEvents { onCheckedChange?.invoke(it) }
+        super.setOnCheckedChangeListener { button, checked -> relay?.changed(button, checked) }
+        val paint = ControlStyle(context, palette)
+        paint.configureButton(this)
+        paint.typography(this, choiceStyle.textSizeSp, medium = true)
+        setTextSize(TypedValue.COMPLEX_UNIT_PX, context.componentSp(choiceStyle.textSizeSp))
+        if (choiceStyle.textStyle != null || choiceStyle.selectedTextStyle != null) {
+            typography = ChoiceTypography(this, choiceStyle).also { it.apply(paintSelected) }
+        }
+        buttonDrawable = null
+        buttonTintList = null
+        gravity = Gravity.CENTER
+        minimumWidth = dp(48f)
+        minimumHeight = dp(max(48f, choiceStyle.minHeightDp))
+        minWidth = minimumWidth
+        minHeight = minimumHeight
+        setPaddingRelative(dp(choiceStyle.startPaddingDp ?: choiceStyle.horizontalPaddingDp), dp(choiceStyle.verticalPaddingDp),
+            dp(choiceStyle.endPaddingDp ?: choiceStyle.horizontalPaddingDp), dp(choiceStyle.verticalPaddingDp))
+        compoundDrawablePadding = dp(choiceStyle.iconGapDp)
+        isFocusable = true
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        if (android.os.Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
+        ready = true
+        isSelected = paintSelected
+        paintPalette()
+    }
+
+    override fun setOnCheckedChangeListener(listener: CompoundButton.OnCheckedChangeListener?) {
+        val events = relay
+        if (events == null) super.setOnCheckedChangeListener(listener) else events.listener = listener
+    }
+
+    override fun setChecked(checked: Boolean) {
+        super.setChecked(if (ready && role == ChoiceRole.Button) false else checked)
+        if (ready) {
+            isSelected = paintSelected
+            typography?.apply(paintSelected)
+            applyIcon()
+        }
+    }
+
+    override fun toggle() {
+        if (role == ChoiceRole.Button || onActivationRequest != null || dispatchingControlledClick) return
+        if (!exclusive || !isChecked) super.toggle()
+    }
+
+    override fun performClick(): Boolean {
+        if (!isEnabled || !acceptsNativeInput()) return false
+        val request = onActivationRequest
+        if (request != null) {
+            if (dispatchingControlledClick) return false
+            dispatchingControlledClick = true
+            try {
+                val accepted = request()
+                if (accepted) super.performClick()
+                return accepted
+            } finally {
+                dispatchingControlledClick = false
+            }
+        }
+        return relay?.click(this) { super.performClick() } ?: super.performClick()
+    }
+
+    override fun performLongClick(): Boolean =
+        if (!isEnabled || !acceptsNativeInput()) false else super.performLongClick()
+
+    fun bind(label: CharSequence, checked: Boolean, enabled: Boolean = true) {
+        if (!TextUtils.equals(text, label)) text = label
+        bindChecked(checked, enabled)
+    }
+
+    fun bindChecked(checked: Boolean, enabled: Boolean = true) {
+        refreshConfiguration()
+        checkNotNull(relay).bind {
+            buttonSelected = false
+            isEnabled = enabled
+            isChecked = checked
+        }
+    }
+
+    /** Model-owned selection for an ordinary Button action; checked state remains false. */
+    fun bindButton(label: CharSequence, selected: Boolean = false, enabled: Boolean = true) {
+        require(role == ChoiceRole.Button) { "bindButton requires BUTTON semantics" }
+        refreshConfiguration()
+        if (!TextUtils.equals(text, label)) text = label
+        checkNotNull(relay).bind {
+            buttonSelected = selected
+            isEnabled = enabled
+            isChecked = false
+        }
+    }
+
+    /** Null checkedIcon keeps the normal icon when selected. Drawables are owned by this control. */
+    fun setIcons(normal: Drawable?, checked: Drawable? = null) {
+        if (normalIcon === normal && checkedIcon === checked) return
+        normalIcon = normal
+        checkedIcon = checked
+        applyIcon()
+    }
+
+    /** The control retains this owned end glyph across selection, palette and density binding. */
+    fun setTrailingIcon(icon: Drawable?) {
+        if (trailingIcon === icon) return
+        trailingIcon = icon
+        applyIcon()
+    }
+
+    fun applyPalette(palette: ControlPalette) {
+        refreshConfiguration()
+        if (currentPalette == palette) return
+        currentPalette = palette
+        paintPalette()
+    }
+
+    internal fun asSingleChoice(semantics: NativeChoiceSemantics) {
+        val previousRole = role
+        exclusive = semantics != NativeChoiceSemantics.BUTTON
+        role = semantics.choiceRole()
+        if (previousRole != role || role == ChoiceRole.Button && isChecked)
+            bindChecked(isChecked, isEnabled)
+    }
+
+    override fun getAccessibilityClassName(): CharSequence = when (role) {
+        ChoiceRole.CheckBox -> "android.widget.CheckBox"
+        ChoiceRole.Radio -> "android.widget.RadioButton"
+        ChoiceRole.Tab -> "android.app.ActionBar\$Tab"
+        ChoiceRole.Button -> "android.widget.Button"
+    }
+
+    override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(info)
+        info.className = accessibilityClassName
+        if (role == ChoiceRole.Tab || role == ChoiceRole.Button) {
+            info.isCheckable = false
+            info.isChecked = false
+        }
+        info.isSelected = paintSelected
+        if (role == ChoiceRole.Button) {
+            info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SELECT)
+            info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLEAR_SELECTION)
+        }
+        if (exclusive && isEnabled && (!isChecked || onActivationRequest != null))
+            info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SELECT)
+        (parent as? NativeSegmentedChoice)?.describeItem(this, info)
+    }
+
+    override fun performAccessibilityAction(action: Int, arguments: Bundle?): Boolean {
+        if (action == AccessibilityNodeInfo.ACTION_CLICK) {
+            if (!isEnabled || !acceptsNativeInput()) return false
+            if (onActivationRequest != null) return performClick()
+        }
+        if (role == ChoiceRole.Button && (action == AccessibilityNodeInfo.ACTION_SELECT ||
+            action == AccessibilityNodeInfo.ACTION_CLEAR_SELECTION)) return false
+        if (action == AccessibilityNodeInfo.ACTION_SELECT && exclusive) {
+            if (!isEnabled || !acceptsNativeInput()) return false
+            if (onActivationRequest != null) return performClick()
+            if (!isChecked) performClick()
+            return isChecked
+        }
+        return super.performAccessibilityAction(action, arguments)
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        val iconOnly = iconOnlyDrawable()
+        if (iconOnly != null) {
+            val end = trailingIcon?.takeUnless { it === iconOnly }
+            val gap = if (end == null) 0 else compoundDrawablePadding
+            val combined = iconOnly.bounds.width() + gap + (end?.bounds?.width() ?: 0)
+            val left = paddingLeft + (width - paddingLeft - paddingRight - combined) / 2f
+            val primaryX = if (layoutDirection == View.LAYOUT_DIRECTION_RTL && end != null)
+                left + end.bounds.width() + gap else left
+            drawCenteredIcon(canvas, iconOnly, primaryX)
+            if (end != null) drawCenteredIcon(canvas, end,
+                if (layoutDirection == View.LAYOUT_DIRECTION_RTL) left else left + iconOnly.bounds.width() + gap)
+        } else {
+            centerInlineIcon()
+            super.onDraw(canvas)
+        }
+        if (!paintSelected || choiceStyle.indicatorHeightDp == 0f) return
+        val inset = choiceStyle.indicatorInsetDp * density
+        if (width <= inset * 2f) return
+        val indicatorWidth = min(width - inset * 2f,
+            choiceStyle.indicatorWidthDp?.times(density) ?: (width - inset * 2f))
+        val indicatorLeft = (width - indicatorWidth) / 2f
+        val color = indicatorColor
+        indicatorPaint.color = color
+        indicatorPaint.alpha = if (isEnabled) Color.alpha(color) else Color.alpha(color) / 2
+        canvas.drawRect(indicatorLeft, max(0f, height - choiceStyle.indicatorHeightDp * density),
+            indicatorLeft + indicatorWidth, height.toFloat(), indicatorPaint)
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        refreshConfiguration()
+        typography?.apply(paintSelected)
+        refreshComponentLineHeight()
+        if (stretchTopIconToWidth && choiceStyle.iconAbove) {
+            // The group first measures intrinsic labels to choose its column count. Only its
+            // final exact cell width stretches the preview; an old expanded preview must not
+            // become the next intrinsic minimum and progressively reduce the column count.
+            val trailingReserve = if (trailingIcon == null) 0 else
+                dp(choiceStyle.trailingIconSizeDp) + compoundDrawablePadding
+            val targetWidth = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.EXACTLY)
+                max(0, MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight - trailingReserve)
+                else dp(choiceStyle.iconSizeDp)
+            if (measuredTopIconWidth != targetWidth) {
+                measuredTopIconWidth = targetWidth
+                applyIcon()
+            }
+        }
+        val iconOnly = iconOnlyDrawable()
+        val contentHeight: Int
+        if (iconOnly != null) {
+            val end = trailingIcon?.takeUnless { it === iconOnly }
+            val contentWidth = paddingLeft + paddingRight + iconOnly.bounds.width() +
+                if (end == null) 0 else compoundDrawablePadding + end.bounds.width()
+            contentHeight = paddingTop + paddingBottom + max(iconOnly.bounds.height(), end?.bounds?.height() ?: 0)
+            setMeasuredDimension(resolveSizeAndState(max(suggestedMinimumWidth, contentWidth), widthMeasureSpec, 0),
+                resolveSizeAndState(max(suggestedMinimumHeight, contentHeight), heightMeasureSpec, 0))
+        } else {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            val iconHeight = activeIcon()?.bounds?.height() ?: 0
+            val textHeight = layout?.height ?: 0
+            val bodyHeight = if (choiceStyle.iconAbove && iconHeight > 0)
+                iconHeight + compoundDrawablePadding + textHeight else max(iconHeight, textHeight)
+            contentHeight = paddingTop + paddingBottom + max(bodyHeight, trailingIcon?.bounds?.height() ?: 0)
+        }
+        val minimum = choiceStyle.visualMinHeightDp
+        val inset = if (minimum == null) 0 else
+            max(0, (measuredHeight - max(dp(minimum), contentHeight)) / 2)
+        if (visualInsetPx != inset) { visualInsetPx = inset; invalidate() }
+    }
+
+    override fun getBaseline(): Int = if (ready && iconOnlyDrawable() != null) -1 else super.getBaseline()
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        refreshConfiguration()
+        requestLayout()
+    }
+
+    private fun refreshConfiguration() {
+        if (!configuration.changed(context)) return
+        minimumWidth = dp(48f)
+        minimumHeight = dp(max(48f, choiceStyle.minHeightDp))
+        minWidth = minimumWidth
+        minHeight = minimumHeight
+        setPaddingRelative(dp(choiceStyle.startPaddingDp ?: choiceStyle.horizontalPaddingDp), dp(choiceStyle.verticalPaddingDp),
+            dp(choiceStyle.endPaddingDp ?: choiceStyle.horizontalPaddingDp), dp(choiceStyle.verticalPaddingDp))
+        compoundDrawablePadding = dp(choiceStyle.iconGapDp)
+        measuredTopIconWidth = null
+        applyIcon()
+        if (typography == null) setTextSize(TypedValue.COMPLEX_UNIT_PX, context.componentSp(choiceStyle.textSizeSp))
+        else typography?.apply(paintSelected)
+        paintPalette()
+    }
+
+    private fun activeIcon(): Drawable? = if (paintSelected) checkedIcon ?: normalIcon else normalIcon
+
+    private fun iconOnlyDrawable(): Drawable? = if (text.isNullOrEmpty() &&
+        (choiceStyle.iconAbove || trailingIcon != null)) activeIcon() ?: trailingIcon else null
+
+    private fun drawCenteredIcon(canvas: Canvas, icon: Drawable, x: Float) {
+        val y = paddingTop + (height - paddingTop - paddingBottom - icon.bounds.height()) / 2f
+        val save = canvas.save()
+        canvas.translate(x - icon.bounds.left, y - icon.bounds.top)
+        icon.draw(canvas)
+        canvas.restoreToCount(save)
+    }
+
+    internal fun minimumCellWidth(): Int {
+        val iconWidth = activeIcon()?.bounds?.width() ?: 0
+        val textWidth = if (text.isNullOrEmpty()) 0 else max(1, paint.measureText("M").roundToInt())
+        val contentWidth = if (choiceStyle.iconAbove) max(iconWidth, textWidth)
+            else iconWidth + textWidth + if (iconWidth > 0 && textWidth > 0) compoundDrawablePadding else 0
+        val endWidth = trailingIcon?.bounds?.width() ?: 0
+        return max(dp(48f), paddingLeft + paddingRight + contentWidth + endWidth +
+            if (endWidth > 0 && contentWidth > 0) compoundDrawablePadding else 0)
+    }
+
+    private fun centerInlineIcon() {
+        val icon = if (choiceStyle.iconAbove) null else activeIcon()
+        val end = trailingIcon
+        if (icon == null && end == null) return
+        val centered = textAlignment == View.TEXT_ALIGNMENT_CENTER ||
+            (textAlignment == View.TEXT_ALIGNMENT_GRAVITY || textAlignment == View.TEXT_ALIGNMENT_INHERIT) &&
+                (gravity and Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.CENTER_HORIZONTAL
+        if (!centered) {
+            icon?.setBounds(0, 0, dp(choiceStyle.iconSizeDp), dp(choiceStyle.iconSizeDp))
+            end?.setBounds(0, 0, dp(choiceStyle.trailingIconSizeDp), dp(choiceStyle.trailingIconSizeDp))
+            return
+        }
+        val textLayout = layout ?: return
+        var lineWidth = 0f
+        for (line in 0 until textLayout.lineCount) lineWidth = max(lineWidth, textLayout.getLineWidth(line))
+        if (choiceStyle.iconAbove) lineWidth = max(lineWidth, (activeIcon()?.bounds?.width() ?: 0).toFloat())
+        val iconWidth = if (icon == null) 0 else dp(choiceStyle.iconSizeDp)
+        val endWidth = if (end == null) 0 else dp(choiceStyle.trailingIconSizeDp)
+        val gap = if (text.isNullOrEmpty()) 0 else compoundDrawablePadding
+        val freeWidth = width - paddingLeft - paddingRight - iconWidth - endWidth - lineWidth -
+            (if (icon == null) 0 else gap) - (if (end == null) 0 else gap)
+        val inset = max(0, (freeWidth / 2f).roundToInt())
+        val shift = if (layoutDirection == View.LAYOUT_DIRECTION_RTL) -inset else inset
+        // TextView already centers the label inside its icon-reserved area. Only the inline
+        // drawable needs shifting from the padding edge to center the icon and label together.
+        icon?.setBounds(shift, 0, shift + iconWidth, dp(choiceStyle.iconSizeDp))
+        end?.setBounds(-shift, 0, -shift + endWidth, dp(choiceStyle.trailingIconSizeDp))
+    }
+
+    private fun applyIcon() {
+        val icon = activeIcon()
+        val iconWidth = if (stretchTopIconToWidth && choiceStyle.iconAbove)
+            measuredTopIconWidth ?: dp(choiceStyle.iconSizeDp) else dp(choiceStyle.iconSizeDp)
+        icon?.setBounds(0, 0, iconWidth, dp(choiceStyle.iconSizeDp))
+        trailingIcon?.setBounds(0, 0, dp(choiceStyle.trailingIconSizeDp), dp(choiceStyle.trailingIconSizeDp))
+        if (choiceStyle.iconAbove) setCompoundDrawablesRelative(null, icon, trailingIcon, null)
+        else setCompoundDrawablesRelative(icon, null, trailingIcon, null)
+        // Relative top-only replacement can skip TextView's retained tint application.
+        // Keep a null tint untouched so supplied artwork retains its own colors/tint.
+        compoundDrawableTintList?.let { setCompoundDrawableTintList(it) }
+    }
+
+    private fun paintPalette() {
+        palettePaint = ControlStyle(context, currentPalette)
+        fun roleColor(role: NativeTextRole?, fallback: Int): Int = when (role) {
+            null -> fallback
+            NativeTextRole.CONTENT -> currentPalette.content
+            NativeTextRole.MUTED -> currentPalette.muted
+            NativeTextRole.ACCENT -> currentPalette.accent
+            NativeTextRole.ON_ACCENT -> currentPalette.onAccent
+        }
+        fun colors(normal: Int, selected: Int): ColorStateList {
+            val legacy = palettePaint.foregroundStates(normal = normal, selected = selected)
+            val disabled = choiceStyle.disabledContent?.resolve(currentPalette)
+            val selectedOverride = choiceStyle.disabledSelectedContent?.resolve(currentPalette)
+            if (disabled == null && selectedOverride == null && !choiceStyle.retainContentColorsWhenDisabled) return legacy
+            val legacyDisabled = legacy.getColorForState(intArrayOf(-android.R.attr.state_enabled), legacy.defaultColor)
+            val disabledNormal = disabled ?: if (choiceStyle.retainContentColorsWhenDisabled) normal else legacyDisabled
+            val disabledSelected = selectedOverride ?: disabled ?: if (choiceStyle.retainContentColorsWhenDisabled) selected else legacyDisabled
+            return ColorStateList(arrayOf(
+                intArrayOf(-android.R.attr.state_enabled, android.R.attr.state_selected),
+                intArrayOf(-android.R.attr.state_enabled), intArrayOf(android.R.attr.state_selected), intArrayOf()),
+                intArrayOf(disabledSelected, disabledNormal, selected, normal))
+        }
+        boundTextColors = colors(
+            normal = roleColor(choiceStyle.normalTextRole, currentPalette.content),
+            selected = roleColor(choiceStyle.selectedTextRole, defaultSelectedInk()))
+        boundIconColors = colors(
+            normal = roleColor(choiceStyle.normalIconRole, currentPalette.content),
+            selected = roleColor(choiceStyle.selectedIconRole, defaultSelectedInk()))
+        backgroundTintList = null
+        val selectedFill = if (choiceStyle.selectedFill) currentPalette.selection else Color.TRANSPARENT
+        val selectedOutline = if (choiceStyle.selectedOutlineRole == NativeChoiceOutlineRole.ACCENT)
+            currentPalette.accent else currentPalette.outline
+        val selectedOutlined = choiceStyle.selectedOutlined ?: choiceStyle.outlined
+        val unselectedOutlined = choiceStyle.unselectedOutlined ?: choiceStyle.outlined
+        val states = arrayOf(
+            intArrayOf(-android.R.attr.state_enabled, android.R.attr.state_selected),
+            intArrayOf(-android.R.attr.state_enabled),
+            intArrayOf(android.R.attr.state_focused, android.R.attr.state_selected),
+            intArrayOf(android.R.attr.state_focused), intArrayOf(android.R.attr.state_selected), intArrayOf())
+        val fill = ColorStateList(states, intArrayOf(
+            if (choiceStyle.selectedFill) choiceStyle.disabledSelectedFill?.resolve(currentPalette) ?: selectedFill else 0,
+            0, selectedFill, 0, selectedFill, 0))
+        val stroke = ColorStateList(states, intArrayOf(
+            if (selectedOutlined) choiceStyle.disabledSelectedOutline?.resolve(currentPalette)
+                ?: choiceStyle.disabledOutline?.resolve(currentPalette) ?: currentPalette.outline else 0,
+            if (unselectedOutlined) choiceStyle.disabledOutline?.resolve(currentPalette) ?: currentPalette.outline else 0,
+            currentPalette.accent, currentPalette.accent,
+            if (selectedOutlined) selectedOutline else 0, if (unselectedOutlined) currentPalette.outline else 0))
+        val indication = selectionIndication(selectedFill,currentPalette.surface,defaultSelectedInk(),currentPalette.accent)
+        val ripple = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_selected), intArrayOf()),
+            intArrayOf((indication and 0x00ffffff) or (40 shl 24),(currentPalette.accent and 0x00ffffff) or (40 shl 24)))
+        val text = checkNotNull(boundTextColors)
+        val icons = checkNotNull(boundIconColors)
+        val accent = ColorStateList.valueOf(choiceStyle.indicatorColor ?: currentPalette.accent)
+        val retained = selectionAnimation ?: StateColorSurface(this,fill,stroke,text,ripple,
+            choiceStyle.radiusDp*density,density,icons,accent,currentPalette.surface,
+            animateState=choiceStyle.animateSelection,publishInk={ink,icon,indicator ->
+                setTextColor(ink)
+                compoundDrawableTintList=if(preserveIconColors)null else ColorStateList.valueOf(icon)
+                indicatorColor=indicator
+            }).also {selectionAnimation=it}
+        retained.bind(fill,stroke,text,ripple,choiceStyle.radiusDp*density,density,icons,accent,currentPalette.surface)
+        val visual = visualBackground ?: (if (choiceStyle.visualMinHeightDp == null) retained.background
+            else ChoiceVisualBackground(retained.background) { visualInsetPx }).also { visualBackground = it }
+        if (background !== visual) background = visual
+    }
+
+    private fun defaultSelectedInk(): Int = if (choiceStyle.selectedFill)
+        selectionForeground(currentPalette.selection, currentPalette.surface, currentPalette.onAccent, currentPalette.content)
+        else currentPalette.accent
+
+    override fun close() {
+        selectionClosed = true
+        isEnabled = false
+        onActivationRequest = null
+        onCheckedChange = null
+        setOnCheckedChangeListener(null)
+        setOnKeyListener(null)
+        cancelPendingInputEvents()
+        selectionAnimation?.close()
+        selectionAnimation = null
+    }
+
+    private fun dp(value: Float): Int = (value * density).roundToInt()
+}
+
+/** A single native checkbox focus target, with shared mark geometry and silent binding. */
+class NativeCheckBox(
+    context: Context,
+    palette: ControlPalette,
+    style: NativeChoiceStyle = NativeChoiceStyle(),
+) : CheckBox(context) {
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
+        if (bubblesPlainControlEscape(keyCode, event)) false else super.onKeyDown(keyCode, event)
+
+    val choiceStyle = style
+    var onCheckedChange: ((Boolean) -> Unit)? = null
+    private var relay: CheckedEvents? = null
+    private var currentPalette = palette
+    private val mark = CheckMarkDrawable(resources.displayMetrics.density, palette)
+    private var indicatorGapPx = 0
+    private var typography: ChoiceTypography? = null
+    private val configuration = ChoiceConfiguration(context)
+
+    init {
+        relay = CheckedEvents { onCheckedChange?.invoke(it) }
+        super.setOnCheckedChangeListener { button, checked -> relay?.changed(button, checked) }
+        ControlStyle(context, palette).configureButton(this)
+        ControlStyle(context, palette).typography(this, choiceStyle.textSizeSp, medium = false)
+        setTextSize(TypedValue.COMPLEX_UNIT_PX, context.componentSp(choiceStyle.textSizeSp))
+        if (choiceStyle.textStyle != null || choiceStyle.selectedTextStyle != null) {
+            typography = ChoiceTypography(this, choiceStyle).also { it.apply(isChecked) }
+        }
+        val density = resources.displayMetrics.density
+        indicatorGapPx = (choiceStyle.iconGapDp * density).roundToInt()
+        minimumHeight = (max(48f, choiceStyle.minHeightDp) * density).roundToInt()
+        minHeight = minimumHeight
+        setPaddingRelative(((choiceStyle.startPaddingDp ?: choiceStyle.horizontalPaddingDp) * density).roundToInt(),
+            (choiceStyle.verticalPaddingDp * density).roundToInt(),
+            ((choiceStyle.endPaddingDp ?: choiceStyle.horizontalPaddingDp) * density).roundToInt(),
+            (choiceStyle.verticalPaddingDp * density).roundToInt())
+        gravity = Gravity.CENTER_VERTICAL
+        mark.bindOwner(this, choiceStyle.animateSelection)
+        buttonDrawable = mark
+        buttonTintList = null
+        isFocusable = true
+        if (android.os.Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
+        paintPalette()
+    }
+
+    override fun getCompoundPaddingLeft(): Int = super.getCompoundPaddingLeft() +
+        if (layoutDirection != View.LAYOUT_DIRECTION_RTL && buttonDrawable != null && !text.isNullOrEmpty()) indicatorGapPx else 0
+
+    override fun getCompoundPaddingRight(): Int = super.getCompoundPaddingRight() +
+        if (layoutDirection == View.LAYOUT_DIRECTION_RTL && buttonDrawable != null && !text.isNullOrEmpty()) indicatorGapPx else 0
+
+    override fun setChecked(checked: Boolean) {
+        super.setChecked(checked)
+        typography?.apply(isChecked)
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        refreshConfiguration()
+        typography?.apply(isChecked)
+        refreshComponentLineHeight()
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        refreshConfiguration()
+        requestLayout()
+    }
+
+    private fun refreshConfiguration() {
+        if (!configuration.changed(context)) return
+        updateChoiceGeometry(choiceStyle, mark)
+        indicatorGapPx = (choiceStyle.iconGapDp * resources.displayMetrics.density).roundToInt()
+        if (typography == null) setTextSize(TypedValue.COMPLEX_UNIT_PX, context.componentSp(choiceStyle.textSizeSp))
+        else typography?.apply(isChecked)
+        paintPalette()
+    }
+
+    override fun setOnCheckedChangeListener(listener: CompoundButton.OnCheckedChangeListener?) {
+        val events = relay
+        if (events == null) super.setOnCheckedChangeListener(listener) else events.listener = listener
+    }
+
+    override fun performClick(): Boolean {
+        if (!isEnabled || !acceptsNativeInput()) return false
+        return relay?.click(this) { super.performClick() } ?: super.performClick()
+    }
+
+    override fun performLongClick(): Boolean =
+        if (!isEnabled || !acceptsNativeInput()) false else super.performLongClick()
+
+    override fun performAccessibilityAction(action: Int, arguments: Bundle?): Boolean {
+        if (action == AccessibilityNodeInfo.ACTION_CLICK && (!isEnabled || !acceptsNativeInput())) return false
+        return super.performAccessibilityAction(action, arguments)
+    }
+
+    fun bindChecked(checked: Boolean, enabled: Boolean = true) {
+        refreshConfiguration()
+        checkNotNull(relay).bind { isEnabled = enabled; isChecked = checked }
+    }
+
+    fun applyPalette(palette: ControlPalette) {
+        refreshConfiguration()
+        if (currentPalette == palette) return
+        currentPalette = palette
+        mark.palette = palette
+        paintPalette()
+    }
+
+    private fun paintPalette() {
+        ControlStyle(context, currentPalette).applyButton(this, radius = choiceStyle.radiusDp.roundToInt())
+    }
+}
+
+/**
+ * A real RadioButton for a platform RadioGroup. bindChecked silences this component's listeners;
+ * RadioGroup's private child listener stays active for exclusivity. The consumer still guards
+ * its group-level model binding callback, as it would with an ordinary RadioGroup.
+ */
+class NativeRadioButton(
+    context: Context,
+    palette: ControlPalette,
+    style: NativeChoiceStyle = NativeChoiceStyle(),
+) : RadioButton(context) {
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
+        if (bubblesPlainControlEscape(keyCode, event)) false else super.onKeyDown(keyCode, event)
+
+    val choiceStyle = style
+    var onCheckedChange: ((Boolean) -> Unit)? = null
+    private var relay: CheckedEvents? = null
+    private var currentPalette = palette
+    private val mark = RadioMarkDrawable(resources.displayMetrics.density, palette)
+    private var indicatorGapPx = 0
+    private var typography: ChoiceTypography? = null
+    private val configuration = ChoiceConfiguration(context)
+
+    init {
+        relay = CheckedEvents { onCheckedChange?.invoke(it) }
+        super.setOnCheckedChangeListener { button, checked -> relay?.changed(button, checked) }
+        ControlStyle(context, palette).configureButton(this)
+        ControlStyle(context, palette).typography(this, choiceStyle.textSizeSp)
+        setTextSize(TypedValue.COMPLEX_UNIT_PX, context.componentSp(choiceStyle.textSizeSp))
+        if (choiceStyle.textStyle != null || choiceStyle.selectedTextStyle != null) {
+            typography = ChoiceTypography(this, choiceStyle).also { it.apply(isChecked) }
+        }
+        val density = resources.displayMetrics.density
+        indicatorGapPx = (choiceStyle.iconGapDp * density).roundToInt()
+        minimumHeight = (max(48f, choiceStyle.minHeightDp) * density).roundToInt()
+        minHeight = minimumHeight
+        setPaddingRelative(((choiceStyle.startPaddingDp ?: choiceStyle.horizontalPaddingDp) * density).roundToInt(),
+            (choiceStyle.verticalPaddingDp * density).roundToInt(),
+            ((choiceStyle.endPaddingDp ?: choiceStyle.horizontalPaddingDp) * density).roundToInt(),
+            (choiceStyle.verticalPaddingDp * density).roundToInt())
+        gravity = Gravity.CENTER_VERTICAL
+        mark.bindOwner(this, choiceStyle.animateSelection)
+        buttonDrawable = mark
+        buttonTintList = null
+        isFocusable = true
+        if (android.os.Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
+        paintPalette()
+    }
+
+    override fun getCompoundPaddingLeft(): Int = super.getCompoundPaddingLeft() +
+        if (layoutDirection != View.LAYOUT_DIRECTION_RTL && buttonDrawable != null && !text.isNullOrEmpty()) indicatorGapPx else 0
+
+    override fun getCompoundPaddingRight(): Int = super.getCompoundPaddingRight() +
+        if (layoutDirection == View.LAYOUT_DIRECTION_RTL && buttonDrawable != null && !text.isNullOrEmpty()) indicatorGapPx else 0
+
+    override fun setChecked(checked: Boolean) {
+        super.setChecked(checked)
+        typography?.apply(isChecked)
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        refreshConfiguration()
+        typography?.apply(isChecked)
+        refreshComponentLineHeight()
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        refreshConfiguration()
+        requestLayout()
+    }
+
+    private fun refreshConfiguration() {
+        if (!configuration.changed(context)) return
+        updateChoiceGeometry(choiceStyle, mark)
+        indicatorGapPx = (choiceStyle.iconGapDp * resources.displayMetrics.density).roundToInt()
+        if (typography == null) setTextSize(TypedValue.COMPLEX_UNIT_PX, context.componentSp(choiceStyle.textSizeSp))
+        else typography?.apply(isChecked)
+        paintPalette()
+    }
+
+    override fun setOnCheckedChangeListener(listener: CompoundButton.OnCheckedChangeListener?) {
+        val events = relay
+        if (events == null) super.setOnCheckedChangeListener(listener) else events.listener = listener
+    }
+
+    override fun performClick(): Boolean {
+        if (!isEnabled || !acceptsNativeInput()) return false
+        return relay?.click(this) { super.performClick() } ?: super.performClick()
+    }
+
+    override fun performLongClick(): Boolean =
+        if (!isEnabled || !acceptsNativeInput()) false else super.performLongClick()
+
+    override fun performAccessibilityAction(action: Int, arguments: Bundle?): Boolean {
+        if (action == AccessibilityNodeInfo.ACTION_CLICK && (!isEnabled || !acceptsNativeInput())) return false
+        return super.performAccessibilityAction(action, arguments)
+    }
+
+    fun bindChecked(checked: Boolean, enabled: Boolean = true) {
+        refreshConfiguration()
+        checkNotNull(relay).bind { isEnabled = enabled; isChecked = checked }
+    }
+
+    fun applyPalette(palette: ControlPalette) {
+        refreshConfiguration()
+        if (currentPalette == palette) return
+        currentPalette = palette
+        mark.palette = palette
+        paintPalette()
+    }
+
+    private fun paintPalette() {
+        ControlStyle(context, currentPalette).applyButton(this, radius = choiceStyle.radiusDp.roundToInt())
+    }
+}
+
+data class NativeSwitchStyle(
+    val textSizeSp: Float = 14f,
+    val horizontalPaddingDp: Float = 12f,
+    val verticalPaddingDp: Float = 8f,
+    val trackWidthDp: Float = 52f,
+    val trackHeightDp: Float = 32f,
+    val thumbSizeDp: Float = 24f,
+    val offThumbScale: Float = 2f / 3f,
+    val outlinedTrack: Boolean = true,
+    val minHeightDp: Float = 48f,
+    val switchPaddingDp: Float = 12f,
+    val raisedContainer: Boolean = false,
+    /** Opt-in checked-thumb edge gap; null retains legacy native geometry. */
+    val thumbEdgeInsetDp: Float? = null,
+    /** Enabled pressed-state diameter, clamped to retained bounds; null preserves resting size. */
+    val pressedThumbSizeDp: Float? = null,
+) {
+    init {
+        require(listOf(textSizeSp, horizontalPaddingDp, verticalPaddingDp, trackWidthDp,
+            trackHeightDp, thumbSizeDp, offThumbScale, minHeightDp, switchPaddingDp).all { it.isFinite() && it >= 0f })
+        require(trackWidthDp >= trackHeightDp && trackHeightDp > 0f && thumbSizeDp > 0f)
+        require(offThumbScale > 0f && offThumbScale <= 1f)
+        require(thumbEdgeInsetDp == null || thumbEdgeInsetDp.isFinite() && thumbEdgeInsetDp >= 0f &&
+            thumbSizeDp + 2f * thumbEdgeInsetDp <= trackWidthDp)
+        require(pressedThumbSizeDp == null || pressedThumbSizeDp.isFinite() && pressedThumbSizeDp > 0f)
+    }
+}
+
+/** Native Switch interaction/animation with a shared track and thumb, no replacement input node. */
+open class NativeSwitch(
+    context: Context,
+    palette: ControlPalette,
+    style: NativeSwitchStyle = NativeSwitchStyle(),
+) : Switch(context) {
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
+        if (bubblesPlainControlEscape(keyCode, event)) false else super.onKeyDown(keyCode, event)
+
+    val switchStyle = style
+    var onCheckedChange: ((Boolean) -> Unit)? = null
+    private var relay: CheckedEvents? = null
+    private var currentPalette = palette
+    private val density: Float get() = resources.displayMetrics.density
+    private val configuration = ChoiceConfiguration(context)
+    private val trackPaint = SwitchPartDrawable(density, palette, switchStyle, thumb = false)
+    private val thumbPaint = SwitchPartDrawable(density, palette, switchStyle, thumb = true,
+        track = trackPaint, resolveLayoutDirection = { layoutDirection })
+    private var admittedGesture = false
+    private var rowColors: StateColorSurface? = null
+
+    init {
+        relay = CheckedEvents { onCheckedChange?.invoke(it) }
+        super.setOnCheckedChangeListener { button, checked -> relay?.changed(button, checked) }
+        ControlStyle(context, palette).configureButton(this)
+        ControlStyle(context, palette).typography(this, switchStyle.textSizeSp)
+        setTextSize(TypedValue.COMPLEX_UNIT_PX, context.componentSp(switchStyle.textSizeSp))
+        showText = false
+        splitTrack = false
+        switchMinWidth = (switchStyle.trackWidthDp * density).roundToInt()
+        switchPadding = (switchStyle.switchPaddingDp * density).roundToInt()
+        minimumHeight = (max(48f, switchStyle.minHeightDp) * density).roundToInt()
+        minHeight = minimumHeight
+        setPaddingRelative((switchStyle.horizontalPaddingDp * density).roundToInt(),
+            (switchStyle.verticalPaddingDp * density).roundToInt(),
+            (switchStyle.horizontalPaddingDp * density).roundToInt(),
+            (switchStyle.verticalPaddingDp * density).roundToInt())
+        trackPaint.bindOwner(this)
+        thumbPaint.bindOwner(this)
+        trackDrawable = trackPaint
+        thumbDrawable = thumbPaint
+        trackTintList = null
+        thumbTintList = null
+        gravity = Gravity.CENTER_VERTICAL
+        isFocusable = true
+        if (android.os.Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
+        paintPalette()
+    }
+
+    override fun setOnCheckedChangeListener(listener: CompoundButton.OnCheckedChangeListener?) {
+        val events = relay
+        if (events == null) super.setOnCheckedChangeListener(listener) else events.listener = listener
+    }
+
+    override fun performClick(): Boolean {
+        if (!isEnabled || !acceptsNativeInput()) { cancelAdmittedGesture(); return false }
+        return relay?.click(this) { super.performClick() } ?: super.performClick()
+    }
+
+    override fun performLongClick(): Boolean =
+        if (!isEnabled || !acceptsNativeInput()) false else super.performLongClick()
+
+    override fun performAccessibilityAction(action: Int, arguments: Bundle?): Boolean {
+        if (action == AccessibilityNodeInfo.ACTION_CLICK && (!isEnabled || !acceptsNativeInput())) {
+            cancelAdmittedGesture()
+            return false
+        }
+        return super.performAccessibilityAction(action, arguments)
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (!isEnabled || !acceptsNativeInput()) { cancelAdmittedGesture(event); return false }
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) admittedGesture = true
+        if (!admittedGesture) return false
+        try {
+            // Native drag commits bypass performClick; nested tap dispatch must still notify once.
+            return relay?.click(this) { super.onTouchEvent(event) } ?: super.onTouchEvent(event)
+        } finally {
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL)
+                admittedGesture = false
+        }
+    }
+
+    private fun cancelAdmittedGesture(event: MotionEvent? = null) {
+        if (!admittedGesture) return
+        admittedGesture = false
+        val now = SystemClock.uptimeMillis()
+        val cancel = if (event == null) MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
+            else MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+        try { super.onTouchEvent(cancel) } finally { cancel.recycle() }
+    }
+
+    fun bindChecked(checked: Boolean, enabled: Boolean = true) {
+        refreshConfiguration()
+        checkNotNull(relay).bind { isEnabled = enabled; isChecked = checked }
+    }
+
+    fun applyPalette(palette: ControlPalette) {
+        refreshConfiguration()
+        if (currentPalette == palette) return
+        currentPalette = palette
+        trackPaint.palette = palette
+        thumbPaint.palette = palette
+        paintPalette()
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        refreshConfiguration()
+        refreshComponentLineHeight()
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        refreshConfiguration()
+        requestLayout()
+    }
+
+    private fun refreshConfiguration() {
+        if (!configuration.changed(context)) return
+        trackPaint.updateDensity(density)
+        thumbPaint.updateDensity(density)
+        trackDrawable = null
+        thumbDrawable = null
+        trackPaint.bindOwner(this)
+        thumbPaint.bindOwner(this)
+        trackDrawable = trackPaint
+        thumbDrawable = thumbPaint
+        switchMinWidth = (switchStyle.trackWidthDp * density).roundToInt()
+        switchPadding = (switchStyle.switchPaddingDp * density).roundToInt()
+        minimumWidth = (48f * density).roundToInt()
+        minimumHeight = (max(48f, switchStyle.minHeightDp) * density).roundToInt()
+        minWidth = minimumWidth
+        minHeight = minimumHeight
+        setPaddingRelative((switchStyle.horizontalPaddingDp * density).roundToInt(),
+            (switchStyle.verticalPaddingDp * density).roundToInt(),
+            (switchStyle.horizontalPaddingDp * density).roundToInt(),
+            (switchStyle.verticalPaddingDp * density).roundToInt())
+        setTextSize(TypedValue.COMPLEX_UNIT_PX, context.componentSp(switchStyle.textSizeSp))
+        paintPalette()
+    }
+
+    private fun paintPalette() {
+        val paint = ControlStyle(context, currentPalette)
+        if (!switchStyle.raisedContainer) {
+            paint.applyButton(this)
+            return
+        }
+        backgroundTintList = null
+        val selected = smallthingz.ui.graphics.Color(currentPalette.selection)
+            .compositeOver(smallthingz.ui.graphics.Color(currentPalette.raised)).toArgb()
+        val fills = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_selected), intArrayOf()),
+            intArrayOf(selected, currentPalette.raised))
+        val strokes = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_enabled, android.R.attr.state_focused), intArrayOf()),
+            intArrayOf(currentPalette.accent, Color.TRANSPARENT))
+        val ink = paint.foregroundStates()
+        val ripple = ColorStateList.valueOf((currentPalette.accent and 0x00ffffff) or (40 shl 24))
+        val colors = rowColors ?: StateColorSurface(this, fills, strokes, ink, ripple,
+            12f * density, density, underlay = currentPalette.raised, publishInk = { text, _, _ ->
+                setTextColor(text)
+                compoundDrawableTintList = ColorStateList.valueOf(text)
+            }).also { rowColors = it }
+        colors.bind(fills, strokes, ink, ripple, 12f * density, density, underlay = currentPalette.raised)
+        if (background !== colors.background) background = colors.background
+    }
+}
+
+/**
+ * Retains option Views by stable id. Equal-width cells wrap when their minimum content cannot fit;
+ * explicit Wrap is useful for filter chips. Neither binding nor palette changes invoke selection.
+ */
+open class NativeSegmentedChoice(
+    context: Context,
+    palette: ControlPalette,
+    style: NativeChoiceStyle = NativeChoiceStyle(),
+    val gapDp: Float = 4f,
+    val arrangement: ChoiceArrangement = ChoiceArrangement.EqualWidth,
+    val maxColumns: Int = Int.MAX_VALUE,
+    val verticalGapDp: Float = gapDp,
+    val semantics: NativeChoiceSemantics = NativeChoiceSemantics.RADIO,
+    /** False makes directional keys and Home/End move focus without activating the choice. */
+    var activateOnFocusNavigation: Boolean = true,
+    val fixedColumns: Int? = null,
+    val fillRowHeight: Boolean = false,
+    /** One equal-width row; bounded height is propagated to cells, including compact visual hosts. */
+    val singleRow: Boolean = false,
+) : ViewGroup(context), NativeInputGate, AutoCloseable {
+    private var closed = false
+    override val acceptsNativeInput: Boolean get() = !closed
+    val choiceStyle = style
+    var onSelectionChange: ((String) -> Unit)? = null
+    /** Nonnull requests activation, including reselection. The owner binds authoritative selection. */
+    var onSelectionRequest: ((String) -> Boolean)? = null
+        set(value) {
+            field = value
+            options.forEach { option -> chips[option.id]?.let { configureActivation(it, option.id) } }
+        }
+    var selectedId: String? = null
+        private set
+    protected var choicePalette: ControlPalette = palette
+        private set
+    private val chips = LinkedHashMap<String, NativeChip>()
+    private var options: List<NativeChoice> = emptyList()
+    private var ready = false
+    private var placement = IntArray(0)
+    private var rowCount = 0
+    private var measuredColumns = 0
+    private var handledNavigationKey: Int? = null
+    private val density: Float get() = resources.displayMetrics.density
+    private val configuration = ChoiceConfiguration(context)
+    protected open val tabSemantics: Boolean get() = false
+    protected open val fillWrappedCells: Boolean get() = arrangement == ChoiceArrangement.EqualWidth
+    private val choiceSemantics: NativeChoiceSemantics
+        get() = if (tabSemantics) NativeChoiceSemantics.TAB else semantics
+
+    init {
+        require(gapDp.isFinite() && gapDp >= 0f && verticalGapDp.isFinite() && verticalGapDp >= 0f && maxColumns > 0)
+        require(fixedColumns == null || fixedColumns > 0 && fixedColumns <= maxColumns)
+        isFocusable = false
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        ready = true
+    }
+
+    fun bind(options: List<NativeChoice>, selectedId: String?) {
+        if (closed) return
+        require(options.all { it.id.isNotEmpty() } && options.map { it.id }.toSet().size == options.size)
+        val activeIds = options.mapTo(HashSet()) { it.id }
+        val removed = chips.keys.filter { it !in activeIds }
+        removed.forEach { key -> chips.remove(key)?.let { it.close(); removeView(it) } }
+        this.options = options.toList()
+        this.selectedId = selectedId?.takeIf { id -> options.any { it.id == id && semanticsOf(it) != NativeChoiceSemantics.BUTTON } }
+        for (option in options) {
+            val chip = chips.getOrPut(option.id) {
+                NativeChip(context, choicePalette, choiceStyle).apply {
+                    id = View.generateViewId()
+                    onCheckedChange = { checked -> if (checked) selectFromUser(option.id) }
+                    setOnKeyListener { view, keyCode, event -> handleChoiceKey(view, option.id, keyCode, event) }
+                    this@NativeSegmentedChoice.addView(this, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+                }
+            }
+            chip.asSingleChoice(semanticsOf(option))
+            chip.setIcons(ownedIcon(option.icon))
+            configureActivation(chip, option.id)
+            chip.bind(option.label, option.id == this.selectedId, isEnabled && option.enabled)
+            chip.contentDescription = option.contentDescription
+        }
+        // Drawing order changes without detaching retained controls or discarding their focus.
+        if (options.indices.any { getChildAt(it) !== chips[options[it].id] }) {
+            options.forEach { bringChildToFront(checkNotNull(chips[it.id])) }
+        }
+        requestLayout()
+    }
+
+    open fun applyPalette(palette: ControlPalette) {
+        if (configuration.changed(context)) requestLayout()
+        choicePalette = palette
+        chips.values.forEach { it.applyPalette(palette) }
+    }
+
+    override fun setEnabled(enabled: Boolean) {
+        super.setEnabled(enabled)
+        if (ready) options.forEach { chips[it.id]?.isEnabled = enabled && it.enabled }
+    }
+
+    /** Retained semantic node. Visibility and layout are owned by this group. */
+    fun choiceView(id: String): NativeChip? = chips[id]
+
+    private fun selectFromUser(id: String) {
+        if (!isEnabled || !acceptsNativeInput() || isButton(id) ||
+            options.none { it.id == id && it.enabled }) {
+            // A native listener may retire or rebind the group before this component callback.
+            // Restore the current authoritative selection without another checked callback.
+            val option = options.firstOrNull { it.id == id }
+            if (option != null) chips[id]?.bindChecked(id == selectedId && !isButton(id), isEnabled && option.enabled)
+            return
+        }
+        if (selectedId == id) return
+        selectedId = id
+        options.forEach { option -> chips[option.id]?.bindChecked(option.id == id, isEnabled && option.enabled) }
+        onSelectionChange?.invoke(id)
+    }
+
+    private fun configureActivation(chip: NativeChip, id: String) {
+        chip.onActivationRequest = if (onSelectionRequest == null && !isButton(id)) null else ({ requestSelection(id) })
+    }
+
+    private fun semanticsOf(option: NativeChoice): NativeChoiceSemantics = option.semantics ?: choiceSemantics
+    private fun isButton(id: String): Boolean = options.any { it.id == id && semanticsOf(it) == NativeChoiceSemantics.BUTTON }
+
+    private fun requestSelection(id: String): Boolean {
+        if (!isEnabled || !acceptsNativeInput() || options.none { it.id == id && it.enabled }) return false
+        val request = onSelectionRequest
+        if (request != null) return request(id)
+        if (isButton(id)) return false
+        selectFromUser(id)
+        return true
+    }
+
+    private fun handleChoiceKey(view: View, id: String, code: Int, event: KeyEvent): Boolean {
+        if (!isEnabled || !view.isEnabled || !view.acceptsNativeInput() || !view.hasFocus() || !event.hasNoModifiers()) return false
+        val direction = when (code) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> if (layoutDirection == View.LAYOUT_DIRECTION_RTL) 1 else -1
+            KeyEvent.KEYCODE_DPAD_RIGHT -> if (layoutDirection == View.LAYOUT_DIRECTION_RTL) -1 else 1
+            KeyEvent.KEYCODE_DPAD_UP -> -1
+            KeyEvent.KEYCODE_DPAD_DOWN -> 1
+            KeyEvent.KEYCODE_MOVE_HOME -> Int.MIN_VALUE
+            KeyEvent.KEYCODE_MOVE_END -> Int.MAX_VALUE
+            else -> return false
+        }
+        if (event.action == KeyEvent.ACTION_UP) {
+            val handled = handledNavigationKey == code
+            handledNavigationKey = null
+            return handled
+        }
+        if (event.action != KeyEvent.ACTION_DOWN) return false
+        handledNavigationKey = null
+        val eligible = options.filter { it.enabled }
+        if (eligible.isEmpty()) return false
+        if ((code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_DOWN) &&
+            rowCount > 0 && placement.size >= childCount * 6) {
+            val currentView = chips[id] ?: return false
+            val currentIndex = indexOfChild(currentView)
+            if (currentIndex < 0) return false
+            val center = placement[currentIndex * 6] + placement[currentIndex * 6 + 2] / 2f
+            var row = placement[currentIndex * 6 + 4] + direction
+            while (row in 0 until rowCount) {
+                val target = eligible.minByOrNull { option ->
+                    val index = indexOfChild(chips[option.id])
+                    if (index < 0 || placement[index * 6 + 4] != row) Float.POSITIVE_INFINITY
+                    else kotlin.math.abs(placement[index * 6] + placement[index * 6 + 2] / 2f - center)
+                }
+                val targetView = target?.let { chips[it.id] }
+                val targetIndex = if (targetView != null) indexOfChild(targetView) else -1
+                if (targetIndex >= 0 && placement[targetIndex * 6 + 4] == row) {
+                    if (targetView?.requestFocus() != true) return false
+                    if (activateOnFocusNavigation && !isButton(checkNotNull(target).id)) requestSelection(target.id)
+                    handledNavigationKey = code
+                    return true
+                }
+                row += direction
+            }
+            return false
+        }
+        val current = eligible.indexOfFirst { it.id == id }
+        val index = when (direction) {
+            Int.MIN_VALUE -> 0
+            Int.MAX_VALUE -> eligible.lastIndex
+            else -> if (current < 0) 0 else (current + direction + eligible.size) % eligible.size
+        }
+        val target = eligible[index].id
+        if (chips[target]?.requestFocus() != true) return false
+        if (activateOnFocusNavigation && !isButton(target)) requestSelection(target)
+        handledNavigationKey = code
+        return true
+    }
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_CANCEL) return super.dispatchTouchEvent(event)
+        if (!acceptsNativeInput()) {
+            val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+            try { super.dispatchTouchEvent(cancel) } finally { cancel.recycle() }
+            return false
+        }
+        // A compact-row owner may admit the standard 48dp minimum target outside visual bounds.
+        // Only DOWN needs projection into a child; subsequent motion retains its real geometry.
+        val extra = max(0f, (48f * density - height) / 2f)
+        if (singleRow && event.actionMasked == MotionEvent.ACTION_UP &&
+            (event.x < 0f || event.x >= width || event.y < -extra || event.y >= height + extra)) {
+            val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+            return try { super.dispatchTouchEvent(cancel) } finally { cancel.recycle() }
+        }
+        if (singleRow && event.actionMasked == MotionEvent.ACTION_DOWN && height > 0 &&
+            event.x >= 0f && event.x < width && event.y >= -extra && event.y < height + extra &&
+            (event.y < 0f || event.y >= height)) {
+            val projected = MotionEvent.obtain(event)
+            projected.offsetLocation(0f, event.y.coerceIn(0f, height - 1f) - event.y)
+            return try { super.dispatchTouchEvent(projected) } finally { projected.recycle() }
+        }
+        return super.dispatchTouchEvent(event)
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        if (configuration.changed(context)) {
+            // A retained child's measure cache may otherwise skip its own configuration refresh.
+            chips.values.forEach { it.applyPalette(choicePalette) }
+        }
+        val count = childCount
+        if (placement.size < count * 6) placement = IntArray(count * 6)
+        val gap = (gapDp * density).roundToInt()
+        val verticalGap = (verticalGapDp * density).roundToInt()
+        val horizontalPadding = paddingLeft + paddingRight
+        val verticalPadding = paddingTop + paddingBottom
+        val widthMode = MeasureSpec.getMode(widthMeasureSpec)
+        val widthSize = MeasureSpec.getSize(widthMeasureSpec)
+        val available = if (widthMode == MeasureSpec.UNSPECIFIED) Int.MAX_VALUE else max(0, widthSize - horizontalPadding)
+        val childWidthSpec = if (widthMode == MeasureSpec.UNSPECIFIED) MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+            else MeasureSpec.makeMeasureSpec(available, MeasureSpec.AT_MOST)
+        var state = 0
+        var largest = 0
+        var minimumCell = (48f * density).roundToInt()
+        var naturalWidth = 0L
+        for (i in 0 until count) {
+            val child = getChildAt(i)
+            child.measure(childWidthSpec, MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+            largest = max(largest, child.measuredWidth)
+            if (child is NativeChip) minimumCell = max(minimumCell, child.minimumCellWidth())
+            naturalWidth += child.measuredWidth.toLong()
+            state = combineMeasuredStates(state, child.measuredState)
+        }
+        naturalWidth += gap.toLong() * max(0, count - 1)
+        val effectiveFixedColumns = fixedColumns?.let { requested ->
+            if (widthMode == MeasureSpec.UNSPECIFIED) requested else min(requested,
+                max(1, ((available.toLong() + gap) / max(1L, minimumCell.toLong() + gap)).toInt()))
+        }
+        val singleRowColumns = if (singleRow) count else effectiveFixedColumns ?: count
+        val equalWidth = largest.toLong() * singleRowColumns + gap.toLong() * max(0, singleRowColumns - 1)
+        val fillCells = fillWrappedCells || effectiveFixedColumns != null
+        val equal = if (singleRow) true else if (effectiveFixedColumns != null) count <= effectiveFixedColumns else
+            arrangement == ChoiceArrangement.EqualWidth && count <= maxColumns &&
+                minimumCell.toLong() * count + gap.toLong() * max(0, count - 1) <= available
+        val intrinsicColumns = effectiveFixedColumns ?: min(count, maxColumns)
+        val desired = if (equal) equalWidth else if (fillCells)
+            largest.toLong() * intrinsicColumns + gap.toLong() * max(0, intrinsicColumns - 1)
+            else naturalWidth
+        val contentWidth = if (widthMode == MeasureSpec.EXACTLY ||
+            (fillCells && widthMode != MeasureSpec.UNSPECIFIED)) available
+            else min(desired, available.toLong()).toInt()
+        var contentHeight = 0
+        var occupiedWidth = 0
+        rowCount = 0
+        measuredColumns = 0
+        if (count > 0 && equal) {
+            measuredColumns = singleRowColumns
+            val rowGap = if (singleRow && singleRowColumns > 1)
+                min(gap, contentWidth / (singleRowColumns - 1)) else gap
+            val usable = max(0, contentWidth - rowGap * (singleRowColumns - 1))
+            val cellWidth = usable / singleRowColumns
+            val remainder = usable % singleRowColumns
+            var left = 0
+            for (i in 0 until count) {
+                val child = getChildAt(i)
+                val width = cellWidth + if (i < remainder) 1 else 0
+                val boundedHeight = if (singleRow && MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED)
+                    MeasureSpec.makeMeasureSpec(max(0, MeasureSpec.getSize(heightMeasureSpec) - verticalPadding), MeasureSpec.getMode(heightMeasureSpec))
+                    else MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+                child.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), boundedHeight)
+                placement[i * 6] = left
+                placement[i * 6 + 2] = child.measuredWidth
+                placement[i * 6 + 3] = child.measuredHeight
+                placement[i * 6 + 4] = 0
+                placement[i * 6 + 5] = i
+                contentHeight = max(contentHeight, child.measuredHeight)
+                left += width + rowGap
+            }
+            finishRow(0, count, 0, contentHeight)
+            rowCount = 1
+        } else if (count > 0) {
+            val columnMinimum = if (arrangement == ChoiceArrangement.EqualWidth) minimumCell else largest
+            val rowColumns = effectiveFixedColumns ?: if (fillCells) minOf(count, maxColumns,
+                max(1, ((contentWidth.toLong() + gap) / max(1L, columnMinimum.toLong() + gap)).toInt()))
+                else maxColumns
+            measuredColumns = rowColumns
+            if (fillCells) {
+                val usable = max(0, contentWidth - gap * (rowColumns - 1))
+                for (i in 0 until count) {
+                    val cellWidth = usable / rowColumns + if (i % rowColumns < usable % rowColumns) 1 else 0
+                    getChildAt(i).measure(MeasureSpec.makeMeasureSpec(cellWidth, MeasureSpec.EXACTLY),
+                        MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+                }
+            }
+            var rowStart = 0
+            var rowWidth = 0
+            var rowHeight = 0
+            var rowItems = 0
+            for (i in 0 until count) {
+                val child = getChildAt(i)
+                if (rowItems > 0 && (rowItems == rowColumns || effectiveFixedColumns == null &&
+                    rowWidth.toLong() + gap + child.measuredWidth > contentWidth)) {
+                    occupiedWidth = max(occupiedWidth, rowWidth)
+                    finishRow(rowStart, i, contentHeight, rowHeight)
+                    contentHeight += rowHeight + verticalGap
+                    rowCount++
+                    rowStart = i
+                    rowWidth = 0
+                    rowHeight = 0
+                    rowItems = 0
+                }
+                val left = rowWidth + if (rowItems == 0) 0 else gap
+                placement[i * 6] = left
+                placement[i * 6 + 2] = child.measuredWidth
+                placement[i * 6 + 3] = child.measuredHeight
+                placement[i * 6 + 4] = rowCount
+                placement[i * 6 + 5] = rowItems
+                rowWidth = left + child.measuredWidth
+                rowHeight = max(rowHeight, child.measuredHeight)
+                rowItems++
+            }
+            finishRow(rowStart, count, contentHeight, rowHeight)
+            contentHeight += rowHeight
+            occupiedWidth = max(occupiedWidth, rowWidth)
+            rowCount++
+        }
+        val measuredContentWidth = if (!equal && !fillCells && widthMode != MeasureSpec.EXACTLY)
+            occupiedWidth else contentWidth
+        setMeasuredDimension(resolveSizeAndState(measuredContentWidth + horizontalPadding, widthMeasureSpec, state),
+            resolveSizeAndState(contentHeight + verticalPadding, heightMeasureSpec, state shl MEASURED_HEIGHT_STATE_SHIFT))
+    }
+
+    private fun finishRow(start: Int, end: Int, top: Int, rowHeight: Int) {
+        for (i in start until end) {
+            val child = getChildAt(i)
+            if (fillRowHeight) {
+                child.measure(MeasureSpec.makeMeasureSpec(child.measuredWidth, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(rowHeight, MeasureSpec.EXACTLY))
+                placement[i * 6 + 3] = child.measuredHeight
+            }
+            placement[i * 6 + 1] = top + (rowHeight - child.measuredHeight) / 2
+        }
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        for (i in 0 until childCount) {
+            val index = i * 6
+            val childWidth = placement[index + 2]
+            val x = if (layoutDirection == View.LAYOUT_DIRECTION_RTL) width - paddingRight - placement[index] - childWidth
+                else paddingLeft + placement[index]
+            val y = paddingTop + placement[index + 1]
+            getChildAt(i).layout(x, y, x + childWidth, y + placement[index + 3])
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        configuration.changed(context)
+        requestLayout()
+    }
+
+    override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(info)
+        info.className = when (choiceSemantics) {
+            NativeChoiceSemantics.TAB -> "android.widget.TabWidget"
+            NativeChoiceSemantics.RADIO -> "android.widget.RadioGroup"
+            NativeChoiceSemantics.CHECKBOX -> "android.view.ViewGroup"
+            NativeChoiceSemantics.BUTTON -> "android.view.ViewGroup"
+        }
+        var columns = 0
+        for (i in 0 until childCount) columns = max(columns, placement.getOrElse(i * 6 + 5) { 0 } + 1)
+        if (childCount > 0 && fixedColumns != null) columns = measuredColumns.takeIf { it > 0 } ?: fixedColumns
+        info.collectionInfo = AccessibilityNodeInfo.CollectionInfo.obtain(rowCount, columns, false,
+            if (options.any { semanticsOf(it) != NativeChoiceSemantics.BUTTON })
+                AccessibilityNodeInfo.CollectionInfo.SELECTION_MODE_SINGLE else AccessibilityNodeInfo.CollectionInfo.SELECTION_MODE_NONE)
+    }
+
+    internal fun describeItem(child: View, info: AccessibilityNodeInfo) {
+        val index = indexOfChild(child)
+        if (index < 0 || placement.size < (index + 1) * 6) return
+        info.collectionItemInfo = AccessibilityNodeInfo.CollectionItemInfo.obtain(
+            placement[index * 6 + 4], 1, placement[index * 6 + 5], 1, false, child.isSelected)
+    }
+
+    override fun close() {
+        if (closed) return
+        closed = true
+        isEnabled = false
+        onSelectionRequest = null
+        onSelectionChange = null
+        chips.values.forEach { it.close() }
+        cancelPendingInputEvents()
+    }
+
+    private fun ownedIcon(icon: Drawable?): Drawable? = icon?.constantState?.newDrawable(resources)?.mutate() ?: icon
+}
+
+class NativeTabBar(
+    context: Context,
+    palette: ControlPalette,
+    style: NativeChoiceStyle = NativeChoiceStyle(radiusDp = 16f, textSizeSp = 12f, outlined = false, iconSizeDp = 19f, iconGapDp = 7f),
+    gapDp: Float = 4f,
+    arrangement: ChoiceArrangement = ChoiceArrangement.EqualWidth,
+    maxColumns: Int = Int.MAX_VALUE,
+    verticalGapDp: Float = gapDp,
+    activateOnFocusNavigation: Boolean = true,
+    fixedColumns: Int? = null,
+    fillRowHeight: Boolean = false,
+) : NativeSegmentedChoice(context, palette, style, gapDp, arrangement, maxColumns, verticalGapDp,
+    NativeChoiceSemantics.TAB, activateOnFocusNavigation, fixedColumns, fillRowHeight) {
+    override val tabSemantics: Boolean get() = true
+}
+
+data class NativeSwatchChoice(
+    val id: String,
+    val label: CharSequence,
+    val background: Int,
+    val foreground: Int,
+    val enabled: Boolean = true,
+)
+
+/** Shared document-color preview, including sample ink and selected outline/check. */
+class NativeSwatchGrid(
+    context: Context,
+    palette: ControlPalette,
+    val swatchSizeDp: Float = 48f,
+    gapDp: Float = 8f,
+    maxColumns: Int = 5,
+    val fillEqualCells: Boolean = false,
+) : NativeSegmentedChoice(context, palette,
+    NativeChoiceStyle(radiusDp = 8f, textSizeSp = 12f, horizontalPaddingDp = 4f, verticalPaddingDp = 4f,
+        outlined = false, iconSizeDp = swatchSizeDp, iconGapDp = 4f, iconAbove = true, selectedFill = false),
+    gapDp, ChoiceArrangement.Wrap, maxColumns) {
+    private val swatches = LinkedHashMap<String, SwatchDrawable>()
+    override val fillWrappedCells: Boolean get() = fillEqualCells
+
+    init { require(swatchSizeDp.isFinite() && swatchSizeDp > 0f) }
+
+    fun bindSwatches(options: List<NativeSwatchChoice>, selectedId: String?) {
+        val active = options.mapTo(HashSet()) { it.id }
+        swatches.keys.retainAll(active)
+        val choices = options.map { option ->
+            val drawable = swatches.getOrPut(option.id) {
+                SwatchDrawable(resources.displayMetrics.density, swatchSizeDp, choicePalette, option.background, option.foreground)
+            }
+            drawable.setColors(option.background, option.foreground)
+            drawable.updateDensity(resources.displayMetrics.density)
+            NativeChoice(option.id, option.label, drawable, option.enabled)
+        }
+        bind(choices, selectedId)
+        // The sample colors are document content, not control foreground colors.
+        options.forEach { option ->
+            choiceView(option.id)?.apply {
+                stretchTopIconToWidth = fillEqualCells
+                swatches.getValue(option.id).bindOwner(this, choiceStyle.animateSelection)
+                preserveIconColors = true
+                compoundDrawableTintList = null
+            }
+        }
+    }
+
+    override fun applyPalette(palette: ControlPalette) {
+        super.applyPalette(palette)
+        swatches.values.forEach { it.palette = palette; it.updateDensity(resources.displayMetrics.density) }
+        swatches.keys.forEach { choiceView(it)?.compoundDrawableTintList = null }
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        swatches.values.forEach { it.updateDensity(resources.displayMetrics.density) }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+    }
+}
+
+private class ChoiceVisualBackground(drawable: Drawable, private val inset: () -> Int) : DrawableWrapper(drawable) {
+    override fun draw(canvas: Canvas) {
+        val vertical = inset().coerceIn(0, bounds.height() / 2)
+        drawable?.setBounds(bounds.left, bounds.top + vertical, bounds.right, bounds.bottom - vertical)
+        super.draw(canvas)
+    }
+}
+
+private fun CompoundButton.updateChoiceGeometry(style: NativeChoiceStyle, mark: ChoiceDrawable) {
+    val density = resources.displayMetrics.density
+    mark.updateDensity(density)
+    // Refresh native cached mark dimensions without replacing the owned Drawable or input node.
+    buttonDrawable = null
+    buttonDrawable = mark
+    minimumWidth = (48f * density).roundToInt()
+    minimumHeight = (max(48f, style.minHeightDp) * density).roundToInt()
+    minWidth = minimumWidth
+    minHeight = minimumHeight
+    setPaddingRelative(((style.startPaddingDp ?: style.horizontalPaddingDp) * density).roundToInt(),
+        (style.verticalPaddingDp * density).roundToInt(),
+        ((style.endPaddingDp ?: style.horizontalPaddingDp) * density).roundToInt(),
+        (style.verticalPaddingDp * density).roundToInt())
+}
+
+private abstract class ChoiceDrawable(protected var density: Float, palette: ControlPalette) : Drawable() {
+    fun updateDensity(value: Float) {
+        require(value.isFinite() && value > 0f)
+        if (density == value) return
+        density = value
+        invalidateSelf()
+    }
+    var palette: ControlPalette = palette
+        set(value) { if (field != value) { field = value; updateColors(); invalidateSelf() } }
+    protected val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    protected val rect = RectF()
+    protected val path = Path()
+    private var opacity = 255
+    private var checkedState = false
+    private var enabledState = false
+    protected val checked: Boolean get() = checkedState
+    protected val enabled: Boolean get() = enabledState
+    private var colorMotion: ViewColorTransition? = null
+    private var animateState = true
+
+    fun bindOwner(view: View, animateState: Boolean = true) {
+        if (colorMotion != null) return
+        this.animateState = animateState
+        colorMotion = ViewColorTransition(view, targetColors(), { invalidateSelf() })
+    }
+
+    protected abstract fun targetColors(): IntArray
+    protected fun updateColors(stateChange: Boolean = false) {
+        val motion = colorMotion ?: return
+        if (stateChange && !animateState) motion.snap(*targetColors()) else motion.retarget(*targetColors())
+    }
+    protected fun animatedColor(index: Int): Int = colorMotion?.color(index) ?: targetColors()[index]
+
+    override fun isStateful(): Boolean = true
+    override fun onStateChange(state: IntArray): Boolean {
+        checkedState = android.R.attr.state_checked in state
+        enabledState = android.R.attr.state_enabled in state
+        updateColors(stateChange = true)
+        invalidateSelf()
+        return true
+    }
+    override fun setAlpha(alpha: Int) { opacity = alpha.coerceIn(0, 255); invalidateSelf() }
+    override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter; invalidateSelf() }
+    @Suppress("DEPRECATION")
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+
+    protected fun color(value: Int, stroke: Float = 0f) {
+        paint.color = value
+        paint.alpha = (Color.alpha(value) * opacity + 127) / 255
+        paint.style = if (stroke > 0f) Paint.Style.STROKE else Paint.Style.FILL
+        paint.strokeWidth = stroke
+    }
+
+    protected fun muted(value: Int): Int {
+        if (enabled) return value
+        fun channel(shift: Int) = (((value ushr shift) and 255) + ((palette.surface ushr shift) and 255)) / 2
+        return Color.argb(channel(24), channel(16), channel(8), channel(0))
+    }
+}
+
+private class CheckMarkDrawable(density: Float, palette: ControlPalette) : ChoiceDrawable(density, palette) {
+    override fun targetColors() = intArrayOf(muted(if (checked) palette.accent else palette.outline), muted(palette.onAccent))
+    override fun getIntrinsicWidth(): Int = (20f * density).roundToInt()
+    override fun getIntrinsicHeight(): Int = intrinsicWidth
+
+    override fun draw(canvas: Canvas) {
+        val side = min(bounds.width(), bounds.height()).toFloat()
+        val left = bounds.exactCenterX() - side / 2f
+        val top = bounds.exactCenterY() - side / 2f
+        val inset = density
+        rect.set(left + inset, top + inset, left + side - inset, top + side - inset)
+        color(animatedColor(0), if (checked) 0f else 2f * density)
+        canvas.drawRoundRect(rect, 3f * density, 3f * density, paint)
+        if (checked) {
+            color(animatedColor(1), 2f * density)
+            paint.strokeCap = Paint.Cap.ROUND
+            paint.strokeJoin = Paint.Join.ROUND
+            path.reset()
+            path.moveTo(left + side * .24f, top + side * .51f)
+            path.lineTo(left + side * .43f, top + side * .70f)
+            path.lineTo(left + side * .77f, top + side * .32f)
+            canvas.drawPath(path, paint)
+        }
+    }
+}
+
+private class RadioMarkDrawable(density: Float, palette: ControlPalette) : ChoiceDrawable(density, palette) {
+    override fun targetColors() = intArrayOf(muted(if (checked) palette.accent else palette.outline), muted(palette.accent))
+    override fun getIntrinsicWidth(): Int = (20f * density).roundToInt()
+    override fun getIntrinsicHeight(): Int = intrinsicWidth
+
+    override fun draw(canvas: Canvas) {
+        val radius = min(bounds.width(), bounds.height()) / 2f - density
+        color(animatedColor(0), 2f * density)
+        canvas.drawCircle(bounds.exactCenterX(), bounds.exactCenterY(), max(0f, radius), paint)
+        if (checked) {
+            color(animatedColor(1))
+            canvas.drawCircle(bounds.exactCenterX(), bounds.exactCenterY(), max(0f, radius * .55f), paint)
+        }
+    }
+}
+
+private class SwitchPartDrawable(
+    density: Float,
+    palette: ControlPalette,
+    private val style: NativeSwitchStyle,
+    private val thumb: Boolean,
+    private val track: Drawable? = null,
+    private val resolveLayoutDirection: (() -> Int)? = null,
+) : ChoiceDrawable(density, palette) {
+    override fun targetColors() = intArrayOf(
+        muted(if (thumb) { if (checked) palette.onAccent else palette.muted }
+            else if (checked) palette.accent else palette.raised), muted(palette.outline))
+
+    private fun thumbEnvelopeWidth(): Int =
+        ((style.thumbSizeDp + 2f * (style.thumbEdgeInsetDp ?: 0f)) * density).roundToInt()
+
+    override fun getIntrinsicWidth(): Int = if (thumb && style.thumbEdgeInsetDp != null)
+        thumbEnvelopeWidth() else ((if (thumb) style.thumbSizeDp else style.trackWidthDp) * density).roundToInt()
+
+    override fun getPadding(padding: Rect): Boolean {
+        if (style.thumbEdgeInsetDp == null) return super.getPadding(padding)
+        // Matching track/thumb padding pairs cancel in native draw/hit positioning.
+        // Split an odd total asymmetrically so content never becomes negative at E == W.
+        val trackWidth = (style.trackWidthDp * density).roundToInt()
+        val total = max(0L, 2L * thumbEnvelopeWidth() - trackWidth).toInt()
+        val left = total / 2
+        padding.set(left, 0, total - left, 0)
+        return total != 0
+    }
+
+    private fun thumbRadius(): Float {
+        val available = min(bounds.width(), bounds.height()).toFloat()
+        val pressedSize = style.pressedThumbSizeDp
+        if (enabled && android.R.attr.state_pressed in state && pressedSize != null)
+            return min(available, pressedSize * density) / 2f
+        if (style.thumbEdgeInsetDp == null)
+            return available / 2f * if (checked) 1f else style.offThumbScale
+        val trackBounds = track?.bounds
+        val range = (trackBounds?.width() ?: 0) - bounds.width()
+        val progress = if (trackBounds == null || range <= 0) {
+            if (checked) 1f else 0f
+        } else {
+            val physical = ((bounds.left - trackBounds.left).toFloat() / range).coerceIn(0f, 1f)
+            if (resolveLayoutDirection?.invoke() == View.LAYOUT_DIRECTION_RTL) 1f - physical else physical
+        }
+        val diameter = min(available, style.thumbSizeDp * density)
+        return diameter / 2f * (style.offThumbScale + (1f - style.offThumbScale) * progress)
+    }
+    override fun getIntrinsicHeight(): Int = ((if (thumb) style.thumbSizeDp else style.trackHeightDp) * density).roundToInt()
+
+    override fun draw(canvas: Canvas) {
+        if (thumb) {
+            val radius = thumbRadius()
+            color(animatedColor(0))
+            canvas.drawCircle(bounds.exactCenterX(), bounds.exactCenterY(), radius, paint)
+        } else {
+            val halfWidth = min(bounds.width().toFloat(), style.trackWidthDp * density) / 2f
+            val halfHeight = min(bounds.height().toFloat(), style.trackHeightDp * density) / 2f
+            rect.set(bounds.exactCenterX() - halfWidth, bounds.exactCenterY() - halfHeight,
+                bounds.exactCenterX() + halfWidth, bounds.exactCenterY() + halfHeight)
+            color(animatedColor(0))
+            canvas.drawRoundRect(rect, rect.height() / 2f, rect.height() / 2f, paint)
+            if (!checked && style.outlinedTrack) {
+                rect.inset(density, density)
+                color(animatedColor(1), 2f * density)
+                canvas.drawRoundRect(rect, rect.height() / 2f, rect.height() / 2f, paint)
+            }
+        }
+    }
+}
+
+private class SwatchDrawable(
+    density: Float,
+    private val sizeDp: Float,
+    palette: ControlPalette,
+    private var backgroundColor: Int,
+    private var foregroundColor: Int,
+) : ChoiceDrawable(density, palette) {
+    override fun targetColors() = intArrayOf(backgroundColor, foregroundColor,
+        muted(if (checked) palette.accent else palette.outline), muted(palette.accent), muted(palette.onAccent))
+
+    override fun getIntrinsicWidth(): Int = (sizeDp * density).roundToInt()
+    override fun getIntrinsicHeight(): Int = intrinsicWidth
+
+    fun setColors(background: Int, foreground: Int) {
+        if (backgroundColor == background && foregroundColor == foreground) return
+        backgroundColor = background
+        foregroundColor = foreground
+        updateColors()
+        invalidateSelf()
+    }
+
+    override fun draw(canvas: Canvas) {
+        rect.set(bounds)
+        val radius = min(8f * density, rect.width() / 4f)
+        color(animatedColor(0))
+        canvas.drawRoundRect(rect, radius, radius, paint)
+        val unit = min(rect.width(), rect.height()) / 48f
+        color(animatedColor(1), max(1f, 2f * unit))
+        paint.strokeCap = Paint.Cap.ROUND
+        for (line in 0..2) {
+            val y = bounds.top + (17f + line * 7f) * unit
+            canvas.drawLine(bounds.left + 11f * unit, y, bounds.left + (if (line == 2) 30f else 37f) * unit, y, paint)
+        }
+        rect.inset(density, density)
+        color(animatedColor(2), (if (checked) 2f else 1f) * density)
+        canvas.drawRoundRect(rect, radius, radius, paint)
+        if (checked) {
+            val x = bounds.right - 10f * unit
+            val y = bounds.bottom - 10f * unit
+            color(animatedColor(3))
+            canvas.drawCircle(x, y, 7f * unit, paint)
+            color(animatedColor(4), max(1f, 1.5f * unit))
+            path.reset()
+            path.moveTo(x - 3f * unit, y)
+            path.lineTo(x - .5f * unit, y + 2.5f * unit)
+            path.lineTo(x + 3.5f * unit, y - 2.5f * unit)
+            canvas.drawPath(path, paint)
+        }
+    }
+}

@@ -113,6 +113,10 @@ class SpringValue<T, V : AnimationVector> private constructor(
     }
 
     companion object {
+        /** Explicit component motion tokens, with the same interruption and frame semantics. */
+        fun float(initialValue: Float, spec: SpringSpec<Float>): SpringValue<Float, AnimationVector1D> =
+            SpringValue(initialValue, Float.VectorConverter, spec, { AnimationVector1D(0f) })
+
         fun float(initialValue: Float): SpringValue<Float, AnimationVector1D> =
             SpringValue(
                 initialValue,

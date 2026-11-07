@@ -41,6 +41,15 @@ class FontFamily private constructor(internal val familyName: String?) {
         val Serif = FontFamily("serif")
         val Monospace = FontFamily("monospace")
         val Cursive = FontFamily("cursive")
+
+        /** Uses Android's system-family lookup, including its normal fallback for unknown names. */
+        fun system(name: String): FontFamily = when (name) {
+            "sans-serif" -> SansSerif
+            "serif" -> Serif
+            "monospace" -> Monospace
+            "cursive" -> Cursive
+            else -> FontFamily(name)
+        }
     }
 }
 
