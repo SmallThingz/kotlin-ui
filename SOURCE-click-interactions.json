@@ -1,0 +1,62 @@
+{
+  "status": "ownership extraction only; no new input/frame/raster qualification",
+  "original_sources": [
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbClickController.kt",
+      "sha256": "a84216a6d1b4cd6b4d825a9921b52bc4192486b3b512c5d2986189333f9b9ae5",
+      "lines": 488
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbRowIndication.kt",
+      "sha256": "d0ab57998ec4ea434b78b20f5e655d486d3b4058dc933cbc41d12ef389c84fba",
+      "lines": 353
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbRowIndicationSink.kt",
+      "sha256": "704424581b1c2fcce7efc3697f528dd61d6475b07b54c3f985c9e628b88c1efa",
+      "lines": 37
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbButtonElevation.kt",
+      "sha256": "64a45ada9462ad4c5d454389c8295959fa8d324d9c8f0f209bc67bf4ff7eea37",
+      "lines": 312
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbAnimatorDurationScale.kt",
+      "sha256": "ca33e9503cfb1a0bcbf0992b92bf418072758dde8bb717fcf8df7bdb3d657d92",
+      "lines": 72
+    }
+  ],
+  "symbol_renames": {
+    "ReverbClickController": "ViewClickController",
+    "ReverbRowIndication": "RowIndication",
+    "ReverbRowIndicationSink": "RowIndicationSink",
+    "ReverbFilledButtonElevation": "FilledButtonElevation",
+    "ReverbFilledButtonElevationState": "FilledButtonElevationState",
+    "ReverbButtonElevationInteraction": "ButtonElevationInteraction",
+    "ReverbButtonElevationToken": "ButtonElevationToken",
+    "ReverbButtonCapsuleOutline": "ButtonCapsuleOutline",
+    "configureReverbButtonShadowHost": "configureButtonShadowHost",
+    "reverbAnimatorDurationScale": "readCachedAnimatorDurationScale"
+  },
+  "public_symbols": [
+    "ButtonElevationInteraction",
+    "ButtonElevationToken",
+    "FilledButtonElevation",
+    "FilledButtonElevationState",
+    "NativeClickBinding",
+    "NativeClickEnvironment",
+    "NativeClickIndication",
+    "NativePressToken",
+    "NativeStateToken",
+    "RowIndication",
+    "RowIndicationSink",
+    "ViewClickController",
+    "configureButtonShadowHost",
+    "readCachedAnimatorDurationScale"
+  ],
+  "kept_app_specific_factory": "createReverbOnboardingButtonElevation",
+  "intrinsic_copy": "none; labels/accessibility remain host-owned",
+  "duration_policy": "existing app cached observer/retry contract preserved; existing library direct reader is not equivalent",
+  "alpha_policy": "exact original reverbColorWithAlpha formula copied into a private indication helper; no palette dependency"
+}

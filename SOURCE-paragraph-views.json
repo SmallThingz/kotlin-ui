@@ -1,0 +1,108 @@
+{
+  "status": "ownership extraction candidate; no new TalkBack/translation qualification",
+  "original_package": "app.smallthingz.reverb.nativeui",
+  "library_package": "smallthingz.ui.text.view",
+  "sources": [
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbParagraphView.kt",
+      "source_lines": 680,
+      "move_body_lines": 680,
+      "sha256": "a413657bc4e1350a2bd002660c24bd8ba3ff3926e2847d1258b6057aea44e787"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/NativePlainTextSegments.kt",
+      "source_lines": 535,
+      "move_body_lines": 535,
+      "sha256": "552816be136cdbaeb669fbeb7fa2d82e4ca5133bb35910cfd10613c3182089d8"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/PlainTextAccessibility.kt",
+      "source_lines": 312,
+      "move_body_lines": 312,
+      "sha256": "88c039180640aae792b5a72e7e446e45ed5ad5e1ca09b1e53bfc19d1b9057355"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/NativePlainTextViewGeometry.kt",
+      "source_lines": 181,
+      "move_body_lines": 181,
+      "sha256": "a554bb60ce6809292ed72dd0329551ffe87c5c736cc6541abb67293dd30e0bec"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/NativePlainTextGeometry.kt",
+      "source_lines": 89,
+      "move_body_lines": 89,
+      "sha256": "ae6bd47d3ec7112cd7aa61c2e8b9f5e424ceb606d50e29507a305b27597a410c"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbTextTranslationApi31.kt",
+      "source_lines": 72,
+      "move_body_lines": 72,
+      "sha256": "e4ccf16c6ce1770fcc693468c33adabe10a9023cc40116214573cdf8aa565a67"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbTextSubstitutionState.kt",
+      "source_lines": 50,
+      "move_body_lines": 50,
+      "sha256": "11f25f1a4c1d47b777e190dba44c0594ca1717bfbe4c73eea1b5510d7094da42"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/NativeSourceAccessibilityNode.kt",
+      "source_lines": 42,
+      "move_body_lines": 29,
+      "sha256": "50621ab8341798b1a0f3178b66966db2d4986dbb671b041a57a465ecb3abf699"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbMergedRowAccessibility.kt",
+      "source_lines": 407,
+      "move_body_lines": 407,
+      "sha256": "15a49e51dba8867f3f1ada8056ba3bcb4aaa704b2e7c1da344ba1c916b14e0e4"
+    }
+  ],
+  "symbol_renames": {
+    "ReverbParagraphView": "ParagraphView",
+    "ReverbMergedRowAccessibility": "MergedRowAccessibility",
+    "ReverbTextTranslationApi31": "TextTranslationApi31",
+    "ReverbTextSubstitutionState": "TextSubstitutionState"
+  },
+  "public_top_level_symbols": [
+    "MergedRowAccessibility",
+    "NativeMergedRowAccessibilityHost",
+    "NativeMergedRowAccessibilityState",
+    "NativeMergedRowRole",
+    "NativePlainTextViewGeometry",
+    "NativeSourceAccessibilityNode",
+    "NativeSourceAccessibilityNodeProvider",
+    "NativeTextSemanticsClip",
+    "NativeTextSemanticsClipPolicy",
+    "NativeTextSemanticsTransformPolicy",
+    "ParagraphView",
+    "PlainTextAccessibility",
+    "PlainTextAccessibilityGeometry",
+    "PlainTextAccessibilitySnapshot",
+    "PlainTextAccessibilityWindowScope",
+    "nativeMergedRoleBoundsInScreen",
+    "nativeTextSemanticsMatrix"
+  ],
+  "paragraph_read_only_queries_promoted": [
+    "createOriginalSemanticsParagraph",
+    "isAccessibilityNodePresent",
+    "originalAccessibilityBoundsInView"
+  ],
+  "app_retained": [
+    "NativeSurfaceInputAdmission",
+    "nativeSurfaceInputAllowed",
+    "NativePointerLayerShape",
+    "NativePageTextAccessibilityOwner",
+    "ReverbViewEnvironment",
+    "ReverbParagraphStyles",
+    "ReverbPalette"
+  ],
+  "intrinsic_resources_already_library_owned": [
+    "state_on",
+    "state_off",
+    "selected",
+    "not_selected",
+    "switch_role",
+    "tab"
+  ]
+}
