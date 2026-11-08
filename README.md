@@ -9,6 +9,16 @@ The DSL constructs actual Views directly. It does not retain a second UI tree or
 run a reconciler. This is an implementation boundary, not a measured zero-cost
 claim: text layout, animation, allocation and View operations still have costs.
 
+## Removed dialog API
+
+`NativeDialog`, `NativeDialogStyle`, `NativeDialogPlacement`, `NativeDialogCorners`,
+`NativeDialogWidthPolicy`, `NativeDialogDimPolicy` and `NativeDialogSoftInputAdjust`
+have been removed. This is a source and binary breaking change; no compatibility
+facade is provided. External users must retain their own Android dialog implementation
+or choose a component meeting their layout, input, accessibility and lifecycle needs.
+Reverb's app-internal action sheet is not a public replacement. No current Reverb caller
+uses the removed API; this removal does not establish a runtime speed improvement.
+
 ## Build
 
 Use JDK 21 and an Android SDK with platform 37 installed. Set `ANDROID_HOME` or an
