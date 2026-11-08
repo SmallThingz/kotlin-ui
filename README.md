@@ -19,6 +19,21 @@ or choose a component meeting their layout, input, accessibility and lifecycle n
 Reverb's app-internal action sheet is not a public replacement. No current Reverb caller
 uses the removed API; this removal does not establish a runtime speed improvement.
 
+## Named color spaces
+
+`Color` retains its packed sRGB, Unspecified and Oklab encodings, named conversion,
+Oklab interpolation, compositing and luminance. `ColorSpace.connect` retains its
+four rendering intents for these named spaces. Custom RGB profiles are no longer
+part of this component library: `Rgb`, `TransferParameters`, `WhitePoint`,
+`Illuminant`, `Adaptation` and `ColorSpace.adapt` are removed. `ColorSpaces.Srgb`
+now exposes the named `ColorSpace` type rather than `Rgb`; custom subclass/profile
+construction and RGB-specific accessors are unavailable. This is a source and
+binary breaking change for those low-level APIs. No compatibility facade or
+framework-profile equivalence is promised. Component consumers use
+`ColorSpaces.Srgb`, `ColorSpaces.Oklab` and the existing `Color` operations.
+Numerical equivalence and runtime costs require independent qualification; this
+API reduction alone is not a measured speed or battery claim.
+
 ## Build
 
 Use JDK 21 and an Android SDK with platform 37 installed. Set `ANDROID_HOME` or an

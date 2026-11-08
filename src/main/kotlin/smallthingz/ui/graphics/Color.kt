@@ -22,7 +22,7 @@ import androidx.annotation.IntRange
 import smallthingz.ui.graphics.colorspace.ColorModel
 import smallthingz.ui.graphics.colorspace.ColorSpace
 import smallthingz.ui.graphics.colorspace.ColorSpaces
-import smallthingz.ui.graphics.colorspace.Rgb
+import smallthingz.ui.graphics.colorspace.NamedRgb
 import smallthingz.ui.graphics.colorspace.connect
 import smallthingz.ui.util.fastCoerceIn
 import smallthingz.ui.util.lerp
@@ -532,10 +532,10 @@ fun Color.luminance(): Float {
             "The supplied color space is ${colorSpace.model}"
     }
 
-    val eotf = (colorSpace as Rgb).eotfFunc
-    val r = eotf(red.toDouble())
-    val g = eotf(green.toDouble())
-    val b = eotf(blue.toDouble())
+    val rgb = colorSpace as NamedRgb
+    val r = rgb.eotf(red.toDouble())
+    val g = rgb.eotf(green.toDouble())
+    val b = rgb.eotf(blue.toDouble())
 
     return (((0.2126 * r) + (0.7152 * g) + (0.0722 * b)).toFloat()).fastCoerceIn(0.0f, 1.0f)
 }

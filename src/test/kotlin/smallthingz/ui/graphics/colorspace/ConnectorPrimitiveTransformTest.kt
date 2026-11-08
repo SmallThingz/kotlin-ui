@@ -4,8 +4,6 @@ import java.util.Random
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import smallthingz.ui.graphics.Color
-import smallthingz.ui.util.unpackFloat1
-import smallthingz.ui.util.unpackFloat2
 
 class ConnectorPrimitiveTransformTest {
     private val intents = listOf(
@@ -54,29 +52,6 @@ class ConnectorPrimitiveTransformTest {
                 }
             }
         }
-    }
-
-    @Test fun customCallbacksRetainOriginalOrderCountAndResult() {
-        val calls = mutableListOf<Double>()
-        val source = Rgb(
-            "stateful transfer", ColorSpaces.SrgbPrimaries, Illuminant.D50,
-            { it }, { value -> calls.add(value); value + calls.size * 0.0001 },
-            0f, 1f,
-        )
-        val destination = ColorSpaces.Oklab
-        val connector = Connector(source, destination, source, destination, RenderIntent.Relative, null)
-        val color = Color(0.2f, 0.4f, 0.6f, 0.8f)
-        calls.clear()
-        val packed = source.toXy(color.red, color.green, color.blue)
-        val z = source.toZ(color.red, color.green, color.blue)
-        val expected = destination.xyzaToColor(
-            unpackFloat1(packed), unpackFloat2(packed), z, color.alpha, destination,
-        )
-        val expectedCalls = calls.toList()
-        assertEquals(6, expectedCalls.size)
-        calls.clear()
-        assertEquals(expected.value, connector.transformToColor(color).value)
-        assertEquals(expectedCalls, calls)
     }
 
     private fun component(space: ColorSpace, channel: Int, step: Int): Float =

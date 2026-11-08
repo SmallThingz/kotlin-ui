@@ -122,9 +122,9 @@ internal class Oklab(name: String, id: Int) : ColorSpace(name, ColorModel.Lab, i
                     0.6338517070f,
                 ),
                 chromaticAdaptation(
-                    matrix = Adaptation.Bradford.transform,
-                    srcWhitePoint = Illuminant.D50.toXyz(),
-                    dstWhitePoint = Illuminant.D65.toXyz(),
+                    matrix = Bradford,
+                    srcWhitePoint = NamedD50.toXyz(),
+                    dstWhitePoint = NamedD65.toXyz(),
                 ),
             )
 
