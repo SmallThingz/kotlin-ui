@@ -1,510 +1,354 @@
+/*
+ * Source-derived from AndroidX UI 1.11.2 AndroidPopup.android.kt and Material3 1.4.0
+ * AndroidMenu.android.kt. Copyright 2020-2023 The Android Open Source Project.
+ * Licensed under the Apache License, Version 2.0:
+ * https://www.apache.org/licenses/LICENSE-2.0
+ */
 package smallthingz.ui.components
 
-import android.content.Context
-import android.content.res.ColorStateList
-import android.content.res.Configuration
-import android.graphics.Color
+import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
+import android.graphics.Outline
+import android.graphics.PixelFormat
 import android.graphics.Rect
-import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.Drawable
-import android.graphics.drawable.GradientDrawable
-import android.os.IBinder
-import android.os.Looper
-import android.text.TextUtils
+import android.os.Build
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
 import android.view.WindowManager
-import android.view.accessibility.AccessibilityEvent
-import android.view.accessibility.AccessibilityNodeInfo
-import android.widget.FrameLayout
-import android.widget.LinearLayout
-import android.widget.PopupWindow
-import android.widget.ScrollView
-import smallthingz.ui.controls.ControlPalette
-import java.lang.ref.WeakReference
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
+import androidx.annotation.RequiresApi
+import smallthingz.ui.text.TextStyle
+import smallthingz.ui.text.font.FontFamily
+import smallthingz.ui.scroll.NativeVerticalScrollState
+import smallthingz.ui.runtime.MonotonicFrameClock
+import smallthingz.ui.unit.Density
+import androidx.lifecycle.findViewTreeLifecycleOwner
+import androidx.lifecycle.findViewTreeViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.findViewTreeSavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import smallthingz.ui.input.phase.PhasePointerRoot
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-/** Stable action identity is independent of the row's position and Android View id. */
-data class NativeMenuItem(
-    val id: Int,
-    val label: CharSequence,
-    val enabled: Boolean = true,
-    val icon: Drawable? = null,
-    val contentDescription: CharSequence? = null,
-    /** Null is an ordinary action; non-null is an owner-controlled exclusive choice. */
-    val selected: Boolean? = null,
-    val selectionIcon: Drawable? = null,
-    val tag: String? = null,
-)
+/** Actual focusable sub-panel with the released Android Popup flags and geometry. */
+class NativePopupMenu<I> private constructor(
+    private val anchor: View,
+    private val menu: NativeMenuContent<I>,
+    private val density: Density,
+    private val frames: MonotonicFrameClock,
+    private val scope: CoroutineScope,
+    private val input: NativeMenuPointerBinding<I>,
+    private val onDismissRequest: () -> Unit,
+    private val onTerminal: () -> Unit,
+) : PhasePointerRoot(
+    anchor.context,
+    rootToScreen = input.geometry::rootToScreen,
+    coordinates = input.geometry::coordinates,
+    hitLayout = input.layout,
+    prepareCoordinates = input.geometry::begin,
+), AutoCloseable {
+    private constructor(anchor: View, density: Density, frames: MonotonicFrameClock,
+                        scope: CoroutineScope, parts: Parts<I>, onDismissRequest: () -> Unit,
+                        onTerminal: () -> Unit) :
+        this(anchor, parts.content, density, frames, scope, parts.input, onDismissRequest, onTerminal)
 
-/**
- * Default geometry follows Material 3 menu tokens (112–280 dp width, 48 dp rows,
- * 12 dp horizontal/8 dp outer vertical padding, 4 dp corners and 3 dp elevation).
- * Applications supply their own established typography and surface colors explicitly.
- */
-data class NativePopupMenuStyle(
-    val minWidthDp: Float = 112f,
-    val maxWidthDp: Float = 280f,
-    val minRowHeightDp: Float = 48f,
-    val cornerRadiusDp: Float = 4f,
-    val verticalPaddingDp: Float = 8f,
-    val rowHorizontalPaddingDp: Float = 12f,
-    val rowVerticalPaddingDp: Float = 0f,
-    val iconSizeDp: Float = 24f,
-    val iconGapDp: Float = 12f,
-    val verticalMarginDp: Float = 48f,
-    val horizontalMarginDp: Float = 0f,
-    val elevationDp: Float = 3f,
-    val horizontalOffsetDp: Float = 0f,
-    val verticalOffsetDp: Float = 0f,
-    val textStyle: NativeTextStyle = NativeTextStyle(14f, 20f, 500, letterSpacingSp = .1f),
-    val surfaceColor: Int? = null,
-    val outlineColor: Int? = null,
-    val noise: Boolean = false,
-    val disabledContentAlpha: Float = .38f,
-    val iconColor: Int? = null,
-    val disabledIconAlpha: Float = .38f,
-    val horizontalPaddingDp: Float = 0f,
-) {
+    constructor(anchor: View, density: Density, textStyle: TextStyle, resolver: FontFamily.Resolver,
+                colors: NativeMenuColors, state: NativeVerticalScrollState,
+                frames: MonotonicFrameClock, scope: CoroutineScope, icons: NativeMenuIcons<I>,
+                onDismissRequest: () -> Unit, onTerminal: () -> Unit) :
+        this(anchor, density, frames, scope,
+            Parts(anchor, density, textStyle, resolver, colors, state, frames, scope, icons),
+            onDismissRequest, onTerminal)
+
+    fun <T> bindChoices(choices: NativeMenuChoices<T>, colors: NativeMenuColors, select: (T) -> Unit) {
+        menu.bind(choices, colors, select)
+        input.refreshRows()
+    }
+
+    fun bindActions(actions: List<NativeMenuAction<I>>, colors: NativeMenuColors,
+                    background: Int = colors.surfaceContainerHigh) {
+        menu.bindActions(actions, colors, background)
+        input.refreshRows()
+    }
+
+    private class Parts<I>(anchor: View, density: Density, style: TextStyle, resolver: FontFamily.Resolver,
+                           colors: NativeMenuColors, state: NativeVerticalScrollState,
+                           frames: MonotonicFrameClock, scope: CoroutineScope, icons: NativeMenuIcons<I>) {
+        val content: NativeMenuContent<I>
+        val input: NativeMenuPointerBinding<I>
+        init {
+            lateinit var binding: NativeMenuPointerBinding<I>
+            content = NativeMenuContent(anchor.context, density, style, resolver, colors, icons,
+                state, frames, scope) { event -> binding.interestedParent(event) }
+            binding = NativeMenuPointerBinding(content, density)
+            input = binding
+        }
+    }
+
+    private val manager = context.getSystemService(WindowManager::class.java)
+    private val params = WindowManager.LayoutParams().apply {
+        gravity = Gravity.START or Gravity.TOP
+        flags = WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+            (((anchor.rootView.layoutParams as? WindowManager.LayoutParams)?.flags ?: 0) and
+                WindowManager.LayoutParams.FLAG_SECURE)
+        type = WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL
+        token = anchor.applicationWindowToken
+        width = WindowManager.LayoutParams.WRAP_CONTENT
+        height = WindowManager.LayoutParams.WRAP_CONTENT
+        format = PixelFormat.TRANSLUCENT
+        title = context.getString(smallthingz.ui.R.string.default_popup_window_title)
+    }
+    private val visibleFrame = Rect()
+    private val location = IntArray(2)
+    private val transition = NativeMenuTransition()
+    private val animationLayer = NativeMenuAnimationLayer(menu)
+    private var frameJob: Job? = null
+    private var back: Any? = null
+    private var added = false
+    private var closed = false
+    private var positioned = false
+    private var menuMeasured = false
+    private var previousAnchor: NativeMenuBounds? = null
+    private var previousMenuWidth = -1
+    private var previousMenuHeight = -1
+    private var previousWindowWidth = -1
+    private var previousWindowHeight = -1
+    private var anchorObserver: ViewTreeObserver? = null
+    private val anchorLayout = ViewTreeObserver.OnGlobalLayoutListener {
+        // Insets/window changes can change the usable frame without moving this anchor. This
+        // callback is layout-driven; the steady frame loop below only polls cheap coordinates.
+        updatePosition(force = true)
+    }
+
     init {
-        require(listOf(minWidthDp, maxWidthDp, minRowHeightDp, cornerRadiusDp,
-            verticalPaddingDp, horizontalPaddingDp, rowHorizontalPaddingDp, rowVerticalPaddingDp,
-            iconSizeDp, iconGapDp, verticalMarginDp, horizontalMarginDp, elevationDp)
-            .all { it.isFinite() && it >= 0f })
-        require(maxWidthDp > 0f && maxWidthDp >= minWidthDp)
-        require(horizontalOffsetDp.isFinite() && verticalOffsetDp.isFinite())
-        require(disabledContentAlpha.isFinite() && disabledContentAlpha in 0f..1f)
-        require(disabledIconAlpha.isFinite() && disabledIconAlpha in 0f..1f)
+        input.bindRoot(this)
+        id = android.R.id.content
+        setViewTreeLifecycleOwner(anchor.findViewTreeLifecycleOwner())
+        setViewTreeViewModelStoreOwner(anchor.findViewTreeViewModelStoreOwner())
+        setViewTreeSavedStateRegistryOwner(anchor.findViewTreeSavedStateRegistryOwner())
+        isSaveEnabled = false // The screen owner saves each retained ScrollState exactly once.
+        clipChildren = false
+        clipToPadding = false
+        isFocusable = true
+        isFocusableInTouchMode = true
+        // Compose enters an eligible menu item in keyboard mode; touch mode keeps root focus.
+        descendantFocusability = FOCUS_AFTER_DESCENDANTS
+        super.setLayoutDirection(anchor.layoutDirection)
+        elevation = 8f * density.density
+        outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, result: Outline) {
+                result.setRect(0,0,view.width,view.height)
+                result.alpha = 0f // Allocate surface shadow insets without a rectangular root shadow.
+            }
+        }
+        if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
+        animationLayer.scaleX = transition.scale
+        animationLayer.scaleY = transition.scale
+        animationLayer.alpha = 0f
+        addView(animationLayer)
+    }
+
+    fun show() {
+        check(!added && !closed)
+        transition.retarget(true)
+        // Mark before addView, because its synchronous attach callback starts the frame owner.
+        added = true
+        try { manager.addView(this,params) }
+        catch (failure: Throwable) {
+            added = isAttachedToWindow || parent != null
+            try { close() } catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
+            throw failure
+        }
+    }
+
+    fun expanded(expanded: Boolean) {
+        if (closed) return
+        transition.retarget(expanded)
+        // AndroidMenu's condition is outside DropdownMenuContent/updateTransition. A close before
+        // first entry settles removes the popup immediately, rather than inventing an exit tween.
+        if (!transition.shouldExist) onTerminal()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        anchorObserver = anchor.viewTreeObserver.also { it.addOnGlobalLayoutListener(anchorLayout) }
+        if (Build.VERSION.SDK_INT >= 33) back = MenuBackApi33.register(this,onDismissRequest)
+        frameJob = scope.launch {
+            while (isActive && !closed) {
+                frames.withFrameNanos { time ->
+                    if (!closed) {
+                        updatePosition()
+                        transition.frame(time,readCachedAnimatorDurationScale(context))
+                        animationLayer.scaleX = transition.scale
+                        animationLayer.scaleY = transition.scale
+                        animationLayer.alpha = if (positioned && anchor.isAttachedToWindow) transition.alpha else 0f
+                        if (!transition.shouldExist) onTerminal()
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        frameJob?.cancel()
+        frameJob = null
+        anchorObserver?.takeIf { it.isAlive }?.removeOnGlobalLayoutListener(anchorLayout)
+        anchorObserver = null
+        if (Build.VERSION.SDK_INT >= 33) MenuBackApi33.unregister(this,back)
+        back = null
+        super.onDetachedFromWindow()
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int,heightMeasureSpec: Int) {
+        anchor.getWindowVisibleDisplayFrame(visibleFrame)
+        animationLayer.measure(atMost(visibleFrame.width()),atMost(visibleFrame.height()))
+        setMeasuredDimension(animationLayer.measuredWidth,animationLayer.measuredHeight)
+        menuMeasured = true
+        // Compose's onSizeChanged publishes placement during measure, before ViewRoot's initial
+        // relayout and renderer light-center setup. Waiting for onLayout leaves the first setup
+        // at the default window origin even though the popup is drawn at its final placement.
+        updatePosition()
+    }
+
+    override fun onLayout(changed: Boolean,l: Int,t: Int,r: Int,b: Int) {
+        animationLayer.layout(0,0,animationLayer.measuredWidth,animationLayer.measuredHeight)
+        params.width = menu.measuredWidth
+        params.height = menu.measuredHeight
+        if (added && !closed) {
+            updatePosition(force=true)
+        }
+        invalidateOutline()
+    }
+
+    private fun updatePosition(force: Boolean = false) {
+        if (!added || closed || !anchor.isAttachedToWindow || !menuMeasured) return
+        val menuWidth = menu.measuredWidth
+        val menuHeight = menu.measuredHeight
+        anchor.getLocationInWindow(location)
+        val previous = previousAnchor
+        val sameAnchor = previous != null && previous.left == location[0] && previous.top == location[1] &&
+            previous.width == anchor.width && previous.height == anchor.height
+        if (!force && sameAnchor && menuWidth == previousMenuWidth && menuHeight == previousMenuHeight) return
+        val bounds = if (sameAnchor) requireNotNull(previous) else
+            NativeMenuBounds(location[0],location[1],location[0]+anchor.width,location[1]+anchor.height)
+        anchor.getWindowVisibleDisplayFrame(visibleFrame)
+        val windowWidth = visibleFrame.width()
+        val windowHeight = visibleFrame.height()
+        if (!force && bounds == previousAnchor && menuWidth == previousMenuWidth &&
+            menuHeight == previousMenuHeight && windowWidth == previousWindowWidth &&
+            windowHeight == previousWindowHeight) return
+        if (windowWidth != previousWindowWidth || windowHeight != previousWindowHeight) requestLayout()
+        previousAnchor = bounds
+        previousMenuWidth = menuWidth
+        previousMenuHeight = menuHeight
+        previousWindowWidth = windowWidth
+        previousWindowHeight = windowHeight
+        val placement = nativeMenuPosition(bounds,windowWidth,windowHeight,menuWidth,menuHeight,
+            anchor.layoutDirection == LAYOUT_DIRECTION_RTL,(48f*density.density).roundToInt())
+        params.x = placement.x
+        params.y = placement.y
+        animationLayer.pivotX = placement.pivotX * menuWidth
+        animationLayer.pivotY = placement.pivotY * menuHeight
+        if (Build.VERSION.SDK_INT >= 29)
+            systemGestureExclusionRects = listOf(Rect(0,0,windowWidth,windowHeight))
+        manager.updateViewLayout(this,params)
+        positioned = true
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_BACK || event.keyCode == KeyEvent.KEYCODE_ESCAPE) {
+            val state = keyDispatcherState ?: return super.dispatchKeyEvent(event)
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                state.startTracking(event,this)
+                return true
+            } else if (event.action == KeyEvent.ACTION_UP && state.isTracking(event) && !event.isCanceled) {
+                onDismissRequest()
+                return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if ((event.action == MotionEvent.ACTION_DOWN &&
+                (event.x < 0 || event.x >= width || event.y < 0 || event.y >= height)) ||
+            event.action == MotionEvent.ACTION_OUTSIDE) {
+            onDismissRequest()
+            return true
+        }
+        return super.dispatchTouchEvent(event)
+    }
+
+    // Source Popup ignores ViewRootImpl's locale override and retains its parent's direction.
+    override fun setLayoutDirection(layoutDirection: Int) = Unit
+
+    override fun close() {
+        if (closed) return
+        closed = true
+        frameJob?.cancel()
+        frameJob = null
+        var failure: Throwable? = null
+        fun cleanup(block: () -> Unit) {
+            try { block() } catch (problem: Throwable) {
+                if (failure == null) failure = problem else failure!!.addSuppressed(problem)
+            }
+        }
+        cleanup { input.close() }
+        setViewTreeLifecycleOwner(null)
+        if (added) {
+            added = false
+            cleanup { manager.removeViewImmediate(this) }
+        }
+        cleanup { menu.close() }
+        failure?.let { throw it }
     }
 }
 
-/**
- * A focusable anchored menu with retained native action rows. No app routing or command state is
- * captured here: click handlers receive an id and must admit against the app's current state.
- */
-class NativePopupMenu(
-    private val context: Context,
-    palette: ControlPalette,
-    private val anchor: View,
-    style: NativePopupMenuStyle = NativePopupMenuStyle(),
-) {
-    private var palette = palette
-    private var style = style
-    private val surface = NativeSurface(context, surfaceStyle())
-    private val rows = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-    private val scroll = ScrollView(context).apply {
-        isFillViewport = false
-        isFocusable = false
-        clipToPadding = false
-        addView(rows, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-    }
-    private val window = PopupWindow(surface, 0, 0, true)
-    private val windowBackground = GradientDrawable().apply { setColor(style.surfaceColor ?: palette.raised) }
-    private val windowColors = smallthingz.ui.animation.view.ViewColorTransition(surface,
-        intArrayOf(style.surfaceColor ?: palette.raised), ::publishWindowColor)
-    private fun publishWindowColor() { windowBackground.setColor(windowColors.color(0)) }
-    private val entries = LinkedHashMap<Int, Entry>()
-    private var orderedIds = emptyList<Int>()
-    private var presentationActive = false
-    private var generation = 0L
-    private var geometry: Geometry? = null
-    private var horizontalWindowOffset = 0
-    private var verticalWindowOffset = 0
-    private var observedTree: ViewTreeObserver? = null
-    private var focusReturn: FocusReturn? = null
-    private val location = IntArray(2)
-    private val visibleFrame = Rect()
-    private val visibleAnchor = Rect()
-    private val globalLayout = ViewTreeObserver.OnGlobalLayoutListener { refreshGeometry() }
-    private val anchorScroll = ViewTreeObserver.OnScrollChangedListener { refreshGeometry() }
-    private val anchorAttachment = object : View.OnAttachStateChangeListener {
-        override fun onViewAttachedToWindow(view: View) = Unit
-        override fun onViewDetachedFromWindow(view: View) { dismiss() }
-    }
-
-    /** Return true to dismiss after the action; false leaves the menu open. Explicit dismissal is allowed. */
-    var onItemClick: ((Int) -> Boolean)? = null
-    var onDismiss: (() -> Unit)? = null
-    /** Rechecks route/editor ownership immediately before a posted focus restoration. */
-    var canRestoreFocus: (() -> Boolean)? = null
-    val isShowing: Boolean get() = window.isShowing
-    var accessibilityPaneTitle: CharSequence?
-        get() = surface.accessibilityPaneTitle
-        set(value) { requireMainThread(); surface.accessibilityPaneTitle = value }
-
+/** Menu.kt applies motion outside Surface's separate shadow/background/content layers. */
+private class NativeMenuAnimationLayer<I>(private val menu: NativeMenuContent<I>) : ViewGroup(menu.context) {
     init {
-        surface.addView(scroll, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        surface.isFocusable = true
-        surface.isFocusableInTouchMode = true
-        surface.setOnKeyListener { _, key, event -> handleKey(key, event) }
-        window.isOutsideTouchable = true
-        window.isClippingEnabled = true
-        window.overlapAnchor = false
-        window.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
-        window.setOnDismissListener { finishDismissal() }
-        applyGeometryAndPaint()
+        clipChildren = false
+        clipToPadding = false
+        clipToOutline = false
+        isFocusable = false
+        isClickable = false
+        descendantFocusability = FOCUS_AFTER_DESCENDANTS
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+        if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
+        addView(menu)
     }
 
-    /** Binding never invokes actions. Existing ids keep their row and keyboard focus. */
-    fun bind(items: List<NativeMenuItem>) {
-        requireMainThread()
-        require(items.map { it.id }.toSet().size == items.size) { "Menu item ids must be unique" }
-        val focusedId = entries.entries.firstOrNull { it.value.row.hasFocus() }?.key
-        val nextIds = items.map { it.id }
-        entries.keys.filter { it !in nextIds }.forEach { id ->
-            rows.removeView(entries.remove(id)!!.row)
-        }
-        for (item in items) {
-            val entry = entries[item.id] ?: Entry(createRow(item.id)).also {
-                entries[item.id] = it
-                rows.addView(it.row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            }
-            entry.item = item
-            bindRow(entry)
-        }
-        // Reorder without detaching retained nodes from their window.
-        if (orderedIds != nextIds) items.forEach { rows.bringChildToFront(entries.getValue(it.id).row) }
-        orderedIds = nextIds
-        geometry = null
-        if (items.isEmpty() && isShowing) dismiss()
-        else if (isShowing) {
-            refreshGeometry()
-            if (focusedId != null && entries[focusedId]?.item?.enabled != true) focusBoundary(first = true)
-        }
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        menu.measure(widthMeasureSpec, heightMeasureSpec)
+        setMeasuredDimension(menu.measuredWidth, menu.measuredHeight)
     }
 
-    /** Missing optional actions are a no-op, matching nullable menu-item lookup. */
-    fun setItemEnabled(id: Int, enabled: Boolean) {
-        requireMainThread()
-        val entry = entries[id] ?: return
-        val item = entry.item ?: return
-        if (item.enabled == enabled) return
-        val wasFocused = entry.row.hasFocus()
-        entry.item = item.copy(enabled = enabled)
-        entry.row.isEnabled = enabled
-        entry.row.isFocusable = enabled
-        if (!enabled && wasFocused && isShowing) focusBoundary(first = true)
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        menu.layout(0, 0, menu.measuredWidth, menu.measuredHeight)
     }
+}
 
-    fun itemView(id: Int): NativeButton? = entries[id]?.row
-
-    fun applyPalette(palette: ControlPalette) {
-        requireMainThread()
-        if (this.palette == palette) return
-        this.palette = palette
-        applyGeometryAndPaint()
+@RequiresApi(33)
+private object MenuBackApi33 {
+    fun register(view: View,dismiss: () -> Unit): Any {
+        val callback = OnBackInvokedCallback { dismiss() }
+        view.findOnBackInvokedDispatcher()?.registerOnBackInvokedCallback(
+            OnBackInvokedDispatcher.PRIORITY_OVERLAY,callback,
+        )
+        return callback
     }
-
-    fun applyStyle(style: NativePopupMenuStyle) {
-        requireMainThread()
-        if (this.style == style) return
-        this.style = style
-        applyGeometryAndPaint()
-        geometry = null
-        refreshGeometry()
+    fun unregister(view: View,callback: Any?) {
+        if (callback is OnBackInvokedCallback)
+            view.findOnBackInvokedDispatcher()?.unregisterOnBackInvokedCallback(callback)
     }
-
-    /** Returns false when there is no visible, attached anchor or no menu content. */
-    fun show(): Boolean {
-        requireMainThread()
-        if (isShowing) return true
-        if (orderedIds.isEmpty() || !anchor.isAttachedToWindow || !anchor.isShown || !anchor.isEnabled) return false
-        val token = anchor.windowToken ?: return false
-        geometry = null
-        if (!refreshGeometry(updateWindow = false)) return false
-        generation++
-        val root = anchor.rootView
-        focusReturn = FocusReturn(WeakReference(root), root.findFocus()?.let(::WeakReference), token, generation)
-        presentationActive = true
-        anchor.addOnAttachStateChangeListener(anchorAttachment)
-        observedTree = root.viewTreeObserver.also {
-            it.addOnGlobalLayoutListener(globalLayout)
-            it.addOnScrollChangedListener(anchorScroll)
-        }
-        try {
-            window.showAsDropDown(anchor, horizontalWindowOffset, verticalWindowOffset, Gravity.START)
-        } catch (_: WindowManager.BadTokenException) {
-            removeObservers()
-            presentationActive = false
-            focusReturn = null
-            // showAsDropDown marks the framework popup showing before adding its window.
-            // Reset that state and its anchor observers even when the token was rejected.
-            window.dismiss()
-            return false
-        }
-        val shownGeneration = generation
-        surface.post {
-            if (isShowing && generation == shownGeneration) {
-                if (anchor.isInTouchMode) surface.requestFocus() else focusBoundary(first = true)
-            }
-        }
-        return true
-    }
-
-    fun dismiss() {
-        requireMainThread()
-        if (window.isShowing) window.dismiss()
-    }
-
-    private fun createRow(itemId: Int) = MenuRow(context, palette, rowStyle()).apply {
-        this.id = View.generateViewId()
-        gravity = Gravity.START or Gravity.CENTER_VERTICAL
-        setOnClickListener {
-            val current = entries[itemId]?.item
-            if (isShowing && anchor.isAttachedToWindow && anchor.isShown && anchor.isEnabled && current?.enabled == true) {
-                val clickedGeneration = generation
-                if (onItemClick?.invoke(itemId) == true && generation == clickedGeneration && isShowing) dismiss()
-            }
-        }
-        setOnKeyListener { _, key, event -> handleKey(key, event) }
-    }
-
-    private fun bindRow(entry: Entry) {
-        val item = entry.item ?: return
-        val row = entry.row
-        row.applyStyle(rowStyle())
-        row.applyPalette(palette)
-        if (!TextUtils.equals(row.text, item.label)) row.text = item.label
-        row.contentDescription = item.contentDescription
-        row.tag = item.tag
-        row.bindSelection(item.selected)
-        row.isEnabled = item.enabled
-        row.isFocusable = item.enabled
-        val iconColor = style.iconColor ?: palette.muted
-        row.bindIconTint(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()),
-            intArrayOf((iconColor and 0x00ffffff) or ((Color.alpha(iconColor) * style.disabledIconAlpha).roundToInt() shl 24), iconColor)))
-        if (entry.icon !== item.icon || entry.iconSize != dp(style.iconSizeDp)) {
-            entry.icon = item.icon
-            entry.iconSize = dp(style.iconSizeDp)
-            entry.iconDrawable = cloneIcon(item.icon, entry.iconSize)
-        }
-        if (entry.selectionIcon !== item.selectionIcon || entry.selectionIconSize != dp(style.iconSizeDp)) {
-            entry.selectionIcon = item.selectionIcon
-            entry.selectionIconSize = dp(style.iconSizeDp)
-            entry.selectionDrawable = cloneIcon(item.selectionIcon, entry.selectionIconSize)
-            entry.selectionSpace.setBounds(0, 0, entry.selectionIconSize, entry.selectionIconSize)
-        }
-        val trailing = when (item.selected) {
-            null -> null
-            true -> entry.selectionDrawable ?: entry.selectionSpace
-            false -> entry.selectionSpace
-        }
-        val current = row.compoundDrawablesRelative
-        if (current[0] !== entry.iconDrawable || current[2] !== trailing)
-            row.setCompoundDrawablesRelative(entry.iconDrawable, null, trailing, null)
-        row.compoundDrawablePadding = dp(style.iconGapDp)
-    }
-
-    private fun cloneIcon(icon: Drawable?, size: Int): Drawable? = icon?.let {
-        (it.constantState?.newDrawable(context.resources)?.mutate() ?: it.mutate()).apply {
-            setBounds(0, 0, size, size)
-        }
-    }
-
-    private fun rowStyle() = NativeButtonStyle(radiusDp = 0f,
-        minHeightDp = style.minRowHeightDp, minWidthDp = 0f,
-        horizontalPaddingDp = style.rowHorizontalPaddingDp,
-        verticalPaddingDp = style.rowVerticalPaddingDp, textStyle = style.textStyle,
-        disabledContentColor = (palette.content and 0x00ffffff) or
-            ((Color.alpha(palette.content) * style.disabledContentAlpha).roundToInt() shl 24))
-
-    private fun surfaceStyle() = NativeSurfaceStyle(fillColor = style.surfaceColor ?: palette.raised,
-        cornerRadiusDp = style.cornerRadiusDp, outlineColor = style.outlineColor, noise = style.noise)
-
-    private fun applyGeometryAndPaint() {
-        surface.applyStyle(surfaceStyle())
-        rows.setPadding(dp(style.horizontalPaddingDp), dp(style.verticalPaddingDp),
-            dp(style.horizontalPaddingDp), dp(style.verticalPaddingDp))
-        windowColors.retarget(style.surfaceColor ?: palette.raised)
-        windowBackground.cornerRadius = style.cornerRadiusDp * context.resources.displayMetrics.density
-        if (window.background !== windowBackground) window.setBackgroundDrawable(windowBackground)
-        window.elevation = style.elevationDp * context.resources.displayMetrics.density
-        entries.values.forEach(::bindRow)
-    }
-
-    private fun refreshGeometry(updateWindow: Boolean = true): Boolean {
-        if (updateWindow && !isShowing) return false
-        if (!anchor.isAttachedToWindow || !anchor.isShown || !anchor.isEnabled || !anchor.getGlobalVisibleRect(visibleAnchor)) {
-            if (isShowing) dismiss()
-            return false
-        }
-        anchor.getWindowVisibleDisplayFrame(visibleFrame)
-        anchor.getLocationOnScreen(location)
-        if (visibleFrame.width() <= 0 || visibleFrame.height() <= 0) {
-            if (isShowing) dismiss()
-            return false
-        }
-        val key = Geometry(visibleFrame.left, visibleFrame.top, visibleFrame.right, visibleFrame.bottom,
-            location[0], location[1], anchor.width, anchor.height, anchor.layoutDirection,
-            context.resources.displayMetrics.density, context.resources.configuration.fontScale)
-        if (key == geometry) return true
-        if (geometry?.density != key.density || geometry?.fontScale != key.fontScale) applyGeometryAndPaint()
-        geometry = key
-        surface.layoutDirection = anchor.layoutDirection
-        val frame = NativePopupPlacement.insetFrame(
-            NativePopupBounds(visibleFrame.left, visibleFrame.top, visibleFrame.right, visibleFrame.bottom),
-            dp(style.horizontalMarginDp), dp(style.verticalMarginDp))
-        val anchorBounds = NativePopupBounds(location[0], location[1], location[0] + anchor.width, location[1] + anchor.height)
-        val maxWidth = minOf(dp(style.maxWidthDp).coerceAtLeast(1), frame.width)
-        val offset = signedDp(style.verticalOffsetDp)
-        val maxHeight = NativePopupPlacement.maxHeight(frame, anchorBounds, offset)
-        surface.measure(View.MeasureSpec.makeMeasureSpec(maxWidth, View.MeasureSpec.AT_MOST),
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
-        val width = surface.measuredWidth.coerceAtLeast(dp(style.minWidthDp).coerceAtMost(maxWidth)).coerceAtMost(maxWidth)
-        surface.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(maxHeight, View.MeasureSpec.AT_MOST))
-        val height = surface.measuredHeight.coerceAtLeast(1)
-        val rtl = anchor.layoutDirection == View.LAYOUT_DIRECTION_RTL
-        val position = NativePopupPlacement.position(frame, anchorBounds, width, height,
-            signedDp(style.horizontalOffsetDp), offset, rtl)
-        // PopupWindow's START gravity uses the anchor's right edge in RTL. Supplying the
-        // chosen screen position as anchor-relative offsets retains native anchor tracking,
-        // above/below animation selection and Back/outside handling while honoring our gutters.
-        horizontalWindowOffset = position.left - (if (rtl) anchorBounds.right - width else anchorBounds.left)
-        verticalWindowOffset = position.top - anchorBounds.bottom
-        if (updateWindow) window.update(anchor, horizontalWindowOffset, verticalWindowOffset, width, height)
-        else { window.width = width; window.height = height }
-        return true
-    }
-
-    private fun handleKey(key: Int, event: KeyEvent): Boolean {
-        if (key == KeyEvent.KEYCODE_MENU && event.action == KeyEvent.ACTION_UP) {
-            dismiss()
-            return true
-        }
-        if (key == KeyEvent.KEYCODE_ESCAPE) {
-            if (event.action == KeyEvent.ACTION_UP) dismiss()
-            return true
-        }
-        if (event.action != KeyEvent.ACTION_DOWN) return false
-        return when (key) {
-            KeyEvent.KEYCODE_DPAD_DOWN -> moveFocus(1, wrap = false)
-            KeyEvent.KEYCODE_DPAD_UP -> moveFocus(-1, wrap = false)
-            KeyEvent.KEYCODE_TAB -> moveFocus(if (event.isShiftPressed) -1 else 1, wrap = true)
-            KeyEvent.KEYCODE_MOVE_HOME -> { focusBoundary(first = true); true }
-            KeyEvent.KEYCODE_MOVE_END -> { focusBoundary(first = false); true }
-            else -> false // Native buttons handle activation; PopupWindow owns Back and outside touch.
-        }
-    }
-
-    private fun enabledRows() = orderedIds.mapNotNull { entries[it]?.takeIf { entry -> entry.item?.enabled == true }?.row }
-
-    private fun moveFocus(delta: Int, wrap: Boolean): Boolean {
-        val enabled = enabledRows()
-        if (enabled.isEmpty()) { surface.requestFocus(); return true }
-        val current = enabled.indexOfFirst { it.hasFocus() }
-        val index = if (current < 0) { if (delta > 0) 0 else enabled.lastIndex }
-        else if (wrap) (current + delta + enabled.size) % enabled.size
-        else (current + delta).coerceIn(0, enabled.lastIndex)
-        enabled[index].requestFocus()
-        return true
-    }
-
-    private fun focusBoundary(first: Boolean) {
-        val enabled = enabledRows()
-        if ((if (first) enabled.firstOrNull() else enabled.lastOrNull())?.requestFocus() != true) surface.requestFocus()
-    }
-
-    private fun finishDismissal() {
-        if (!presentationActive) return
-        presentationActive = false
-        removeObservers()
-        val restore = focusReturn
-        val restoreAdmission = canRestoreFocus
-        focusReturn = null
-        onDismiss?.invoke()
-        if (restore != null) anchor.post {
-            val root = restore.root.get() ?: return@post
-            if (generation != restore.generation || isShowing || !anchor.isAttachedToWindow ||
-                !anchor.isShown || !anchor.isEnabled || anchor.rootView !== root ||
-                anchor.windowToken != restore.windowToken || !root.hasWindowFocus()) return@post
-            if (restoreAdmission?.invoke() == false) return@post
-            val previous = restore.previousFocus?.get()
-            val focused = root.findFocus()
-            if (focused != null && focused !== previous && focused !== anchor) return@post
-            val target = previous?.takeIf { it.isAttachedToWindow && it.isShown && it.isEnabled && it.isFocusable && it.rootView === root } ?: anchor
-            target.requestFocus()
-        }
-    }
-
-    private fun removeObservers() {
-        anchor.removeOnAttachStateChangeListener(anchorAttachment)
-        observedTree?.takeIf { it.isAlive }?.let {
-            it.removeOnGlobalLayoutListener(globalLayout)
-            it.removeOnScrollChangedListener(anchorScroll)
-        }
-        observedTree = null
-    }
-
-    private fun dp(value: Float) = context.componentDp(value)
-    private fun signedDp(value: Float) = (value * context.resources.displayMetrics.density).roundToInt()
-    private fun requireMainThread() { check(Looper.myLooper() == Looper.getMainLooper()) }
-    private class Entry(val row: MenuRow) {
-        var item: NativeMenuItem? = null
-        var icon: Drawable? = null
-        var iconDrawable: Drawable? = null
-        var iconSize = -1
-        var selectionIcon: Drawable? = null
-        var selectionDrawable: Drawable? = null
-        var selectionIconSize = -1
-        val selectionSpace = ColorDrawable(Color.TRANSPARENT)
-    }
-    private class MenuRow(context: Context, palette: ControlPalette, style: NativeButtonStyle) :
-        NativeButton(context, palette, style) {
-        private var menuSelection: Boolean? = null
-        private var menuIconTint: ColorStateList? = null
-        private var iconColors:smallthingz.ui.animation.view.ViewColorTransition?=null
-
-        fun bindSelection(selected: Boolean?) {
-            val changed = menuSelection != selected
-            menuSelection = selected
-            // Exclusive menu selection is semantic, not a selected surface/color treatment.
-            isSelected = false
-            if (changed) sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED)
-        }
-
-        fun bindIconTint(colors: ColorStateList) {
-            menuIconTint = colors
-            restoreIconTint()
-        }
-
-        override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
-            super.onInitializeAccessibilityNodeInfo(info)
-            info.isSelected = menuSelection == true
-            info.isCheckable = false
-            info.isChecked = false
-        }
-
-        override fun onConfigurationChanged(newConfig: Configuration) {
-            super.onConfigurationChanged(newConfig)
-            restoreIconTint()
-        }
-
-        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-            restoreIconTint()
-        }
-
-        private fun restoreIconTint() {
-            val colors = menuIconTint ?: return
-            val target=colors.getColorForState(drawableState,colors.defaultColor)
-            val motion=iconColors ?: smallthingz.ui.animation.view.ViewColorTransition(this,intArrayOf(target),::publishIconColor).also {iconColors=it}
-            motion.retarget(target)
-            publishIconColor()
-        }
-        private fun publishIconColor() {
-            val color = iconColors?.color(0) ?: return
-            if (compoundDrawableTintList?.defaultColor != color)
-                compoundDrawableTintList = ColorStateList.valueOf(color)
-        }
-        override fun drawableStateChanged(){super.drawableStateChanged();restoreIconTint()}
-    }
-    private data class Geometry(val left: Int, val top: Int, val right: Int, val bottom: Int,
-        val anchorX: Int, val anchorY: Int, val anchorWidth: Int, val anchorHeight: Int,
-        val direction: Int, val density: Float, val fontScale: Float)
-    private data class FocusReturn(val root: WeakReference<View>, val previousFocus: WeakReference<View>?,
-        val windowToken: IBinder, val generation: Long)
 }

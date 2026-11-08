@@ -163,3 +163,32 @@ First-party code is licensed under Apache-2.0; see `LICENSE.txt`.
 Upstream-derived files retain their existing Apache-2.0 notices and provenance.
 Dependencies remain AndroidX annotation
 and emoji2 internally, with coroutines exposed in the existing public API.
+
+## Source-derived anchored menu (API replacement)
+
+`NativePopupMenu<I>` is a concrete focusable sub-panel using the shared phase
+pointer root, vertical viewport, paragraph renderer and retained spring transition.
+Pass an attached anchor, density, fully resolved inherited text style/font resolver,
+`NativeMenuColors`, retained `NativeVerticalScrollState`, window frame clock/scope,
+and one `NativeMenuIcons<I>` rendering adapter. The adapter creates each retained
+icon View once and binds any icon token of I to that same View; keep it nonfocusable
+and excluded from accessibility. An app can use its existing vector/icon renderer.
+
+Bind `NativeMenuChoices<T>` with typed labels/selection or `NativeMenuAction<I>`
+with domain callbacks, then call `show()`. Row identity is positional. Call
+`expanded(false)` to animate dismissal; the terminal callback must retire/close
+that same popup identity. `close()` is immediate and idempotent. Owners retain
+scroll state and admit callback identity/reentrancy; the component does not route
+commands or automatically choose callback-before-dismiss versus dismiss-before-
+callback. The scope/frame clock and density/configuration lifetime are caller-owned.
+
+This intentionally replaces the former `NativePopupMenu`, `NativeMenuItem` and
+`NativePopupMenuStyle` API and removes the unused platform PopupWindow engine.
+It is a source/binary break for external consumers: replace item IDs/style bags
+with typed row data, explicit environment/renderer inputs and owned callbacks.
+There is no NativeButton itemView or compatibility facade. Choice selection is exposed through standard selected accessibility semantics
+and the same visual trailing check; action-row reuse clears selection. Window
+flags/secure inheritance, candidate placement and transition behavior follow the
+source-derived component. The intrinsic popup title stays in library translations;
+domain row labels stay with their owner. Unknown external consumers must migrate
+when adopting this commit rather than assuming the old constructor/defaults persist.
