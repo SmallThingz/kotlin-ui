@@ -6,6 +6,8 @@
  */
 package smallthingz.ui.components
 
+import smallthingz.ui.interaction.view.isNativeClickActivationKey
+
 import smallthingz.ui.geometry.roundedGroupGeometry
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.scroll.NativeVerticalNestedHost
@@ -376,14 +378,9 @@ internal class NativeMenuRowView<I>(
     }
     override fun onTouchEvent(event: MotionEvent) = input.touch(event)
     override fun onKeyDown(code: Int,event: KeyEvent): Boolean =
-        if (isActivationKey(code)) input.key(event) else super.onKeyDown(code,event)
+        if (isNativeClickActivationKey(code)) input.key(event) else super.onKeyDown(code,event)
     override fun onKeyUp(code: Int,event: KeyEvent): Boolean =
-        if (isActivationKey(code)) input.key(event) else super.onKeyUp(code,event)
-    private fun isActivationKey(code: Int): Boolean = when (code) {
-        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
-        KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_SPACE -> true
-        else -> false
-    }
+        if (isNativeClickActivationKey(code)) input.key(event) else super.onKeyUp(code,event)
     override fun onHoverEvent(event: MotionEvent): Boolean {
         val handled = input.hover(event)
         val accessibilityHandled = super.onHoverEvent(event)

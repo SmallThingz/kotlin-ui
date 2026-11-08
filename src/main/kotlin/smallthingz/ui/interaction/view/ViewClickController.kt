@@ -333,7 +333,7 @@ class ViewClickController(
 
     fun key(event: KeyEvent): Boolean {
         val current = binding ?: return false
-        if (!attached || !host.isAttachedToWindow || !current.enabled || !isActivationKey(event.keyCode)) return false
+        if (!attached || !host.isAttachedToWindow || !current.enabled || !isNativeClickActivationKey(event.keyCode)) return false
         val keyCode = event.keyCode // Do not retain a potentially recycled KeyEvent in delayed work.
         return when (event.action) {
             KeyEvent.ACTION_DOWN -> {
@@ -480,9 +480,11 @@ class ViewClickController(
         return false
     }
 
-    private fun isActivationKey(key: Int): Boolean = when (key) {
-        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
-        KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_SPACE -> true
-        else -> false
-    }
+
+}
+
+fun isNativeClickActivationKey(key: Int): Boolean = when (key) {
+    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
+    KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_SPACE -> true
+    else -> false
 }
