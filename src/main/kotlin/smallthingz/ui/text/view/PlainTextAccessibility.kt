@@ -31,6 +31,10 @@ import smallthingz.ui.text.MultiParagraph
 import kotlin.math.max
 import kotlin.math.min
 
+/** Android API31's standard character-location limit, applied locally on every supported API. */
+internal fun nativeTextCharacterLocationRequestLength(textLength: Int, start: Int, requested: Int): Int =
+    if (requested <= 0 || start < 0 || start >= textLength) 0 else min(requested, 20_000)
+
 /**
  * Integrated native geometry contract; actual accessibility/device qualification remains pending.
  * The adapter must supply the same float clipping/coordinate contract
@@ -286,8 +290,9 @@ class PlainTextAccessibility(
         if (arguments == null || !view.isAttachedToWindow || !exposed()) return true
         val current = snapshot()
         val start = arguments.getInt(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_ARG_START_INDEX, -1)
-        val length = arguments.getInt(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_ARG_LENGTH, -1)
-        if (length <= 0 || start < 0 || start >= current.originalText.length) return true
+        val length = nativeTextCharacterLocationRequestLength(current.originalText.length, start,
+            arguments.getInt(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_ARG_LENGTH, -1))
+        if (length == 0) return true
         val paragraph = current.originalSemanticsLayout() ?: return true
         val geometry = current.geometry() ?: return true
         // UTF-16 positions, not code points/grapheme indices. Requested tail beyond text is null.
