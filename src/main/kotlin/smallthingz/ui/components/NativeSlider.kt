@@ -393,10 +393,17 @@ open class NativeSlider(
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (componentKeyboardPolicy == NativeSliderKeyboardPolicy.NATIVE_INTEGER) return onNativeKeyDown(keyCode, event)
-        val direction = keyDirection(keyCode) ?: return super.onKeyDown(keyCode, event)
+        if (keyDirection(keyCode) == null) return super.onKeyDown(keyCode, event)
         if (!isEnabled) return false
         if (isUnownedKeyRepeat(keyCode, event)) return false
-        if (interaction != Interaction.KEYBOARD) beginInteraction(Interaction.KEYBOARD)
+        if (interaction != Interaction.KEYBOARD) {
+            cancelUserInteraction()
+            // Cancellation callbacks may revoke admission or acquire their own input owner.
+            if (!isEnabled || componentKeyboardPolicy != NativeSliderKeyboardPolicy.DEFAULT ||
+                interaction != Interaction.NONE) return false
+            beginInteraction(Interaction.KEYBOARD)
+        }
+        val direction = checkNotNull(keyDirection(keyCode))
         heldKeys[keyCode] = event.downTime
         val range = max.toLong() - min.toLong()
         val divisions = if (componentStyle.steps > 0) componentStyle.steps.toLong() + 1L else 100L
