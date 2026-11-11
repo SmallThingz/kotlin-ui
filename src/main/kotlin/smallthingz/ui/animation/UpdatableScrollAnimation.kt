@@ -94,78 +94,84 @@ class UpdatableScrollAnimation(animationSpec: AnimationSpec<Float>) {
         isRunning = true
 
         try {
-            // Don't rely on the animation's duration vs playtime to calculate completion since the
-            // value could be updated after each frame, and if that happens we need to continue
-            // running the animation.
-            while (!value.isZeroish()) {
-                animationContext.ensureActive()
-                withFrameNanos { frameTime ->
-                    // A frame already dequeued by the window clock can outlive cancellation.
+            // afterFrame may retarget even the final residual frame.
+            do {
+                // A target accepted after the final frame starts with fresh timing.
+                lastFrameTime = UnspecifiedTime
+                lastVelocity = ZeroVector
+                // Don't rely on the animation's duration vs playtime to calculate completion since the
+                // value could be updated after each frame, and if that happens we need to continue
+                // running the animation.
+                while (!value.isZeroish()) {
                     animationContext.ensureActive()
-                    if (lastFrameTime == UnspecifiedTime) {
-                        lastFrameTime = frameTime
-                    }
-
-                    val vectorizedCurrentValue = AnimationVector1D(value)
-                    val playTime =
-                        if (durationScale == 0f) {
-                            // The duration scale will be 0 when animations are disabled via a11y
-                            // settings or developer settings.
-                            vectorizedSpec.getDurationNanos(
-                                initialValue = AnimationVector1D(value),
-                                targetValue = ZeroVector,
-                                initialVelocity = lastVelocity,
-                            )
-                        } else {
-                            ((frameTime - lastFrameTime) / durationScale).roundToLong()
+                    withFrameNanos { frameTime ->
+                        // A frame already dequeued by the window clock can outlive cancellation.
+                        animationContext.ensureActive()
+                        if (lastFrameTime == UnspecifiedTime) {
+                            lastFrameTime = frameTime
                         }
-                    val newValue =
-                        vectorizedSpec
-                            .getValueFromNanos(
+
+                        val vectorizedCurrentValue = AnimationVector1D(value)
+                        val playTime =
+                            if (durationScale == 0f) {
+                                // The duration scale will be 0 when animations are disabled via a11y
+                                // settings or developer settings.
+                                vectorizedSpec.getDurationNanos(
+                                    initialValue = AnimationVector1D(value),
+                                    targetValue = ZeroVector,
+                                    initialVelocity = lastVelocity,
+                                )
+                            } else {
+                                ((frameTime - lastFrameTime) / durationScale).roundToLong()
+                            }
+                        val newValue =
+                            vectorizedSpec
+                                .getValueFromNanos(
+                                    playTimeNanos = playTime,
+                                    initialValue = vectorizedCurrentValue,
+                                    targetValue = ZeroVector,
+                                    initialVelocity = lastVelocity,
+                                )
+                                .value
+                        lastVelocity =
+                            vectorizedSpec.getVelocityFromNanos(
                                 playTimeNanos = playTime,
                                 initialValue = vectorizedCurrentValue,
                                 targetValue = ZeroVector,
                                 initialVelocity = lastVelocity,
                             )
-                            .value
-                    lastVelocity =
-                        vectorizedSpec.getVelocityFromNanos(
-                            playTimeNanos = playTime,
-                            initialValue = vectorizedCurrentValue,
-                            targetValue = ZeroVector,
-                            initialVelocity = lastVelocity,
-                        )
-                    lastFrameTime = frameTime
+                        lastFrameTime = frameTime
 
-                    val delta = value - newValue
-                    value = newValue
-                    beforeFrame(delta)
-                }
-                // A supplied clock may return normally after beforeFrame cancels this job.
-                animationContext.ensureActive()
-                afterFrame()
-
-                if (durationScale == 0f) {
-                    // Never run more than one loop when animations are disabled.
-                    break
-                }
-            }
-
-            // The last iteration of the loop may have called block with a non-zero value due to
-            // the visibility threshold, so ensure it gets called one last time with actual zero.
-            if (value.absoluteValue != 0f) {
-                animationContext.ensureActive()
-                withFrameNanos {
+                        val delta = value - newValue
+                        value = newValue
+                        beforeFrame(delta)
+                    }
+                    // A supplied clock may return normally after beforeFrame cancels this job.
                     animationContext.ensureActive()
-                    val delta = value
-                    // Update the value before invoking the callback so that the callback will see
-                    // the correct value if it looks at it.
-                    value = 0f
-                    beforeFrame(delta)
+                    afterFrame()
+
+                    if (durationScale == 0f) {
+                        // Use one snap per sequence when animations are disabled.
+                        break
+                    }
                 }
-                animationContext.ensureActive()
-                afterFrame()
-            }
+
+                // The last iteration of the loop may have called block with a non-zero value due to
+                // the visibility threshold, so ensure it gets called one last time with actual zero.
+                if (value.absoluteValue != 0f) {
+                    animationContext.ensureActive()
+                    withFrameNanos {
+                        animationContext.ensureActive()
+                        val delta = value
+                        // Update the value before invoking the callback so that the callback will see
+                        // the correct value if it looks at it.
+                        value = 0f
+                        beforeFrame(delta)
+                    }
+                    animationContext.ensureActive()
+                    afterFrame()
+                }
+            } while (value != 0f)
         } finally {
             lastFrameTime = UnspecifiedTime
             lastVelocity = ZeroVector

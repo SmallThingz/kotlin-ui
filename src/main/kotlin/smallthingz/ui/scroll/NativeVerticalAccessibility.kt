@@ -69,6 +69,55 @@ fun nativeBringIntoViewLocalRect(ancestor: View, child: View, requested: Rect): 
     return requested.translate(Offset(fullBounds.left, fullBounds.top))
 }
 
+/** Copies Android child-content coordinates and converts them using the child's live scroll. */
+fun nativeChildRectangleBounds(child: View, rectangle: AndroidRect): () -> Rect {
+    val requested = Rect(rectangle.left.toFloat(), rectangle.top.toFloat(),
+        rectangle.right.toFloat(), rectangle.bottom.toFloat())
+    return {
+        val scrollX = child.scrollX
+        val scrollY = child.scrollY
+        if (scrollX == 0 && scrollY == 0) requested
+        else Rect(requested.left - scrollX, requested.top - scrollY,
+            requested.right - scrollX, requested.bottom - scrollY)
+    }
+}
+
+/** Only Android's direct automatic focus callback duplicates our requestChildFocus reveal. */
+fun nativeIsAutomaticFocusRectangle(host: View): Boolean {
+    val stack = Throwable().stackTrace
+    val hostClass = host.javaClass.name
+    val index = stack.indexOfFirst {
+        it.className == hostClass && it.methodName == "requestChildRectangleOnScreen"
+    }
+    if (index < 0 || index + 2 >= stack.size) return false
+    // Anchor the nearest host entry: an outer automatic request may contain a nested explicit call.
+    val request = stack[index + 1]
+    val caller = stack[index + 2]
+    return request.className == "android.view.View" && request.methodName == "requestRectangleOnScreen" &&
+        caller.className == "android.view.View" && caller.methodName == "onFocusChanged"
+}
+
+/** Copies an INPUT_FOCUS child-content rectangle and retires it with its focus generation. */
+fun nativeFocusRectangleBounds(
+    host: View,
+    child: View,
+    rectangle: AndroidRect,
+    isCurrentGeneration: () -> Boolean,
+): (() -> Rect?)? {
+    val focused = host.findFocus()?.takeIf { it !== host } ?: return null
+    val bounds = nativeChildRectangleBounds(child, rectangle)
+    fun currentBounds(): Rect? {
+        if (!isCurrentGeneration() || host.findFocus() !== focused ||
+            !focused.isAttachedToWindow || child.parent !== host) return null
+        var descendant: View = focused
+        while (descendant !== child) {
+            descendant = descendant.parent as? View ?: return null
+        }
+        return bounds()
+    }
+    return if (currentBounds() != null) ::currentBounds else null
+}
+
 fun Rect.toNativeBringIntoViewRect(): AndroidRect =
     // AndroidComposeView's final native boundary uses toAndroidRect's Float.toInt conversion.
     AndroidRect(left.toInt(), top.toInt(), right.toInt(), bottom.toInt())

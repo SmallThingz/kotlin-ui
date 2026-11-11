@@ -113,4 +113,115 @@ class UpdatableScrollAnimationTest {
             assertEquals(0f, animation.value, 0f)
         }
     }
+    @Test fun finalResidualRetargetContinuesInterpolatingUntilExactlyZero() = runBlocking {
+        val clock = CapturedFrameClock()
+        val animation = UpdatableScrollAnimation(tween(100, easing = LinearEasing))
+        animation.value = .005f
+        var after = 0
+        val job = CoroutineScope(coroutineContext + clock).launch {
+            animation.animateToZero({}, { if (++after == 1) animation.value = 7f })
+        }
+        try {
+            yield(); clock.frame(0L); yield()
+            assertTrue(job.isActive); assertEquals(7f, animation.value, 0f)
+            assertEquals(1, clock.pendingCount)
+            clock.frame(20_000_000L); yield()
+            // A new normal-duration target must use interpolation, not another residual snap.
+            assertTrue(job.isActive); assertEquals(7f, animation.value, 0f)
+            repeat(200) { frame ->
+                if (job.isActive) { clock.frame((frame + 2) * 20_000_000L); yield() }
+            }
+            assertTrue(job.isCompleted); assertFalse(job.isCancelled)
+            assertEquals(0f, animation.value, 0f); assertEquals(0, clock.pendingCount)
+        } finally { job.cancel(); job.join() }
+    }
+
+    @Test fun disabledMotionRetargetFromFinalTailDeliversEveryFiniteTarget() = runBlocking {
+        val clock = CapturedFrameClock()
+        val disabled = object : MotionDurationScale { override val scaleFactor = 0f }
+        val animation = UpdatableScrollAnimation(tween(100))
+        animation.value = 10f
+        val deltas = mutableListOf<Float>()
+        var after = 0
+        val job = CoroutineScope(coroutineContext + clock + disabled).launch {
+            animation.animateToZero({ deltas += it }, {
+                when (++after) { 1 -> animation.value = 7f; 2 -> animation.value = -3f }
+            })
+        }
+        try {
+            yield(); clock.frame(1L); yield()
+            assertTrue(job.isActive)
+            clock.frame(2L); yield() // The original final residual tail retargets again.
+            assertTrue(job.isActive); assertEquals(-3f, animation.value, 0f)
+            assertEquals(1, clock.pendingCount)
+            clock.frame(3L); yield()
+            assertTrue(job.isCompleted); assertFalse(job.isCancelled)
+            assertEquals(listOf(10f, 7f, -3f), deltas)
+            assertEquals(3, after); assertEquals(0f, animation.value, 0f)
+            assertEquals(0, clock.pendingCount)
+        } finally { job.cancel(); job.join() }
+    }
+
+    @Test fun cancelledRetargetedTailCannotPublishIntoReplacementOwner() = runBlocking {
+        val clock = CapturedFrameClock()
+        val disabled = object : MotionDurationScale { override val scaleFactor = 0f }
+        val scope = CoroutineScope(coroutineContext + clock + disabled)
+        val animation = UpdatableScrollAnimation(tween(100))
+        animation.value = .005f
+        var oldCalls = 0
+        val old = scope.launch {
+            animation.animateToZero({ oldCalls++ }, { oldCalls++; animation.value = 7f })
+        }
+        try {
+            yield(); clock.frame(1L); yield()
+            assertTrue(old.isActive); assertEquals(2, oldCalls)
+            val captured = clock.capture()
+            old.cancel(); old.join()
+            animation.value = 4f
+            var newCalls = 0
+            val replacement = scope.launch { animation.animateToZero({ newCalls++ }, { newCalls++ }) }
+            try {
+                yield(); captured(2L); yield()
+                assertEquals(2, oldCalls); assertEquals(0, newCalls)
+                assertEquals(4f, animation.value, 0f); assertEquals(1, clock.pendingCount)
+                clock.frame(3L); yield()
+                assertTrue(replacement.isCompleted); assertFalse(replacement.isCancelled)
+                assertEquals(2, newCalls); assertEquals(0f, animation.value, 0f)
+            } finally { replacement.cancel(); replacement.join() }
+        } finally { old.cancel(); old.join() }
+    }
+
+    @Test fun retargetedResidualRestartsFrameHistoryWithoutChangingCallbackOrder() = runBlocking {
+        val clock = CapturedFrameClock()
+        val animation = UpdatableScrollAnimation(tween(100, easing = LinearEasing))
+        animation.value = 10f
+        val order = mutableListOf<String>()
+        var retargeted = false
+        var verifyRestart = false
+        var restartObserved = false
+        val job = CoroutineScope(coroutineContext + clock).launch {
+            animation.animateToZero({ delta ->
+                order += "before"
+                if (verifyRestart) {
+                    assertEquals(0f, delta, 0f); assertEquals(7f, animation.value, 0f)
+                    verifyRestart = false; restartObserved = true
+                }
+            }, {
+                order += "after"
+                if (!retargeted && animation.value == 0f) {
+                    animation.value = 7f; retargeted = true; verifyRestart = true
+                }
+            })
+        }
+        try {
+            yield()
+            repeat(200) { frame ->
+                if (job.isActive) { clock.frame(frame * 20_000_000L); yield() }
+            }
+            assertTrue(job.isCompleted); assertFalse(job.isCancelled)
+            assertTrue(restartObserved); assertEquals(0f, animation.value, 0f)
+            assertEquals(List(order.size / 2) { listOf("before", "after") }.flatten(), order)
+            assertEquals(0, clock.pendingCount)
+        } finally { job.cancel(); job.join() }
+    }
 }

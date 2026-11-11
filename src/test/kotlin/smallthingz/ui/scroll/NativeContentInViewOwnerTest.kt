@@ -115,7 +115,8 @@ class NativeContentInViewOwnerTest {
         present = false
         fixture.frames.advanceUntil { request.isCompleted && !fixture.content.isAnimationRunning }
         assertFalse(request.isCancelled)
-        // The already accepted sample may run once; source checks detachment after that frame.
+        assertEquals(0, fixture.state.value)
+        // Revoked bounds cannot authorize a previously sampled frame.
         assertTrue(fixture.frames.delivered <= 2)
         assertFalse(fixture.state.isScrollInProgress)
     }
@@ -177,6 +178,69 @@ class NativeContentInViewOwnerTest {
         assertFalse(fixture.state.isScrollInProgress)
     }
 
+    @Test(timeout = 5_000) fun newerExplicitRequestWinsAfterFocusRevocation() = runBlocking {
+        val fixture = Fixture(this)
+        var focusLive = true
+        val focus = launch(start = CoroutineStart.UNDISPATCHED) {
+            fixture.content.bringChildIntoView { if (focusLive) fixture.bounds(140f, 170f) else null }
+        }
+        focusLive = false
+        val explicit = launch(start = CoroutineStart.UNDISPATCHED) {
+            fixture.content.bringChildIntoView { fixture.bounds(240f, 270f) }
+        }
+        fixture.frames.advanceUntil { explicit.isCompleted && !fixture.content.isAnimationRunning }
+        focus.join()
+        assertFalse(explicit.isCancelled)
+        assertEquals(190, fixture.state.value)
+    }
+
+    @Test(timeout = 5_000) fun finalResidualFrameRetargetDoesNotCompleteNewRequestHidden() = runBlocking {
+        val fixture = Fixture(this)
+        var generation = 0
+        var second: kotlinx.coroutines.Job? = null
+        var third: kotlinx.coroutines.Job? = null
+        val first = launch(start = CoroutineStart.UNDISPATCHED) {
+            fixture.content.bringChildIntoView { if (generation == 0) fixture.bounds(140f, 170f) else null }
+        }
+        fixture.frames.beforeDelivery = { index ->
+            if (index == 0) {
+                generation = 1
+                second = launch(start = CoroutineStart.UNDISPATCHED) {
+                    fixture.content.bringChildIntoView { if (generation == 1) fixture.bounds(240f, 270f) else null }
+                }
+            } else if (index == 1) {
+                // At scale zero, retargeting after the first frame schedules the actual final tail.
+                assertEquals(90, fixture.state.value)
+                generation = 2
+                third = launch(start = CoroutineStart.UNDISPATCHED) {
+                    fixture.content.bringChildIntoView { fixture.bounds(0f, 30f) }
+                }
+            }
+        }
+        fixture.frames.advanceUntil { third?.isCompleted == true && !fixture.content.isAnimationRunning }
+        first.join()
+        requireNotNull(second).join()
+        assertFalse(requireNotNull(third).isCancelled)
+        assertEquals(0, fixture.state.value)
+    }
+
+    @Test(timeout = 5_000) fun staleUnreachableDeltaCannotCancelReachableReplacementAtBoundary() = runBlocking {
+        val fixture = Fixture(this)
+        fixture.state.measured(80, 100)
+        var oldLive = true
+        val old = launch(start = CoroutineStart.UNDISPATCHED) {
+            fixture.content.bringChildIntoView { if (oldLive) fixture.bounds(180f, 200f) else null }
+        }
+        oldLive = false
+        val replacement = launch(start = CoroutineStart.UNDISPATCHED) {
+            fixture.content.bringChildIntoView { fixture.bounds(80f, 100f) }
+        }
+        fixture.frames.advanceUntil { replacement.isCompleted && !fixture.content.isAnimationRunning }
+        old.join()
+        assertFalse(replacement.isCancelled)
+        assertEquals(20, fixture.state.value)
+    }
+
     private class Fixture(scope: CoroutineScope) {
         val state = NativeVerticalScrollState().also { it.measured(80, 500) }
         val frames = ControlledFrames()
@@ -203,6 +267,7 @@ class NativeContentInViewOwnerTest {
     private class ControlledFrames : MonotonicFrameClock {
         private val requests = Channel<Unit>(Channel.UNLIMITED)
         private val times = Channel<Long>(Channel.UNLIMITED)
+        var beforeDelivery: (Int) -> Unit = {}
         var delivered = 0
             private set
         override suspend fun <R> withFrameNanos(onFrame: (Long) -> R): R {
@@ -216,6 +281,7 @@ class NativeContentInViewOwnerTest {
                 yield()
                 if (done()) return@withTimeout
                 requests.receive()
+                beforeDelivery(delivered)
                 times.send(delivered * 16_666_667L)
                 yield()
             }
