@@ -1,10 +1,10 @@
 package smallthingz.ui.animation.view
 
 import android.animation.ValueAnimator
-import android.os.Build
 import android.view.Choreographer
 import android.view.View
 import smallthingz.ui.animation.ColorTransition
+import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
 
 /** Retained color-only owner. No layout, drawable creation or initial-bind animation. */
 class ViewColorTransition(
@@ -17,7 +17,8 @@ class ViewColorTransition(
     private val choreographer=Choreographer.getInstance()
     private var posted=false
     private var closed=false
-    private var cachedScale=1f
+    private val scaleReader=AnimationScaleReader(
+        {durationScale?.invoke() ?: defaultFrameScale()}, ValueAnimator::areAnimatorsEnabled)
     init {view.addOnAttachStateChangeListener(this)}
     fun color(index:Int):Int=state.color(index)
     val isInterpolating:Boolean get()=state.isInterpolating
@@ -33,8 +34,8 @@ class ViewColorTransition(
         if(closed)return
         val unchanged=state.hasTarget(colors)
         if(unchanged&&!state.running)return
-        cachedScale=if(unchanged)frameScale() else durationScale?.invoke() ?: readAnimatorDurationScale(view.context)
-        state.retarget(colors,System.nanoTime(),cachedScale)
+        if(!unchanged)scaleReader.retryOnNewTarget()
+        state.retarget(colors,System.nanoTime(),scaleReader.read())
         if(!view.isAttachedToWindow||!view.isShown)state.snapToTarget()
         publish();view.invalidate();schedule()
     }
@@ -43,7 +44,7 @@ class ViewColorTransition(
         posted=false
         if(closed)return
         if(!view.isAttachedToWindow||!view.isShown)state.snapToTarget()
-        else state.frame(frameTimeNanos,frameScale())
+        else state.frame(frameTimeNanos,scaleReader.read())
         publish();view.invalidate();schedule()
     }
 
@@ -51,10 +52,10 @@ class ViewColorTransition(
         if(state.running&&!posted&&!closed){posted=true;choreographer.postFrameCallback(this)}
         else if(!state.running&&posted){choreographer.removeFrameCallback(this);posted=false}
     }
-    private fun frameScale():Float = durationScale?.invoke() ?: when {
-        !ValueAnimator.areAnimatorsEnabled()->0f
-        Build.VERSION.SDK_INT>=33->ValueAnimator.getDurationScale()
-        else->cachedScale
+    private fun defaultFrameScale():Float {
+        if(!ValueAnimator.areAnimatorsEnabled())return 0f
+        val scale=readCachedAnimatorDurationScale(view.context)
+        return if(scale.isFinite()&&scale>=0f)scale else 1f
     }
     override fun onViewAttachedToWindow(view:View) = Unit
     override fun onViewDetachedFromWindow(view:View) {

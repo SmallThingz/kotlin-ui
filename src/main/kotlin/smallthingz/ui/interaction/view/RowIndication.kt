@@ -9,7 +9,9 @@
 package smallthingz.ui.interaction.view
 
 import smallthingz.ui.animation.view.ViewColorTransition
+import smallthingz.ui.animation.view.AnimationScaleReader
 
+import android.animation.ValueAnimator
 import android.content.res.ColorStateList
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -53,6 +55,7 @@ class RowIndication private constructor(
     private var framePosted = false
     private val scheduledRippleWork = HashMap<Runnable, Runnable>()
     private val stateAlpha = RowStateAlpha()
+    private val stateScale = AnimationScaleReader(durationScale, ValueAnimator::areAnimatorsEnabled)
     private var currentState: StateToken? = null
 
     enum class StateKind { HOVER, FOCUS, DRAG }
@@ -171,6 +174,7 @@ class RowIndication private constructor(
         } else {
             if (previous?.kind == StateKind.DRAG) 150 else 15
         }
+        stateScale.retryOnNewTarget()
         stateAlpha.animateTo(target, durationMillis)
         requestFrame()
     }
@@ -184,7 +188,7 @@ class RowIndication private constructor(
 
     override fun doFrame(frameTimeNanos: Long) {
         framePosted = false
-        stateAlpha.frame(frameTimeNanos, durationScale())
+        stateAlpha.frame(frameTimeNanos, stateScale.read())
         invalidateSelf()
         requestFrame()
     }

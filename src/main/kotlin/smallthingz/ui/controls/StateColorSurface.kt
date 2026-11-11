@@ -43,6 +43,8 @@ class StateColorSurface(
     private var radius=radiusPx
     private var strokeWidth=strokePx
     private var ready=false
+    internal var paintFill=true
+        set(value) {field=value;view.invalidate()}
     private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
     private val mask=GradientDrawable().apply {setColor(-1);cornerRadius=radiusPx}
     private val surface=object:Drawable() {
@@ -56,7 +58,7 @@ class StateColorSurface(
             val corner=min(radius,min(bounds.width(),bounds.height())/2f)
             paint.style=Paint.Style.FILL;paint.color=motion.color(0)
             paint.alpha=(paint.alpha*opacity+127)/255
-            canvas.drawRoundRect(bounds.left.toFloat(),bounds.top.toFloat(),bounds.right.toFloat(),bounds.bottom.toFloat(),corner,corner,paint)
+            if(paintFill)canvas.drawRoundRect(bounds.left.toFloat(),bounds.top.toFloat(),bounds.right.toFloat(),bounds.bottom.toFloat(),corner,corner,paint)
             paint.style=Paint.Style.STROKE;paint.color=motion.color(1)
             paint.alpha=(paint.alpha*opacity+127)/255
             paint.strokeWidth=strokeWidth*if(android.R.attr.state_enabled in state&&android.R.attr.state_focused in state)focusedStrokeScale else 1f

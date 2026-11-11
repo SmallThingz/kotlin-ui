@@ -225,6 +225,12 @@ class NativeChip(
     internal var exclusive = semantics == NativeChoiceSemantics.RADIO || semantics == NativeChoiceSemantics.TAB
     var onActivationRequest: (() -> Boolean)? = null
     internal var preserveIconColors = false
+    internal var parentDrawsSelectedFill = false
+        set(value) {
+            if (field == value) return
+            field = value
+            selectionAnimation?.paintFill = !value
+        }
     private var dispatchingControlledClick = false
     private var role = semantics.choiceRole()
     private var buttonSelected = false
@@ -251,6 +257,7 @@ class NativeChip(
     private val indicatorPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var typography: ChoiceTypography? = null
     private var visualInsetPx = 0
+    internal val selectedFillInset: Int get() = visualInsetPx
     private var selectionAnimation: StateColorSurface? = null
     private var visualBackground: Drawable? = null
     private var indicatorColor = style.indicatorColor ?: palette.accent
@@ -642,6 +649,7 @@ class NativeChip(
                 indicatorColor=indicator
             }).also {selectionAnimation=it}
         retained.bind(fill,stroke,text,ripple,choiceStyle.radiusDp*density,density,icons,accent,currentPalette.surface)
+        retained.paintFill = !parentDrawsSelectedFill
         val visual = visualBackground ?: (if (choiceStyle.visualMinHeightDp == null) retained.background
             else ChoiceVisualBackground(retained.background) { visualInsetPx }).also { visualBackground = it }
         if (background !== visual) background = visual
@@ -1110,6 +1118,8 @@ open class NativeSegmentedChoice(
     val fillRowHeight: Boolean = false,
     /** One equal-width row; bounded height is propagated to cells, including compact visual hosts. */
     val singleRow: Boolean = false,
+    /** Move one retained fill behind the selected cell; the cells retain their input and semantics. */
+    val movingSelectionBackground: Boolean = false,
 ) : ViewGroup(context), NativeInputGate, AutoCloseable {
     private var closed = false
     override val acceptsNativeInput: Boolean get() = !closed
@@ -1138,6 +1148,8 @@ open class NativeSegmentedChoice(
     protected open val fillWrappedCells: Boolean get() = arrangement == ChoiceArrangement.EqualWidth
     private val choiceSemantics: NativeChoiceSemantics
         get() = if (tabSemantics) NativeChoiceSemantics.TAB else semantics
+    private val selectionIndicator = if (movingSelectionBackground && style.selectedFill)
+        NativeSelectionIndicator(this, palette.selection) else null
 
     init {
         require(gapDp.isFinite() && gapDp >= 0f && verticalGapDp.isFinite() && verticalGapDp >= 0f && maxColumns > 0)
@@ -1158,6 +1170,7 @@ open class NativeSegmentedChoice(
         for (option in options) {
             val chip = chips.getOrPut(option.id) {
                 NativeChip(context, choicePalette, choiceStyle).apply {
+                    parentDrawsSelectedFill = selectionIndicator != null
                     id = View.generateViewId()
                     onCheckedChange = { checked -> if (checked) selectFromUser(option.id) }
                     setOnKeyListener { view, keyCode, event -> handleChoiceKey(view, option.id, keyCode, event) }
@@ -1174,6 +1187,7 @@ open class NativeSegmentedChoice(
         if (options.indices.any { getChildAt(it) !== chips[options[it].id] }) {
             options.forEach { bringChildToFront(checkNotNull(chips[it.id])) }
         }
+        updateSelectionIndicator()
         requestLayout()
     }
 
@@ -1181,11 +1195,15 @@ open class NativeSegmentedChoice(
         if (configuration.changed(context)) requestLayout()
         choicePalette = palette
         chips.values.forEach { it.applyPalette(palette) }
+        updateSelectionIndicator()
     }
 
     override fun setEnabled(enabled: Boolean) {
         super.setEnabled(enabled)
-        if (ready) options.forEach { chips[it.id]?.isEnabled = enabled && it.enabled }
+        if (ready) {
+            options.forEach { chips[it.id]?.isEnabled = enabled && it.enabled }
+            updateSelectionIndicator()
+        }
     }
 
     /** Retained semantic node. Visibility and layout are owned by this group. */
@@ -1203,6 +1221,7 @@ open class NativeSegmentedChoice(
         if (selectedId == id) return
         selectedId = id
         options.forEach { option -> chips[option.id]?.bindChecked(option.id == id, isEnabled && option.enabled) }
+        updateSelectionIndicator()
         onSelectionChange?.invoke(id)
     }
 
@@ -1453,6 +1472,28 @@ open class NativeSegmentedChoice(
             val y = paddingTop + placement[index + 1]
             getChildAt(i).layout(x, y, x + childWidth, y + placement[index + 3])
         }
+        updateSelectionIndicator()
+    }
+
+    private fun updateSelectionIndicator() {
+        val indicator = selectionIndicator ?: return
+        val child = selectedId?.let { chips[it] }
+        if (child == null) {
+            indicator.clear()
+            return
+        }
+        val color = if (!child.isEnabled) choiceStyle.disabledSelectedFill?.resolve(choicePalette)
+            ?: choicePalette.selection else choicePalette.selection
+        indicator.bindColor(color)
+        if (child.isLaidOut) {
+            val inset = child.selectedFillInset.toFloat()
+            indicator.retarget(child.left.toFloat(), child.top + inset, child.right.toFloat(), child.bottom - inset)
+        }
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        selectionIndicator?.draw(canvas, choiceStyle.radiusDp * density)
+        super.dispatchDraw(canvas)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -1490,6 +1531,7 @@ open class NativeSegmentedChoice(
         isEnabled = false
         onSelectionRequest = null
         onSelectionChange = null
+        selectionIndicator?.close()
         chips.values.forEach { it.close() }
         cancelPendingInputEvents()
     }

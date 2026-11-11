@@ -923,7 +923,8 @@ open class NativeSlider(
 
     private fun activeTrackColor(): Int = if (isEnabled) componentStyle.colors.activeTrackColor ?: componentPalette.accent
         else componentStyle.colors.disabledActiveTrackColor ?: withAlpha(componentPalette.content, .38f)
-    private fun inactiveTrackColor(): Int = if (isEnabled) componentStyle.colors.inactiveTrackColor ?: componentPalette.selection
+    private fun inactiveTrackColor(): Int = if (isEnabled) componentStyle.colors.inactiveTrackColor
+        ?: composite(withAlpha(Color.BLACK, .18f), componentPalette.selection)
         else componentStyle.colors.disabledInactiveTrackColor ?: withAlpha(componentPalette.content, .12f)
     private fun activeTickColor(): Int = if (isEnabled) componentStyle.colors.activeTickColor ?: componentStyle.colors.inactiveTrackColor ?: componentPalette.selection
         else componentStyle.colors.disabledActiveTickColor ?: withAlpha(componentPalette.content, .12f)

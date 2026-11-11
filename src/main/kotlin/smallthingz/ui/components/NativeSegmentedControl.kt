@@ -32,7 +32,8 @@ class NativeSegmentedControl(
             normalTextRole = NativeTextRole.CONTENT, selectedTextRole = NativeTextRole.ON_ACCENT,
             normalIconRole = NativeTextRole.CONTENT, selectedIconRole = NativeTextRole.ON_ACCENT,
             textStyle = NativeTextStyle(sizeSp = 14f, lineHeightSp = 20f, weight = 400),
-            animateSelection = true), gapDp = 0f, activateOnFocusNavigation = false, singleRow = true)
+            animateSelection = true), gapDp = 0f, activateOnFocusNavigation = false, singleRow = true,
+        movingSelectionBackground = true)
     var onSelectionRequest: ((String) -> Boolean)? = null
 
     override val acceptsNativeInput: Boolean
