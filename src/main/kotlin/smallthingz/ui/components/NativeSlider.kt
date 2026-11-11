@@ -355,6 +355,9 @@ open class NativeSlider(
         // A cancelled/retired pointer cannot fall into SeekBar's UP-as-click path.
         if (event.actionMasked != MotionEvent.ACTION_DOWN && interaction != Interaction.TOUCH) return false
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            // AbsSeekBar still owns native pressed/drag cleanup until its outer frame returns.
+            if (cancellingTouch) return false
+            if (!prepareInteraction()) return false
             beginInteraction(Interaction.TOUCH)
             touchDownTime = event.downTime
         }
@@ -397,10 +400,7 @@ open class NativeSlider(
         if (!isEnabled) return false
         if (isUnownedKeyRepeat(keyCode, event)) return false
         if (interaction != Interaction.KEYBOARD) {
-            cancelUserInteraction()
-            // Cancellation callbacks may revoke admission or acquire their own input owner.
-            if (!isEnabled || componentKeyboardPolicy != NativeSliderKeyboardPolicy.DEFAULT ||
-                interaction != Interaction.NONE) return false
+            if (!prepareInteraction()) return false
             beginInteraction(Interaction.KEYBOARD)
         }
         val direction = checkNotNull(keyDirection(keyCode))
@@ -445,13 +445,12 @@ open class NativeSlider(
             return false
         }
         val began = interaction != Interaction.KEYBOARD
-        if (began) beginInteraction(Interaction.KEYBOARD)
-        val owner = generation
-        // Prior-owner cancellation may change RTL direction, range/value, enabled state or policy.
-        if (!isEnabled || componentKeyboardPolicy != NativeSliderKeyboardPolicy.NATIVE_INTEGER) {
-            if (began) retireEmptyKeyboardAttempt(owner)
-            return false
+        if (began) {
+            if (!prepareInteraction()) return false
+            beginInteraction(Interaction.KEYBOARD)
         }
+        val owner = generation
+        // Prior-owner cancellation may change RTL direction or range/value.
         val target = nativeKeyTarget(checkNotNull(nativeKeyDirection(keyCode)))
         if (target == progress) {
             if (began) retireEmptyKeyboardAttempt(owner) else finishInteraction(false)
@@ -522,11 +521,14 @@ open class NativeSlider(
                 continuousAccessibilityDispatches.removeAt(continuousAccessibilityDispatches.lastIndex)
             })
         }
+        if (action == AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.id) {
+            if (arguments?.containsKey(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE) != true ||
+                !arguments.getFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE).isFinite()) return false
+        }
+        if (!prepareInteraction()) return false
         var resolvedArguments = arguments
         if (action == AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.id) {
-            if (arguments?.containsKey(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE) != true) return false
-            val requested = arguments.getFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE)
-            if (!requested.isFinite()) return false
+            val requested = checkNotNull(arguments).getFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE)
             if (componentStyle.steps > 0) {
                 // Native SeekBar truncates its Float argument before notifying listeners.
                 // Resolve the discrete step first, while preserving its delegate/range route.
@@ -565,11 +567,19 @@ open class NativeSlider(
         // Reject before cancelling another input owner. Admission is rechecked after its cleanup.
         if (!admitContinuousValue(clamped)) return false
         val needsReadmission = interaction != Interaction.NONE
+        if (!prepareInteraction()) return false
+        // Cancellation may rebind the draft/range; relative actions use that current value.
+        val currentTarget = when (action) {
+            AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> continuousDraft + (max.toDouble() - min.toDouble()).toFloat() / 20f
+            AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> continuousDraft - (max.toDouble() - min.toDouble()).toFloat() / 20f
+            else -> target
+        }.coerceIn(min.toFloat(), max.toFloat())
+        if (currentTarget == continuousDraft) return false
         beginInteraction(Interaction.ACCESSIBILITY)
         var handled = false
         var completed = false
         return withCleanup({
-            handled = setContinuousUserValue(clamped, admissionChecked = !needsReadmission)
+            handled = setContinuousUserValue(currentTarget, admissionChecked = !needsReadmission)
             completed = true
             handled
         }, {
@@ -713,8 +723,18 @@ open class NativeSlider(
         canvas.restoreToCount(saved)
     }
 
-    private fun beginInteraction(kind: Interaction) {
+    /** Public cancellation callbacks run before an outer caller may claim ownership. */
+    private fun prepareInteraction(): Boolean {
+        // Native touch callbacks can precede more SeekBar mutations in the same frame.
+        if (touchDispatchDepth > 0) return false
+        val policy = componentKeyboardPolicy
+        val expectedGeneration = generation + if (interaction != Interaction.NONE) 1L else 0L
         if (interaction != Interaction.NONE) cancelUserInteraction()
+        return isEnabled && interaction == Interaction.NONE && componentKeyboardPolicy == policy &&
+            generation == expectedGeneration
+    }
+
+    private fun beginInteraction(kind: Interaction) {
         generation++
         interaction = kind
         interactionStart = progress
