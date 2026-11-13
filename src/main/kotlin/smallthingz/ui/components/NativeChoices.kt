@@ -16,6 +16,10 @@ import android.graphics.drawable.DrawableWrapper
 import android.os.Bundle
 import android.os.SystemClock
 import android.text.TextUtils
+import android.text.Spanned
+import android.text.style.CharacterStyle
+import android.text.style.LeadingMarginSpan
+import android.text.style.LineBackgroundSpan
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
@@ -225,6 +229,49 @@ class NativeChip(
     internal var exclusive = semantics == NativeChoiceSemantics.RADIO || semantics == NativeChoiceSemantics.TAB
     var onActivationRequest: (() -> Boolean)? = null
     internal var preserveIconColors = false
+    internal var uniformSelectionEligible = false
+    internal fun hasUniformSelectionContent(): Boolean {
+        if (!uniformSelectionEligible) return false
+        val currentLayout = layout
+        // Do not invoke caller transformations to probe them. TextView may build the display
+        // layout during drawing, so an unavailable transformed layout retains the old renderer.
+        if (transformationMethod != null && currentLayout == null) return false
+        return !hasSelectionPaintSpans(text) && !hasSelectionPaintSpans(currentLayout?.text)
+    }
+
+    private fun hasSelectionPaintSpans(value: CharSequence?): Boolean {
+        val spans = value as? Spanned ?: return false
+        val end = spans.length
+        if (end == Int.MAX_VALUE) return true
+        // Include both zero and end: even an empty paragraph can paint a margin/background.
+        val limit = end + 1
+        return spans.nextSpanTransition(-1, limit, CharacterStyle::class.java) <= end ||
+            spans.nextSpanTransition(-1, limit, LeadingMarginSpan::class.java) <= end ||
+            spans.nextSpanTransition(-1, limit, LineBackgroundSpan::class.java) <= end
+    }
+    internal var uniformSelectionForeground: NativeSelectionForeground? = null
+        set(value) {
+            if (field === value) return
+            field = value
+            if (value != null && foregroundContentBounds == null) {
+                foregroundContentBounds = RectF()
+                drawChoiceContentCallback = { drawChoiceContent(it) }
+                uniformSelectionInk = NativeSelectionInk()
+            }
+            selectionAnimation?.parentOwnsForeground = value != null
+            invalidate()
+        }
+    private var foregroundContentBounds: RectF? = null
+    private var drawChoiceContentCallback: ((Canvas) -> Unit)? = null
+    internal var uniformSelectionInk: NativeSelectionInk? = null
+        private set
+
+    internal fun prepareUniformSelectionInk(surface: Int, fill: Int) {
+        val state = selectionAnimation ?: return
+        val ink = checkNotNull(uniformSelectionInk)
+        if (ink.update(surface, fill, currentTextColor or -0x1000000, state.animatedRippleColor)) invalidate()
+        state.publishParentRipple(ink.rippleColor)
+    }
     internal var parentDrawsSelectedFill = false
         set(value) {
             if (field == value) return
@@ -429,6 +476,26 @@ class NativeChip(
     }
 
     override fun onDraw(canvas: Canvas) {
+        val foreground = uniformSelectionForeground
+        if (foreground == null) drawChoiceContent(canvas)
+        else {
+            updateForegroundContentBounds()
+            foreground.draw(canvas, this, checkNotNull(foregroundContentBounds), checkNotNull(drawChoiceContentCallback))
+        }
+        if (!paintSelected || choiceStyle.indicatorHeightDp == 0f) return
+        val inset = choiceStyle.indicatorInsetDp * density
+        if (width <= inset * 2f) return
+        val indicatorWidth = min(width - inset * 2f,
+            choiceStyle.indicatorWidthDp?.times(density) ?: (width - inset * 2f))
+        val indicatorLeft = (width - indicatorWidth) / 2f
+        val color = indicatorColor
+        indicatorPaint.color = color
+        indicatorPaint.alpha = if (isEnabled) Color.alpha(color) else Color.alpha(color) / 2
+        canvas.drawRect(indicatorLeft, max(0f, height - choiceStyle.indicatorHeightDp * density),
+            indicatorLeft + indicatorWidth, height.toFloat(), indicatorPaint)
+    }
+
+    private fun drawChoiceContent(canvas: Canvas) {
         val iconOnly = iconOnlyDrawable()
         if (iconOnly != null) {
             val end = trailingIcon?.takeUnless { it === iconOnly }
@@ -444,17 +511,26 @@ class NativeChip(
             centerInlineIcon()
             super.onDraw(canvas)
         }
-        if (!paintSelected || choiceStyle.indicatorHeightDp == 0f) return
-        val inset = choiceStyle.indicatorInsetDp * density
-        if (width <= inset * 2f) return
-        val indicatorWidth = min(width - inset * 2f,
-            choiceStyle.indicatorWidthDp?.times(density) ?: (width - inset * 2f))
-        val indicatorLeft = (width - indicatorWidth) / 2f
-        val color = indicatorColor
-        indicatorPaint.color = color
-        indicatorPaint.alpha = if (isEnabled) Color.alpha(color) else Color.alpha(color) / 2
-        canvas.drawRect(indicatorLeft, max(0f, height - choiceStyle.indicatorHeightDp * density),
-            indicatorLeft + indicatorWidth, height.toFloat(), indicatorPaint)
+    }
+
+    private fun updateForegroundContentBounds() {
+        var textWidth = 0f
+        val textLayout = layout
+        if (textLayout != null) for (line in 0 until textLayout.lineCount)
+            textWidth = max(textWidth, textLayout.getLineWidth(line))
+        val icon = activeIcon()
+        val end = trailingIcon
+        val iconWidth = icon?.bounds?.width() ?: 0
+        val endWidth = end?.takeUnless { it === icon }?.bounds?.width() ?: 0
+        val gap = if (text.isNullOrEmpty()) 0 else compoundDrawablePadding
+        // The capsule contract uses centered inline icons and text, with identical ink roles.
+        val contentWidth = textWidth + iconWidth + endWidth +
+            (if (iconWidth > 0) gap else 0) + (if (endWidth > 0) gap else 0)
+        val contentHeight = max(max(textLayout?.height ?: 0, icon?.bounds?.height() ?: 0),
+            end?.bounds?.height() ?: 0)
+        val x = paddingLeft + (width - paddingLeft - paddingRight - contentWidth) / 2f
+        val y = paddingTop + (height - paddingTop - paddingBottom - contentHeight) / 2f
+        checkNotNull(foregroundContentBounds).set(x, y, x + contentWidth, y + contentHeight)
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -648,6 +724,7 @@ class NativeChip(
                 compoundDrawableTintList=if(preserveIconColors)null else ColorStateList.valueOf(icon)
                 indicatorColor=indicator
             }).also {selectionAnimation=it}
+        retained.parentOwnsForeground = uniformSelectionForeground != null
         retained.bind(fill,stroke,text,ripple,choiceStyle.radiusDp*density,density,icons,accent,currentPalette.surface)
         retained.paintFill = !parentDrawsSelectedFill
         val visual = visualBackground ?: (if (choiceStyle.visualMinHeightDp == null) retained.background
@@ -1150,6 +1227,14 @@ open class NativeSegmentedChoice(
         get() = if (tabSemantics) NativeChoiceSemantics.TAB else semantics
     private val selectionIndicator = if (movingSelectionBackground && style.selectedFill)
         NativeSelectionIndicator(this, palette.selection) else null
+    private var uniformSelectionForeground: NativeSelectionForeground? = null
+
+    /** Capsule presentation uses matching text/icon roles; other choice styles retain their own ink. */
+    internal fun useUniformSelectionForeground(surfaceColor: () -> Int?) {
+        check(chips.isEmpty() && uniformSelectionForeground == null)
+        uniformSelectionForeground = NativeSelectionForeground(this, checkNotNull(selectionIndicator),
+            { choiceStyle.radiusDp * density }, surfaceColor)
+    }
 
     init {
         require(gapDp.isFinite() && gapDp >= 0f && verticalGapDp.isFinite() && verticalGapDp >= 0f && maxColumns > 0)
@@ -1181,6 +1266,14 @@ open class NativeSegmentedChoice(
             chip.setIcons(ownedIcon(option.icon))
             configureActivation(chip, option.id)
             chip.bind(option.label, option.id == this.selectedId, isEnabled && option.enabled)
+            uniformSelectionForeground?.let { foreground ->
+                // Caller spans keep TextView's RGB. The public retained view can also acquire
+                // styles later, so inspect its live buffer separately before each draw.
+                chip.uniformSelectionEligible = option.label !is Spanned
+                chip.uniformSelectionForeground = foreground.takeIf {
+                    chip.hasUniformSelectionContent() && it.isAvailable
+                }
+            }
             chip.contentDescription = option.contentDescription
         }
         // Drawing order changes without detaching retained controls or discarding their focus.
@@ -1492,6 +1585,7 @@ open class NativeSegmentedChoice(
     }
 
     override fun dispatchDraw(canvas: Canvas) {
+        uniformSelectionForeground?.prepare()
         selectionIndicator?.draw(canvas, choiceStyle.radiusDp * density)
         super.dispatchDraw(canvas)
     }
@@ -1531,6 +1625,7 @@ open class NativeSegmentedChoice(
         isEnabled = false
         onSelectionRequest = null
         onSelectionChange = null
+        uniformSelectionForeground?.close()
         selectionIndicator?.close()
         chips.values.forEach { it.close() }
         cancelPendingInputEvents()

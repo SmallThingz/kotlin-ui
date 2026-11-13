@@ -111,6 +111,48 @@ internal fun selectionForeground(fill: Int, surface: Int, preferred: Int, altern
     }
 }
 
+/** Packed opaque ink (low 32 bits) and safe current-color layer alpha (high 32 bits).
+ * Qualifies its whole opacity prefix, including interior chromatic luminance extrema.
+ * Platform ripple sessions retaining historical paints are outside this sampled-color contract.
+ */
+internal fun selectionForegroundWithIndication(fill: Int, surface: Int, preferred: Int, indication: Int): Long {
+    fun composite(foreground: Int, background: Int, alpha: Int): Int {
+        fun channel(shift: Int) = (((foreground ushr shift and 255) * alpha +
+            (background ushr shift and 255) * (255 - alpha) + 127) / 255) shl shift
+        return -0x1000000 or channel(16) or channel(8) or channel(0)
+    }
+    val background = composite(fill, surface, fill ushr 24)
+    var minimum = srgbLuminance(background)
+    var maximum = minimum
+    val preferredLuminance = srgbLuminance(preferred)
+    var ink = selectionInkForLuminanceRange(minimum, maximum, preferred, preferredLuminance)
+    check(ink != 0)
+    var acceptedAlpha = 0
+    for (alpha in 1..(indication ushr 24)) {
+        val luminance = srgbLuminance(composite(indication, background, alpha))
+        minimum = minOf(minimum, luminance)
+        maximum = maxOf(maximum, luminance)
+        val candidate = selectionInkForLuminanceRange(minimum, maximum, preferred, preferredLuminance)
+        if (candidate == 0) break
+        ink = candidate
+        acceptedAlpha = alpha
+    }
+    return (acceptedAlpha.toLong() shl 32) or (ink.toLong() and 0xffffffffL)
+}
+
+private fun selectionInkForLuminanceRange(minimum: Double, maximum: Double, preferred: Int,
+    preferredLuminance: Double): Int {
+    val nearest = preferredLuminance.coerceIn(minimum, maximum)
+    val preferredContrast = (maxOf(nearest, preferredLuminance) + .05) /
+        (minOf(nearest, preferredLuminance) + .05)
+    return when {
+        preferred ushr 24 == 255 && preferredContrast >= 4.5 -> preferred
+        1.05 / (maximum + .05) >= 4.5 -> -1
+        (minimum + .05) / .05 >= 4.5 -> -0x1000000
+        else -> 0
+    }
+}
+
 /** Qualifies a static selected ripple's whole integer opacity envelope once when paint is bound. */
 internal fun selectionIndication(fill: Int, surface: Int, ink: Int, preferred: Int): Int {
     fun composite(foreground: Int, background: Int, alpha: Int): Int {

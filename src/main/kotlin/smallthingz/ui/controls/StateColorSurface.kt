@@ -45,6 +45,17 @@ class StateColorSurface(
     private var ready=false
     internal var paintFill=true
         set(value) {field=value;view.invalidate()}
+    internal var parentOwnsForeground=false
+        set(value) {
+            if(field==value)return
+            field=value
+            if(ready) {
+                retarget()
+                // An idle, unchanged target skips the motion callback. Ownership still changed:
+                // restore raw ink/ripple immediately when the parent stops qualifying them.
+                publish()
+            }
+        }
     private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
     private val mask=GradientDrawable().apply {setColor(-1);cornerRadius=radiusPx}
     private val surface=object:Drawable() {
@@ -72,6 +83,16 @@ class StateColorSurface(
     }
     private val motion=ViewColorTransition(view,colors(view.drawableState),{publish()})
     val background=RippleDrawable(ColorStateList.valueOf(motion.color(3)),surface,mask)
+    private var publishedRippleColor = motion.color(3)
+    internal val animatedRippleColor: Int get() = motion.color(3)
+    internal fun publishParentRipple(color: Int) {
+        if (parentOwnsForeground) publishRipple(color)
+    }
+    private fun publishRipple(color: Int) {
+        if (publishedRippleColor == color) return
+        publishedRippleColor = color
+        background.setColor(ColorStateList.valueOf(color))
+    }
     init {ready=true;surface.state=view.drawableState;publish()}
 
     fun bind(fill:ColorStateList,stroke:ColorStateList,ink:ColorStateList,ripple:ColorStateList,
@@ -84,16 +105,16 @@ class StateColorSurface(
         retarget()
     }
     private fun colors(state:IntArray)=intArrayOf(
-        fills.getColorForState(state,fills.defaultColor),strokes.getColorForState(state,strokes.defaultColor),
+        if(parentOwnsForeground)0 else fills.getColorForState(state,fills.defaultColor),strokes.getColorForState(state,strokes.defaultColor),
         inks.getColorForState(state,inks.defaultColor),ripples.getColorForState(state,ripples.defaultColor),
         secondaryInks.getColorForState(state,secondaryInks.defaultColor),accentInks.getColorForState(state,accentInks.defaultColor),underlayColor)
     private fun retarget(state:IntArray=view.drawableState){motion.retarget(*colors(state))}
     fun updateState(state:IntArray){retarget(state)}
     private fun publish() {
-        fun readable(color:Int)=if(motion.isInterpolating&&color ushr 24==255&&motion.color(6) ushr 24==255)
+        fun readable(color:Int)=if(!parentOwnsForeground&&motion.isInterpolating&&color ushr 24==255&&motion.color(6) ushr 24==255)
             selectionForeground(motion.color(0),motion.color(6),color,color) else color
         publishInk(readable(motion.color(2)),readable(motion.color(4)),motion.color(5))
-        background.setColor(ColorStateList.valueOf(motion.color(3)))
+        if (!parentOwnsForeground) publishRipple(motion.color(3))
         surface.invalidateSelf()
     }
     override fun close()=motion.close()

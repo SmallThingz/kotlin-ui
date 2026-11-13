@@ -83,6 +83,33 @@ class SelectionContrastTest {
         }
     }
 
+    @Test fun actualThemeRetargetRippleCannotInvalidateBareTrackInk() {
+        val track = 0xff454349.toInt()
+        val preferred = 0xffb5b0b9.toInt()
+        val ripple = 0x28b8a4eb
+        assertTrue(contrast(preferred, track) >= 4.5)
+        assertTrue(contrast(preferred, composite(ripple, track, 4)) < 4.5)
+        val qualified = selectionForegroundWithIndication(0, track, preferred, ripple)
+        assertEquals(40, (qualified ushr 32).toInt())
+        for (alpha in 0..40) assertTrue(contrast(qualified.toInt(), composite(ripple, track, alpha)) >= 4.5)
+    }
+
+    @Test fun crossoverCapsPreserveFeedbackAndEveryIntermediateOpacity() {
+        var capped = 0
+        for (gray in 0..255) {
+            val track = -0x1000000 or (gray shl 16) or (gray shl 8) or gray
+            for (ripple in listOf(0x28ffffff, 0x28000000, 0x2885c854)) {
+                val qualified = selectionForegroundWithIndication(0, track, 0xffaaaaaa.toInt(), ripple)
+                val cap = (qualified ushr 32).toInt()
+                assertTrue(cap in 1..40)
+                if (cap < 40) capped++
+                for (alpha in 0..cap)
+                    assertTrue(contrast(qualified.toInt(), composite(ripple, track, alpha)) >= 4.5)
+            }
+        }
+        assertTrue(capped > 0)
+    }
+
     private fun contrast(a: Int, b: Int): Double {
         val first = srgbLuminance(a); val second = srgbLuminance(b)
         return (max(first, second) + .05) / (min(first, second) + .05)

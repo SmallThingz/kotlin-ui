@@ -78,6 +78,9 @@ open class NativeSurface(context: Context, style: NativeSurfaceStyle) : FrameLay
     private val colorMotion=smallthingz.ui.animation.view.ViewColorTransition(this,
         intArrayOf(style.fillColor,style.outlineColor ?: Color.TRANSPARENT,style.rippleColor ?: Color.TRANSPARENT),::publishColors)
 
+    /** The sampled fill currently painted, including an in-flight palette transition. */
+    val paintedFillColor: Int get() = colorMotion.color(0)
+
     private fun publishColors() {
         fill.setColor(colorMotion.color(0))
         ripple?.setColor(ColorStateList.valueOf(colorMotion.color(2)))

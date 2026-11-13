@@ -31,6 +31,10 @@ internal class NativeSelectionIndicator(
     private var elapsed = 0.0
     private var lastFrame = 0L
 
+    internal val paintedBounds: RectF get() = displayed
+    internal val paintedColor: Int get() = colors.color(0)
+    internal val isVisible: Boolean get() = initialized && !closed
+
     init { host.addOnAttachStateChangeListener(this) }
 
     fun bindColor(color: Int) { colors.retarget(color) }

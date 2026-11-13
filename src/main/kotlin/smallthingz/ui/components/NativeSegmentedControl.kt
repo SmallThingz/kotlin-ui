@@ -13,6 +13,8 @@ interface NativeSegmentedPresentation {
     val surface: ViewGroup
     fun setContent(content: View) { surface.addView(content) }
     fun bindSurface(palette: ControlPalette)
+    /** Actual opaque/composited underlay, including animation. Unknown or translucent paint keeps legacy ink. */
+    val paintedSurfaceColor: Int? get() = null
 }
 
 /** A single-row capsule with owner-bound selection and a stable Android pointer interop host. */
@@ -42,6 +44,7 @@ class NativeSegmentedControl(
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         row.addView(choices)
+        choices.useUniformSelectionForeground { this.presentation.paintedSurfaceColor }
         this.presentation.setContent(row)
         addView(this.presentation.surface)
         choices.onSelectionRequest = { id -> acceptsNativeInput && onSelectionRequest?.invoke(id) == true }
@@ -98,4 +101,5 @@ internal class DefaultSegmentedPresentation(context: Context, palette: ControlPa
     override fun bindSurface(palette: ControlPalette) {
         surface.applyStyle(NativeSurfaceStyle(palette.surface, cornerRadiusDp = 30f, outlineColor = palette.outline))
     }
+    override val paintedSurfaceColor: Int get() = surface.paintedFillColor
 }
