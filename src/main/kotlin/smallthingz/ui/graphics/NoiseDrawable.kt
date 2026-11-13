@@ -30,6 +30,25 @@ class NoiseDrawable(
     private var drawableAlpha = 255
     private var outputColorFilter: ColorFilter? = null
     private var compositePaint: Paint? = null
+    private var textSurfaceRange = backgroundColor?.let(::grainSurfaceRange) ?: 0L
+
+    /** Bounds include the unchanged black/white grain (alpha5..17), not just its base color. */
+    val paintedTextSurface: Long
+        get() = if (drawsBackground && drawableAlpha == 255 && outputColorFilter == null)
+            textSurfaceRange else 0L
+
+    private fun grainSurfaceRange(color: Int): Long {
+        if (color ushr 24 != 255) return 0L
+        var darkest = 0xff000000.toInt()
+        var lightest = 0xff000000.toInt()
+        for (shift in 0..16 step 8) {
+            val channel = color ushr shift and 255
+            // Floor/ceiling enclose integer raster rounding and bilinear grain interpolation.
+            darkest = darkest or ((channel * 238 / 255) shl shift)
+            lightest = lightest or (((channel * 238 + 255 * 17 + 254) / 255) shl shift)
+        }
+        return smallthingz.ui.controls.textSurfaceRange(darkest, lightest)
+    }
 
     init {
         backgroundColor?.let { backgroundPaint.color = it }
@@ -40,6 +59,7 @@ class NoiseDrawable(
         if (drawsBackground == (color != null) && (color == null || backgroundPaint.color == color)) return
         drawsBackground = color != null
         color?.let { backgroundPaint.color = it }
+        textSurfaceRange = color?.let(::grainSurfaceRange) ?: 0L
         invalidateSelf()
     }
 

@@ -82,6 +82,36 @@ class ParagraphView(
     private var fontResolver = initialFontResolver
     private var textColor = Color(initialTextColor)
     private var colorTransition: ViewColorTransition? = null
+    /**
+     * Optional actual opaque surface bounds for this plain label's palette-owned base ink. The
+     * owner must invalidate this View whenever that paint changes, including with an idle/equal
+     * ink target. No observer or frame loop is installed. Unknown/translucent bounds opt out.
+     * Explicit setTextColor still ends palette ownership; typography/custom paint is not filtered.
+     */
+    var paintedTextSurface: java.util.function.LongSupplier? = null
+        set(value) {
+            if (field === value) return
+            field = value
+            invalidate()
+        }
+    private var contrastSurface = 0L
+    private var contrastInk = 0
+    private var contrastResult = 0
+    private var contrastCached = false
+
+    private fun paintedTextColor(): Color {
+        val supplier = paintedTextSurface ?: return textColor
+        if (colorTransition == null) return textColor
+        val surface = supplier.asLong
+        val ink = textColor.toArgb()
+        if (!contrastCached || surface != contrastSurface || ink != contrastInk) {
+            contrastSurface = surface
+            contrastInk = ink
+            contrastResult = smallthingz.ui.controls.textSurfaceForeground(surface, ink)
+            contrastCached = true
+        }
+        return Color(contrastResult)
+    }
     private var label = ""
     private var softWrap = true
     private var maximumLines = Int.MAX_VALUE
@@ -570,7 +600,7 @@ class ParagraphView(
         try {
             canvas.translate(paddingLeft.toFloat(), paddingTop.toFloat())
             if (clipParagraph) canvas.clipRect(0, 0, measuredContentSize.width, measuredContentSize.height)
-            current.paint(canvas, textColor, textStyle.textDecoration ?: TextDecoration.None)
+            current.paint(canvas, paintedTextColor(), textStyle.textDecoration ?: TextDecoration.None)
         } finally {
             canvas.restoreToCount(saved)
         }
