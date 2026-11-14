@@ -20,6 +20,7 @@ package smallthingz.ui.unit
 import smallthingz.ui.geometry.isSpecified
 import smallthingz.ui.util.floatFromBits
 import smallthingz.ui.util.lerp
+import smallthingz.ui.util.requirePrecondition
 
 /**
  * We encode the unit information and float value into the single 64-bit long integer. The higher

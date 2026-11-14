@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package smallthingz.ui.graphics
+package smallthingz.ui.util
 
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.contract

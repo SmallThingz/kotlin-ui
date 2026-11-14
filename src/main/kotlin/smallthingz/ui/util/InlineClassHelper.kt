@@ -18,32 +18,6 @@
 
 package smallthingz.ui.util
 
-// These two functions are technically identical to Float.fromBits()
-// and Double.fromBits(). However, since they are declared as top-
-// level functions, they do not incur the cost of a static fetch
-// through the Companion class. Using these top-level functions,
-// the generated arm64 code after dex2oat is exactly a single `fmov`
-
-/** Returns the [Float] value corresponding to a given bit representation. */
-
-/** Returns the [Double] value corresponding to a given bit representation. */
-
-/**
- * Returns the closest integer to the argument, tying rounding to positive infinity. Some values are
- * treated differently:
- * - NaN becomes 0
- * - -Infinity or any value less than Integer.MIN_VALUE becomes Integer.MIN_VALUE.toFloat()
- * - +Infinity or any value greater than Integer.MAX_VALUE becomes Integer.MAX_VALUE.toFloat()
- */
-
-/**
- * Returns the closest integer to the argument, tying rounding to positive infinity. Some values are
- * treated differently:
- * - NaN becomes 0
- * - -Infinity or any value less than Integer.MIN_VALUE becomes Integer.MIN_VALUE.toFloat()
- * - +Infinity or any value greater than Integer.MAX_VALUE becomes Integer.MAX_VALUE.toFloat()
- */
-
 /** Packs two Float values into one Long value for use in inline classes. */
 inline fun packFloats(val1: Float, val2: Float): Long {
     val v1 = val1.toRawBits().toLong()

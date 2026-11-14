@@ -26,6 +26,7 @@ import smallthingz.ui.graphics.colorspace.NamedRgb
 import smallthingz.ui.graphics.colorspace.connect
 import smallthingz.ui.util.fastCoerceIn
 import smallthingz.ui.util.lerp
+import smallthingz.ui.util.requirePrecondition
 import kotlin.math.max
 import kotlin.math.min
 

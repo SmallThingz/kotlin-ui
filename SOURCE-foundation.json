@@ -6,6 +6,7 @@
     "Remove Compose stability/compiler annotations",
     "Android-only actual bodies",
     "SparseArray platform cache",
+    "The identical graphics and unit requirePrecondition helpers share util/Preconditions.kt; contract, lazy message and non-inline exception path are unchanged. Original upstream source entries below remain provenance records.",
     "Local overlaps contract correction in Rect, MutableRect and IntRect: empty or inverted bounds do not overlap; NaN coordinates return false; positive ordered finite/infinite bounds retain upstream results. This intentionally corrects the documented nonzero-area API contract and is not an exact upstream edge-case behavior claim.",
     "Local rectangle center correction: IntRect midpoints widen the delta before truncating toward zero; Rect/MutableRect retain the original Float operation order unless finite endpoint subtraction overflows, then use a Double midpoint. Width/height ABI and nonfinite endpoint behavior remain unchanged."
   ],

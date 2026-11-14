@@ -20,6 +20,7 @@ package smallthingz.ui.unit
 
 import smallthingz.ui.util.fastCoerceAtLeast
 import smallthingz.ui.util.fastCoerceIn
+import smallthingz.ui.util.requirePrecondition
 import kotlin.jvm.JvmInline
 import kotlin.math.min
 

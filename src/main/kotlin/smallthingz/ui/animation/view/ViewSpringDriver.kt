@@ -1,31 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 package smallthingz.ui.animation.view
 
-import android.animation.ValueAnimator
-import android.content.Context
-import android.os.Build
-import android.provider.Settings
 import android.view.Choreographer
 import android.view.View
 import androidx.annotation.MainThread
 import smallthingz.ui.animation.SpringValue
 import smallthingz.ui.animation.core.AnimationVector
-
-/** Public platform APIs only; the duration-scale getter was added after our minimum SDK. */
-internal fun readAnimatorDurationScale(context: Context): Float {
-    if (!ValueAnimator.areAnimatorsEnabled()) return 0f
-    val scale = if (Build.VERSION.SDK_INT >= 33) {
-        ValueAnimator.getDurationScale()
-    } else {
-        try {
-            Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
-        } catch (_: SecurityException) {
-            // An unavailable optional setting must not prevent the owner from updating its UI.
-            1f
-        }
-    }
-    return if (scale.isFinite() && scale >= 0f) scale else 1f
-}
+import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
 
 /**
  * Optional thin View scheduler. The owner supplies its normal paint/property update and
@@ -37,7 +18,7 @@ class ViewSpringDriver<T, V : AnimationVector>(
     private val view: View,
     private val state: SpringValue<T, V>,
     private val publish: (T) -> Unit,
-    private val durationScale: () -> Float = { readAnimatorDurationScale(view.context) },
+    private val durationScale: () -> Float = { readCachedAnimatorDurationScale(view.context) },
 ) : Choreographer.FrameCallback, AutoCloseable {
     private val choreographer = Choreographer.getInstance()
     private var framePosted = false
