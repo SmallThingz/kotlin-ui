@@ -1,0 +1,85 @@
+{
+  "app_base_commit": "1edddf65a3fd662fe7fc1eabd438fac40d9a5056",
+  "library_base_commit": "b18f9e0875f6b9e148353f78a71cdc7b1943da1d",
+  "extraction_inputs": [
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/NativeAboutWindowRuntime.kt",
+      "sha256": "d35c999c7819d1b5d83e3ede78ebd926b130486154730996f2b2730c10d66c83"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/NativeActionSheetAccessibility.kt",
+      "sha256": "bc7fc5ece117149bb608505a407e95ef5449bc87dd47076f05283630e6f9f1ff"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/NativeActionSheetInput.kt",
+      "sha256": "05de4df0332dc9bba31c5bf398b16bd0466588781f16b0db0840880b4fd6f875"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/NativeActionSheetState.kt",
+      "sha256": "cd743762758e9c5cd349815464789a8ed36d25a891470150c0c6f7ff50356202"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/NativeActionSheetSurface.kt",
+      "sha256": "fbc203bebbf9cc4865b0a6c90705e8da861c10586d4dbc9432fb12842f7ef8b2"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/NativeSheetDragHandle.kt",
+      "sha256": "a61dbcef3e8794a194661fa1fdd0e9289e948eaa7f2b5057dfe234c108c0b645"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/NativeSheetTooltip.kt",
+      "sha256": "afa782317e318bfe2c86637f8bc8cdb284edaaaa729be9bfe0d0293a7793b1d9"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/NativeWindowInsetsBinding.kt",
+      "sha256": "2fcfa2a0fc11f333c849bbc89660fa674c61f5258ba831ca027dfb979e720091"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbAboutDialog.kt",
+      "sha256": "e5f37bfd0ccec5a70f22434e3076d59cd62ba9f6f02a4344550005d0309fd9c4"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbAboutMotion.kt",
+      "sha256": "87224983d6901328f0f2b6bcb475ea9974e7fefc750607e9fdc3e2aad4549cc0"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbActionSheetDialog.kt",
+      "sha256": "7c94c53f21a820e5ea94119ef9e2e490761d733bcc20546a8366a0c39937cb25"
+    }
+  ],
+  "ownership": {
+    "NativeActionSheet": "Moved active sheet state, input, window, surface, accessibility, drag handle and tooltip; app supplies colors/typography/glyph/background and domain content.",
+    "NativeFloatingDialog": "Moved active About window/root and visibility/predictive motion; app retains About content, links, scroll restoration and appearance.",
+    "NativeModalWindowRuntime": "Moved native window dispatcher/frame clock/lifecycle gate; existing cached duration-scale reader is shared.",
+    "NativeWindowInsetsBinding": "Moved native root inset/IME stream owner.",
+    "shared_helpers": "closePreservingPrimaryFailure and predictiveBackCommitDurationMillis moved once; app imports same implementation."
+  },
+  "retained_upstream_records": [
+    "src/main/resource-provenance/sheets/SOURCE.md",
+    "src/main/resource-provenance/sheets/LICENSE.txt",
+    "src/main/resource-provenance/dialog-window/SOURCE.json",
+    "src/main/resource-provenance/dialog-window/APACHE-2.0.txt"
+  ],
+  "source_versions": [
+    "AndroidX Material3 1.4.0",
+    "AndroidX Compose UI/animation/foundation 1.11.2",
+    "AndroidX activity 1.13.0"
+  ],
+  "tests_moved": [
+    "NativeActionSheetGeometryTest",
+    "NativeActionSheetStateTest",
+    "NativeTooltipReleaseLifetimeTest",
+    "NativeFloatingDialogMotionTest (formerly ReverbAboutMotionTest)"
+  ],
+  "qualification": "Source extraction only. No build, tests, device qualification or runtime performance claim is made by this manifest.",
+  "shared_helper_inputs": [
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/CloseableOwnership.kt",
+      "baseline_sha256": "79ab416b1b99effd303e6a85b8c4e98b32e503765dede378cbaf08785f185412"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/PredictiveBackMotion.kt",
+      "baseline_sha256": "e3481c572c732843e80f0e94bc6d3f70ba377c9183ddebeb15f8d73cb6783482"
+    }
+  ]
+}

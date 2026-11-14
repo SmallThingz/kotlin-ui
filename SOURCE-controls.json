@@ -1,0 +1,76 @@
+{
+  "extracted_from_app_commit": "1edddf65a3fd662fe7fc1eabd438fac40d9a5056",
+  "library_base": "b18f9e0875f6b9e148353f78a71cdc7b1943da1d",
+  "sources": [
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbGroupLayout.kt",
+      "sha256": "2d6d756c0bfbaa437a46319adc2fc2854f0ff46d3d87189825367bfceda89301"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbRecordingGroupGeometry.kt",
+      "sha256": "eeaa5d30ffbd9240e7d0caeb291f2cb2a15a032d3431d098504b497cf3f8cd68"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbRecordingGroupShape.kt",
+      "sha256": "a3a407e0b87a3aee39a71e6daeeb6ac181083c55a81b9e882f2a492e9e9167ca"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbAppTopBarView.kt",
+      "sha256": "033a9ca629dfbc199ad90795045c20db97eca9adde225a023fe2da6d6d4f2132"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbTopBarHitTest.kt",
+      "sha256": "b4f77a040b039ee9e52a5e9011210975ea97ba03a4adfcc07a706075fbff8299"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/NativeSettingsTopBarGeometry.kt",
+      "sha256": "502822f4d30671d41b43f017efe0f52d98a020ad60ba78cce77313d6eafe9712"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbSettingsTopBarView.kt",
+      "sha256": "b751bfa05a3f4b1cb8a05221e2a56459d5d030e24d1e00b6b0d0638aa2bc952f"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbStandardIconButtonView.kt",
+      "sha256": "2ac8748f97693de76970b1823fe0b59d6db10f7b78fa599c0b5602dff0d4160f"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/NativePointerLayerShape.kt",
+      "sha256": "af2cdf31a4babb792b36acd7b878b1e794c102ef6d1fc5c2020d3e93f56b3305"
+    },
+    {
+      "path": "app/src/main/java/app/smallthingz/reverb/nativeui/NativeHomeLayoutMath.kt",
+      "sha256": "47fefe565230c3c483cd44fca86034adcc0a3f375608a13e83c1fb737f9f7027"
+    }
+  ],
+  "owners": {
+    "groups": [
+      "NativeGroupLayout",
+      "NativeDividerLayout",
+      "NativeGroupEdges"
+    ],
+    "toolbar": [
+      "NativeTopBarLayout",
+      "NativeTopBarAction",
+      "NativeCenteredTopBarLayout",
+      "NativeTopBarInsets",
+      "NativeTopBarHitTarget"
+    ],
+    "circular_action": [
+      "NativeStandardIconButtonView"
+    ],
+    "accessibility": [
+      "NativeActionDescriptionView",
+      "bindActionDescriptionAccessibility"
+    ],
+    "input": [
+      "NativePointerLayerShape"
+    ]
+  },
+  "preserved_contract": "Retained View ownership, rounded/joined clipping and border order, sampled theme colors, device animation scale, density/RTL rounding, direct-before-near hit routing, source accessibility leases and component lifetime. Reverb glyphs/palette and recording/navigation policies remain in app.",
+  "removed_api": [
+    "NativeSettingsGroup"
+  ],
+  "distinct_retained_api": "NativeIconButton uses the platform ImageButton contract; it is not a phase-input replacement.",
+  "qualification": "Source extraction. Existing moved tests and retained reliability fixtures require current build/runtime qualification; no measured speed, memory or battery claim."
+}

@@ -3,8 +3,6 @@ package smallthingz.ui.components
 import android.content.Context
 import android.content.res.Configuration
 import android.content.res.ColorStateList
-import android.graphics.Canvas
-import android.graphics.Paint
 import android.graphics.drawable.Drawable
 import smallthingz.ui.graphics.Color
 import smallthingz.ui.graphics.compositeOver
@@ -331,81 +329,3 @@ open class NativeSettingsRow(
 }
 
 /** A rounded group with retained rows and dividers that follow visible row boundaries. */
-class NativeSettingsGroup(
-    context: Context,
-    surfaceStyle: NativeSurfaceStyle,
-    dividerColor: Int,
-    private val dividerStartDp: Float = 16f,
-    private val dividerEndDp: Float = 16f,
-) : NativeSurface(context, surfaceStyle) {
-    private data class Entry(val view: View, val divider: Divider?)
-    private val entries = ArrayList<Entry>()
-    private val column = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-    private var dividerColor = dividerColor
-
-    init {
-        require(dividerStartDp.isFinite() && dividerStartDp >= 0f)
-        require(dividerEndDp.isFinite() && dividerEndDp >= 0f)
-        addView(column, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-    }
-
-    fun addRow(row: NativeSettingsRow, dividerBefore: Boolean = true) {
-        addContent(row, dividerBefore)
-    }
-
-    /** Admit an existing full-width slider/choice block without changing its listeners or state. */
-    fun addContent(view: View, dividerBefore: Boolean = true) {
-        require(view.parent == null) { "Settings content already belongs to another parent" }
-        val divider = if (entries.isNotEmpty() && dividerBefore) Divider(context, dividerColor).also {
-            column.addView(it, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT,
-                resources.displayMetrics.density.roundToInt().coerceAtLeast(1)))
-        } else null
-        entries.add(Entry(view, divider))
-        column.addView(view, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-    }
-
-    fun applyPalette(palette: ControlPalette, surfaceStyle: NativeSurfaceStyle) {
-        applyStyle(surfaceStyle)
-        dividerColor = palette.outline
-        entries.forEach {
-            (it.view as? NativeSettingsRow)?.applyPalette(palette)
-            it.divider?.setColor(dividerColor)
-        }
-    }
-
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        var previousVisible = false
-        entries.forEach {
-            val visible = it.view.visibility != GONE
-            it.divider?.visibility = if (visible && previousVisible) VISIBLE else GONE
-            if (visible) previousVisible = true
-        }
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-    }
-
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        val height = resources.displayMetrics.density.roundToInt().coerceAtLeast(1)
-        entries.forEach { entry -> entry.divider?.let { divider ->
-            if (divider.layoutParams.height != height) {
-                divider.layoutParams = divider.layoutParams.apply { this.height = height }
-            }
-        } }
-    }
-
-    private inner class Divider(context: Context, color: Int) : View(context) {
-        private val paint = Paint().apply { this.color = color }
-        private val colors=smallthingz.ui.animation.view.ViewColorTransition(this,intArrayOf(color),{invalidate()})
-        init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
-        fun setColor(color: Int) {
-            colors.retarget(color)
-        }
-        override fun onDraw(canvas: Canvas) {
-            paint.color=colors.color(0)
-            val density = resources.displayMetrics.density
-            val left = (if (layoutDirection == LAYOUT_DIRECTION_RTL) dividerEndDp else dividerStartDp) * density
-            val right = width - (if (layoutDirection == LAYOUT_DIRECTION_RTL) dividerStartDp else dividerEndDp) * density
-            if (right > left) canvas.drawRect(left, 0f, right, height.toFloat(), paint)
-        }
-    }
-}

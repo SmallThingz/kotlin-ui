@@ -30,7 +30,7 @@ import kotlin.math.sqrt
 /**
  * Decoration on the existing row, not another View or renderer tree.
  *
- * Install before ReverbGroupLayout wraps the row foreground with its separator. The owning row
+ * Install before NativeGroupLayout wraps the row foreground with its separator. The owning row
  * supplies accepted press/hover/focus interactions; this object never clicks, toggles, requests
  * focus, or manages accessibility. Its state is deliberately separate from View.drawableState:
  * passing focused/hovered state to RippleDrawable would draw the platform state layer twice.

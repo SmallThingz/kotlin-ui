@@ -16,8 +16,62 @@ claim: text layout, animation, allocation and View operations still have costs.
 have been removed. This is a source and binary breaking change; no compatibility
 facade is provided. External users must retain their own Android dialog implementation
 or choose a component meeting their layout, input, accessibility and lifecycle needs.
-Reverb's app-internal action sheet is not a public replacement. No current Reverb caller
-uses the removed API; this removal does not establish a runtime speed improvement.
+The concrete `NativeActionSheet` and `NativeFloatingDialog` below have their own
+explicit content and lifetime contracts; they do not restore the removed API.
+No current Reverb caller uses the removed API; this removal does not establish a runtime speed improvement.
+
+## Grouped controls
+
+`NativeGroupLayout` owns a rounded surface and one retained horizontal or vertical
+content layout. Its `LayoutParams.dividerTop` and `dividerStart` opt individual
+children into one-physical-pixel foreground separators, including RTL start edges.
+The separators share the surface's sampled border color and preserve the child's
+ripple, alpha and transform. The group adds no padding or spacing; callers own
+their content and 48dp minimum targets. `pointerContent` and `containsVisualPoint`
+expose the actual shared clip for phase-input and accessibility bindings.
+
+`setJoinedEdges(NativeGroupEdges(first, last))` decorates an individual row in a
+joined vertical group; a null edge binding restores the uniform surface. Joined
+rows retain 16dp corner geometry, raw 1dp side outlines and a physical-pixel top
+separator. `setPaletteImmediately` accepts colors already sampled by a caller's
+multi-channel animation. The optional `onPaintedSurfaceChanged` callback observes
+actual fill changes for caller-owned contrast invalidation.
+
+The unused `NativeSettingsGroup` API is removed in favor of this shared owner.
+This is a source/binary breaking change, with no compatibility facade. Its old
+layout-space dividers are not an equivalent rendering of the new explicit
+foreground separators. `NativeSettingsRow` remains available as row content.
+
+## Top bars and icon actions
+
+`NativeTopBarLayout` owns retained action hit routing and the fixed start/center/end
+slot layout. `ActionLayoutParams` selects a slot; `bindMetrics` supplies density,
+remaining top inset and content height. `NativeTopBarHitTarget` exposes the actual
+clipped visual bounds, so a direct sibling hit takes priority over an expanded
+48dp near hit. Custom toolbar layouts may override measurement and placement while
+retaining this router.
+
+`NativeCenteredTopBarLayout` measures a supplied navigation View, title View and
+action View independently. It owns the 64dp minimum content height, multiline title
+growth, constrained full-width title centering, RTL placement and content clipping.
+`NativeTopBarInsets.remaining` computes bars/cutout union minus ancestor consumption;
+the window owner applies those remaining insets once.
+
+`NativeTopBarAction` owns the rounded 46dp action, optional 48dp wrapper, described
+23dp icon semantics, source-node accessibility bindings and phase-input endpoint.
+A caller supplies `iconPainter`; application glyphs and branding stay outside the
+library. Shared-surface actions retain separate input and semantic identities.
+`NativeStandardIconButtonView` owns the circular 40dp action and 24dp glyph layout,
+with an independent 48dp minimum target. Supply a real glyph View and its description
+accessibility binding; `bindAction` controls density, enabled state and inherited
+ripple color. Explicit glyph tint stays with the glyph owner. These components use
+the shared click, ripple and animation-scale infrastructure and create no second
+input or animation engine.
+
+The older `NativeIconButton` remains a platform ImageButton-based control with
+its own tested public contract. It is not an equivalent replacement for these
+source-shaped phase-input actions. Reverb adapters contain only app glyphs,
+palette/contrast policy, incident-preview animation and screen action policy.
 
 ## Named color spaces
 
@@ -186,8 +240,8 @@ statements are not a claim that a new checkout has passed current tests.
 
 First-party code is licensed under Apache-2.0; see `LICENSE.txt`.
 Upstream-derived files retain their existing Apache-2.0 notices and provenance.
-Dependencies remain AndroidX annotation
-and emoji2 internally, with coroutines exposed in the existing public API.
+Dependencies include AndroidX annotation, core, lifecycle, savedstate and emoji2.
+Coroutines and activity-ktx 1.13.0 are exposed by the window/runtime APIs.
 
 ## Source-derived anchored menu (API replacement)
 
@@ -217,3 +271,47 @@ flags/secure inheritance, candidate placement and transition behavior follow the
 source-derived component. The intrinsic popup title stays in library translations;
 domain row labels stay with their owner. Unknown external consumers must migrate
 when adopting this commit rather than assuming the old constructor/defaults persist.
+
+## Action sheets and floating windows
+
+`NativeActionSheet` owns a real `ComponentDialog`, its two-anchor state, phase
+pointer root, nested drag/scroll connection, predictive transform, scrim, title,
+close action, drag handle and tooltip. Supply an anchor, `NativeActionSheetStyle`
+(density, font resolver, text styles and colors), title, dismissal
+callback and `NativeActionSheetIcon`. The icon supplies an existing glyph View,
+its accessibility binding and tint callback; input/ripple/merged role use the
+shared `NativeStandardIconButtonView`. An optional caller Drawable decorates the
+content. No application environment or domain policy is retained by the library.
+
+Build body/actions against `contentContext`, then call `setContent` with their
+explicit hit layouts and `show()`. The context supplies the real pointer root,
+window runtime, nested-scroll parent, source accessibility geometry/cursor and
+scroll events. `bind` updates title/callback; `updateStyle` updates retained
+paints and typography. Recreate for anchor/density/configuration changes.
+Direct Close invokes the owner immediately; scrim, drag and Back animate hidden
+before their callback. The owner removes its route and calls `dismiss()`.
+`setDismissalAdmission` and `refreshDismissalAdmission` let busy owners veto those
+animated dismissals, including an already-running hide; direct content actions
+retain caller policy. Owner teardown is immediate and idempotent.
+
+`NativeFloatingDialog` owns the distinct top-aligned floating window, measured
+entry/exit and predictive Back continuation. Its content factory receives the
+themed context, `NativeModalWindowRuntime` and animated dismiss request. Return
+`NativeFloatingDialogContent` with the actual View, predictive target and explicit
+accessibility/disposal hooks. Domain text, links, scroll state and callback policy
+stay in that content. Explicit `dismiss()` retires the window/content once without
+invoking navigation; `bind` updates the owner callback and inherited window policy.
+Both modal owners retain secure-window inheritance and lifecycle frame gating.
+`NativeWindowInsetsBinding` is also available for other native window roots.
+
+The unused `NativeSheetModel` tokens (`NativeSheetBehavior`,
+`NativeSheetHandleStyle`, `NativeSheetState`) were removed with no in-repository
+callers. This is a source/binary break; the concrete sheet supports Hidden and
+Expanded only. It does not promise partial expansion. Intrinsic sheet strings,
+translations and themes belong to the library, including the header's localized
+`close_sheet` description; caller titles and domain actions remain supplied by the app.
+`SOURCE-dialogs.json` and the retained
+resource provenance record source versions and licenses. Moved unit tests cover
+state/admission, geometry, tooltip release and floating motion; those tests do not
+prove Android window/input/IME or rendering parity, and moving code establishes
+no runtime performance improvement.
