@@ -770,18 +770,7 @@ class NativeCheckBox(
         }
         val density = resources.displayMetrics.density
         indicatorGapPx = (choiceStyle.iconGapDp * density).roundToInt()
-        minimumHeight = (max(48f, choiceStyle.minHeightDp) * density).roundToInt()
-        minHeight = minimumHeight
-        setPaddingRelative(((choiceStyle.startPaddingDp ?: choiceStyle.horizontalPaddingDp) * density).roundToInt(),
-            (choiceStyle.verticalPaddingDp * density).roundToInt(),
-            ((choiceStyle.endPaddingDp ?: choiceStyle.horizontalPaddingDp) * density).roundToInt(),
-            (choiceStyle.verticalPaddingDp * density).roundToInt())
-        gravity = Gravity.CENTER_VERTICAL
-        mark.bindOwner(this, choiceStyle.animateSelection)
-        buttonDrawable = mark
-        buttonTintList = null
-        isFocusable = true
-        if (android.os.Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
+        initializePlainChoice(choiceStyle, mark, density)
         paintPalette()
     }
 
@@ -887,18 +876,7 @@ class NativeRadioButton(
         }
         val density = resources.displayMetrics.density
         indicatorGapPx = (choiceStyle.iconGapDp * density).roundToInt()
-        minimumHeight = (max(48f, choiceStyle.minHeightDp) * density).roundToInt()
-        minHeight = minimumHeight
-        setPaddingRelative(((choiceStyle.startPaddingDp ?: choiceStyle.horizontalPaddingDp) * density).roundToInt(),
-            (choiceStyle.verticalPaddingDp * density).roundToInt(),
-            ((choiceStyle.endPaddingDp ?: choiceStyle.horizontalPaddingDp) * density).roundToInt(),
-            (choiceStyle.verticalPaddingDp * density).roundToInt())
-        gravity = Gravity.CENTER_VERTICAL
-        mark.bindOwner(this, choiceStyle.animateSelection)
-        buttonDrawable = mark
-        buttonTintList = null
-        isFocusable = true
-        if (android.os.Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
+        initializePlainChoice(choiceStyle, mark, density)
         paintPalette()
     }
 
@@ -1706,6 +1684,22 @@ private class ChoiceVisualBackground(drawable: Drawable, private val inset: () -
         drawable?.setBounds(bounds.left, bounds.top + vertical, bounds.right, bounds.bottom - vertical)
         super.draw(canvas)
     }
+}
+
+/** Initial setup deliberately omits the refresh path's minimum-width changes and mark reset. */
+private fun CompoundButton.initializePlainChoice(style: NativeChoiceStyle, mark: ChoiceDrawable, density: Float) {
+    minimumHeight = (max(48f, style.minHeightDp) * density).roundToInt()
+    minHeight = minimumHeight
+    setPaddingRelative(((style.startPaddingDp ?: style.horizontalPaddingDp) * density).roundToInt(),
+        (style.verticalPaddingDp * density).roundToInt(),
+        ((style.endPaddingDp ?: style.horizontalPaddingDp) * density).roundToInt(),
+        (style.verticalPaddingDp * density).roundToInt())
+    gravity = Gravity.CENTER_VERTICAL
+    mark.bindOwner(this, style.animateSelection)
+    buttonDrawable = mark
+    buttonTintList = null
+    isFocusable = true
+    if (android.os.Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
 }
 
 private fun CompoundButton.updateChoiceGeometry(style: NativeChoiceStyle, mark: ChoiceDrawable) {
