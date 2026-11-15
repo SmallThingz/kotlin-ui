@@ -13,14 +13,12 @@ import smallthingz.ui.animation.view.ViewColorTransition
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Outline
 import android.graphics.Paint
 import android.os.Build
 import android.view.ContextThemeWrapper
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewOutlineProvider
 import android.view.Window
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
@@ -159,11 +157,7 @@ class NativeActionSheet(
         root.setViewTreeSavedStateRegistryOwner(anchor.findViewTreeSavedStateRegistryOwner())
         root.layoutDirection=anchor.layoutDirection
         root.elevation=8f*style.textDensity.density
-        root.outlineProvider=object:ViewOutlineProvider() {
-            override fun getOutline(view:View,result:Outline) {
-                result.setRect(0,0,view.width,view.height);result.alpha=0f
-            }
-        }
+        root.outlineProvider = NativeWindowShadowOutline
         if(Build.VERSION.SDK_INT>=29)root.isForceDarkAllowed=false
         updateWindowParameters()
         updateWindowColors()

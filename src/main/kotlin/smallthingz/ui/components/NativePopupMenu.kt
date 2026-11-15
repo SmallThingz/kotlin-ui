@@ -7,7 +7,6 @@
 package smallthingz.ui.components
 
 import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
-import android.graphics.Outline
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.os.Build
@@ -16,7 +15,6 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.window.OnBackInvokedCallback
@@ -145,12 +143,7 @@ class NativePopupMenu<I> private constructor(
         descendantFocusability = FOCUS_AFTER_DESCENDANTS
         super.setLayoutDirection(anchor.layoutDirection)
         elevation = 8f * density.density
-        outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(view: View, result: Outline) {
-                result.setRect(0,0,view.width,view.height)
-                result.alpha = 0f // Allocate surface shadow insets without a rectangular root shadow.
-            }
-        }
+        outlineProvider = NativeWindowShadowOutline
         if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
         animationLayer.scaleX = transition.scale
         animationLayer.scaleY = transition.scale

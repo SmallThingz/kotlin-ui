@@ -1,5 +1,8 @@
 {
   "version": "AndroidX animation-core/animation1.11.2 selected leaf math; Apache2.0",
+  "adaptations": [
+    "The identical animation-core argument preconditions use ui.util.Preconditions; inline contract, lazy message and non-inline throw path are retained. State/null helpers and original upstream file records remain local and unchanged."
+  ],
   "files": [
     {
       "path": "native-ui/src/main/java/app/smallthingz/nativeui/animation/ColorAnimation.kt",

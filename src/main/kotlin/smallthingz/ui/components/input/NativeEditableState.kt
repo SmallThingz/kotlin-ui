@@ -11,6 +11,13 @@
  */
 package smallthingz.ui.components.input
 
+import android.graphics.Paint
+import android.os.Build
+import android.os.LocaleList
+import android.text.Layout
+import android.text.method.TextKeyListener
+import android.view.Gravity
+import android.view.View
 import android.text.Editable
 import android.text.Selection
 import android.text.TextUtils
@@ -34,6 +41,61 @@ class NativeEditableState(private val editor: EditText, private val afterTextApp
     // Public composing-span manipulation only; this is never a registered IME session.
     private val composingSpans = object : BaseInputConnection(editor, true) {
         override fun getEditable(): Editable = checkNotNull(editor.editableText)
+    }
+
+    /**
+     * One-time plain editor setup before caller-owned IME hints, typography and listeners.
+     * Keeps the native Editor and unrestricted raw input; does not request focus or set text.
+     */
+    fun initializeUnrestrictedSingleLineEditor() {
+        with(editor) {
+            // The cursor-only style does not inherit EditText's touch-mode focus default.
+            isFocusableInTouchMode = true
+            background = null
+            foreground = null
+            // AndroidComposeView opts out of the platform overlay; cursor/selection own field focus.
+            defaultFocusHighlightEnabled = false
+            setPadding(0, 0, 0, 0)
+            setCompoundDrawablePadding(0)
+            minimumWidth = 0
+            minimumHeight = 0
+            setMinWidth(0)
+            setMinHeight(0)
+            setAutoSizeTextTypeWithDefaults(EditText.AUTO_SIZE_TEXT_TYPE_NONE)
+            includeFontPadding = false
+            setFallbackLineSpacing(true)
+            gravity = Gravity.TOP or Gravity.START
+            textAlignment = View.TEXT_ALIGNMENT_GRAVITY
+            textDirection = View.TEXT_DIRECTION_FIRST_STRONG
+            paintFlags = Paint.ANTI_ALIAS_FLAG
+            paint.hinting = Paint.HINTING_ON
+            paint.isSubpixelText = false
+            paint.isLinearText = false
+            paint.textSkewX = 0f
+            paint.isFakeBoldText = false
+            fontFeatureSettings = ""
+            textScaleX = 1f
+            textLocales = LocaleList.getDefault()
+            breakStrategy = android.graphics.text.LineBreaker.BREAK_STRATEGY_SIMPLE
+            hyphenationFrequency = Layout.HYPHENATION_FREQUENCY_NONE
+            justificationMode = android.graphics.text.LineBreaker.JUSTIFICATION_MODE_NONE
+            if (Build.VERSION.SDK_INT >= 33) {
+                lineBreakStyle = android.graphics.text.LineBreakConfig.LINE_BREAK_STYLE_NONE
+                lineBreakWordStyle = android.graphics.text.LineBreakConfig.LINE_BREAK_WORD_STYLE_NONE
+            }
+            if (Build.VERSION.SDK_INT >= 35) {
+                setUseBoundsForWidth(false)
+                setShiftDrawingOffsetForStartOverhang(false)
+            }
+            // IME hints must not filter raw Unicode, punctuation or pasted newlines.
+            keyListener = TextKeyListener.getInstance(false, TextKeyListener.Capitalize.NONE)
+            filters = emptyArray()
+            setSingleLine(true)
+            transformationMethod = null // Source VisualTransformation.None retains raw newlines.
+            setHorizontallyScrolling(true)
+            setSelectAllOnFocus(false)
+            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
+        }
     }
 
     /** Install callbacks before the caller updates typography/IME hints and reconciles owner text. */

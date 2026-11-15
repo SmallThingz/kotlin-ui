@@ -16,6 +16,7 @@
 
 package smallthingz.ui.animation.core
 
+import smallthingz.ui.util.requirePrecondition
 import smallthingz.ui.util.fastCoerceIn
 import kotlin.math.max
 

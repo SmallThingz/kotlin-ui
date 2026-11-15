@@ -18,6 +18,7 @@
 
 package smallthingz.ui.animation.core
 
+import smallthingz.ui.util.throwIllegalArgumentException
 import smallthingz.ui.util.packFloats
 import smallthingz.ui.util.unpackFloat1
 import smallthingz.ui.util.unpackFloat2

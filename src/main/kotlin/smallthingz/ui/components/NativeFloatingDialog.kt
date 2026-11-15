@@ -7,7 +7,6 @@
 package smallthingz.ui.components
 
 import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
-import android.graphics.Outline
 import android.os.Build
 import android.view.Choreographer
 import android.view.ContextThemeWrapper
@@ -16,7 +15,6 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewOutlineProvider
 import android.view.Window
 import android.view.WindowManager
 import androidx.activity.BackEventCompat
@@ -162,12 +160,7 @@ class NativeFloatingDialog(
         root.layoutDirection = anchor.layoutDirection
         contentOwner.bindWindowAccessibility(root)
         root.elevation = 8f * density
-        root.outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(view: View, result: Outline) {
-                result.setRect(0, 0, view.width, view.height)
-                result.alpha = 0f // Space for source shadows without drawing a native light shadow.
-            }
-        }
+        root.outlineProvider = NativeWindowShadowOutline
         if (Build.VERSION.SDK_INT >= 29) root.isForceDarkAllowed = false
         (window.decorView as? ViewGroup)?.disableClippingUntil(root)
         setContentView(root)

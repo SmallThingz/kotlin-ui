@@ -13,7 +13,6 @@ import smallthingz.ui.text.view.NativeTextSemanticsClipPolicy
 import smallthingz.ui.text.view.PlainTextAccessibilityWindowScope
 import smallthingz.ui.text.view.nativeMergedRoleBoundsInScreen
 import android.graphics.Canvas
-import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
@@ -25,7 +24,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
-import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import smallthingz.ui.animation.core.AnimationVector1D
@@ -310,9 +308,7 @@ private class NativePlainTooltipWindow(
         setViewTreeViewModelStoreOwner(anchor.findViewTreeViewModelStoreOwner())
         setViewTreeSavedStateRegistryOwner(anchor.findViewTreeSavedStateRegistryOwner())
         elevation=8f*style.textDensity.density
-        outlineProvider=object:ViewOutlineProvider() {
-            override fun getOutline(view:View,result:Outline) {result.setRect(0,0,width,height);result.alpha=0f}
-        }
+        outlineProvider = NativeWindowShadowOutline
         if(Build.VERSION.SDK_INT>=29)isForceDarkAllowed=false
         importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_YES
         accessibilityLiveRegion=ACCESSIBILITY_LIVE_REGION_ASSERTIVE

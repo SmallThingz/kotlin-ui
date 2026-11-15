@@ -80,63 +80,27 @@ value class Matrix(
     fun map(rect: Rect): Rect {
         // See top-level comment
         if (values.size < 16) return rect
-
-        val v00 = this[0, 0]
-        val v01 = this[0, 1]
-        val v03 = this[0, 3]
-        val v10 = this[1, 0]
-        val v11 = this[1, 1]
-        val v13 = this[1, 3]
-        val v30 = this[3, 0]
-        val v31 = this[3, 1]
-        val v33 = this[3, 3]
-
-        val l = rect.left
-        val t = rect.top
-        val r = rect.right
-        val b = rect.bottom
-
-        var x = l
-        var y = t
-        var inverseZ = 1.0f / (v03 * x + v13 * y + v33)
-        var pZ = if (inverseZ.fastIsFinite()) inverseZ else 0f
-        val x0 = pZ * (v00 * x + v10 * y + v30)
-        val y0 = pZ * (v01 * x + v11 * y + v31)
-
-        x = l
-        y = b
-        inverseZ = 1.0f / (v03 * x + v13 * y + v33)
-        pZ = if (inverseZ.fastIsFinite()) inverseZ else 0f
-        val x1 = pZ * (v00 * x + v10 * y + v30)
-        val y1 = pZ * (v01 * x + v11 * y + v31)
-
-        x = r
-        y = t
-        inverseZ = 1.0f / (v03 * x + v13 * y + v33)
-        pZ = if (inverseZ.fastIsFinite()) inverseZ else 0f
-        val x2 = pZ * (v00 * x + v10 * y + v30)
-        val y2 = pZ * (v01 * x + v11 * y + v31)
-
-        x = r
-        y = b
-        inverseZ = 1.0f / (v03 * x + v13 * y + v33)
-        pZ = if (inverseZ.fastIsFinite()) inverseZ else 0f
-        val x3 = pZ * (v00 * x + v10 * y + v30)
-        val y3 = pZ * (v01 * x + v11 * y + v31)
-
-        return Rect(
-            fastMinOf(x0, x1, x2, x3),
-            fastMinOf(y0, y1, y2, y3),
-            fastMaxOf(x0, x1, x2, x3),
-            fastMaxOf(y0, y1, y2, y3),
-        )
+        return mapRectBounds(rect.left, rect.top, rect.right, rect.bottom) { left, top, right, bottom ->
+            Rect(left, top, right, bottom)
+        }
     }
 
     /** Does a 3D transform on [rect], transforming [rect] with the results. */
     fun map(rect: MutableRect) {
         // See top-level comment
         if (values.size < 16) return
+        mapRectBounds(rect.left, rect.top, rect.right, rect.bottom) { left, top, right, bottom ->
+            rect.left = left
+            rect.top = top
+            rect.right = right
+            rect.bottom = bottom
+        }
+    }
 
+    private inline fun <T> mapRectBounds(
+        l: Float, t: Float, r: Float, b: Float,
+        result: (Float, Float, Float, Float) -> T,
+    ): T {
         val v00 = this[0, 0]
         val v01 = this[0, 1]
         val v03 = this[0, 3]
@@ -146,11 +110,6 @@ value class Matrix(
         val v30 = this[3, 0]
         val v31 = this[3, 1]
         val v33 = this[3, 3]
-
-        val l = rect.left
-        val t = rect.top
-        val r = rect.right
-        val b = rect.bottom
 
         var x = l
         var y = t
@@ -180,10 +139,12 @@ value class Matrix(
         val x3 = pZ * (v00 * x + v10 * y + v30)
         val y3 = pZ * (v01 * x + v11 * y + v31)
 
-        rect.left = fastMinOf(x0, x1, x2, x3)
-        rect.top = fastMinOf(y0, y1, y2, y3)
-        rect.right = fastMaxOf(x0, x1, x2, x3)
-        rect.bottom = fastMaxOf(y0, y1, y2, y3)
+        return result(
+            fastMinOf(x0, x1, x2, x3),
+            fastMinOf(y0, y1, y2, y3),
+            fastMaxOf(x0, x1, x2, x3),
+            fastMaxOf(y0, y1, y2, y3),
+        )
     }
 
     /** Multiply this matrix by [m] and assign the result to this matrix. */

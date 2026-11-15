@@ -48,6 +48,7 @@
     }
   ],
   "ownership": {
+    "NativeWindowShadowOutline": "Stateless full-bounds zero-alpha outline shared by sheet, floating dialog, menu and tooltip roots; caller elevation, clipping and window policy remain separate.",
     "NativeActionSheet": "Moved active sheet state, input, window, surface, accessibility, drag handle and tooltip; app supplies colors/typography/glyph/background and domain content.",
     "NativeFloatingDialog": "Moved active About window/root and visibility/predictive motion; app retains About content, links, scroll restoration and appearance.",
     "NativeModalWindowRuntime": "Moved native window dispatcher/frame clock/lifecycle gate; existing cached duration-scale reader is shared.",

@@ -2,6 +2,7 @@
   "version": "AndroidX leaf math1.11.2",
   "scope": "Selected leaf geometry, units, scalar math, color conversion and Android frame dispatch; no composition/rendering framework",
   "adaptations": [
+    "Matrix rectangle mapping shares one private inline arithmetic body across immutable and mutable outputs. Float expression order and short-array guards are retained; plain rectangle fields are sampled before matrix coefficients rather than after. No concurrent mutation contract is added.",
     "Own package",
     "Remove Compose stability/compiler annotations",
     "Android-only actual bodies",
