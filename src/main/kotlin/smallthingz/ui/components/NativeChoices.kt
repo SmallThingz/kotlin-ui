@@ -104,12 +104,7 @@ data class NativeChoiceColor(val role: NativeTextRole, val alpha: Float = 1f) {
     init { require(alpha.isFinite() && alpha in 0f..1f) }
 
     internal fun resolve(palette: ControlPalette): Int {
-        val color = when (role) {
-            NativeTextRole.CONTENT -> palette.content
-            NativeTextRole.MUTED -> palette.muted
-            NativeTextRole.ACCENT -> palette.accent
-            NativeTextRole.ON_ACCENT -> palette.onAccent
-        }
+        val color = palette.roleColor(role)
         return (color and 0x00ffffff) or ((Color.alpha(color) * alpha).roundToInt() shl 24)
     }
 }
@@ -665,13 +660,8 @@ class NativeChip(
 
     private fun paintPalette() {
         palettePaint = ControlStyle(context, currentPalette)
-        fun roleColor(role: NativeTextRole?, fallback: Int): Int = when (role) {
-            null -> fallback
-            NativeTextRole.CONTENT -> currentPalette.content
-            NativeTextRole.MUTED -> currentPalette.muted
-            NativeTextRole.ACCENT -> currentPalette.accent
-            NativeTextRole.ON_ACCENT -> currentPalette.onAccent
-        }
+        fun roleColor(role: NativeTextRole?, fallback: Int): Int =
+            if (role == null) fallback else currentPalette.roleColor(role)
         fun colors(normal: Int, selected: Int): ColorStateList {
             val legacy = palettePaint.foregroundStates(normal = normal, selected = selected)
             val disabled = choiceStyle.disabledContent?.resolve(currentPalette)

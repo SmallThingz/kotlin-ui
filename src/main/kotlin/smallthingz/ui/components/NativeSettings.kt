@@ -194,12 +194,7 @@ open class NativeSettingsRow(
             detailView.animateTextColor(palette.muted)
             valueView.animateTextColor(palette.muted)
         }
-        val iconColor = when (style.iconRole) {
-            NativeTextRole.CONTENT -> palette.content
-            NativeTextRole.MUTED -> palette.muted
-            NativeTextRole.ACCENT -> palette.accent
-            NativeTextRole.ON_ACCENT -> palette.onAccent
-        }
+        val iconColor = palette.roleColor(style.iconRole)
         val iconColors = if (style.dimDisabledContent) paint.foregroundStates(normal = iconColor)
             else paint.foregroundStates(normal = iconColor, disabled = iconColor)
         val states=arrayOf(intArrayOf(android.R.attr.state_selected),intArrayOf())

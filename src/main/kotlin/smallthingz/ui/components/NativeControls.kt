@@ -178,7 +178,8 @@ private class ComponentMetrics {
     }
 }
 
-private fun ControlPalette.roleColor(role: NativeTextRole): Int = when (role) {
+@Suppress("NOTHING_TO_INLINE") // Keep callers independent of this file's Android color initialization.
+internal inline fun ControlPalette.roleColor(role: NativeTextRole): Int = when (role) {
     NativeTextRole.CONTENT -> content
     NativeTextRole.MUTED -> muted
     NativeTextRole.ACCENT -> accent
