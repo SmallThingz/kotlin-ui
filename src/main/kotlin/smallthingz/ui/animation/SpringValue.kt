@@ -9,7 +9,6 @@ import smallthingz.ui.animation.core.AnimationVector
 import smallthingz.ui.animation.core.AnimationVector1D
 import smallthingz.ui.animation.core.AnimationVector4D
 import smallthingz.ui.animation.core.SpringSpec
-import smallthingz.ui.animation.core.TargetBasedAnimation
 import smallthingz.ui.animation.core.TwoWayConverter
 import smallthingz.ui.animation.core.VectorConverter
 import smallthingz.ui.animation.core.VisibilityThreshold
@@ -28,22 +27,18 @@ import smallthingz.ui.unit.Dp
 @MainThread
 class SpringValue<T, V : AnimationVector> private constructor(
     initialValue: T,
-    private val converter: TwoWayConverter<T, V>,
-    private val spec: SpringSpec<T>,
-    private val zeroVector: () -> V,
+    converter: TwoWayConverter<T, V>,
+    spec: SpringSpec<T>,
+    zeroVector: () -> V,
 ) {
-    var value: T = initialValue
-        private set
-    var targetValue: T = initialValue
-        private set
-    val isRunning: Boolean get() = animation != null
-
-    private var animation: TargetBasedAnimation<T, V>? = null
-    private var velocityVector: V = zeroVector()
-    private var startFrameNanos = 0L
-    private var lastFrameNanos = 0L
-    private var hasStartFrame = false
-    private var hasLastFrame = false
+    private val motion = AnimatedValue(initialValue, converter, spec, zeroVector)
+    var value: T
+        get() = motion.value
+        private set(next) { motion.setValueOnly(next) }
+    var targetValue: T
+        get() = motion.target
+        private set(next) { motion.setTargetOnly(next) }
+    val isRunning: Boolean get() = motion.running
 
     /**
      * Retarget from the last delivered value/frame, not an extrapolation to event wall time.
@@ -51,65 +46,20 @@ class SpringValue<T, V : AnimationVector> private constructor(
      */
     fun retarget(next: T, durationScale: Float = 1f): Boolean {
         if (next == targetValue) return false
-        val previousFrame = lastFrameNanos
-        val hadPreviousFrame = hasLastFrame
-
-        // Animatable.animateTo's default initialVelocity is velocity: T, NOT its raw vector.
-        // Color.VectorConverter therefore clamps/quantizes velocity through Color on interruption.
-        // Passing velocityVector directly would subtly change the released color trajectory.
-        val initialVelocity = converter.convertFromVector(velocityVector)
-        animation = TargetBasedAnimation(
-            animationSpec = spec,
-            typeConverter = converter,
-            initialValue = value,
-            targetValue = next,
-            initialVelocity = initialVelocity,
-        )
-        targetValue = next
-        startFrameNanos = previousFrame
-        hasStartFrame = hadPreviousFrame
-
-        // A running Animatable reuses lastFrameTimeNanos and delivers its zero-time
-        // restarted frame immediately. A stopped one waits for the next frame clock.
-        if (hadPreviousFrame) frame(previousFrame, durationScale)
+        motion.target(next, durationScale)
         return true
     }
 
     /** Sample using the Choreographer/MonotonicFrameClock nanosecond timebase. */
-    fun frame(frameTimeNanos: Long, durationScale: Float = 1f) {
-        val current = animation ?: return
-        require(durationScale >= 0f) { "negative scale factor" }
-        val start = if (hasStartFrame) startFrameNanos else frameTimeNanos.also {
-            startFrameNanos = it
-            hasStartFrame = true
-        }
-        val playTimeNanos = if (durationScale == 0f) {
-            current.durationNanos
-        } else {
-            // Keep upstream Float division/toLong ordering, including its time quantization.
-            ((frameTimeNanos - start) / durationScale).toLong()
-        }
-        lastFrameNanos = frameTimeNanos
-        hasLastFrame = true
-        value = current.getValueFromNanos(playTimeNanos)
-        velocityVector = current.getVelocityVectorFromNanos(playTimeNanos)
-        if (current.isFinishedFromNanos(playTimeNanos)) clearMotion()
-    }
+    fun frame(frameTimeNanos: Long, durationScale: Float = 1f) = motion.frame(frameTimeNanos, durationScale)
 
     /** Explicit host disposal/stop preserves the last value and retires its momentum. */
-    fun stop() = clearMotion()
+    fun stop() = motion.stop()
 
     fun snapTo(next: T) {
-        clearMotion()
+        motion.stop()
         value = next
         targetValue = next
-    }
-
-    private fun clearMotion() {
-        animation = null
-        velocityVector = zeroVector()
-        hasLastFrame = false
-        hasStartFrame = false
     }
 
     companion object {

@@ -63,6 +63,10 @@ class AnimatedValue<T, V : AnimationVector>(
         hasLastFrame = false
     }
 
+    // Spring facade private setters write the existing state without changing motion ownership.
+    internal fun setValueOnly(next: T) { value = next }
+    internal fun setTargetOnly(next: T) { target = next }
+
     fun snap(next: T) { stop(); value = next; target = next }
 
 }

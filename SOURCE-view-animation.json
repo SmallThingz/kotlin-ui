@@ -39,6 +39,7 @@
   ],
   "license": "Apache-2.0; upstream notices retained",
   "notes": [
+    "SpringValue shares AnimatedValue sampling state while retaining its equal-target admission and public var/private-set properties through value-only internal write bridges. Private backing fields become accessors; source getter/factory/default-argument APIs remain, with one additional construction-time delegate object.",
     "Typed velocity round-trips and raw-vector transition momentum remain separate contracts.",
     "ViewFrameLoop rejects captured callbacks after cancellation or owner replacement; AttachedFrameLoop rejects them after scope cancellation.",
     "UpdatableScrollAnimation checks its captured coroutine context before either captured-frame mutation or delivery.",
