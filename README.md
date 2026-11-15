@@ -304,6 +304,25 @@ invoking navigation; `bind` updates the owner callback and inherited window poli
 Both modal owners retain secure-window inheritance and lifecycle frame gating.
 `NativeWindowInsetsBinding` is also available for other native window roots.
 
+### Optional status-bar protection
+
+`NativeStatusBarProtection` draws a caller-supplied background only within the
+visible status-bar insets. Supply an opaque background that contrasts with the
+chosen icon polarity (`darkIcons`, false by default). Retain one protection
+instance and its background Drawable per window; do not share them between
+window roots. For a root owned by the host, install it as the root foreground,
+feed `updateInsets` the raw window insets before child consumption, and call
+`applyWindowAppearance` for that window. Use the root's existing inset listener;
+this adds no layout, frame loop or inset observer. Hidden status bars produce no
+protection; cutout, navigation-bar and IME insets are not substituted for
+status-bar insets.
+
+The explicit protected constructors of `NativeActionSheet` and
+`NativeFloatingDialog` perform this wiring themselves. Their original
+constructors retain their existing behavior. This policy does not observe
+SystemUI's rendered icon tint or guarantee other windows' appearance.
+Navigation-bar appearance keeps its existing owner.
+
 The unused `NativeSheetModel` tokens (`NativeSheetBehavior`,
 `NativeSheetHandleStyle`, `NativeSheetState`) were removed with no in-repository
 callers. This is a source/binary break; the concrete sheet supports Hidden and

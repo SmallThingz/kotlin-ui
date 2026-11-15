@@ -50,8 +50,16 @@ class NativeFloatingDialog(
     private val anchor: View,
     density: Float,
     onDismiss: () -> Unit,
+    statusBarProtection: NativeStatusBarProtection?,
     createContent: (android.content.Context, NativeModalWindowRuntime, () -> Unit) -> NativeFloatingDialogContent,
 ) : ComponentDialog(ContextThemeWrapper(anchor.context, smallthingz.ui.R.style.FloatingDialogWindowTheme)) {
+    constructor(
+        anchor: View,
+        density: Float,
+        onDismiss: () -> Unit,
+        createContent: (android.content.Context, NativeModalWindowRuntime, () -> Unit) -> NativeFloatingDialogContent,
+    ) : this(anchor, density, onDismiss, null, createContent)
+
     private var currentOnDismiss = onDismiss
     private val visibilityMotion = NativeFloatingVisibilityMotion()
     private val predictiveMotion = NativeFloatingPredictiveMotion()
@@ -77,7 +85,7 @@ class NativeFloatingDialog(
     }
     private val contentOwner = createContent(context,runtime,::requestDismiss)
     private val content = contentOwner.view.apply { alpha = 0f }
-    private val root = FloatingWindowRoot(context, requireNotNull(window), content) {
+    private val root = FloatingWindowRoot(context, requireNotNull(window), content, statusBarProtection) {
         visibilityMotion.setHeight(content.measuredHeight)
         applyMotion()
         requestFrame()
@@ -163,6 +171,7 @@ class NativeFloatingDialog(
         if (Build.VERSION.SDK_INT >= 29) root.isForceDarkAllowed = false
         (window.decorView as? ViewGroup)?.disableClippingUntil(root)
         setContentView(root)
+        statusBarProtection?.applyWindowAppearance(window)
         root.setViewTreeLifecycleOwner(anchor.findViewTreeLifecycleOwner())
         root.setViewTreeViewModelStoreOwner(anchor.findViewTreeViewModelStoreOwner())
         root.setViewTreeSavedStateRegistryOwner(anchor.findViewTreeSavedStateRegistryOwner())
@@ -308,6 +317,7 @@ private class FloatingWindowRoot(
     context: android.content.Context,
     private val dialogWindow: Window,
     private val content: View,
+    private val statusBarProtection: NativeStatusBarProtection?,
     private val onContentMeasured: () -> Unit,
 ) : ViewGroup(context) {
     init {
@@ -318,15 +328,19 @@ private class FloatingWindowRoot(
         isFocusableInTouchMode = true
         defaultFocusHighlightEnabled = false
         addView(content)
+        foreground = statusBarProtection
         ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
+            statusBarProtection?.updateInsets(insets)
             insetForChild(insets) { l, t, r, b -> insets.inset(l, t, r, b) }
         }
         ViewCompat.setWindowInsetsAnimationCallback(this,
             object : WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
                 override fun onStart(animation: WindowInsetsAnimationCompat, bounds: WindowInsetsAnimationCompat.BoundsCompat) =
                     insetForChild(bounds) { l, t, r, b -> bounds.inset(Insets.of(l, t, r, b)) }
-                override fun onProgress(insets: WindowInsetsCompat, runningAnimations: MutableList<WindowInsetsAnimationCompat>) =
-                    insetForChild(insets) { l, t, r, b -> insets.inset(l, t, r, b) }
+                override fun onProgress(insets: WindowInsetsCompat, runningAnimations: MutableList<WindowInsetsAnimationCompat>): WindowInsetsCompat {
+                    statusBarProtection?.updateInsets(insets)
+                    return insetForChild(insets) { l, t, r, b -> insets.inset(l, t, r, b) }
+                }
             })
     }
 

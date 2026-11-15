@@ -75,8 +75,18 @@ class NativeActionSheet(
     title:String,
     onDismiss:()->Unit,
     closeIcon: NativeActionSheetIcon,
-    contentBackground: android.graphics.drawable.Drawable? = null,
+    contentBackground: android.graphics.drawable.Drawable?,
+    private val statusBarProtection: NativeStatusBarProtection?,
 ):ComponentDialog(ContextThemeWrapper(anchor.context,smallthingz.ui.R.style.NativeSheetWindowTheme)) {
+    constructor(
+        anchor: View,
+        initialStyle: NativeActionSheetStyle,
+        title: String,
+        onDismiss: () -> Unit,
+        closeIcon: NativeActionSheetIcon,
+        contentBackground: android.graphics.drawable.Drawable? = null,
+    ) : this(anchor, initialStyle, title, onDismiss, closeIcon, contentBackground, null)
+
     var style=initialStyle;private set
     private var onOwnerDismiss=onDismiss
     private var disposed=false
@@ -107,7 +117,10 @@ class NativeActionSheet(
     val contentContext=NativeActionSheetContentContext(
         root,style,runtime,nested,pointer,dragNode::interested,accessibility,scrollEvents,
     )
-    private val insets=NativeWindowInsetsBinding(root) {root.insets(it)}
+    private val insets=NativeWindowInsetsBinding(root) {
+        statusBarProtection?.updateInsets(it)
+        root.insets(it)
+    }
     private var contentScroll:NativeVerticalPhaseBinding?=null
     private var contentScrollAccessibility:AutoCloseable?=null
     private val lifecycleObserver=LifecycleEventObserver {_,event->
@@ -140,6 +153,7 @@ class NativeActionSheet(
         actual.setBackgroundDrawableResource(android.R.color.transparent)
         WindowCompat.setDecorFitsSystemWindows(actual,false)
         setContentView(root)
+        root.foreground=statusBarProtection
         root.setViewTreeLifecycleOwner(anchor.findViewTreeLifecycleOwner())
         root.setViewTreeViewModelStoreOwner(anchor.findViewTreeViewModelStoreOwner())
         root.setViewTreeSavedStateRegistryOwner(anchor.findViewTreeSavedStateRegistryOwner())
@@ -279,7 +293,8 @@ class NativeActionSheet(
         val contentColor=ComposeColor(style.palette.onSurface)
         val dark=contentColor!=ComposeColor.Transparent&&contentColor.luminance()<=.5f
         WindowCompat.getInsetsController(actual,actual.decorView).apply {
-            isAppearanceLightStatusBars=dark;isAppearanceLightNavigationBars=dark
+            isAppearanceLightStatusBars=statusBarProtection?.darkIcons ?: dark
+            isAppearanceLightNavigationBars=dark
         }
     }
     private fun updateWindowParameters() {
