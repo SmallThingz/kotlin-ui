@@ -27,7 +27,6 @@ private const val AssumePointerMoveStoppedMilliseconds = 40
 private const val HistorySize = 20
 private const val HorizonMilliseconds = 100
 private inline fun checkPrecondition(value: Boolean, message: () -> String) { if (!value) throw IllegalStateException(message()) }
-private fun throwIllegalArgumentException(message: String): Nothing = throw IllegalArgumentException(message)
 
 /** Exact LSQ2 planar tracker. Gesture owners supply original positions and history explicitly. */
 class VelocityTracker {
@@ -240,47 +239,12 @@ internal constructor(
     ): Float {
         // The 2nd coefficient is the derivative of the quadratic polynomial at
         // x = 0, and that happens to be the last timestamp that we end up
-        // passing to polyFitLeastSquares.
-        return try {
-            val workspace = leastSquaresWorkspace
-                ?: LeastSquaresWorkspace().also { leastSquaresWorkspace = it }
-            polyFitLeastSquares(time, dataPoints, sampleCount, 2, reusableVelocityCoefficients, workspace)[1]
-        } catch (exception: IllegalArgumentException) {
-            0f
-        }
+        // passing to fitQuadraticLeastSquares.
+        val workspace = leastSquaresWorkspace
+            ?: LeastSquaresWorkspace().also { leastSquaresWorkspace = it }
+        return fitQuadraticLeastSquares(time, dataPoints, sampleCount, reusableVelocityCoefficients, workspace)
     }
 }
-
-/**
- * TODO (shepshapard): If we want to support varying weights for each position, we could accept a
- * 3rd FloatArray of weights for each point and use them instead of the [DefaultWeight].
- */
-private const val DefaultWeight = 1f
-
-/**
- * Fits a polynomial of the given degree to the data points.
- *
- * If the [degree] is larger than or equal to the number of points, a polynomial will be returned
- * with coefficients of the value 0 for all degrees larger than or equal to the number of points.
- * For example, if 2 data points are provided and a quadratic polynomial (degree of 2) is requested,
- * the resulting polynomial ax^2 + bx + c is guaranteed to have a = 0;
- *
- * Throws an IllegalArgumentException if:
- * <ul>
- * <li>[degree] is not a positive integer.
- * <li>[sampleCount] is zero.
- * </ul>
- */
-internal fun polyFitLeastSquares(
-    /** The x-coordinates of each data point. */
-    x: FloatArray,
-    /** The y-coordinates of each data point. */
-    y: FloatArray,
-    /** number of items in each array */
-    sampleCount: Int,
-    degree: Int,
-    coefficients: FloatArray = FloatArray((degree + 1).coerceAtLeast(0)),
-): FloatArray = polyFitLeastSquares(x, y, sampleCount, degree, coefficients, null)
 
 private class LeastSquaresWorkspace {
     val a = Matrix(3, HistorySize)
@@ -288,36 +252,22 @@ private class LeastSquaresWorkspace {
     val r = Matrix(3, 3)
 }
 
-private fun polyFitLeastSquares(
+// LSQ2 admission above guarantees 3..HistorySize samples; workspace dimensions stay 3 x HistorySize.
+private fun fitQuadraticLeastSquares(
     x: FloatArray,
     y: FloatArray,
     sampleCount: Int,
-    degree: Int,
     coefficients: FloatArray,
-    workspace: LeastSquaresWorkspace?,
-): FloatArray {
-    if (degree < 1) {
-        throwIllegalArgumentException("The degree must be at positive integer")
-    }
-    if (sampleCount == 0) {
-        throwIllegalArgumentException("At least one point must be provided")
-    }
-
-    val truncatedDegree =
-        if (degree >= sampleCount) {
-            sampleCount - 1
-        } else {
-            degree
-        }
-
+    workspace: LeastSquaresWorkspace,
+): Float {
     // Shorthands for the purpose of notation equivalence to original C++ code.
     val m = sampleCount
-    val n = truncatedDegree + 1
+    val n = 3
 
-    // Expand the X vector to a matrix A, pre-multiplied by the weights.
-    val a = workspace?.a ?: Matrix(n, m)
+    // Expand the X vector to the three quadratic basis rows.
+    val a = workspace.a
     for (h in 0 until m) {
-        a[0, h] = DefaultWeight
+        a[0, h] = 1f
         for (i in 1 until n) {
             a[i, h] = a[i - 1, h] * x[h]
         }
@@ -326,9 +276,9 @@ private fun polyFitLeastSquares(
     // Apply the Gram-Schmidt process to A to obtain its QR decomposition.
 
     // Orthonormal basis, column-major order.
-    val q = workspace?.q ?: Matrix(n, m)
+    val q = workspace.q
     // Upper triangular matrix, row-major order.
-    val r = workspace?.r ?: Matrix(n, n)
+    val r = workspace.r
     for (j in 0 until n) {
         val w = q[j]
         a[j].copyInto(w, 0, 0, m)
@@ -354,23 +304,8 @@ private fun polyFitLeastSquares(
 
     // Solve R B = Qt W Y to find B. This is easy because R is upper triangular.
     // We just work from bottom-right to top-left calculating B's coefficients.
-    var wy = y
-
-    // NOTE: DefaultWeight is currently always set to 1.0f, there's no need to allocate a new
-    // array and to perform several multiplications for no reason
-    @Suppress("KotlinConstantConditions")
-    if (DefaultWeight != 1.0f) {
-        // TODO: Even when we pass the test above, this allocation is likely unnecessary.
-        // We could just modify wy (y) in place instead. This would need to be documented
-        // to avoid surprises for the caller though.
-        wy = FloatArray(m)
-        for (h in 0 until m) {
-            wy[h] = y[h] * DefaultWeight
-        }
-    }
-
     for (i in n - 1 downTo 0) {
-        var c = q[i].dot(wy, m)
+        var c = q[i].dot(y, m)
         val ri = r[i]
         for (j in n - 1 downTo i + 1) {
             c -= ri[j] * coefficients[j]
@@ -378,7 +313,7 @@ private fun polyFitLeastSquares(
         coefficients[i] = c / ri[i]
     }
 
-    return coefficients
+    return coefficients[1]
 }
 
 /**

@@ -1,6 +1,7 @@
 package smallthingz.ui.input.pointer.util
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VelocityTrackerStorageTest {
@@ -9,6 +10,24 @@ class VelocityTrackerStorageTest {
 
     private fun assertBits(expected: Float, actual: Float) =
         assertEquals(expected.toRawBits(), actual.toRawBits())
+
+    @Test fun quadraticMotionEstimatesTheLatestDerivativeInUnitsPerSecond() {
+        for (count in intArrayOf(3, 20)) for (sign in floatArrayOf(-1f, 1f)) {
+            val tracker = tracker(VelocityTracker1D.Strategy.Lsq2)
+            repeat(count) { i ->
+                tracker.addDataPoint(100L + i * 4L, sign * (i * i + 2 * i + 3))
+            }
+            // p(t) = sign * ((t / 4)^2 + 2(t / 4) + 3), evaluated at t = 4(count - 1).
+            assertEquals(sign * count * 500f, tracker.calculateVelocity(), 0.5f)
+        }
+    }
+
+    @Test fun singularRepeatedTimestampsReturnNaNRawAndZeroWhenBounded() {
+        val tracker = tracker(VelocityTracker1D.Strategy.Lsq2)
+        for (position in floatArrayOf(0f, 3f, -2f, 7f)) tracker.addDataPoint(100L, position)
+        assertTrue(tracker.calculateVelocity().isNaN())
+        assertBits(0f, tracker.calculateVelocity(250f))
+    }
 
     @Test fun resetDiscardsEveryOldSampleBeforeHistoryRefills() {
         for (strategy in VelocityTracker1D.Strategy.values()) {
