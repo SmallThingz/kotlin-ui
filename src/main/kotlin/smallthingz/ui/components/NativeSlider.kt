@@ -76,7 +76,7 @@ data class NativeSliderStyle(
 ) {
     init {
         require(steps >= 0 && steps < Int.MAX_VALUE)
-        require(listOf(minHeightDp, minWidthDp, trackHeightDp, thumbWidthDp, thumbHeightDp,
+        require(floatArrayOf(minHeightDp, minWidthDp, trackHeightDp, thumbWidthDp, thumbHeightDp,
             pressedThumbWidthDp, thumbTrackGapDp, trackInsideCornerDp, tickSizeDp,
             stopIndicatorSizeDp, horizontalPaddingDp, verticalPaddingDp).all { it.isFinite() && it >= 0f })
         require(thumbWidthDp > 0f && thumbHeightDp > 0f && pressedThumbWidthDp > 0f)

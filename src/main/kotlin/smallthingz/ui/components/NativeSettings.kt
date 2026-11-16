@@ -46,9 +46,9 @@ data class NativeSettingsRowStyle(
     val dimDisabledContent: Boolean = true,
 ) {
     init {
-        require(listOf(minHeightDp, horizontalPaddingDp, verticalPaddingDp, iconSizeDp, gapDp,
+        require(floatArrayOf(minHeightDp, horizontalPaddingDp, verticalPaddingDp, iconSizeDp, gapDp,
             minTextWidthDp, detailGapDp).all { it.isFinite() && it >= 0f })
-        require(listOf(titleSizeSp, detailSizeSp, valueSizeSp).all { it.isFinite() && it > 0f })
+        require(floatArrayOf(titleSizeSp, detailSizeSp, valueSizeSp).all { it.isFinite() && it > 0f })
         require(cornerRadiusDp >= 0)
         require(titleWeight in 1..1000)
         require(startPaddingDp == null || startPaddingDp.isFinite() && startPaddingDp >= 0f)

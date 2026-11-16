@@ -83,7 +83,7 @@ data class NativeChoiceStyle(
     val animateSelection: Boolean = true,
 ) {
     init {
-        require(listOf(radiusDp, minHeightDp, textSizeSp, horizontalPaddingDp,
+        require(floatArrayOf(radiusDp, minHeightDp, textSizeSp, horizontalPaddingDp,
             verticalPaddingDp, iconSizeDp, iconGapDp, indicatorHeightDp,
             indicatorInsetDp, trailingIconSizeDp).all { it.isFinite() && it >= 0f })
         require(indicatorWidthDp == null || indicatorWidthDp.isFinite() && indicatorWidthDp >= 0f)
@@ -967,7 +967,7 @@ data class NativeSwitchStyle(
     val pressedThumbSizeDp: Float? = null,
 ) {
     init {
-        require(listOf(textSizeSp, horizontalPaddingDp, verticalPaddingDp, trackWidthDp,
+        require(floatArrayOf(textSizeSp, horizontalPaddingDp, verticalPaddingDp, trackWidthDp,
             trackHeightDp, thumbSizeDp, offThumbScale, minHeightDp, switchPaddingDp).all { it.isFinite() && it >= 0f })
         require(trackWidthDp >= trackHeightDp && trackHeightDp > 0f && thumbSizeDp > 0f)
         require(offThumbScale > 0f && offThumbScale <= 1f)

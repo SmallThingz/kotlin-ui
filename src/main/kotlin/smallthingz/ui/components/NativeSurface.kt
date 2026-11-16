@@ -33,7 +33,7 @@ data class NativeCornerRadii(
     val bottomStartDp: Float,
 ) {
     init {
-        require(listOf(topStartDp, topEndDp, bottomEndDp, bottomStartDp).all { it.isFinite() && it >= 0f })
+        require(floatArrayOf(topStartDp, topEndDp, bottomEndDp, bottomStartDp).all { it.isFinite() && it >= 0f })
     }
 }
 

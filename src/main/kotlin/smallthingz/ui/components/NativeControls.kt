@@ -82,7 +82,7 @@ data class NativeButtonStyle(
     val disabledContainerColor: Int? = null,
 ) {
     init {
-        require(listOf(radiusDp, minHeightDp, minWidthDp, horizontalPaddingDp, verticalPaddingDp).all { it.isFinite() && it >= 0f })
+        require(floatArrayOf(radiusDp, minHeightDp, minWidthDp, horizontalPaddingDp, verticalPaddingDp).all { it.isFinite() && it >= 0f })
         require(visualMinHeightDp == null || visualMinHeightDp.isFinite() && visualMinHeightDp >= 0f)
     }
 }
@@ -99,7 +99,7 @@ data class NativeIconButtonStyle(
     val disabledContentColor: Int? = null,
 ) {
     init {
-        require(listOf(radiusDp, minSizeDp, iconSizeDp, backgroundInsetDp).all { it.isFinite() && it >= 0f })
+        require(floatArrayOf(radiusDp, minSizeDp, iconSizeDp, backgroundInsetDp).all { it.isFinite() && it >= 0f })
         require(minSizeDp > 0f && iconSizeDp <= minSizeDp && backgroundInsetDp * 2f < minSizeDp)
         require(disabledContainerAlpha == null || disabledContainerAlpha.isFinite() && disabledContainerAlpha in 0f..1f)
         require(disabledContentAlpha == null || disabledContentAlpha.isFinite() && disabledContentAlpha in 0f..1f)
@@ -117,7 +117,7 @@ data class NativeTextFieldStyle(
     val endPaddingDp: Float? = null,
 ) {
     init {
-        require(listOf(radiusDp, minHeightDp, horizontalPaddingDp, verticalPaddingDp).all { it.isFinite() && it >= 0f })
+        require(floatArrayOf(radiusDp, minHeightDp, horizontalPaddingDp, verticalPaddingDp).all { it.isFinite() && it >= 0f })
         require(startPaddingDp == null || startPaddingDp.isFinite() && startPaddingDp >= 0f)
         require(endPaddingDp == null || endPaddingDp.isFinite() && endPaddingDp >= 0f)
     }

@@ -68,7 +68,7 @@ data class NativeLabeledTextFieldStyle(
     val expandedLabelStyle: NativeTextStyle? = null,
 ) {
     init {
-        require(listOf(outlineWidthDp, focusedOutlineWidthDp, cutoutPaddingDp,
+        require(floatArrayOf(outlineWidthDp, focusedOutlineWidthDp, cutoutPaddingDp,
             supportingTopPaddingDp, supportingHorizontalPaddingDp, minimumWidthDp,
             minimumEditorWidthDp, trailingRowGapDp).all { it.isFinite() && it >= 0f })
         require(disabledContentAlpha.isFinite() && disabledContentAlpha in 0f..1f)
