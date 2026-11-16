@@ -33,12 +33,13 @@ internal class NativeMenuPointerBinding<I>(
         maximumVelocity = { config.scaledMaximumFlingVelocity.toFloat() },
         parentInterested = { false }, // A sub-panel has no parent scroll/drag connection.
     )
-    private val rowLayouts = IdentityHashMap<NativeMenuRowView<I>, Layout>()
+    private val minimum = NativeMinimumTouchTarget { Size(48f*density.density,48f*density.density) }
+    private val rowLayouts = IdentityHashMap<NativeMenuRowView<I>, NativeRetainedViewHitLayout>()
     private var reversedRows: List<NativeViewPointerHitLayout> = emptyList()
-    private val columnLayout = Layout(content.column,emptyList(),{ reversedRows })
+    private val columnLayout = NativeRetainedViewHitLayout(content.column,geometry,minimum,emptyList(),{ reversedRows })
     private val viewportChildren = listOf(columnLayout)
-    private val viewportLayout = Layout(
-        content.viewport,vertical.nodes,{ viewportChildren },
+    private val viewportLayout = NativeRetainedViewHitLayout(
+        content.viewport,geometry,minimum,vertical.nodes,{ viewportChildren },
         clip = { local ->
             val extra = (30f*density.density).roundToInt()
             local.x >= -extra && local.x < content.viewport.width+extra &&
@@ -51,7 +52,7 @@ internal class NativeMenuPointerBinding<I>(
         override fun cancel() = Unit
     }
     private val surfaceChildren = listOf(viewportLayout)
-    private val surfaceLayout = Layout(content,listOf(shield),{ surfaceChildren },clip = {
+    private val surfaceLayout = NativeRetainedViewHitLayout(content,geometry,minimum,listOf(shield),{ surfaceChildren },clip = {
         roundedGroupGeometry(content.width.toFloat(),content.height.toFloat(),density.density,18f)
             .contains(it.x,it.y)
     })
@@ -78,7 +79,7 @@ internal class NativeMenuPointerBinding<I>(
             row.pointerRoot = root
             rowLayouts.getOrPut(row) {
                 val node = NativeClickPhaseNode(row,ViewClickPhaseEndpoint(row.input),vertical::interested)
-                Layout(row,listOf(node),{ emptyList() },clip = {
+                NativeRetainedViewHitLayout(row,geometry,minimum,listOf(node),{ emptyList() },clip = {
                     roundedGroupGeometry(row.width.toFloat(),row.height.toFloat(),density.density,12f)
                         .contains(it.x,it.y)
                 })
@@ -90,20 +91,6 @@ internal class NativeMenuPointerBinding<I>(
     // Touch receives current ancestor interest explicitly through NativeClickPhaseNode. The
     // ordinary View fallback has no synthetic captured MotionEvent pretending to be that change.
     fun interestedParent(event: MotionEvent): Boolean = false
-
-    private inner class Layout(
-        private val view: View,
-        override val nodes: List<NativeViewPhasePointerNode>,
-        private val children: () -> List<NativeViewPointerHitLayout>,
-        private val clip: (Offset) -> Boolean = { true },
-    ) : NativeViewPointerHitLayout {
-        override val placed get() = view.isAttachedToWindow && view.isLaidOut && view.visibility == View.VISIBLE
-        override val size get() = Size(view.width.toFloat(),view.height.toFloat())
-        override val minimumTouchTarget get() = Size(48f*density.density,48f*density.density)
-        override val childrenInHitOrder get() = children()
-        override fun screenToLocal(screen: Offset) = geometry.coordinates(view).local(screen)
-        override fun withinLayerBounds(local: Offset) = clip(local)
-    }
 
     override fun close() {
         root?.cancelPointerInput()

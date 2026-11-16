@@ -371,8 +371,8 @@ class NativeActionSheetContentContext internal constructor(
         children:()->List<NativeViewPointerHitLayout> = {emptyList()},
         minimumTouchTarget:Size=Size(48f*style.textDensity.density,48f*style.textDensity.density),
         clip:(Offset)->Boolean={true},
-    ):NativeViewPointerHitLayout=NativeActionSheetHitLayout(view,pointer.geometry,
-        {minimumTouchTarget},nodes,children,clip)
+    ):NativeViewPointerHitLayout=NativeRetainedViewHitLayout(view,pointer.geometry,
+        NativeMinimumTouchTarget {minimumTouchTarget},nodes,children,clip)
 }
 
 internal class SheetRoot(
@@ -488,14 +488,14 @@ internal class SheetPointerOwner(private val density:Float):AutoCloseable {
     fun bind(root:SheetRoot,surface:NativeSheetSurface,scrim:SheetScrim,handle:NativeSheetDragHandle,
         app:NativeSheetContent,drag:NativeActionSheetDragNode) {
         this.root=root
-        val minimum={Size(48f*density,48f*density)}
+        val minimum=NativeMinimumTouchTarget {Size(48f*density,48f*density)}
         val close=app.close.visual
-        val closeHit=NativeActionSheetHitLayout(close,geometry,minimum,
+        val closeHit=NativeRetainedViewHitLayout(close,geometry,minimum,
             listOf(NativeClickPhaseNode(close,close.nativeClickEndpoint,drag::interested)),clip={p->
                 val radius=min(close.width,close.height)*.5f
                 val x=p.x-close.width*.5f;val y=p.y-close.height*.5f;x*x+y*y<=radius*radius
             })
-        val handleHit=NativeActionSheetHitLayout(handle,geometry,minimum,
+        val handleHit=NativeRetainedViewHitLayout(handle,geometry,minimum,
             listOf(handle.tooltip.pointerNode,NativeClickPhaseNode(handle,handle.nativeClickEndpoint,drag::interested)))
         val shield=object:NativeViewPhasePointerNode {
             override val view:View get()=surface.painted
@@ -504,12 +504,12 @@ internal class SheetPointerOwner(private val density:Float):AutoCloseable {
         }
         fixedContentHits=listOf(closeHit,handleHit)
         refreshContentHits()
-        val contentHit=NativeActionSheetHitLayout(surface.painted,geometry,minimum,listOf(shield),
+        val contentHit=NativeRetainedViewHitLayout(surface.painted,geometry,minimum,listOf(shield),
             children={combinedContentHits},clip=surface::containsShape)
         val surfaceChildren=listOf(contentHit)
-        val surfaceHit=NativeActionSheetHitLayout(surface,geometry,minimum,listOf(drag),
+        val surfaceHit=NativeRetainedViewHitLayout(surface,geometry,minimum,listOf(drag),
             children={surfaceChildren})
-        val scrimHit=NativeActionSheetHitLayout(scrim,geometry,{Size.Zero},
+        val scrimHit=NativeRetainedViewHitLayout(scrim,geometry,NativeMinimumTouchTarget {Size.Zero},
             listOf(NativeSheetScrimTapNode(scrim,{density}) {scrim.performClick()}))
         sheets=listOf(surfaceHit,scrimHit)
     }

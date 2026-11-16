@@ -48,6 +48,7 @@
     }
   ],
   "ownership": {
+    "NativeRetainedViewHitLayout": "Local reuse of the sheet real-View hit layout by menu rows; live geometry, placement, children and clips remain caller-owned. A primitive Size-returning SAM preserves live minimum targets without a generic Function0 result bridge.",
     "NativeWindowShadowOutline": "Stateless full-bounds zero-alpha outline shared by sheet, floating dialog, menu and tooltip roots; caller elevation, clipping and window policy remain separate.",
     "NativeActionSheet": "Moved active sheet state, input, window, surface, accessibility, drag handle and tooltip; app supplies colors/typography/glyph/background and domain content.",
     "NativeFloatingDialog": "Moved active About window/root and visibility/predictive motion; app retains About content, links, scroll restoration and appearance.",

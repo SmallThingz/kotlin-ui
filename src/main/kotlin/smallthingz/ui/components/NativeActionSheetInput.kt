@@ -131,18 +131,22 @@ internal class NativeSheetScrimTapNode(
     override fun cancel() { waiting = false; ignoreFinalDown = false }
 }
 
+internal fun interface NativeMinimumTouchTarget {
+    fun get(): Size
+}
+
 /** Explicit real-View hit node; caller supplies released clip and modifier order, never guessed. */
-internal class NativeActionSheetHitLayout(
+internal class NativeRetainedViewHitLayout(
     private val view: View,
     private val geometry: NativeWindowPointerCoordinates,
-    private val minimum: () -> Size,
+    private val minimum: NativeMinimumTouchTarget,
     override val nodes: List<NativeViewPhasePointerNode>,
     private val children: () -> List<NativeViewPointerHitLayout> = { emptyList() },
     private val clip: (Offset) -> Boolean = { true },
 ) : NativeViewPointerHitLayout {
     override val placed get() = view.isAttachedToWindow && view.isLaidOut && view.visibility == View.VISIBLE
     override val size get() = Size(view.width.toFloat(), view.height.toFloat())
-    override val minimumTouchTarget get() = minimum()
+    override val minimumTouchTarget get() = minimum.get()
     override val childrenInHitOrder get() = children()
     override fun screenToLocal(screen: Offset) = geometry.coordinates(view).local(screen)
     override fun withinLayerBounds(local: Offset) = clip(local)
