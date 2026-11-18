@@ -84,6 +84,8 @@ open class NativeMaterialButtonView(
     private var colorMotion: ViewColorTransition? = null
     private var icon: Drawable? = null
     private var leading: View? = null
+    private var leadingOriginalImportance = IMPORTANT_FOR_ACCESSIBILITY_AUTO
+    private var leadingExposed = false
     private var displayedInk = Color.TRANSPARENT
     private var indicationInk = Color.TRANSPARENT
     private var inputReady = false
@@ -220,14 +222,29 @@ open class NativeMaterialButtonView(
     }
 
     fun setLeadingView(value: View?, exposeToAccessibility: Boolean = false) {
-        if (closed || leading === value) return
-        leading?.let(content::removeView)
-        leading = value
-        accessibilityChildren = if (exposeToAccessibility && value != null) listOf(value) + labelChildren else labelChildren
-        value?.let {
-            if (!exposeToAccessibility) it.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-            content.addView(it, 0)
+        if (closed || leading === value && (value == null || leadingExposed == exposeToAccessibility)) return
+        val replacing = leading !== value
+        if (replacing) releaseLeadingView()
+        if (value == null) return
+        if (replacing) {
+            leading = value
+            leadingOriginalImportance = value.importantForAccessibility
         }
+        leadingExposed = exposeToAccessibility
+        accessibilityChildren = if (exposeToAccessibility) listOf(value) + labelChildren else labelChildren
+        value.importantForAccessibility = if (exposeToAccessibility) leadingOriginalImportance
+            else IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        if (replacing) content.addView(value, 0)
+    }
+
+    private fun releaseLeadingView() {
+        val former = leading ?: return
+        val importance = leadingOriginalImportance
+        leading = null
+        leadingExposed = false
+        accessibilityChildren = labelChildren
+        try { content.removeView(former) }
+        finally { former.importantForAccessibility = importance }
     }
 
     private fun publishColors() {
@@ -317,8 +334,9 @@ open class NativeMaterialButtonView(
         action = {}
         isEnabled = false
         isFocusable = false
-        val failure = closePreservingPrimaryFailure(null, input::cancel)
-        closePreservingPrimaryFailure(failure) { colorMotion?.close(); colorMotion = null }?.let { throw it }
+        var failure = closePreservingPrimaryFailure(null, input::cancel)
+        failure = closePreservingPrimaryFailure(failure) { colorMotion?.close(); colorMotion = null }
+        closePreservingPrimaryFailure(failure, ::releaseLeadingView)?.let { throw it }
     }
     private fun exact(value: Int) = MeasureSpec.makeMeasureSpec(value, MeasureSpec.EXACTLY)
     private fun atMost(value: Int) = MeasureSpec.makeMeasureSpec(value, MeasureSpec.AT_MOST)
