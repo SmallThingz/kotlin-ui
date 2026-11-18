@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="native_theme_title">Theme</string>
-    <string name="native_theme_system">Auto</string>
-    <string name="native_theme_light">Light</string>
-    <string name="native_theme_dark">Dark</string>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Theme has its own translations. Other locales use these English defaults even
+         when the library ships localized platform semantics or dialog strings for them. -->
+    <string name="native_theme_title" tools:ignore="MissingTranslation">Theme</string>
+    <string name="native_theme_system" tools:ignore="MissingTranslation">Auto</string>
+    <string name="native_theme_light" tools:ignore="MissingTranslation">Light</string>
+    <string name="native_theme_dark" tools:ignore="MissingTranslation">Dark</string>
 </resources>

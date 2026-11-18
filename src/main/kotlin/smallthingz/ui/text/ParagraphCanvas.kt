@@ -15,25 +15,33 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.fonts.Font
 import android.graphics.text.MeasuredText
+import android.os.Build
 import android.text.Layout
+import androidx.annotation.RequiresApi
 
 /**
  * Native Layout skips clipped lines before drawing. The caller already clips the paragraph;
  * keep Layout's traversal independent of that viewport so shadows/fallback glyph edges survive.
  * Only Android Layout and EmojiCompat text drawing enter this adapter, not arbitrary app graphics.
  */
-internal class ParagraphCanvas : Canvas() {
+internal open class ParagraphCanvas private constructor() : Canvas() {
     companion object {
         private val threadCanvas = ThreadLocal<ParagraphCanvas>()
         fun draw(layout: Layout, value: Canvas) {
-            val adapter = threadCanvas.get() ?: ParagraphCanvas().also(threadCanvas::set)
+            val adapter = threadCanvas.get() ?: create().also(threadCanvas::set)
             val previous = adapter.target
             adapter.target = value
             try { layout.draw(adapter) } finally { adapter.target = previous }
         }
+
+        private fun create(): ParagraphCanvas = when {
+            Build.VERSION.SDK_INT >= 31 -> GlyphCanvas()
+            Build.VERSION.SDK_INT >= 29 -> MeasuredTextCanvas()
+            else -> ParagraphCanvas()
+        }
     }
     private var target: Canvas? = null
-    private val canvas: Canvas get() = checkNotNull(target)
+    protected val canvas: Canvas get() = checkNotNull(target)
     override fun getClipBounds(bounds: Rect): Boolean {
         val visible = canvas.getClipBounds(bounds)
         if (visible) bounds.set(0, 0, bounds.width(), Int.MAX_VALUE)
@@ -82,10 +90,17 @@ internal class ParagraphCanvas : Canvas() {
     override fun drawTextRun(text: CharSequence, start: Int, end: Int, contextStart: Int,
                              contextEnd: Int, x: Float, y: Float, isRtl: Boolean, paint: Paint) =
         canvas.drawTextRun(text, start, end, contextStart, contextEnd, x, y, isRtl, paint)
-    override fun drawTextRun(text: MeasuredText, start: Int, end: Int, contextStart: Int,
-                             contextEnd: Int, x: Float, y: Float, isRtl: Boolean, paint: Paint) =
-        canvas.drawTextRun(text, start, end, contextStart, contextEnd, x, y, isRtl, paint)
-    override fun drawGlyphs(glyphIds: IntArray, glyphIdOffset: Int, positions: FloatArray,
-                            positionOffset: Int, glyphCount: Int, font: Font, paint: Paint) =
-        canvas.drawGlyphs(glyphIds, glyphIdOffset, positions, positionOffset, glyphCount, font, paint)
+    @RequiresApi(29)
+    private open class MeasuredTextCanvas : ParagraphCanvas() {
+        override fun drawTextRun(text: MeasuredText, start: Int, end: Int, contextStart: Int,
+                                 contextEnd: Int, x: Float, y: Float, isRtl: Boolean, paint: Paint) =
+            canvas.drawTextRun(text, start, end, contextStart, contextEnd, x, y, isRtl, paint)
+    }
+
+    @RequiresApi(31)
+    private class GlyphCanvas : MeasuredTextCanvas() {
+        override fun drawGlyphs(glyphIds: IntArray, glyphIdOffset: Int, positions: FloatArray,
+                                positionOffset: Int, glyphCount: Int, font: Font, paint: Paint) =
+            canvas.drawGlyphs(glyphIds, glyphIdOffset, positions, positionOffset, glyphCount, font, paint)
+    }
 }

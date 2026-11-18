@@ -10,6 +10,8 @@ package smallthingz.ui.text
 
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.text.LineBreaker
+import android.graphics.text.LineBreakConfig
 import android.os.Build
 import android.os.LocaleList
 import android.text.BoringLayout
@@ -22,7 +24,6 @@ import android.text.TextDirectionHeuristics
 import android.text.TextPaint
 import android.text.TextUtils
 import android.text.style.MetricAffectingSpan
-import android.graphics.text.LineBreakConfig
 import androidx.annotation.DoNotInline
 import androidx.annotation.RequiresApi
 import smallthingz.ui.geometry.Offset
@@ -265,9 +266,9 @@ open class Paragraph(
             .setMaxLines(lines)
             .setEllipsize(ellipsis)
             .setEllipsizedWidth(width)
-            .setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE)
+            .setBreakStrategy(LineBreaker.BREAK_STRATEGY_SIMPLE)
             .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
-            .setJustificationMode(Layout.JUSTIFICATION_MODE_NONE)
+            .setJustificationMode(LineBreaker.JUSTIFICATION_MODE_NONE)
         if (Build.VERSION.SDK_INT >= 33) ParagraphApi33.setLineBreakConfig(builder)
         if (Build.VERSION.SDK_INT >= 35) {
             builder.setUseBoundsForWidth(false)

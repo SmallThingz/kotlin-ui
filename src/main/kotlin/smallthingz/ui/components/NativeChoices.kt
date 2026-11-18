@@ -490,6 +490,9 @@ class NativeChip(
             indicatorLeft + indicatorWidth, height.toFloat(), indicatorPaint)
     }
 
+    // Both call sites run synchronously inside this chip's onDraw. The clipped ink passes
+    // need only the superclass content, since View.draw would redraw the background as well.
+    @android.annotation.SuppressLint("WrongCall")
     private fun drawChoiceContent(canvas: Canvas) {
         val iconOnly = iconOnlyDrawable()
         if (iconOnly != null) {
