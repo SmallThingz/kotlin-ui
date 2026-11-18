@@ -4,10 +4,48 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import smallthingz.ui.animation.core.FastOutSlowInEasing
+import smallthingz.ui.graphics.Color
+import smallthingz.ui.graphics.lerp
+import smallthingz.ui.graphics.toArgb
 
 class ColorTransitionTest {
     private val black=0xFF000000.toInt()
     private val white=0xFFFFFFFF.toInt()
+
+    @Test fun packedOklabEndpointsMatchArgbInterpolationAcrossFramesAndRetargets() {
+        val random=kotlin.random.Random(62)
+        var start=IntArray(32) { random.nextInt() }
+        val state=ColorTransition(start)
+        var time=0L
+        repeat(12) {
+            val target=IntArray(start.size) { index ->
+                if(index%4==0)start[index] else random.nextInt()
+            }
+            state.retarget(target,time)
+            val frames=if(it%2==0)79 else 159
+            for(step in 1..frames) {
+                val fraction=FastOutSlowInEasing.transform(step/160f)
+                state.frame(time+step*1_000_000L)
+                for(index in start.indices) {
+                    val expected=lerp(Color(start[index]),Color(target[index]),fraction).toArgb()
+                    assertEquals("transition $it, frame $step, channel $index",expected,state.color(index))
+                }
+            }
+            time+=frames*1_000_000L
+            if(it%2==0) {
+                val fraction=FastOutSlowInEasing.transform(frames/160f)
+                start=IntArray(start.size) { index ->
+                    lerp(Color(start[index]),Color(target[index]),fraction).toArgb()
+                }
+            } else {
+                time+=1_000_000L
+                state.frame(time)
+                start=target
+                for(index in start.indices)assertEquals(start[index],state.color(index))
+            }
+        }
+    }
 
     @Test fun initialAndCompletedTuplesAreExact() {
         val state=ColorTransition(intArrayOf(black,white))

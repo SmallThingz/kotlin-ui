@@ -2,14 +2,16 @@ package smallthingz.ui.animation
 
 import smallthingz.ui.animation.core.FastOutSlowInEasing
 import smallthingz.ui.graphics.Color
+import smallthingz.ui.graphics.colorspace.ColorSpaces
 import smallthingz.ui.graphics.lerp
 import smallthingz.ui.graphics.toArgb
 
 /** One bounded timeline for a related set of foreground, background and icon colors. */
 class ColorTransition(initial:IntArray) {
     private val displayed=initial.copyOf()
-    private val start=initial.copyOf()
     private val target=initial.copyOf()
+    private val startLab=LongArray(initial.size)
+    private val targetLab=LongArray(initial.size)
     private var elapsed=0.0
     private var lastFrame:Long?=null
     var running=false
@@ -24,10 +26,14 @@ class ColorTransition(initial:IntArray) {
         val sampleTime=maxOf(nowNanos,lastFrame ?: nowNanos)
         frame(sampleTime,durationScale)
         if(target.contentEquals(next))return running
-        displayed.copyInto(start);next.copyInto(target)
+        next.copyInto(target)
         elapsed=0.0;lastFrame=sampleTime
         running=!displayed.contentEquals(target)
         if(durationScale<=0f)snapToTarget()
+        if(running)for(index in displayed.indices) {
+            startLab[index]=Color(displayed[index]).convert(ColorSpaces.Oklab).value.toLong()
+            targetLab[index]=Color(target[index]).convert(ColorSpaces.Oklab).value.toLong()
+        }
         return running
     }
 
@@ -41,11 +47,12 @@ class ColorTransition(initial:IntArray) {
         val fraction=(elapsed/DURATION_NANOS).coerceIn(0.0,1.0).toFloat()
         if(fraction>=1f){snapToTarget();return}
         val eased=FastOutSlowInEasing.transform(fraction)
-        for(index in displayed.indices)displayed[index]=lerp(Color(start[index]),Color(target[index]),eased).toArgb()
+        for(index in displayed.indices)displayed[index]=
+            lerp(Color(startLab[index].toULong()),Color(targetLab[index].toULong()),eased).toArgb()
     }
 
     fun snapToTarget() {
-        target.copyInto(displayed);target.copyInto(start)
+        target.copyInto(displayed)
         running=false;lastFrame=null;elapsed=0.0
     }
 
