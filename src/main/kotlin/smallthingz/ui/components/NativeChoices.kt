@@ -1876,18 +1876,18 @@ private class SwitchPartDrawable(
         if (thumb) {
             val radius = thumbRadius()
             color(animatedColor(0))
-            canvas.drawCircle(bounds.exactCenterX(), bounds.exactCenterY(), radius, paint)
+            NativeSwitchPainter.circularThumb(canvas, bounds.exactCenterX(), bounds.exactCenterY(), radius, paint)
         } else {
             val halfWidth = min(bounds.width().toFloat(), style.trackWidthDp * density) / 2f
             val halfHeight = min(bounds.height().toFloat(), style.trackHeightDp * density) / 2f
             rect.set(bounds.exactCenterX() - halfWidth, bounds.exactCenterY() - halfHeight,
                 bounds.exactCenterX() + halfWidth, bounds.exactCenterY() + halfHeight)
             color(animatedColor(0))
-            canvas.drawRoundRect(rect, rect.height() / 2f, rect.height() / 2f, paint)
+            NativeSwitchPainter.track(canvas, rect.left, rect.top, rect.right, rect.bottom, rect.height() / 2f, paint)
             if (!checked && style.outlinedTrack) {
                 rect.inset(density, density)
                 color(animatedColor(1), 2f * density)
-                canvas.drawRoundRect(rect, rect.height() / 2f, rect.height() / 2f, paint)
+                NativeSwitchPainter.track(canvas, rect.left, rect.top, rect.right, rect.bottom, rect.height() / 2f, paint)
             }
         }
     }
