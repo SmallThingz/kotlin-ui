@@ -90,6 +90,11 @@ class NativeGroupLayout(
         content.removeView(child)
     }
 
+    fun setRowOrientation(orientation: Int) {
+        require(orientation == LinearLayout.HORIZONTAL || orientation == LinearLayout.VERTICAL)
+        if (content.orientation != orientation) content.orientation = orientation
+    }
+
     /** Actual source clip, shared with the window's phase hit tree; no geometry approximation. */
     fun containsVisualPoint(x: Float, y: Float): Boolean =
         if (joinedEdges == null) geometry.contains(x, y)

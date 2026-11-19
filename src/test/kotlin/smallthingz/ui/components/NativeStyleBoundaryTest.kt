@@ -7,12 +7,6 @@ class NativeStyleBoundaryTest {
     private val nonnegative: List<Pair<String, (Float) -> Any>> = listOf(
         "choice radius" to { NativeChoiceStyle(radiusDp = it) },
         "choice trailing icon" to { NativeChoiceStyle(trailingIconSizeDp = it) },
-        "switch text" to { NativeSwitchStyle(textSizeSp = it) },
-        "switch padding" to { NativeSwitchStyle(switchPaddingDp = it) },
-        "button radius" to { NativeButtonStyle(radiusDp = it) },
-        "button vertical padding" to { NativeButtonStyle(verticalPaddingDp = it) },
-        "icon button radius" to { NativeIconButtonStyle(radiusDp = it) },
-        "icon button inset" to { NativeIconButtonStyle(backgroundInsetDp = it) },
         "text field radius" to { NativeTextFieldStyle(radiusDp = it) },
         "text field vertical padding" to { NativeTextFieldStyle(verticalPaddingDp = it) },
         "slider minimum height" to { NativeSliderStyle(minHeightDp = it) },
@@ -48,24 +42,6 @@ class NativeStyleBoundaryTest {
         for ((label, construct) in positiveText) {
             for (value in rejected) assertThrows("$label: $value", IllegalArgumentException::class.java) { construct(value) }
             assertAccepted("$label: smallest positive") { construct(Float.MIN_VALUE) }
-        }
-    }
-
-    @Test fun iconSizeInsetAndOptionalAlphaRespectTheirBoundaries() {
-        assertAccepted("icon equal to target") { NativeIconButtonStyle(minSizeDp = 48f, iconSizeDp = 48f) }
-        assertAccepted("inset below half target") { NativeIconButtonStyle(backgroundInsetDp = Math.nextDown(24f)) }
-        assertThrows(IllegalArgumentException::class.java) { NativeIconButtonStyle(minSizeDp = 0f, iconSizeDp = 0f) }
-        assertThrows(IllegalArgumentException::class.java) { NativeIconButtonStyle(minSizeDp = 48f, iconSizeDp = 49f) }
-        assertThrows(IllegalArgumentException::class.java) { NativeIconButtonStyle(backgroundInsetDp = 24f) }
-        val alphaFields: List<Pair<String, (Float?) -> Any>> = listOf(
-            "container alpha" to { NativeIconButtonStyle(disabledContainerAlpha = it) },
-            "content alpha" to { NativeIconButtonStyle(disabledContentAlpha = it) },
-        )
-        for ((label, construct) in alphaFields) {
-            for (value in listOf(null, 0f, 1f)) assertAccepted("$label: $value") { construct(value) }
-            for (value in floatArrayOf(-0.01f, 1.01f, Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY)) {
-                assertThrows("$label: $value", IllegalArgumentException::class.java) { construct(value) }
-            }
         }
     }
 

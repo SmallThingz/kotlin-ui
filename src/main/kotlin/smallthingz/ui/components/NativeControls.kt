@@ -6,30 +6,20 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Canvas
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.InsetDrawable
-import android.graphics.drawable.RippleDrawable
-import android.graphics.drawable.StateListDrawable
 import android.os.Build
 import android.text.TextUtils
 import android.text.InputType
 import android.util.TypedValue
-import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import android.widget.Button
 import android.widget.EditText
-import android.widget.ImageButton
-import android.widget.ImageView
 import android.widget.TextView
 import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.controls.ControlStyle
 import smallthingz.ui.controls.StateColorSurface
 import smallthingz.ui.animation.view.ViewColorTransition
-import smallthingz.ui.controls.selectionForeground
-import smallthingz.ui.controls.selectionIndication
 import smallthingz.ui.text.style.LineHeightStyle
 import smallthingz.ui.unit.Density
 import smallthingz.ui.unit.sp
@@ -65,47 +55,6 @@ data class NativeTextStyle(
 }
 
 enum class NativeTextRole { CONTENT, MUTED, ACCENT, ON_ACCENT }
-enum class NativeButtonTone { TEXT, TONAL, OUTLINED, FILLED }
-
-data class NativeButtonStyle(
-    val tone: NativeButtonTone = NativeButtonTone.TEXT,
-    val radiusDp: Float = 12f,
-    val minHeightDp: Float = 48f,
-    val minWidthDp: Float = 48f,
-    val horizontalPaddingDp: Float = 12f,
-    val verticalPaddingDp: Float = 8f,
-    val textStyle: NativeTextStyle = NativeTextStyle(14f, weight = 500),
-    val outlined: Boolean = false,
-    val fullCorner: Boolean = false,
-    val disabledContentColor: Int? = null,
-    val visualMinHeightDp: Float? = null,
-    val disabledContainerColor: Int? = null,
-) {
-    init {
-        require(floatArrayOf(radiusDp, minHeightDp, minWidthDp, horizontalPaddingDp, verticalPaddingDp).all { it.isFinite() && it >= 0f })
-        require(visualMinHeightDp == null || visualMinHeightDp.isFinite() && visualMinHeightDp >= 0f)
-    }
-}
-
-data class NativeIconButtonStyle(
-    val tone: NativeButtonTone = NativeButtonTone.TEXT,
-    val radiusDp: Float = 12f,
-    val minSizeDp: Float = 48f,
-    val iconSizeDp: Float = 24f,
-    val outlined: Boolean = false,
-    val backgroundInsetDp: Float = 0f,
-    val disabledContainerAlpha: Float? = null,
-    val disabledContentAlpha: Float? = null,
-    val disabledContentColor: Int? = null,
-) {
-    init {
-        require(floatArrayOf(radiusDp, minSizeDp, iconSizeDp, backgroundInsetDp).all { it.isFinite() && it >= 0f })
-        require(minSizeDp > 0f && iconSizeDp <= minSizeDp && backgroundInsetDp * 2f < minSizeDp)
-        require(disabledContainerAlpha == null || disabledContainerAlpha.isFinite() && disabledContainerAlpha in 0f..1f)
-        require(disabledContentAlpha == null || disabledContentAlpha.isFinite() && disabledContentAlpha in 0f..1f)
-    }
-}
-
 data class NativeTextFieldStyle(
     val radiusDp: Float = 16f,
     val minHeightDp: Float = 48f,
@@ -184,62 +133,6 @@ internal inline fun ControlPalette.roleColor(role: NativeTextRole): Int = when (
     NativeTextRole.MUTED -> muted
     NativeTextRole.ACCENT -> accent
     NativeTextRole.ON_ACCENT -> onAccent
-}
-
-private fun alphaColor(color: Int, alpha: Int): Int = (color and 0x00ffffff) or (alpha shl 24)
-
-private fun componentBackground(
-    view: View,
-    palette: ControlPalette,
-    tone: NativeButtonTone,
-    radiusDp: Float,
-    outlined: Boolean,
-    disabledContainerAlpha: Float? = null,
-    fullCorner: Boolean = false,
-    disabledContainerColor: Int? = null,
-    retained: StateColorSurface? = null,
-    foreground: ColorStateList,
-    publishInk: (Int,Int,Int)->Unit,
-): StateColorSurface {
-    val context=view.context
-    val border = outlined || tone == NativeButtonTone.OUTLINED
-    val fill = when (tone) {
-        NativeButtonTone.TEXT, NativeButtonTone.OUTLINED -> Color.TRANSPARENT
-        NativeButtonTone.TONAL -> palette.raised
-        NativeButtonTone.FILLED -> palette.accent
-    }
-    val selectedFill = if (tone == NativeButtonTone.FILLED) palette.accent else palette.selection
-    fun disabledFill(color: Int): Int = disabledContainerColor ?: if (color == Color.TRANSPARENT) color else
-        alphaColor(color, disabledContainerAlpha?.let { (Color.alpha(color) * it).roundToInt() } ?: 90)
-    val states=arrayOf(intArrayOf(-android.R.attr.state_enabled,android.R.attr.state_selected),
-        intArrayOf(-android.R.attr.state_enabled),intArrayOf(android.R.attr.state_focused,android.R.attr.state_selected),
-        intArrayOf(android.R.attr.state_focused),intArrayOf(android.R.attr.state_selected),intArrayOf())
-    val fills=ColorStateList(states,intArrayOf(disabledFill(selectedFill),disabledFill(fill),selectedFill,fill,selectedFill,fill))
-    val focus=if(tone==NativeButtonTone.FILLED)palette.onAccent else palette.accent
-    val strokes=ColorStateList(states,intArrayOf(if(border)palette.outline else 0,if(border)palette.outline else 0,
-        focus,focus,if(border)palette.accent else 0,if(border)palette.outline else 0))
-    val preferredRipple = if (tone == NativeButtonTone.FILLED) palette.onAccent else palette.accent
-    val selectedInk = if (tone == NativeButtonTone.FILLED) palette.onAccent else
-        selectionForeground(palette.selection, palette.surface, palette.onAccent, palette.content)
-    val selectedRipple = selectionIndication(selectedFill, palette.surface, selectedInk, preferredRipple)
-    val rippleColors = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_selected), intArrayOf()),
-        intArrayOf(alphaColor(selectedRipple, 40), alphaColor(preferredRipple, 40)))
-    val radius=if(fullCorner)Float.MAX_VALUE else radiusDp*context.resources.displayMetrics.density
-    val stroke=context.componentDp(1f).coerceAtLeast(1).toFloat()
-    val result=retained ?: StateColorSurface(view,fills,strokes,foreground,rippleColors,radius,stroke,
-        underlay=palette.surface,publishInk=publishInk)
-    result.bind(fills,strokes,foreground,rippleColors,radius,stroke,underlay=palette.surface)
-    return result
-}
-
-private fun componentForeground(context: Context, palette: ControlPalette, tone: NativeButtonTone, disabledContentAlpha: Float? = null, disabledContentColor: Int? = null): ColorStateList {
-    val normal = if (tone == NativeButtonTone.FILLED) palette.onAccent else palette.content
-    val selected = if (tone == NativeButtonTone.FILLED) palette.onAccent else
-        selectionForeground(palette.selection, palette.surface, palette.onAccent, palette.content)
-    val controls = ControlStyle(context, palette)
-    return if (disabledContentColor != null) controls.foregroundStates(normal, selected, disabledContentColor)
-    else if (disabledContentAlpha == null) controls.foregroundStates(normal, selected)
-    else controls.foregroundStates(normal, selected, alphaColor(normal, (Color.alpha(normal) * disabledContentAlpha).roundToInt()))
 }
 
 /** A retained native text node with shared typography and palette handling. */
@@ -335,191 +228,6 @@ open class NativeText(
     override fun drawableStateChanged() {
         super.drawableStateChanged()
         inkTargets?.let {inkMotion?.retarget(it.getColorForState(drawableState,it.defaultColor))}
-    }
-}
-
-/** Native click, keyboard and accessibility behavior, without platform theme geometry. */
-open class NativeButton(
-    context: Context,
-    palette: ControlPalette,
-    style: NativeButtonStyle = NativeButtonStyle(),
-) : Button(context, null, 0) {
-    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
-        if (bubblesPlainControlEscape(keyCode, event)) false else super.onKeyDown(keyCode, event)
-
-    private var componentPalette = palette
-    private var componentStyle = style
-    private val componentMetrics = ComponentMetrics()
-    private var visualContainer: NativeButtonContainerDrawable? = null
-    private var colorSurface:StateColorSurface?=null
-    init {
-        isAllCaps = false
-        gravity = Gravity.CENTER
-        stateListAnimator = null
-        elevation = 0f
-        applyGeometry()
-        applyPaint()
-        componentMetrics.update(context, textScaleX)
-    }
-    fun applyPalette(palette: ControlPalette) {
-        refreshMetrics()
-        if (componentPalette == palette) return
-        componentPalette = palette
-        applyPaint()
-    }
-    fun applyStyle(style: NativeButtonStyle) {
-        if (componentStyle == style) { refreshMetrics(); return }
-        componentStyle = style
-        applyGeometry()
-        applyPaint()
-        componentMetrics.update(context, textScaleX)
-    }
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        refreshMetrics(force = true)
-    }
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        refreshMetrics()
-        refreshComponentLineHeight()
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-        updateVisualContainerHeight()
-    }
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        updateVisualContainerHeight()
-    }
-    override fun performClick(): Boolean = acceptsNativeInput() && super.performClick()
-
-    private fun updateVisualContainerHeight() {
-        val container = visualContainer ?: return
-        val visualMinimum = componentStyle.visualMinHeightDp ?: return
-        // The text Layout retains its intrinsic height independently of the View's
-        // interaction minimum. Large or wrapped content therefore removes the inset.
-        val contentHeight = (layout?.height ?: 0) + compoundPaddingTop + compoundPaddingBottom
-        container.setVisualHeight(maxOf(context.componentDp(visualMinimum), contentHeight))
-    }
-    private fun refreshMetrics(force: Boolean = false) {
-        if (componentMetrics.update(context, textScaleX) || force) {
-            applyGeometry()
-            applyPaint()
-        }
-    }
-    private fun applyGeometry() {
-        val style = componentStyle
-        componentTypography(style.textStyle)
-        minWidth = context.componentDp(style.minWidthDp)
-        minimumWidth = minWidth
-        minHeight = context.componentDp(style.minHeightDp)
-        minimumHeight = minHeight
-        setPaddingRelative(context.componentDp(style.horizontalPaddingDp), context.componentDp(style.verticalPaddingDp), context.componentDp(style.horizontalPaddingDp), context.componentDp(style.verticalPaddingDp))
-    }
-    private fun applyPaint() {
-        backgroundTintList = null
-        val foreground = componentForeground(context, componentPalette, componentStyle.tone,
-            disabledContentColor = componentStyle.disabledContentColor)
-        val surface = componentBackground(this, componentPalette, componentStyle.tone, componentStyle.radiusDp,
-            componentStyle.outlined, fullCorner = componentStyle.fullCorner,
-            disabledContainerColor = componentStyle.disabledContainerColor,retained=colorSurface,foreground=foreground,
-            publishInk={ink,icon,_->setTextColor(ink);compoundDrawableTintList=ColorStateList.valueOf(icon)})
-        colorSurface=surface
-        val paint=surface.background
-        visualContainer = if (componentStyle.visualMinHeightDp == null) null else visualContainer ?: NativeButtonContainerDrawable(paint)
-        val next=visualContainer ?: paint
-        if(background !== next)background=next
-        updateVisualContainerHeight()
-    }
-}
-
-/** The image stays at the requested glyph size even when its touch target grows. */
-open class NativeIconButton(
-    context: Context,
-    palette: ControlPalette,
-    style: NativeIconButtonStyle = NativeIconButtonStyle(),
-) : ImageButton(context, null, 0) {
-    private var componentPalette = palette
-    private var componentStyle = style
-    private val componentMetrics = ComponentMetrics()
-    private var colorSurface:StateColorSurface?=null
-    private var insetSurface:InsetDrawable?=null
-    private var insetSize=-1
-    init {
-        scaleType = ImageView.ScaleType.FIT_CENTER
-        stateListAnimator = null
-        elevation = 0f
-        applyGeometry()
-        applyPaint()
-        componentMetrics.update(context)
-    }
-    fun applyPalette(palette: ControlPalette) {
-        refreshMetrics()
-        if (componentPalette == palette) return
-        componentPalette = palette
-        applyPaint()
-    }
-    fun applyStyle(style: NativeIconButtonStyle) {
-        if (componentStyle == style) { refreshMetrics(); return }
-        componentStyle = style
-        applyGeometry()
-        applyPaint()
-        componentMetrics.update(context)
-    }
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        refreshMetrics(force = true)
-    }
-    override fun performClick(): Boolean = acceptsNativeInput() && super.performClick()
-    private fun refreshMetrics(force: Boolean = false) {
-        if (componentMetrics.update(context) || force) {
-            applyGeometry()
-            applyPaint()
-        }
-    }
-    private fun applyGeometry() {
-        val style = componentStyle
-        require(style.iconSizeDp.isFinite() && style.iconSizeDp >= 0f && style.iconSizeDp <= style.minSizeDp)
-        require(style.backgroundInsetDp.isFinite() && style.backgroundInsetDp >= 0f && style.backgroundInsetDp * 2f < style.minSizeDp)
-        minimumWidth = context.componentDp(style.minSizeDp)
-        minimumHeight = context.componentDp(style.minSizeDp)
-        updateIconPadding(if (width > 0) width else minimumWidth, if (height > 0) height else minimumHeight)
-    }
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        refreshMetrics()
-        // Drawable intrinsic size and size-dependent centering padding must not feed
-        // WRAP_CONTENT measurement back into an ever-growing touch target.
-        val measuredWidth = resolveSizeAndState(suggestedMinimumWidth, widthMeasureSpec, 0)
-        val measuredHeight = resolveSizeAndState(suggestedMinimumHeight, heightMeasureSpec, 0)
-        super.onMeasure(
-            MeasureSpec.makeMeasureSpec(measuredWidth and MEASURED_SIZE_MASK, MeasureSpec.EXACTLY),
-            MeasureSpec.makeMeasureSpec(measuredHeight and MEASURED_SIZE_MASK, MeasureSpec.EXACTLY),
-        )
-        setMeasuredDimension(measuredWidth, measuredHeight)
-    }
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        updateIconPadding(w, h)
-    }
-    private fun updateIconPadding(w: Int, h: Int) {
-        val glyph = context.componentDp(componentStyle.iconSizeDp)
-        val horizontal = ((w - glyph) / 2).coerceAtLeast(0)
-        val vertical = ((h - glyph) / 2).coerceAtLeast(0)
-        if (paddingLeft != horizontal || paddingTop != vertical || paddingRight != horizontal || paddingBottom != vertical) {
-            setPadding(horizontal, vertical, horizontal, vertical)
-        }
-    }
-    private fun applyPaint() {
-        backgroundTintList = null
-        val foreground=componentForeground(context,componentPalette,componentStyle.tone,
-            componentStyle.disabledContentAlpha,componentStyle.disabledContentColor)
-        val surface=componentBackground(this,componentPalette,componentStyle.tone,componentStyle.radiusDp,
-            componentStyle.outlined,componentStyle.disabledContainerAlpha,retained=colorSurface,foreground=foreground,
-            publishInk={ink,_,_->imageTintList=ColorStateList.valueOf(ink)})
-        colorSurface=surface
-        val inset=context.componentDp(componentStyle.backgroundInsetDp)
-        if(inset!=insetSize){insetSize=inset;insetSurface=if(inset>0)InsetDrawable(surface.background,inset) else null}
-        val next=insetSurface ?: surface.background
-        if(background !== next)background=next
-        // A drawable's optical padding must not change the requested glyph geometry.
-        updateIconPadding(if (width > 0) width else minimumWidth, if (height > 0) height else minimumHeight)
     }
 }
 

@@ -177,27 +177,6 @@ class NativeSegmentedIntegrationTest {
         animated.close(); plain.close()
     }
 
-    @Test fun componentButtonsAndIconsUseReadableDefaultSelectedInkForEveryTone() = main {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        for (selection in listOf(palette.accent, 0xffdbe5ff.toInt())) {
-            val colors = palette.copy(selection = selection)
-            for (tone in NativeButtonTone.entries) {
-                val button = NativeButton(context, colors, NativeButtonStyle(tone = tone))
-                val icon = NativeIconButton(context, colors, NativeIconButtonStyle(tone = tone))
-                val expected = if (tone == NativeButtonTone.FILLED || selection == palette.accent)
-                    palette.onAccent else palette.content
-                for (focused in listOf(false, true)) {
-                    val state = if (focused) intArrayOf(android.R.attr.state_enabled,
-                        android.R.attr.state_selected, android.R.attr.state_focused)
-                        else intArrayOf(android.R.attr.state_enabled, android.R.attr.state_selected)
-                    assertEquals(expected, button.textColors.getColorForState(state, 0))
-                    assertEquals(expected, button.compoundDrawableTintList!!.getColorForState(state, 0))
-                    assertEquals(expected, icon.imageTintList!!.getColorForState(state, 0))
-                }
-            }
-        }
-    }
-
     @Test fun animatedIconDefaultsRemainIndependentOfTextOverridesAtBothEndpoints() = main {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val chip = NativeChip(context, palette, NativeChoiceStyle(animateSelection = true,
@@ -224,15 +203,10 @@ class NativeSegmentedIntegrationTest {
             val colors = palette.copy(surface = -0x1000000, selection = 0xff747474.toInt(),
                 content = -1, accent = -1, onAccent = -0x1000000)
             val style = ControlStyle(context, colors)
-            val button = NativeButton(context, colors)
-            val icon = NativeIconButton(context, colors)
             chip = NativeChip(context, colors)
-            button.isSelected = true; icon.isSelected = true; chip.bind("Selected", true)
-            assertEquals(-1, button.currentTextColor)
-            assertEquals(-1, icon.imageTintList!!.getColorForState(icon.drawableState, 0))
+            chip.bind("Selected", true)
             assertEquals(-1, chip.currentTextColor)
-            ripples = listOf(style.background(), button.background as RippleDrawable,
-                icon.background as RippleDrawable, chip.background as RippleDrawable)
+            ripples = listOf(style.background(), chip.background as RippleDrawable)
         }
         try {
             for (ripple in ripples) {

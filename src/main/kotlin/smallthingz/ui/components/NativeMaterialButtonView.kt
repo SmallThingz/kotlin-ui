@@ -17,8 +17,7 @@ import android.view.ViewOutlineProvider
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.graphics.ColorUtils
 import smallthingz.ui.animation.view.ViewColorTransition
-import smallthingz.ui.geometry.roundedGroupGeometry
-import smallthingz.ui.input.phase.NativeClickPhaseEndpoint
+import smallthingz.ui.geometry.roundedGroupContains
 import smallthingz.ui.input.phase.NativeClickPhaseHost
 import smallthingz.ui.input.phase.NativePointerLayerShape
 import smallthingz.ui.interaction.view.isNativeClickActivationKey
@@ -34,25 +33,6 @@ import smallthingz.ui.util.closePreservingPrimaryFailure
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
-
-/** The surface owns clipping and sizing. The input host supplies its window's click admission. */
-fun interface NativeMaterialButtonInteractionsFactory {
-    fun create(host: View, indication: View, filled: Boolean, setElevationPx: (Float) -> Unit): NativeMaterialButtonInteractions
-}
-
-interface NativeMaterialButtonInteractions {
-    val pointerEndpoint: NativeClickPhaseEndpoint
-    val foreground: Drawable
-    fun bind(enabled: Boolean, contentColor: Int)
-    fun measured(width: Int, height: Int)
-    fun touch(event: MotionEvent): Boolean
-    fun key(event: KeyEvent): Boolean
-    fun hover(event: MotionEvent): Boolean
-    fun focusChanged(focused: Boolean)
-    fun cancel()
-    fun attached()
-    fun detached()
-}
 
 /** Insets and minimums describe the painted surface. A parent may supply a larger touch target. */
 data class NativeMaterialButtonStyle(
@@ -75,7 +55,7 @@ open class NativeMaterialButtonView(
     private var density: Density,
     resolver: FontFamily.Resolver,
     private val style: NativeMaterialButtonStyle,
-    factory: NativeMaterialButtonInteractionsFactory,
+    inputPolicy: NativeButtonInputPolicy = NativeButtonInputPolicy.Default,
     onClick: () -> Unit,
 ) : ViewGroup(context), NativeClickPhaseHost, NativePointerLayerShape, NativeMergedRowAccessibilityHost, AutoCloseable {
     private var action = onClick
@@ -84,6 +64,7 @@ open class NativeMaterialButtonView(
     private var colorMotion: ViewColorTransition? = null
     private var icon: Drawable? = null
     private var leading: View? = null
+    private val hasLeading get() = icon != null || leading != null
     private var leadingOriginalImportance = IMPORTANT_FOR_ACCESSIBILITY_AUTO
     private var leadingExposed = false
     private var displayedInk = Color.TRANSPARENT
@@ -115,15 +96,15 @@ open class NativeMaterialButtonView(
             val widthBounded = style.assignedSize || MeasureSpec.getMode(w) != MeasureSpec.UNSPECIFIED
             val innerWidth = if (widthBounded) (width - 2 * horizontal).coerceAtLeast(0) else Int.MAX_VALUE
             val innerHeight = if (bounded) (height - 2 * vertical).coerceAtLeast(0) else Int.MAX_VALUE
-            val hasIcon = icon != null || leading != null
-            iconWidth = if (hasIcon) min(dp(style.iconSizeDp), innerWidth) else 0
-            iconHeight = if (hasIcon) min(dp(style.iconSizeDp), innerHeight) else 0
-            iconGap = if (hasIcon && style.showLabel) min(dp(style.iconGapDp), innerWidth - iconWidth) else 0
+            val leadingSize = leadingSize()
+            iconWidth = min(leadingSize, innerWidth)
+            iconHeight = min(leadingSize, innerHeight)
+            iconGap = min(leadingGap(), innerWidth - iconWidth)
             leading?.measure(exact(iconWidth), exact(iconHeight))
             if (style.showLabel) label.measure(if (widthBounded) atMost(innerWidth - iconWidth - iconGap) else w,
                 if (bounded) atMost(innerHeight) else h)
             setMeasuredDimension(
-                if (style.assignedSize) width else resolveSize(max(dp(style.minimumWidthDp), 2 * horizontal + iconWidth + iconGap + label.measuredWidth), w),
+                if (style.assignedSize) width else resolveSize(contentWidth(horizontal, iconWidth, iconGap, label.measuredWidth), w),
                 if (style.assignedSize) height else resolveSize(max(dp(style.minimumHeightDp), 2 * vertical + max(iconHeight, label.measuredHeight)), h),
             )
         }
@@ -156,7 +137,7 @@ open class NativeMaterialButtonView(
             }
         }
     }
-    private val input = factory.create(this, content, filled) { elevation = it }
+    private val input = NativeMaterialButtonInput(this, content, style.radiusDp, filled, inputPolicy) { elevation = it }
     override val nativeClickEndpoint get() = input.pointerEndpoint
     override val mergedRowAccessibility = MergedRowAccessibility(this, NativeMergedRowRole.BUTTON,
         { NativeMergedRowAccessibilityState(isEnabled, null, null, accessibilityChildren) },
@@ -175,11 +156,16 @@ open class NativeMaterialButtonView(
         descendantFocusability = FOCUS_BLOCK_DESCENDANTS
         outlineProvider = shape
         content.outlineProvider = shape
-        content.foreground = input.foreground
         label.isScreenReaderFocusable = false
         addView(content)
         addView(mergedRowAccessibility.roleView)
         accessibilityDelegate = mergedRowAccessibility
+        if (inputPolicy.inputRoot == null) {
+            mergedRowAccessibility.enableStandaloneAccessibility({ !closed }) {
+                contentDescription ?: if (style.showLabel) label.getText() else
+                    leading?.contentDescription?.takeIf { leadingExposed }
+            }
+        }
         setOnClickListener { if (canActivate()) action() }
         if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
         inputReady = true
@@ -263,7 +249,15 @@ open class NativeMaterialButtonView(
         invalidate()
     }
 
-    fun preferredWidth(compact: Boolean): Int = label.maxIntrinsicTextWidth() + 2 * padding(compact)
+    fun preferredWidth(compact: Boolean): Int = contentWidth(padding(compact), leadingSize(), leadingGap(),
+        if (style.showLabel) label.maxIntrinsicTextWidth() else 0)
+
+    private fun leadingSize(): Int = if (hasLeading) dp(style.iconSizeDp) else 0
+    private fun leadingGap(): Int = if (hasLeading && style.showLabel) dp(style.iconGapDp) else 0
+    private fun contentWidth(padding: Int, leadingWidth: Int, gap: Int, labelWidth: Int): Int {
+        val width = 2 * padding + leadingWidth + gap + labelWidth
+        return if (style.assignedSize) width else max(dp(style.minimumWidthDp), width)
+    }
     fun intrinsicHeight(width: Int): Int {
         label.measure(atMost((width - 2 * horizontalPadding()).coerceAtLeast(0)), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
         return max(dp(style.minimumHeightDp), label.measuredHeight + 2 * dp(style.verticalPaddingDp))
@@ -274,8 +268,8 @@ open class NativeMaterialButtonView(
     private fun padding(compact: Boolean) = dp(if (compact && filled) 12 else style.horizontalPaddingDp)
     private fun horizontalPadding() = padding(compactPadding)
     private fun radius(w: Int, h: Int): Float = min(min(w, h) / 2f, style.radiusDp?.times(layoutDensity) ?: Float.MAX_VALUE)
-    override fun containsPointerLayer(x: Float, y: Float): Boolean = roundedGroupGeometry(width.toFloat(), height.toFloat(),
-        layoutDensity, radius(width, height) / layoutDensity).contains(x, y)
+    override fun containsPointerLayer(x: Float, y: Float): Boolean = roundedGroupContains(width.toFloat(), height.toFloat(),
+        layoutDensity, radius(width, height) / layoutDensity, x, y)
     override fun onMeasure(w: Int, h: Int) {
         content.measure(w, h)
         setMeasuredDimension(content.measuredWidth, content.measuredHeight)
@@ -286,7 +280,7 @@ open class NativeMaterialButtonView(
         mergedRowAccessibility.roleView.layout(0, 0, width, height)
         invalidateOutline()
         content.invalidateOutline()
-        input.measured(width, height)
+        input.measured()
     }
     override fun onDraw(canvas: Canvas) {
         val radius = radius(width, height)

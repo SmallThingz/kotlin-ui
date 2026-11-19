@@ -1,6 +1,7 @@
 package smallthingz.ui.components
 
 import smallthingz.ui.geometry.roundedGroupGeometry
+import smallthingz.ui.geometry.roundedGroupContains
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -8,6 +9,31 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NativeGroupGeometryTest {
+    @Test
+    fun directHitMatchesPreviousDrawingGeometryAcrossBoundsAndCorners() {
+        for ((width, height) in listOf(0f to 20f, 18f to 0f, -2f to 3f, 3f to 5f,
+            5f to 3f, 34.5f to 34.5f, 137f to 49f)) {
+            for (density in floatArrayOf(1f, 1.333f, 2.625f)) {
+                for (cornerDp in floatArrayOf(0f, 1.75f, 20f, Float.MAX_VALUE)) {
+                    val radius = minOf(cornerDp * density, minOf(width, height).coerceAtLeast(0f) / 2f)
+                    fun coordinates(limit: Float) = floatArrayOf(Float.NaN, Float.NEGATIVE_INFINITY,
+                        -0.25f, 0f, radius * 0.25f, radius * 0.5f, Math.nextDown(radius), radius,
+                        limit * 0.5f, limit - radius, Math.nextDown(limit), limit, Float.POSITIVE_INFINITY)
+                    val geometry = roundedGroupGeometry(width, height, density, cornerDp)
+                    for (x in coordinates(width)) for (y in coordinates(height)) {
+                        val expected = if (x >= 0f && x < width && y >= 0f && y < height) {
+                            val dx = x - x.coerceIn(radius, width - radius)
+                            val dy = y - y.coerceIn(radius, height - radius)
+                            dx * dx + dy * dy <= radius * radius
+                        } else false
+                        assertEquals(expected, roundedGroupContains(width, height, density, cornerDp, x, y))
+                        assertEquals(expected, geometry.contains(x, y))
+                    }
+                }
+            }
+        }
+    }
+
     @Test
     fun explicitCornerRadiusKeepsTheSameDensityAndStrokeRules() {
         val geometry = roundedGroupGeometry(300f, 200f, 2.625f, cornerRadiusDp = 20f)

@@ -69,8 +69,16 @@
   },
   "preserved_contract": "Retained View ownership, rounded/joined clipping and border order, sampled theme colors, device animation scale, density/RTL rounding, direct-before-near hit routing, source accessibility leases and component lifetime. Reverb glyphs/palette and recording/navigation policies remain in app.",
   "removed_api": [
-    "NativeSettingsGroup"
+    "NativeSettingsGroup",
+    "NativeSwitch",
+    "NativeSwitchStyle",
+    "NativeButton",
+    "NativeButtonStyle",
+    "NativeButtonTone",
+    "NativeIconButton",
+    "NativeIconButtonStyle",
+    "NativeCheckBox",
+    "NativeRadioButton"
   ],
-  "distinct_retained_api": "NativeIconButton uses the platform ImageButton contract; it is not a phase-input replacement.",
   "qualification": "Source extraction. Existing moved tests and retained reliability fixtures require current build/runtime qualification; no measured speed, memory or battery claim."
 }

@@ -20,6 +20,9 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.view.ViewCompat
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.text.view.ParagraphView
+import smallthingz.ui.text.TextStyle
+import smallthingz.ui.text.font.FontFamily
+import smallthingz.ui.unit.Density
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -85,6 +88,17 @@ class NativeDropdown<T>(
         addView(selected)
         addView(arrow.view)
         if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
+    }
+
+    fun bindTypography(titleStyle: TextStyle, selectedStyle: TextStyle, density: Density,
+        resolver: FontFamily.Resolver) {
+        if (closed) return
+        title.setTypography(titleStyle, density, resolver)
+        selected.setTypography(selectedStyle, density, resolver)
+    }
+
+    fun bindDescription(description: CharSequence?) {
+        if (!closed) arrow.view.contentDescription = description
     }
 
     fun bind(next: NativeDropdownContent<T>, expanded: Boolean, palette: NativeDropdownColors) {

@@ -9,16 +9,89 @@ The DSL constructs actual Views directly. It does not retain a second UI tree or
 run a reconciler. This is an implementation boundary, not a measured zero-cost
 claim: text layout, animation, allocation and View operations still have costs.
 
-## Removed dialog API
+## Getting started
 
-`NativeDialog`, `NativeDialogStyle`, `NativeDialogPlacement`, `NativeDialogCorners`,
-`NativeDialogWidthPolicy`, `NativeDialogDimPolicy` and `NativeDialogSoftInputAdjust`
-have been removed. This is a source and binary breaking change; no compatibility
-facade is provided. External users must retain their own Android dialog implementation
-or choose a component meeting their layout, input, accessibility and lifecycle needs.
-The concrete `NativeActionSheet` and `NativeFloatingDialog` below have their own
-explicit content and lifetime contracts; they do not restore the removed API.
-No current Reverb caller uses the removed API; this removal does not establish a runtime speed improvement.
+Add `implementation(project(":native-ui"))` when the library is included as an
+Android module. See [Build](#build) for the standalone library build.
+
+Use `NativeMaterialButtonView` for a labeled action,
+`NativeStandardIconButtonView` for a circular glyph action, and `NativeToggleRow`
+for a checked setting with a title and optional description. Use
+`NativeSegmentedControl` for a small set of peer options and `NativeDropdown` for
+a typed choice that opens a list. `NativeGroupLayout` gives related rows one
+surface, an outer border, and optional dividers.
+
+```kotlin
+import android.content.Context
+import android.graphics.Color
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import smallthingz.ui.components.NativeGroupLayout
+import smallthingz.ui.components.NativeMaterialButtonStyle
+import smallthingz.ui.components.NativeMaterialButtonView
+import smallthingz.ui.text.TextStyle
+import smallthingz.ui.text.font.createFontFamilyResolver
+import smallthingz.ui.unit.Density
+import smallthingz.ui.unit.sp
+
+fun actions(
+    context: Context,
+    saveLabel: String,
+    resetLabel: String,
+    onSave: () -> Unit,
+    onReset: () -> Unit,
+): Triple<NativeGroupLayout, NativeMaterialButtonView, NativeMaterialButtonView> {
+    val density = Density(context)
+    val resolver = createFontFamilyResolver(context)
+    val textStyle = TextStyle(fontSize = 14.sp)
+    val style = NativeMaterialButtonStyle(horizontalPaddingDp = 16, minimumHeightDp = 48)
+    val save = NativeMaterialButtonView(context, true, textStyle, density, resolver, style, onClick = onSave)
+    val reset = NativeMaterialButtonView(context, false, textStyle, density, resolver, style, onClick = onReset)
+    save.bind(saveLabel, true, 0xff193b73.toInt(), Color.WHITE)
+    reset.bind(resetLabel, true, Color.TRANSPARENT, 0xff193b73.toInt())
+
+    val group = NativeGroupLayout(context)
+    group.setPaletteImmediately(Color.WHITE, 0xff777777.toInt())
+    group.addRow(save, NativeGroupLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+    group.addRow(reset, NativeGroupLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
+        dividerTop = true
+    })
+    return Triple(group, save, reset)
+}
+```
+
+Mount the group in an existing Activity or Fragment. The default button input
+handles ordinary Android touch and keys. Supply `NativeButtonInputPolicy` when
+the host needs an explicit input root, an owner revision key, or delayed press
+admission under a scrolling parent.
+
+Keep the returned controls for the owner’s lifetime. Rebind labels, enabled
+state, actions and palette on the same views. For font or display changes, obtain
+a new `Density` and shared font resolver from the current window and call
+`bindTypography` before rebinding labels. For language changes, resolve
+domain labels and descriptions again from the current resources. The library's
+intrinsic control states and roles use its translated Android resources. Call
+`close()` on retained buttons, toggles, selectors and dropdowns when their
+logical owner retires, such as at `Fragment.onDestroyView()`.
+
+A toggle callback requests the next checked value. A segmented callback
+requests an option ID. Publish the authoritative selection back through
+`bindToggle` or `bind`; labels can change with locale while option identity
+stays stable. For a dropdown, keep the popup in the window owner and pass typed
+options to `NativePopupMenu`. Recreate an open popup if its immutable typography
+or density changes, or if the anchor changes layout direction. Retain the
+caller’s scroll state for that same choice.
+
+Mounted buttons and toggles with default input expose a single named Android
+accessibility action using the view's visible bounds. Toggle semantics include
+the current checked state. Set `contentDescription` for a control whose visible
+content does not provide a name.
+
+Hosts with an explicit input root supply the control's `mergedRowAccessibility`
+geometry. A standalone host may also bind geometry for custom traversal and
+bounds. The first explicit binding takes over for the lifetime of that view.
+Closing its lease hides the source node until a new lease is bound. See
+[Paragraph views and merged rows](docs/paragraph-views.md#merged-rows).
 
 ## Grouped controls
 
@@ -37,10 +110,8 @@ separator. `setPaletteImmediately` accepts colors already sampled by a caller's
 multi-channel animation. The optional `onPaintedSurfaceChanged` callback observes
 actual fill changes for caller-owned contrast invalidation.
 
-The unused `NativeSettingsGroup` API is removed in favor of this shared owner.
-This is a source/binary breaking change, with no compatibility facade. Its old
-layout-space dividers are not an equivalent rendering of the new explicit
-foreground separators. `NativeSettingsRow` remains available as row content.
+Use `NativeSettingsRow` as row content when a setting needs a title, description,
+and a value. A `NativeToggleRow` supplies one checked action for the whole row.
 
 ## Top bars and icon actions
 
@@ -67,11 +138,6 @@ accessibility binding; `bindAction` controls density, enabled state and inherite
 ripple color. Explicit glyph tint stays with the glyph owner. These components use
 the shared click, ripple and animation-scale infrastructure and create no second
 input or animation engine.
-
-The older `NativeIconButton` remains a platform ImageButton-based control with
-its own tested public contract. It is not an equivalent replacement for these
-source-shaped phase-input actions. Reverb adapters contain only app glyphs,
-palette/contrast policy, incident-preview animation and screen action policy.
 
 ## Named color spaces
 
@@ -243,7 +309,7 @@ Upstream-derived files retain their existing Apache-2.0 notices and provenance.
 Dependencies include AndroidX annotation, core, lifecycle, savedstate and emoji2.
 Coroutines and activity-ktx 1.13.0 are exposed by the window/runtime APIs.
 
-## Source-derived anchored menu (API replacement)
+## Anchored menus
 
 `NativePopupMenu<I>` is a concrete focusable sub-panel using the shared phase
 pointer root, vertical viewport, paragraph renderer and retained spring transition.
@@ -261,16 +327,11 @@ scroll state and admit callback identity/reentrancy; the component does not rout
 commands or automatically choose callback-before-dismiss versus dismiss-before-
 callback. The scope/frame clock and density/configuration lifetime are caller-owned.
 
-This intentionally replaces the former `NativePopupMenu`, `NativeMenuItem` and
-`NativePopupMenuStyle` API and removes the unused platform PopupWindow engine.
-It is a source/binary break for external consumers: replace item IDs/style bags
-with typed row data, explicit environment/renderer inputs and owned callbacks.
-There is no NativeButton itemView or compatibility facade. Choice selection is exposed through standard selected accessibility semantics
+Choice selection is exposed through standard selected accessibility semantics
 and the same visual trailing check; action-row reuse clears selection. Window
 flags/secure inheritance, candidate placement and transition behavior follow the
 source-derived component. The intrinsic popup title stays in library translations;
-domain row labels stay with their owner. Unknown external consumers must migrate
-when adopting this commit rather than assuming the old constructor/defaults persist.
+domain row labels stay with their owner.
 
 ## Action sheets and floating windows
 
@@ -334,3 +395,12 @@ resource provenance record source versions and licenses. Moved unit tests cover
 state/admission, geometry, tooltip release and floating motion; those tests do not
 prove Android window/input/IME or rendering parity, and moving code establishes
 no runtime performance improvement.
+
+## API migration
+
+- Use `NativeGroupLayout` for grouped settings, and opt each divider in through
+  its row's layout parameters. [Control source records](SOURCE-controls.json)
+- Choose `NativeActionSheet` or `NativeFloatingDialog` when moving a dialog to
+  the current window components. [Dialog source records](SOURCE-dialogs.json)
+- Bind typed choices or action callbacks when upgrading an anchored menu.
+  See [Anchored menus](#anchored-menus) for window ownership and dismissal.

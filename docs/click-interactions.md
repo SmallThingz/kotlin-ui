@@ -1,6 +1,18 @@
 # Explicit View click, ripple and elevation owners
 
-`smallthingz.ui.interaction.view` provides independent owners for an existing Android View. They do not create a widget hierarchy or infer screen actions. Existing NativeButton/NativeSwitch behavior is unchanged; these owners preserve a different source-derived event and frame contract.
+`smallthingz.ui.interaction.view` provides independent input and indication owners for an existing Android View. `NativeToggleRow` uses these owners for the checked action, with `NativeMaterialSwitchView` drawing the switch.
+
+## Shared material button
+
+`NativeMaterialButtonView` supplies click handling, ripple, accessibility and a capsule shadow for a filled button by default.
+
+```kotlin
+val save = NativeMaterialButtonView(context, true, textStyle, density, resolver,
+    NativeMaterialButtonStyle(horizontalPaddingDp = 24)) { onSave() }
+save.bind(saveLabel, enabled = canSave, container = accentColor, contentColor = onAccentColor)
+```
+
+Supply `NativeButtonInputPolicy` when the button belongs to a custom native input root or a recycled row. An optional `revisionKey` produces the current gesture owner identity. Changing that key at `bind` cancels held input, while rebinding the same key keeps the gesture and dispatches to the current callback. A null key suspends gesture admission. A finite `radiusDp` uses the rounded style without elevation. The enclosing owner can delay a press for an interested parent and should close the button on retirement.
 
 ## Click admission and interaction identity
 

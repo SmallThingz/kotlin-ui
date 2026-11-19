@@ -116,6 +116,15 @@ class MergedRowAccessibility(
     private var sourceNode: (() -> NativeSourceAccessibilityNode)? = null
     private var sourceChildPresent: ((View) -> Boolean)? = null
     private var sourceRequest: (() -> Map<View, NativeSourceAccessibilityNode>)? = null
+    private var sourceGeometryWasBound = false
+    private var standaloneExposure: (() -> Boolean)? = null
+    private var standaloneDescription: (() -> CharSequence?)? = null
+
+    /** Native bounds are available only until a source window first takes over. */
+    internal fun enableStandaloneAccessibility(exposed: () -> Boolean, description: () -> CharSequence?) {
+        standaloneExposure = exposed
+        standaloneDescription = description
+    }
 
     fun sourceOrderedChildren(): List<View> = sourceState().orderedChildren
 
@@ -145,6 +154,7 @@ class MergedRowAccessibility(
                              request: (() -> Map<View, NativeSourceAccessibilityNode>)?,
                              exposed: () -> Boolean): AutoCloseable {
         val token = Any()
+        sourceGeometryWasBound = true
         geometryToken = token
         geometry = value
         sourceExposure = exposed
@@ -165,6 +175,20 @@ class MergedRowAccessibility(
 
     private fun snapshot(): NativeMergedRowAccessibilitySnapshot {
         val state = sourceState()
+        val nativeExposure = standaloneExposure
+        if (!sourceGeometryWasBound && nativeExposure != null) {
+            val bounds = Rect()
+            val present = nativeExposure() && host.isAttachedToWindow && host.isShown &&
+                host.windowVisibility == View.VISIBLE && !hasTransparentAncestor(host) && host.getGlobalVisibleRect(bounds)
+            if (present) {
+                val rootLocation = IntArray(2)
+                host.rootView.getLocationOnScreen(rootLocation)
+                bounds.offset(rootLocation[0], rootLocation[1])
+            }
+            return NativeMergedRowAccessibilitySnapshot(present, !present, present, state.enabled,
+                state.checked, state.clickLabel, emptyList(), 0, bounds, bounds, state.selected,
+                standaloneDescription?.invoke(), state.clickable, state.longClickable, state.longClickLabel, state.rolePresent)
+        }
         val localBounds = (host as? NativeMergedRowAccessibilityHost)?.accessibilityBoundsInView
             ?: ComposeRect(0f, 0f, host.width.toFloat(), host.height.toFloat())
         val mapped = geometry?.capture(host, Offset.Zero,

@@ -165,8 +165,8 @@ class NativeMaterialSwitchView(
         thumbPaint.color = colorMotion?.color(1) ?: colors.thumb(isEnabled, checked)
         borderPaint.color = colorMotion?.color(2) ?: colors.border(isEnabled, checked)
         borderPaint.strokeWidth = borderWidth
-        NativeSwitchPainter.track(canvas, originX, originY, originX + trackWidth, originY + trackHeight,
-            radius, trackPaint)
+        canvas.drawRoundRect(originX, originY, originX + trackWidth, originY + trackHeight,
+            radius, radius, trackPaint)
 
         // ThumbNode truncates its animated pixel size/offset; it does not round them or animate dp.
         val actualSize = size.value.toInt()
@@ -176,12 +176,14 @@ class NativeMaterialSwitchView(
         } else logicalOffset
         val thumbY = ((trackHeight - actualSize) / 2f).roundToInt()
         val thumbRadius = actualSize / 2f
-        NativeSwitchPainter.track(canvas, originX + thumbX, originY + thumbY,
-            originX + thumbX + actualSize, originY + thumbY + actualSize, thumbRadius, thumbPaint)
+        canvas.drawRoundRect(originX + thumbX, originY + thumbY,
+            originX + thumbX + actualSize, originY + thumbY + actualSize, thumbRadius, thumbRadius, thumbPaint)
 
         // Modifier.border draws after background and children, including the thumb.
-        NativeSwitchPainter.border(canvas, originX, originY, originX + trackWidth, originY + trackHeight,
-            radius, borderWidth / 2f, borderPaint)
+        val inset = borderWidth / 2f
+        val borderRadius = (radius - inset).coerceAtLeast(0f)
+        canvas.drawRoundRect(originX + inset, originY + inset, originX + trackWidth - inset,
+            originY + trackHeight - inset, borderRadius, borderRadius, borderPaint)
     }
 
     override fun doFrame(frameTimeNanos: Long) {
@@ -344,23 +346,5 @@ private class SwitchFloatMotion(initial: Float) {
     private companion object {
         const val UNSET_FRAME = Long.MIN_VALUE
         val SPRING = FloatSpringSpec(dampingRatio = 0.9f, stiffness = 1400f, visibilityThreshold = 0.01f)
-    }
-}
-
-/** Shared track, thumb and inset border drawing for row-driven and platform switches. */
-internal object NativeSwitchPainter {
-    fun track(canvas: Canvas, left: Float, top: Float, right: Float, bottom: Float,
-        radius: Float, paint: Paint) {
-        canvas.drawRoundRect(left, top, right, bottom, radius, radius, paint)
-    }
-
-    fun circularThumb(canvas: Canvas, x: Float, y: Float, radius: Float, paint: Paint) {
-        canvas.drawCircle(x, y, radius, paint)
-    }
-
-    fun border(canvas: Canvas, left: Float, top: Float, right: Float, bottom: Float,
-        radius: Float, inset: Float, paint: Paint) {
-        track(canvas, left + inset, top + inset, right - inset, bottom - inset,
-            (radius - inset).coerceAtLeast(0f), paint)
     }
 }

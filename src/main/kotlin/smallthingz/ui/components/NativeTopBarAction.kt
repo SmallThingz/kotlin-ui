@@ -9,6 +9,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import smallthingz.ui.animation.view.ViewColorTransition
+import smallthingz.ui.geometry.roundedGroupContains
 import smallthingz.ui.geometry.roundedGroupGeometry
 import smallthingz.ui.input.phase.*
 import smallthingz.ui.interaction.view.*
@@ -128,7 +129,7 @@ private class NativeTopBarActionLeaf(
     }, RowIndicationSink(indication) { x, y, point -> point.set(x, y) })
     override val nativeClickEndpoint: NativeClickPhaseEndpoint = ViewClickPhaseEndpoint(controller)
     override fun containsPointerLayer(x: Float, y: Float) =
-        roundedGroupGeometry(width.toFloat(), height.toFloat(), density, cornerRadiusDp).contains(x, y)
+        roundedGroupContains(width.toFloat(), height.toFloat(), density, cornerRadiusDp, x, y)
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         // The actual Icon child owns the description; Settings retains its explicit button role.

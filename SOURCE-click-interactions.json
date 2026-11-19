@@ -55,7 +55,7 @@
     "configureButtonShadowHost",
     "readCachedAnimatorDurationScale"
   ],
-  "kept_app_specific_factory": "createReverbOnboardingButtonElevation",
+  "button_configuration": "NativeMaterialButtonView uses the shared elevation owner and an optional NativeButtonInputPolicy",
   "intrinsic_copy": "none; labels/accessibility remain host-owned",
   "duration_policy": "existing app cached observer/retry contract preserved; existing library direct reader is not equivalent",
   "alpha_policy": "exact original reverbColorWithAlpha formula copied into a private indication helper; no palette dependency"

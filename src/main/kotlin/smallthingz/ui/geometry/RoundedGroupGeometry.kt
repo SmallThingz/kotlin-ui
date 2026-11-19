@@ -12,12 +12,7 @@ data class RoundedGroupGeometry(
     val strokeRadius: Float,
     val fillBorder: Boolean,
 ) {
-    fun contains(x: Float, y: Float): Boolean {
-        if (x < 0f || y < 0f || x >= width || y >= height || !x.isFinite() || !y.isFinite()) return false
-        val dx = x - x.coerceIn(radius, width - radius)
-        val dy = y - y.coerceIn(radius, height - radius)
-        return dx * dx + dy * dy <= radius * radius
-    }
+    fun contains(x: Float, y: Float): Boolean = containsRoundedPoint(width, height, radius, x, y)
 
     fun acceptsPointer(x: Float, y: Float, touch: Boolean, minimumTarget: Float): Boolean {
         if (contains(x, y)) return true
@@ -34,6 +29,21 @@ data class RoundedGroupGeometry(
     }
 }
 
+/** Tests the visual clip directly when the caller does not need stroke or drawing geometry. */
+fun roundedGroupContains(width: Float, height: Float, density: Float, cornerRadiusDp: Float,
+                         x: Float, y: Float): Boolean =
+    containsRoundedPoint(width, height, roundedRadius(min(width, height), density, cornerRadiusDp), x, y)
+
+private fun roundedRadius(minimumDimension: Float, density: Float, cornerRadiusDp: Float): Float =
+    min(cornerRadiusDp * density, minimumDimension.coerceAtLeast(0f) / 2f)
+
+private fun containsRoundedPoint(width: Float, height: Float, radius: Float, x: Float, y: Float): Boolean {
+    if (x < 0f || y < 0f || x >= width || y >= height || !x.isFinite() || !y.isFinite()) return false
+    val dx = x - x.coerceIn(radius, width - radius)
+    val dy = y - y.coerceIn(radius, height - radius)
+    return dx * dx + dy * dy <= radius * radius
+}
+
 fun roundedGroupGeometry(
     width: Float,
     height: Float,
@@ -41,7 +51,7 @@ fun roundedGroupGeometry(
     cornerRadiusDp: Float = 16f,
 ): RoundedGroupGeometry {
     val minimum = min(width, height).coerceAtLeast(0f)
-    val radius = min(cornerRadiusDp * density, minimum / 2f)
+    val radius = roundedRadius(minimum, density, cornerRadiusDp)
     // Compose BorderModifierNode rounds a non-hairline dp stroke up to device pixels.
     val stroke = min(ceil(density), ceil(minimum / 2f))
     return RoundedGroupGeometry(

@@ -1,6 +1,6 @@
 package smallthingz.ui.components
 
-import smallthingz.ui.geometry.roundedGroupGeometry
+import smallthingz.ui.geometry.roundedGroupContains
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -53,8 +53,7 @@ internal class NativeMenuPointerBinding<I>(
     }
     private val surfaceChildren = listOf(viewportLayout)
     private val surfaceLayout = NativeRetainedViewHitLayout(content,geometry,minimum,listOf(shield),{ surfaceChildren },clip = {
-        roundedGroupGeometry(content.width.toFloat(),content.height.toFloat(),density.density,18f)
-            .contains(it.x,it.y)
+        roundedGroupContains(content.width.toFloat(),content.height.toFloat(),density.density,18f, it.x, it.y)
     })
     val layout: NativeViewPointerHitLayout = object : NativeViewPointerHitLayout {
         override val placed get() = root?.isAttachedToWindow == true
@@ -80,8 +79,7 @@ internal class NativeMenuPointerBinding<I>(
             rowLayouts.getOrPut(row) {
                 val node = NativeClickPhaseNode(row,ViewClickPhaseEndpoint(row.input),vertical::interested)
                 NativeRetainedViewHitLayout(row,geometry,minimum,listOf(node),{ emptyList() },clip = {
-                    roundedGroupGeometry(row.width.toFloat(),row.height.toFloat(),density.density,12f)
-                        .contains(it.x,it.y)
+                    roundedGroupContains(row.width.toFloat(),row.height.toFloat(),density.density,12f, it.x, it.y)
                 })
             }
         }
