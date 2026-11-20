@@ -159,22 +159,7 @@ class RectOverlapTest {
     }
 
     private fun assertFloatOverlap(expected: Boolean, first: Rect, second: Rect) {
-        val mutableFirst = MutableRect(first.left, first.top, first.right, first.bottom)
-        val mutableSecond = MutableRect(second.left, second.top, second.right, second.bottom)
         assertEquals("Rect forward: $first / $second", expected, first.overlaps(second))
         assertEquals("Rect reverse: $second / $first", expected, second.overlaps(first))
-        assertEquals("MutableRect/Rect forward", expected, mutableFirst.overlaps(second))
-        assertEquals("MutableRect/Rect reverse", expected, mutableSecond.overlaps(first))
-        assertEquals("MutableRect/MutableRect forward", expected, mutableFirst.overlaps(mutableSecond))
-        assertEquals("MutableRect/MutableRect reverse", expected, mutableSecond.overlaps(mutableFirst))
-        assertUnchanged(first, mutableFirst)
-        assertUnchanged(second, mutableSecond)
-    }
-
-    private fun assertUnchanged(expected: Rect, actual: MutableRect) {
-        assertEquals(expected.left.toRawBits(), actual.left.toRawBits())
-        assertEquals(expected.top.toRawBits(), actual.top.toRawBits())
-        assertEquals(expected.right.toRawBits(), actual.right.toRawBits())
-        assertEquals(expected.bottom.toRawBits(), actual.bottom.toRawBits())
     }
 }

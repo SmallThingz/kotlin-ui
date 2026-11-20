@@ -18,31 +18,13 @@
 
 package smallthingz.ui.unit
 
-import smallthingz.ui.util.fastCoerceAtLeast
 import smallthingz.ui.util.fastCoerceIn
 import smallthingz.ui.util.requirePrecondition
 import kotlin.jvm.JvmInline
 import kotlin.math.min
 
 /**
- * Immutable constraints for measuring layouts, used by [layouts][smallthingz.ui.layout.Layout]
- * or [layout modifiers][smallthingz.ui.layout.LayoutModifier] to measure their layout
- * children. The parent chooses the [Constraints] defining a range, in pixels, within which the
- * measured layout should choose a size:
- * - `minWidth` <= `chosenWidth` <= `maxWidth`
- * - `minHeight` <= `chosenHeight` <= `maxHeight`
- *
- * For more details about how layout measurement works, see
- * [smallthingz.ui.layout.MeasurePolicy] or
- * [smallthingz.ui.layout.LayoutModifier.measure].
- *
- * A set of [Constraints] can have infinite maxWidth and/or maxHeight. This is a trick often used by
- * parents to ask their children for their preferred size: unbounded constraints force children
- * whose default behavior is to fill the available space (always size to maxWidth/maxHeight) to have
- * an opinion about their preferred size. Most commonly, when measured with unbounded [Constraints],
- * these children will fallback to size themselves to wrap their content, instead of expanding to
- * fill the available space (this is not always true as it depends on the child layout model, but is
- * a common behavior for core layout components).
+ * Pixel bounds for native text measurement.
  *
  * [Constraints] uses a [Long] to represent four values, [minWidth], [minHeight], [maxWidth], and
  * [maxHeight]. The range of the values varies to allow for at most 256K in one dimension. There are
@@ -55,11 +37,7 @@ import kotlin.math.min
 @JvmInline
 value class Constraints(@PublishedApi internal val value: Long) {
     /**
-     * Indicates how the bits are assigned. One of:
-     * - MinFocusWidth
-     * - MaxFocusWidth
-     * - MinFocusHeight
-     * - MaxFocusHeight
+     * Selects the width/height bit allocation described by [FocusMask].
      */
     private inline val focusIndex
         get() = (value and FocusMask).toInt()
@@ -104,22 +82,14 @@ value class Constraints(@PublishedApi internal val value: Long) {
             return if (height == 0) Infinity else height - 1
         }
 
-    /**
-     * `false` when [maxWidth] is [Infinity] and `true` if [maxWidth] is a non-[Infinity] value.
-     *
-     * @see hasBoundedHeight
-     */
+    /** Whether [maxWidth] is finite. */
     val hasBoundedWidth: Boolean
         get() {
             val mask = widthMask(indexToBitOffset(focusIndex))
             return ((value shr 33).toInt() and mask) != 0
         }
 
-    /**
-     * `false` when [maxHeight] is [Infinity] and `true` if [maxHeight] is a non-[Infinity] value.
-     *
-     * @see hasBoundedWidth
-     */
+    /** Whether [maxHeight] is finite. */
     val hasBoundedHeight: Boolean
         get() {
             val bitOffset = indexToBitOffset(focusIndex)
@@ -127,74 +97,6 @@ value class Constraints(@PublishedApi internal val value: Long) {
             val offset = minHeightOffsets(bitOffset) + 31
             return ((value shr offset).toInt() and mask) != 0
         }
-
-    /** Whether there is exactly one width value that satisfies the constraints. */
-    val hasFixedWidth: Boolean
-        get() {
-            val mask = widthMask(indexToBitOffset(focusIndex))
-            val minWidth = ((value shr 2).toInt() and mask)
-            val maxWidth =
-                ((value shr 33).toInt() and mask).let { if (it == 0) Infinity else it - 1 }
-            return minWidth == maxWidth
-        }
-
-    /** Whether there is exactly one height value that satisfies the constraints. */
-    val hasFixedHeight: Boolean
-        get() {
-            val bitOffset = indexToBitOffset(focusIndex)
-            val mask = heightMask(bitOffset)
-            val offset = minHeightOffsets(bitOffset)
-            val minHeight = (value shr offset).toInt() and mask
-            val maxHeight =
-                ((value shr (offset + 31)).toInt() and mask).let {
-                    if (it == 0) Infinity else it - 1
-                }
-            return minHeight == maxHeight
-        }
-
-    /**
-     * Whether the area of a component respecting these constraints will definitely be 0. This is
-     * true when at least one of maxWidth and maxHeight are 0.
-     */
-    val isZero: Boolean
-        get() {
-            val bitOffset = indexToBitOffset(focusIndex)
-            val maxWidth = ((value shr 33).toInt() and widthMask(bitOffset)) - 1
-            val offset = minHeightOffsets(bitOffset) + 31
-            val maxHeight = ((value shr offset).toInt() and heightMask(bitOffset)) - 1
-            return (maxWidth == 0) or (maxHeight == 0)
-        }
-
-    /**
-     * Copies the existing [Constraints], replacing some of [minWidth], [minHeight], [maxWidth], or
-     * [maxHeight] as desired. [minWidth] and [minHeight] must be positive and [maxWidth] and
-     * [maxHeight] must be greater than or equal to [minWidth] and [minHeight], respectively, or
-     * [Infinity].
-     */
-    fun copy(
-        minWidth: Int = this.minWidth,
-        maxWidth: Int = this.maxWidth,
-        minHeight: Int = this.minHeight,
-        maxHeight: Int = this.maxHeight,
-    ): Constraints {
-        requirePrecondition(
-            maxWidth >= minWidth && maxHeight >= minHeight && minWidth >= 0 && minHeight >= 0
-        ) {
-            """
-            maxWidth must be >= than minWidth,
-            maxHeight must be >= than minHeight,
-            minWidth and minHeight must be >= 0
-            """
-                .trimIndent()
-        }
-        return createConstraints(minWidth, maxWidth, minHeight, maxHeight)
-    }
-
-    /**
-     * Copies the existing [Constraints], setting [minWidth] and [minHeight] to 0, and preserving
-     * [maxWidth] and [maxHeight] as-is.
-     */
-    inline fun copyMaxDimensions() = Constraints(value and MaxDimensionsAndFocusMask)
 
     override fun toString(): String {
         val maxWidth = maxWidth
@@ -206,78 +108,10 @@ value class Constraints(@PublishedApi internal val value: Long) {
     }
 
     companion object {
-        /**
-         * A value that [maxWidth] or [maxHeight] will be set to when the constraint should be
-         * considered infinite. [hasBoundedWidth] or [hasBoundedHeight] will be `false` when
-         * [maxWidth] or [maxHeight] is [Infinity], respectively.
-         */
+        /** An unbounded maximum width or height. */
         const val Infinity = Int.MAX_VALUE
 
-        /** Creates constraints for fixed size in both dimensions. */
-        fun fixed(width: Int, height: Int): Constraints {
-            requirePrecondition((width >= 0) and (height >= 0)) { "width and height must be >= 0" }
-            return createConstraints(width, width, height, height)
-        }
-
-        /** Creates constraints for fixed width and unspecified height. */
-        fun fixedWidth(width: Int): Constraints {
-            requirePrecondition(width >= 0) { "width must be >= 0" }
-            return createConstraints(
-                minWidth = width,
-                maxWidth = width,
-                minHeight = 0,
-                maxHeight = Infinity,
-            )
-        }
-
-        /** Creates constraints for fixed height and unspecified width. */
-        fun fixedHeight(height: Int): Constraints {
-            requirePrecondition(height >= 0) { "height must be >= 0" }
-            return createConstraints(
-                minWidth = 0,
-                maxWidth = Infinity,
-                minHeight = height,
-                maxHeight = height,
-            )
-        }
-
-        // This should be removed before the next release
-        @Deprecated(
-            "Replace with fitPrioritizingWidth",
-            replaceWith =
-                ReplaceWith(
-                    "Constraints.fitPrioritizingWidth(minWidth, maxWidth, minHeight, maxHeight)"
-                ),
-        )
-        fun restrictConstraints(
-            minWidth: Int,
-            maxWidth: Int,
-            minHeight: Int,
-            maxHeight: Int,
-            prioritizeWidth: Boolean = true,
-        ): Constraints {
-            return if (prioritizeWidth) {
-                fitPrioritizingWidth(minWidth, maxWidth, minHeight, maxHeight)
-            } else {
-                fitPrioritizingHeight(minWidth, maxWidth, minHeight, maxHeight)
-            }
-        }
-
-        /**
-         * Returns [Constraints] that match as close as possible to the values passed. If the
-         * dimensions are outside of those that can be represented, the constraints are limited to
-         * those that can be represented.
-         *
-         * [Constraints] is a `value class` based on a [Long] and 4 integers must be limited to fit
-         * within its size. The larger dimension has up to 18 bits (262,143) and the smaller as few
-         * as 13 bits (8191). The width is granted as much space as it needs or caps the size to 18
-         * bits. The height is given the remaining space.
-         *
-         * This can be useful when layout constraints are possible to be extremely large, but not
-         * everything is possible to display on the device. For example a text layout where an
-         * entire chapter of a book is measured in one Layout and it isn't possible to break up the
-         * content to show in a `LazyColumn`.
-         */
+        /** Fits the bounds into the packed value, allocating width bits before height bits. */
         fun fitPrioritizingWidth(
             minWidth: Int,
             maxWidth: Int,
@@ -297,60 +131,21 @@ value class Constraints(@PublishedApi internal val value: Long) {
             val minH = min(maxAllowed, minHeight)
             return Constraints(minW, maxW, minH, maxH)
         }
-
-        /**
-         * Returns [Constraints] that match as close as possible to the values passed. If the
-         * dimensions are outside of those that can be represented, the constraints are limited to
-         * those that can be represented.
-         *
-         * [Constraints] is a `value class` based on a [Long] and 4 integers must be limited to fit
-         * within its size. The larger dimension has up to 18 bits (262,143) and the smaller as few
-         * as 13 bits (8191). The height is granted as much space as it needs or caps the size to 18
-         * bits. The width is given the remaining space.
-         *
-         * This can be useful when layout constraints are possible to be extremely large, but not
-         * everything is possible to display on the device. For example a text layout where an
-         * entire chapter of a book is measured in one Layout and it isn't possible to break up the
-         * content to show in a `LazyColumn`.
-         */
-        fun fitPrioritizingHeight(
-            minWidth: Int,
-            maxWidth: Int,
-            minHeight: Int,
-            maxHeight: Int,
-        ): Constraints {
-            val minH = min(minHeight, MaxFocusMask - 1)
-            val maxH =
-                if (maxHeight == Infinity) {
-                    Infinity
-                } else {
-                    min(maxHeight, MaxFocusMask - 1)
-                }
-            val consumed = if (maxH == Infinity) minH else maxH
-            val maxAllowed = maxAllowedForSize(consumed)
-            val maxW = if (maxWidth == Infinity) Infinity else min(maxAllowed, maxWidth)
-            val minW = min(maxAllowed, minWidth)
-            return Constraints(minW, maxW, minH, maxH)
-        }
     }
 }
 
 // Redefinition of Constraints.Infinity to bypass the companion object
 private const val Infinity = Int.MAX_VALUE
 
-/**
- * The mask to retrieve the focus:
- * - MaxFocusHeight = 0x0. The bit distribution when the focus of the bits should be on the height,
- *   and a a maximal number of bits assigned to the height. 13 bits assigned to width, 18 bits
- *   assigned to height.
- * - MinFocusHeight = 0x1. The bit distribution when the focus of the bits should be on the height,
- *   but only a minimal difference in focus. 15 bits assigned to width, 16 bits assigned to height.
- * - MinFocusWidth = 0x2. The bit distribution when the focus of the bits should be on the width,
- *   but only a minimal difference in focus. 16 bits assigned to width, 15 bits assigned to height.
- * - MaxFocusWidth = 0x3 .The bit distribution when the focus of the bits should be on the width,
- *   and a maximal number of bits assigned to the width. 18 bits assigned to width, 13 bits assigned
- *   to height.
- */
+// The low two bits select how the other 62 bits are divided into two 31-bit halves.
+// Each half stores width followed by height, with the same allocation in both halves.
+// Index  Offset  Width bits/mask  Height bits/mask  Min height shift
+//   0       0       13 / 0x1fff     18 / 0x3ffff          15
+//   1       2       15 / 0x7fff     16 / 0xffff           17
+//   2       3       16 / 0xffff     15 / 0x7fff           18
+//   3       5       18 / 0x3ffff    13 / 0x1fff           20
+// The low half encodes minimums. The upper half encodes maximums as value + 1,
+// reserving zero for infinity. Thus the capacity for a finite value is its mask minus one.
 private const val FocusMask = 0x3L
 
 /** The number of bits used for the focused dimension when there is minimal focus. */
@@ -380,9 +175,6 @@ private const val MaxAllowedForMaxNonFocusBits = (1 shl (31 - MaxNonFocusBits)) 
 
 /** The mask to use for the non-focused dimension when there is maximal focus. */
 private const val MaxNonFocusMask = 0x1FFF // 8K (13 bits)
-
-// 0xFFFFFFFE_00000003UL.toLong(), written as a signed value to declare it const
-@PublishedApi internal const val MaxDimensionsAndFocusMask = -0x00000001_FFFFFFFDL
 
 // Wrap those throws in functions to avoid inlining the string building at the call sites
 // Keep internal for codegen
@@ -461,9 +253,9 @@ private inline fun maxAllowedForSize(size: Int): Int {
 }
 
 /**
- * Create a [Constraints]. [minWidth] and [minHeight] must be positive and [maxWidth] and
+ * Create a [Constraints]. Both minimum dimensions must be nonnegative. [maxWidth] and
  * [maxHeight] must be greater than or equal to [minWidth] and [minHeight], respectively, or
- * [Infinity][Constraints.Infinity].
+ * [Constraints.Infinity].
  */
 fun Constraints(
     minWidth: Int = 0,
@@ -484,28 +276,6 @@ fun Constraints(
     return createConstraints(minWidth, maxWidth, minHeight, maxHeight)
 }
 
-/**
- * Takes [otherConstraints] and returns the result of coercing them in the current constraints. Note
- * this means that any size satisfying the resulting constraints will satisfy the current
- * constraints, but they might not satisfy the [otherConstraints] when the two set of constraints
- * are disjoint. Examples (showing only width, height works the same): (minWidth=2,
- * maxWidth=10).constrain(minWidth=7, maxWidth=12) -> (minWidth = 7, maxWidth = 10) (minWidth=2,
- * maxWidth=10).constrain(minWidth=11, maxWidth=12) -> (minWidth=10, maxWidth=10) (minWidth=2,
- * maxWidth=10).constrain(minWidth=5, maxWidth=7) -> (minWidth=5, maxWidth=7)
- */
-fun Constraints.constrain(otherConstraints: Constraints): Constraints {
-    val minWidth = minWidth
-    val maxWidth = maxWidth
-    val minHeight = minHeight
-    val maxHeight = maxHeight
-    return Constraints(
-        minWidth = otherConstraints.minWidth.fastCoerceIn(minWidth, maxWidth),
-        maxWidth = otherConstraints.maxWidth.fastCoerceIn(minWidth, maxWidth),
-        minHeight = otherConstraints.minHeight.fastCoerceIn(minHeight, maxHeight),
-        maxHeight = otherConstraints.maxHeight.fastCoerceIn(minHeight, maxHeight),
-    )
-}
-
 /** Takes a size and returns the closest size to it that satisfies the constraints. */
 fun Constraints.constrain(size: IntSize) =
     IntSize(
@@ -513,91 +283,11 @@ fun Constraints.constrain(size: IntSize) =
         height = size.height.fastCoerceIn(minHeight, maxHeight),
     )
 
-/** Takes a width and returns the closest size to it that satisfies the constraints. */
-fun Constraints.constrainWidth(width: Int) = width.fastCoerceIn(minWidth, maxWidth)
-
-/** Takes a height and returns the closest size to it that satisfies the constraints. */
-fun Constraints.constrainHeight(height: Int) = height.fastCoerceIn(minHeight, maxHeight)
-
-/** Takes a size and returns whether it satisfies the current constraints. */
-fun Constraints.isSatisfiedBy(size: IntSize): Boolean {
-    return size.width in minWidth..maxWidth && size.height in minHeight..maxHeight
-}
-
-/** Returns the Constraints obtained by offsetting the current instance with the given values. */
-fun Constraints.offset(horizontal: Int = 0, vertical: Int = 0) =
-    Constraints(
-        (minWidth + horizontal).fastCoerceAtLeast(0),
-        addMaxWithMinimum(maxWidth, horizontal),
-        (minHeight + vertical).fastCoerceAtLeast(0),
-        addMaxWithMinimum(maxHeight, vertical),
-    )
-
-private inline fun addMaxWithMinimum(max: Int, value: Int): Int {
-    return if (max == Infinity) {
-        max
-    } else {
-        (max + value).fastCoerceAtLeast(0)
-    }
-}
-
-// NOTE: The functions below are not on the companion object to avoid unnecessary
-//       static resolutions. Even inlined, calling these functions requires a
-//       static inline access in case initialization is required. Making them top
-//       level functions addresses this issues.
-
-// The following describes the computations performed by the 4 functions below.
-// Each function is a mapping from an index to a value.
-//
-// index = 0 -> MaxFocusHeight = 15
-// index = 1 -> MinFocusHeight = 17
-// index = 2 -> MinFocusWidth  = 18
-// index = 3 -> MaxFocusWidth  = 20
-//
-// MinHeightOffsets = 2 + 13 + (index and 0x1 shl 1) + ((index and 0x2 shr 1) * 3)
-//
-// The sub-expression `(index and 0x1 shl 1) + ((index and 0x2 shr 1) * 3)` applies
-// the following mapping:
-//
-// 0 -> 0
-// 1 -> 2
-// 2 -> 3
-// 3 -> 5
-//
-// From this mapping we can build all the other mappings:
-//
-// index = 0 -> MaxNonFocusMask = 0x1fff  (13 bits)
-// index = 1 -> MinNonFocusMask = 0x7fff  (15 bits)
-// index = 2 -> MinFocusMask    = 0xffff  (16 bits)
-// index = 3 -> MaxFocusMask    = 0x3ffff (18 bits)
-//
-// WidthMask = (1 shl (13 + (index and 0x1 shl 1) + ((index and 0x2 shr 1) * 3))) - 1
-//
-// Here we used the pattern `(1 << n) - 1` to set all first n bits to 1.
-//
-// index = 0 -> MaxFocusMask    = 0x3ffff
-// index = 1 -> MinFocusMask    = 0xffff
-// index = 2 -> MinNonFocusMask = 0x7fff
-// index = 3 -> MaxNonFocusMask = 0x1fff
-//
-// HeightMask = (1 shl (18 - (index and 0x1 shl 1) - ((index and 0x2 shr 1) * 3))) - 1
-//
-// To optimize computations, the common part that follows is factored into the
-// `indexToBitOffset` function:
-//
-// (index and 0x1 shl 1) + ((index and 0x2 shr 1) * 3)
-//
-// We are therefore left with:
-//
-// MinHeightOffsets = 15 + indexToBitOffset(index)
-// WidthMask = (1 shl (13 + indexToBitOffset(index))) - 1
-// HeightMask = (1 shl (18 - indexToBitOffset(index))) - 1
-
 /**
  * Maps an index (MaxFocusHeight, MinFocusHeight, MinFocusWidth, MaxFocusWidth) to a "bit offset":
- * 0, 2, 3 or 5. That bit offset is used by [minHeightOffsets], [widthMask], and [heightMask] to
- * compute other values without the need of lookup tables. For instance, [minHeightOffsets] returns
- * `2 + 13 + bitOffset`.
+ * 0, 2, 3 or 5. The low index bit contributes two extra width bits and the high index bit
+ * contributes three. Adding this offset to the 13-bit base width and subtracting it from the
+ * 18-bit base height yields the mask sizes without a lookup table.
  */
 private inline fun indexToBitOffset(index: Int) =
     (index and 0x1 shl 1) + ((index and 0x2 shr 1) * 3)
@@ -606,8 +296,8 @@ private inline fun indexToBitOffset(index: Int) =
 private inline fun bitOffsetToIndex(bits: Int) = (bits shr 1) + (bits and 0x1)
 
 /**
- * Minimum Height shift offsets into Long value, indexed by FocusMask Max offsets are these + 31
- * Width offsets are always either 2 (min) or 33 (max)
+ * The minimum height follows two index bits and `13 + bitOffset` width bits. Add 31 to
+ * either dimension's minimum shift to reach its maximum. Width shifts are 2 and 33.
  */
 private inline fun minHeightOffsets(bitOffset: Int) = 15 + bitOffset
 

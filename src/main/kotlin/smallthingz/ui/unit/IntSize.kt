@@ -76,11 +76,6 @@ value class IntSize @PublishedApi internal constructor(val packedValue: Long) {
 /** Returns an [IntSize] with [size]'s [IntSize.width] and [IntSize.height] multiplied by [this]. */
 inline operator fun Int.times(size: IntSize) = size * this
 
-/** Convert a [IntSize] to a [IntRect]. */
-fun IntSize.toIntRect(): IntRect {
-    return IntRect(IntOffset.Zero, this)
-}
-
 /**
  * Returns the [IntOffset] of the center of the rect from the point of [0, 0] with this [IntSize].
  */

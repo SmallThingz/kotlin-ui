@@ -117,7 +117,11 @@ class NativePlainTextGeometryTest {
 
     @Test fun unknownSemanticTransformUsesUnchangedBackendMatrix() {
         val target = Matrix()
-        val backend = Matrix().apply { translate(3.125f, -4.75f); scale(2f, 3f) }
+        val backend = Matrix().apply {
+            translate(3.125f, -4.75f)
+            this[0, 0] = 2f
+            this[1, 1] = 3f
+        }
         var backendReads = 0
         populateNativeTextSemanticsTransform(target,
             sourceTransform = { it.translate(99f, 99f); false },

@@ -16,9 +16,6 @@
 
 package smallthingz.ui.unit
 
-import smallthingz.ui.geometry.Rect
-import smallthingz.ui.geometry.Size
-import smallthingz.ui.geometry.isSpecified
 import smallthingz.ui.util.fastRoundToInt
 
 /**
@@ -75,25 +72,4 @@ interface Density : FontScaling {
 
     /** Convert a [Float] pixel value to a Sp */
     fun Float.toSp(): TextUnit = toDp().toSp()
-
-    /** Convert a [DpRect] to a [Rect]. */
-    fun DpRect.toRect(): Rect {
-        return Rect(left.toPx(), top.toPx(), right.toPx(), bottom.toPx())
-    }
-
-    /** Convert a [DpSize] to a [Size]. */
-    fun DpSize.toSize(): Size =
-        if (isSpecified) {
-            Size(width.toPx(), height.toPx())
-        } else {
-            Size.Unspecified
-        }
-
-    /** Convert a [Size] to a [DpSize]. */
-    fun Size.toDpSize(): DpSize =
-        if (isSpecified) {
-            DpSize(width.toDp(), height.toDp())
-        } else {
-            DpSize.Unspecified
-        }
 }

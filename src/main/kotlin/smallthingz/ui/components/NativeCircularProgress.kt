@@ -1,236 +1,191 @@
-// SPDX-License-Identifier: Apache-2.0
+/*
+ * Source-derived from Material3 1.4.0 ProgressIndicator.kt, Copyright The Android Open
+ * Source Project, Apache-2.0. Adapted from the Apache-2.0 upstream source.
+ */
 package smallthingz.ui.components
 
-import android.content.Context
-import android.content.res.Configuration
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.ColorFilter
-import android.graphics.Paint
-import android.graphics.PixelFormat
-import android.graphics.RectF
-import android.graphics.drawable.Drawable
-import android.os.Build
-import android.view.View
-import android.widget.ProgressBar
-import smallthingz.ui.animation.core.CubicBezierEasing
-import kotlin.math.min
-import kotlin.math.roundToInt
+import smallthingz.ui.animation.view.ViewColorTransition
 
-/**
- * An indeterminate circular indicator with explicit visual geometry and native progress semantics.
- * The caller owns its loading label. [paddingDp] is 12dp for a 48dp editor slot, or 0dp for a 24dp
- * inline indicator. Color and geometry updates retain the drawable and its animation phase.
- */
-class NativeCircularProgress(
+import android.content.Context
+import android.database.ContentObserver
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
+import android.view.View
+import android.view.accessibility.AccessibilityNodeInfo
+import smallthingz.ui.animation.core.CubicBezierEasing
+import smallthingz.ui.animation.core.LinearEasing
+import smallthingz.ui.animation.core.TargetBasedAnimation
+import smallthingz.ui.animation.core.VectorConverter
+import smallthingz.ui.animation.core.infiniteRepeatable
+import smallthingz.ui.animation.core.keyframes
+import smallthingz.ui.animation.core.tween
+import smallthingz.ui.runtime.MonotonicFrameClock
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+
+/** Released indeterminate indicator: The default round stroke is 2dp. */
+open class NativeCircularProgress(
     context: Context,
     color: Int,
-    diameterDp: Float = 24f,
-    strokeWidthDp: Float = 2f,
-    paddingDp: Float = 12f,
-) : ProgressBar(context, null, android.R.attr.progressBarStyleSmall) {
-    private var componentDiameterDp = diameterDp
-    private var componentStrokeWidthDp = strokeWidthDp
-    private var componentPaddingDp = paddingDp
-    private var indicator: CircularIndicatorDrawable? = null
-    private var ready = false
-    private var animationOwner: NativeProgressAnimationOwner? = null
-    private val colorMotion=smallthingz.ui.animation.view.ViewColorTransition(this,intArrayOf(color),::publishColor)
-    private fun publishColor(){indicator?.applyColor(colorMotion.color(0))}
+    private val frames: MonotonicFrameClock,
+    private val scope: CoroutineScope,
+    private val durationScale: () -> Float,
+    private val strokeWidthDp: Float = 2f,
+) : View(context) {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        this.color = color
+    }
+    private val arc = RectF()
+    private val colorMotion:ViewColorTransition by lazy {ViewColorTransition(this,intArrayOf(paint.color),{
+        paint.color=colorMotion.color(0);invalidate()
+    },durationScale)}
+    private var frameJob: Job? = null
+    private var presentationActive = true
+    private var origin = Long.MIN_VALUE
+    private var lastScale = Float.NaN
+    private var rotation = 0f
+    private var progress = 0.1f
+    private val scaleObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) { updateScheduling() }
+    }
 
     init {
-        validateGeometry(diameterDp, strokeWidthDp, paddingDp)
-        val density = resources.displayMetrics.density
-        indicator = CircularIndicatorDrawable(color).apply {
-            applyGeometry(context.componentDp(diameterDp).toFloat(), strokeWidthDp * density)
-        }
-        indeterminateTintList = null
-        indeterminateDrawable = indicator
-        isIndeterminate = true
-        background = null
-        isFocusable = false
-        // Circular motion is clockwise in both writing directions, including mirrored platform themes.
-        layoutDirection = LAYOUT_DIRECTION_LTR
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
-        if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
-        ready = true
-        updateGeometry()
-        animationOwner = NativeProgressAnimationOwner(this, checkNotNull(indicator))
+        isFocusable = false
+        if (android.os.Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
     }
 
-    fun applyColor(color: Int) {
-        colorMotion.retarget(color)
+    fun setColor(value: Int) {colorMotion.retarget(value)}
+
+    /** Retained panels can be offscreen without changing View visibility. Keep their last pose. */
+    fun setPresentationActive(active: Boolean) {
+        if (presentationActive == active) return
+        presentationActive = active
+        updateScheduling()
     }
 
-    fun applyGeometry(diameterDp: Float, strokeWidthDp: Float, paddingDp: Float) {
-        validateGeometry(diameterDp, strokeWidthDp, paddingDp)
-        if (componentDiameterDp == diameterDp && componentStrokeWidthDp == strokeWidthDp &&
-            componentPaddingDp == paddingDp) return
-        componentDiameterDp = diameterDp
-        componentStrokeWidthDp = strokeWidthDp
-        componentPaddingDp = paddingDp
-        updateGeometry()
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        context.contentResolver.registerContentObserver(
+            Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, scaleObserver)
+        origin = Long.MIN_VALUE
+        updateScheduling()
     }
 
-    override fun setIndeterminateDrawable(drawable: Drawable?) {
-        // ProgressBar construction can dispatch here before this component's fields exist.
-        indicator?.takeIf { it !== drawable }?.allowAnimation(false)
-        super.setIndeterminateDrawable(drawable)
-        animationOwner?.update()
-    }
-
-    override fun setIndeterminate(indeterminate: Boolean) {
-        super.setIndeterminate(indeterminate)
-        animationOwner?.update()
-    }
-
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val size = preferredSize()
-        setMeasuredDimension(resolveSizeAndState(size, widthMeasureSpec, 0),
-            resolveSizeAndState(size, heightMeasureSpec, 0))
-    }
-
-    override fun onSizeChanged(width: Int, height: Int, oldWidth: Int, oldHeight: Int) {
-        super.onSizeChanged(width, height, oldWidth, oldHeight)
-        if (ready) updateIndicatorBounds()
-    }
-
-    override fun onVisibilityAggregated(isVisible: Boolean) {
-        super.onVisibilityAggregated(isVisible)
-        animationOwner?.onVisibilityAggregated(isVisible)
-    }
-
-    override fun onWindowVisibilityChanged(visibility: Int) {
-        super.onWindowVisibilityChanged(visibility)
-        animationOwner?.update()
+    override fun onDetachedFromWindow() {
+        context.contentResolver.unregisterContentObserver(scaleObserver)
+        stopFrames()
+        super.onDetachedFromWindow()
     }
 
     override fun onVisibilityChanged(changedView: View, visibility: Int) {
         super.onVisibilityChanged(changedView, visibility)
-        animationOwner?.update()
+        updateScheduling()
     }
 
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        if (ready) updateGeometry()
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        updateScheduling()
     }
 
-    private fun updateGeometry() {
-        val density = resources.displayMetrics.density
-        val padding = context.componentDp(componentPaddingDp)
-        setPadding(padding, padding, padding, padding)
-        val size = preferredSize()
-        minimumWidth = size
-        minimumHeight = size
-        indicator?.applyGeometry(context.componentDp(componentDiameterDp).toFloat(), componentStrokeWidthDp * density)
-        updateIndicatorBounds()
-        requestLayout()
+    private fun updateScheduling() {
+        if (!presentationActive || !isAttachedToWindow || !isShown || windowVisibility != VISIBLE) {
+            stopFrames()
+            return
+        }
+        // InfiniteTransition skips to each animation's target and suspends at zero motion scale.
+        val scale = durationScale()
+        if (scale == 0f) {
+            stopFrames()
+            rotation = 1080f + 360f
+            progress = 0.87f
+            lastScale = 0f
+            origin = Long.MIN_VALUE
+            invalidate()
+        } else if (frameJob?.isActive != true) {
+            frameJob = scope.launch {
+                while (isActive && presentationActive && isAttachedToWindow && isShown && windowVisibility == VISIBLE) {
+                    frames.withFrameNanos(::frame)
+                }
+            }
+        }
+    }
+
+    private fun stopFrames() {
+        frameJob?.cancel()
+        frameJob = null
+    }
+
+    private fun frame(frameTimeNanos: Long) {
+        if (!presentationActive || !isAttachedToWindow || !isShown || windowVisibility != VISIBLE) return
+        val scale = durationScale()
+        if (scale == 0f) { updateScheduling(); return }
+        if (origin == Long.MIN_VALUE || lastScale != scale) {
+            origin = frameTimeNanos
+            lastScale = scale
+        }
+        val playTime = ((frameTimeNanos - origin) / scale).toLong()
+        rotation = IncidentLoadingMotion.global.getValueFromNanos(playTime) +
+            IncidentLoadingMotion.additional.getValueFromNanos(playTime)
+        progress = IncidentLoadingMotion.progress.getValueFromNanos(playTime)
         invalidate()
     }
 
-    // Round content and padding separately so fractional densities cannot steal a content pixel.
-    private fun preferredSize(): Int = context.componentDp(componentDiameterDp) +
-        context.componentDp(componentPaddingDp) * 2
+    /** Host-injected scale changes use the same wake-up as the platform setting observer. */
+    fun motionScaleChanged() = updateScheduling()
 
-    private fun updateIndicatorBounds() {
-        indicator?.setBounds(0, 0, (width - paddingLeft - paddingRight).coerceAtLeast(0),
-            (height - paddingTop - paddingBottom).coerceAtLeast(0))
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        paint.strokeWidth = strokeWidthDp * resources.displayMetrics.density
+        val inset = paint.strokeWidth / 2f
+        // Released drawCircularIndicator uses width for both arc dimensions, even if nonsquare.
+        arc.set(inset, inset, width - inset, width - inset)
+        val checkpoint = canvas.save()
+        canvas.rotate(rotation, width / 2f, height / 2f)
+        // Transparent track contributes no pixels; retain active draw at startAngle0, same sweep.
+        canvas.drawArc(arc, 0f, progress * 360f, false, paint)
+        canvas.restoreToCount(checkpoint)
     }
 
-    private companion object {
-        fun validateGeometry(diameterDp: Float, strokeWidthDp: Float, paddingDp: Float) {
-            require(diameterDp.isFinite() && diameterDp > 0f)
-            require(strokeWidthDp.isFinite() && strokeWidthDp > 0f && strokeWidthDp <= diameterDp)
-            require(paddingDp.isFinite() && paddingDp >= 0f)
-            require((diameterDp + paddingDp * 2f).isFinite())
-        }
+    override fun getAccessibilityClassName(): CharSequence = "android.widget.ProgressBar"
+    override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(info)
+        // AndroidComposeView exposes indeterminate progress without RangeInfo; no fake percentage.
+        info.rangeInfo = null
+        androidx.core.view.accessibility.AccessibilityNodeInfoCompat.wrap(info).stateDescription =
+            context.getString(smallthingz.ui.R.string.in_progress)
     }
 }
 
-/**
- * Motion follows Material3 1.4.0 ProgressIndicator.kt; source JAR SHA-256:
- * 08a23a069407ba2a59685f88d676fd38ede207301a0805ee904ed63735f5d0b5.
- */
-private class CircularIndicatorDrawable(color: Int) : NativeAnimatedProgressDrawable(CYCLE_MILLIS) {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
-    }
-    private val arc = RectF()
-    private var componentColor = color
-    private var drawableAlpha = 255
-    private var diameter = 0f
-    private var strokeWidth = 0f
-
-    init { updateColor() }
-
-    fun applyColor(color: Int) {
-        if (componentColor == color) return
-        componentColor = color
-        updateColor()
-        invalidateSelf()
-    }
-
-    fun applyGeometry(diameter: Float, strokeWidth: Float) {
-        this.diameter = diameter
-        this.strokeWidth = strokeWidth
-        paint.strokeWidth = strokeWidth
-        invalidateSelf()
-    }
-
-    override fun draw(canvas: Canvas) {
-        val extent = min(diameter, min(bounds.width(), bounds.height()).toFloat())
-        if (extent <= 0f || strokeWidth <= 0f) return
-        val actualStroke = min(strokeWidth, extent)
-        paint.strokeWidth = actualStroke
-        val radius = (extent - actualStroke) / 2f
-        arc.set(bounds.exactCenterX() - radius, bounds.exactCenterY() - radius,
-            bounds.exactCenterX() + radius, bounds.exactCenterY() + radius)
-        val time = animationTimeMillis.coerceIn(0f, CYCLE_MILLIS.toFloat())
-        val segment = (time / ADDITIONAL_ROTATION_INTERVAL).toInt()
-        val advance = ((time % ADDITIONAL_ROTATION_INTERVAL) / ADDITIONAL_ROTATION_DURATION).coerceAtMost(1f)
-        val rotation = 1080f * time / CYCLE_MILLIS + 90f * (segment + advance)
-        // Material keyframe easing belongs to the following interval: only the shrinking half eases.
-        val progress = if (time <= HALF_CYCLE_MILLIS) {
-            MIN_PROGRESS + PROGRESS_DELTA * time / HALF_CYCLE_MILLIS
-        } else {
-            MAX_PROGRESS - PROGRESS_DELTA * SHRINK_EASING.transform((time - HALF_CYCLE_MILLIS) / HALF_CYCLE_MILLIS)
-        }
-        canvas.drawArc(arc, rotation, progress * 360f, false, paint)
-    }
-
-    override fun getIntrinsicWidth(): Int = diameter.roundToInt()
-    override fun getIntrinsicHeight(): Int = diameter.roundToInt()
-
-    override fun setAlpha(alpha: Int) {
-        drawableAlpha = alpha.coerceIn(0, 255)
-        updateColor()
-        invalidateSelf()
-    }
-
-    override fun getAlpha(): Int = drawableAlpha
-
-    override fun setColorFilter(colorFilter: ColorFilter?) {
-        paint.colorFilter = colorFilter
-        invalidateSelf()
-    }
-
-    @Deprecated("Required by Drawable")
-    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
-
-    private fun updateColor() {
-        paint.color = componentColor
-        paint.alpha = (Color.alpha(componentColor) * drawableAlpha + 127) / 255
-    }
-
-    private companion object {
-        const val CYCLE_MILLIS = 6000L
-        const val HALF_CYCLE_MILLIS = 3000f
-        const val ADDITIONAL_ROTATION_INTERVAL = 1500f
-        const val ADDITIONAL_ROTATION_DURATION = 300f
-        const val MIN_PROGRESS = 0.1f
-        const val MAX_PROGRESS = 0.87f
-        const val PROGRESS_DELTA = MAX_PROGRESS - MIN_PROGRESS
-        val SHRINK_EASING = CubicBezierEasing(0.2f, 0f, 0f, 1f)
-    }
+/** The pinned keyframes/easings, shared by the View; no Composition or animation state tree. */
+private object IncidentLoadingMotion {
+    val global = TargetBasedAnimation(
+        infiniteRepeatable(animation = tween<Float>(6000, easing = LinearEasing)),
+        Float.VectorConverter, 0f, 1080f)
+    val additional = TargetBasedAnimation(
+        infiniteRepeatable(animation = keyframes<Float> {
+            durationMillis = 6000
+            90f at 300 using CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+            90f at 1500
+            180f at 1800
+            180f at 3000
+            270f at 3300
+            270f at 4500
+            360f at 4800
+            360f at 6000
+        }), Float.VectorConverter, 0f, 360f)
+    val progress = TargetBasedAnimation(
+        infiniteRepeatable(animation = keyframes<Float> {
+            durationMillis = 6000
+            0.87f at 3000 using CubicBezierEasing(0.2f, 0f, 0f, 1f)
+            0.1f at 6000
+        }), Float.VectorConverter, 0.1f, 0.87f)
 }

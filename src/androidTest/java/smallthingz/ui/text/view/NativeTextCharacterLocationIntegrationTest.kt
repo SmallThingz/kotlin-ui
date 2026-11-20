@@ -6,6 +6,7 @@ import android.view.View
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -13,6 +14,8 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeMenuAccessibilityTestActivity
+import smallthingz.ui.geometry.Offset
+import smallthingz.ui.geometry.Rect
 import smallthingz.ui.text.TextStyle
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
@@ -22,6 +25,31 @@ import smallthingz.ui.unit.Density
 class NativeTextCharacterLocationIntegrationTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val key = AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_KEY
+
+    @SdkSuppress(minSdkVersion = 28, maxSdkVersion = 28)
+    @Test fun legacyWindowProjectionKeepsRootScrollAfterItsTransform() = withLabel { label ->
+        val root = label.parent as FrameLayout
+        val parent = root.parent as View
+        root.scrollTo(5, 7)
+        root.pivotX = 0f
+        root.pivotY = 0f
+        root.rotation = 27f
+        root.scaleX = .8f
+        root.scaleY = 1.2f
+
+        val geometry = requireNotNull(NativePlainTextViewGeometry(root,
+            NativeTextSemanticsClipPolicy { NativeTextSemanticsClip.Rectangle(Rect(10f, 12f, 80f, 50f)) }
+        ).capture(label, Offset(2f, 3f), Rect(0f, 0f, 100f, 60f), windowPositionInScreen = Offset.Zero))
+        assertEquals(Offset(-3f, -4f), geometry.paragraphPositionInRoot)
+        assertEquals(Rect(5f, 5f, 75f, 43f), geometry.visibleBoundsInRoot)
+
+        val parentWindow = IntArray(2).also(parent::getLocationInWindow)
+        val pointInRoot = Offset(32f, 14f)
+        val transformed = floatArrayOf(pointInRoot.x, pointInRoot.y).also { root.matrix.mapPoints(it) }
+        val projected = geometry.rootToScreen(pointInRoot)
+        assertEquals(transformed[0] + parentWindow[0] + root.left - 5f, projected.x, .001f)
+        assertEquals(transformed[1] + parentWindow[1] + root.top - 7f, projected.y, .001f)
+    }
 
     private fun withLabel(action: (ParagraphView) -> Unit) {
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,

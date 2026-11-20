@@ -112,11 +112,8 @@ class RectMidpointTest {
         assertEquals(-1, integer.width)
         assertEquals(-1, integer.height)
         val floating = Rect(-Float.MAX_VALUE, -Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE)
-        val mutable = MutableRect(floating.left, floating.top, floating.right, floating.bottom)
         assertEquals(Float.POSITIVE_INFINITY.toRawBits(), floating.width.toRawBits())
         assertEquals(Float.POSITIVE_INFINITY.toRawBits(), floating.height.toRawBits())
-        assertEquals(floating.width.toRawBits(), mutable.width.toRawBits())
-        assertEquals(floating.height.toRawBits(), mutable.height.toRawBits())
     }
 
     private fun legacyFloatMidpoint(start: Float, end: Float): Float = start + (end - start) / 2f
@@ -130,21 +127,11 @@ class RectMidpointTest {
     }
 
     private fun assertFloatMidpoints(rect: Rect, x: Float, y: Float) {
-        val mutable = MutableRect(rect.left, rect.top, rect.right, rect.bottom)
         assertOffsetBits(x, rect.top, rect.topCenter)
         assertOffsetBits(rect.left, y, rect.centerLeft)
         assertOffsetBits(x, y, rect.center)
         assertOffsetBits(rect.right, y, rect.centerRight)
         assertOffsetBits(x, rect.bottom, rect.bottomCenter)
-        assertOffsetBits(x, rect.top, mutable.topCenter)
-        assertOffsetBits(rect.left, y, mutable.centerLeft)
-        assertOffsetBits(x, y, mutable.center)
-        assertOffsetBits(rect.right, y, mutable.centerRight)
-        assertOffsetBits(x, rect.bottom, mutable.bottomCenter)
-        assertEquals(rect.left.toRawBits(), mutable.left.toRawBits())
-        assertEquals(rect.top.toRawBits(), mutable.top.toRawBits())
-        assertEquals(rect.right.toRawBits(), mutable.right.toRawBits())
-        assertEquals(rect.bottom.toRawBits(), mutable.bottom.toRawBits())
     }
 
     private fun assertOffsetBits(x: Float, y: Float, actual: Offset) {
