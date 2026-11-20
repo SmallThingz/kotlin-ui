@@ -1,5 +1,6 @@
 package smallthingz.ui.animation.core
 
+import smallthingz.ui.MotionDurationScale
 import smallthingz.ui.animation.CapturedFrameClock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -107,8 +108,13 @@ class AnimationFailureCleanupTest {
         try {
             clock.frame(0L); yield()
             replacement = launch(clock, start = CoroutineStart.UNDISPATCHED) {
-                animated.animateTo(20f, tween(100), initialVelocity = 2f) {
-                    replacementStarted.complete(Unit)
+                animated.animateTo(20f, tween(100)) {
+                    if (!replacementStarted.isCompleted) {
+                        assertEquals(0f.toRawBits(), value.toRawBits())
+                        assertEquals(4f.toRawBits(), velocity.toRawBits())
+                        assertEquals(0L, internalState.lastFrameTimeNanos)
+                        replacementStarted.complete(Unit)
+                    }
                 }
             }
             first.join()
@@ -125,6 +131,68 @@ class AnimationFailureCleanupTest {
             assertFalse(animated.isRunning)
             assertFalse(animated.internalState.isRunning)
             assertEquals(0f, animated.velocity, 0f)
+        } finally { first.cancelAndJoin(); replacement?.cancelAndJoin() }
+    }
+
+    @Test(timeout = 10_000) fun animatableQueuedScaleAndTerminalReplacementPreservePublishedState() = runBlocking {
+        val owner = this
+        val clock = CapturedFrameClock()
+        val scale = object : MotionDurationScale { override var scaleFactor = 1f }
+        val animated = Animatable(0f)
+        val state = animated.internalState
+        val spec = tween<Float>(100, easing = LinearEasing)
+        val firstFrame = 1_000_000L
+        val lastFrame = 17_000_000L
+        val terminalVelocity = (1f - .99f) * 1000f
+        var callbackCount = 0
+        var replacement: Job? = null
+        val replacementEntered = CompletableDeferred<Unit>()
+        val first = launch(clock + scale, start = CoroutineStart.UNDISPATCHED) {
+            animated.animateTo(1f, spec, initialVelocity = -4f) {
+                assertSame(state, asState())
+                assertTrue(isRunning)
+                if (++callbackCount == 1) {
+                    assertEquals(0f.toRawBits(), value.toRawBits())
+                    assertEquals((-4f).toRawBits(), velocity.toRawBits())
+                    assertEquals(firstFrame, state.lastFrameTimeNanos)
+                    assertFalse(state.isFinished)
+                    assertTrue(state.isRunning)
+                } else {
+                    assertEquals(1f.toRawBits(), value.toRawBits())
+                    assertEquals(terminalVelocity.toRawBits(), velocity.toRawBits())
+                    assertEquals(lastFrame, state.lastFrameTimeNanos)
+                    assertEquals(lastFrame, state.finishedTimeNanos)
+                    assertFalse(state.isRunning)
+                    scale.scaleFactor = 1f
+                    replacement = owner.launch(clock + scale, start = CoroutineStart.UNDISPATCHED) {
+                        animated.animateTo(2f, spec) {
+                            assertSame(state, asState())
+                            assertEquals(1f.toRawBits(), value.toRawBits())
+                            assertEquals(terminalVelocity.toRawBits(), velocity.toRawBits())
+                            assertEquals(lastFrame, state.lastFrameTimeNanos)
+                            assertFalse(state.isFinished)
+                            assertTrue(state.isRunning)
+                            replacementEntered.complete(Unit)
+                        }
+                    }
+                    assertFalse(replacementEntered.isCompleted)
+                }
+            }
+        }
+        try {
+            scale.scaleFactor = 0f
+            clock.frame(firstFrame); yield()
+            assertEquals(1, callbackCount)
+            assertEquals(1, clock.pendingCount)
+            clock.frame(lastFrame)
+            first.join()
+            replacementEntered.await()
+            assertEquals(2, callbackCount)
+            checkNotNull(replacement).cancelAndJoin()
+            assertFalse(animated.isRunning)
+            assertFalse(state.isRunning)
+            assertNull(state.activeScope)
+            assertEquals(0, clock.pendingCount)
         } finally { first.cancelAndJoin(); replacement?.cancelAndJoin() }
     }
 
@@ -167,6 +235,19 @@ class AnimationFailureCleanupTest {
             assertEquals(3f, animated.value, 0f)
             assertFalse(animated.isRunning)
             assertFalse(animated.internalState.isRunning)
+            assertEquals(1L, animated.internalState.finishedTimeNanos)
+            val waiting = launch(clock, start = CoroutineStart.UNDISPATCHED) { animated.animateTo(6f) }
+            try {
+                assertTrue(animated.isRunning)
+                assertEquals(1, clock.pendingCount)
+                assertEquals(1L, animated.internalState.finishedTimeNanos)
+            } finally {
+                waiting.cancelAndJoin()
+            }
+            assertEquals(1L, animated.internalState.finishedTimeNanos)
+            assertFalse(animated.isRunning)
+            assertFalse(animated.internalState.isRunning)
+            assertNull(animated.internalState.activeScope)
         } finally { job.cancelAndJoin() }
     }
 

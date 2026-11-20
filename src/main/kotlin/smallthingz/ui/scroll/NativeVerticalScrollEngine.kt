@@ -5,10 +5,8 @@
  */
 package smallthingz.ui.scroll
 
-import smallthingz.ui.animation.core.AnimationVector1D
-import smallthingz.ui.animation.core.DecayAnimation
-import smallthingz.ui.animation.core.DecayAnimationSpec
-import smallthingz.ui.animation.core.VectorConverter
+import smallthingz.ui.animation.core.FloatDecayAnimation
+import smallthingz.ui.animation.core.FloatDecayAnimationSpec
 import smallthingz.ui.foundation.MutatePriority
 import smallthingz.ui.foundation.MutatorMutex
 import smallthingz.ui.util.fastRoundToInt
@@ -168,18 +166,17 @@ class NativeVerticalScrollEngine(
 }
 
 /**
- * Exact sampling part of DefaultFlingBehavior, using the pinned public spline DecayAnimation.
- * Its owner creates splineBasedDecay<Float>(Density(currentDensity)) on density changes.
+ * Scalar sampling of DefaultFlingBehavior. The owner supplies a spline for its current density.
  *
  * [consume] receives logical ScrollState deltas. The host reverses to physical Y, wraps nested
  * dispatch in overscroll, and reverses consumption back. Callbacks remain synchronous.
  */
 class NativeVerticalFling(
-    private val decay: DecayAnimationSpec<Float>,
+    private val decay: FloatDecayAnimationSpec,
     private val consume: (Float) -> Float,
     private val finished: (remainingVelocity: Float) -> Unit,
 ) {
-    private var animation: DecayAnimation<Float, AnimationVector1D>? = null
+    private var animation: FloatDecayAnimation? = null
     private var startFrameNanos: Long? = null
     private var lastValue = 0f
     var remainingVelocity = 0f
@@ -199,7 +196,7 @@ class NativeVerticalFling(
             finished(initialVelocity)
             return
         }
-        animation = DecayAnimation(decay, Float.VectorConverter, 0f, AnimationVector1D(initialVelocity))
+        animation = FloatDecayAnimation(decay, initialVelocity)
     }
 
     /**
@@ -212,7 +209,7 @@ class NativeVerticalFling(
         val first = startFrameNanos ?: frameTimeNanos.also { startFrameNanos = it }
         val playTimeNanos = ((frameTimeNanos - first) / 1f).toLong()
         val value = current.getValueFromNanos(playTimeNanos)
-        val velocity = current.getVelocityVectorFromNanos(playTimeNanos).value
+        val velocity = current.getVelocityFromNanos(playTimeNanos)
         val delta = value - lastValue
         remainingVelocity = velocity
         val consumed = consume(delta)

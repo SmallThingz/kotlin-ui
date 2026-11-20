@@ -16,8 +16,7 @@
 
 package smallthingz.ui.animation
 
-import smallthingz.ui.animation.core.DecayAnimationSpec
-import smallthingz.ui.animation.core.generateDecayAnimationSpec
+import smallthingz.ui.animation.core.FloatDecayAnimationSpec
 import smallthingz.ui.unit.Density
 import kotlin.math.abs
 import kotlin.math.ln
@@ -93,5 +92,5 @@ internal object AndroidFlingSpline {
 
 }
 
-public fun <T> splineBasedDecay(density: Density): DecayAnimationSpec<T> =
-    SplineBasedFloatDecayAnimationSpec(density).generateDecayAnimationSpec()
+public fun splineBasedDecay(density: Density): FloatDecayAnimationSpec =
+    SplineBasedFloatDecayAnimationSpec(density)

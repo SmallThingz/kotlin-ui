@@ -31,18 +31,6 @@ public suspend fun animate(
     animate(Float.VectorConverter, initialValue, targetValue, initialVelocity, animationSpec, block)
 }
 
-public suspend fun animateDecay(
-    initialValue: Float,
-    initialVelocity: Float,
-    animationSpec: FloatDecayAnimationSpec,
-    block: (value: Float, velocity: Float) -> Unit,
-) {
-    val anim = DecayAnimation(animationSpec, initialValue, initialVelocity)
-    AnimationState(initialValue, initialVelocity).animate(anim) {
-        block(value, velocityVector.value)
-    }
-}
-
 public suspend fun <T, V : AnimationVector> animate(
     typeConverter: TwoWayConverter<T, V>,
     initialValue: T,
@@ -80,25 +68,6 @@ public suspend fun <T, V : AnimationVector> AnimationState<T, V>.animateTo(
             targetValue = targetValue,
             typeConverter = typeConverter,
             initialVelocityVector = velocityVector,
-        )
-    animate(
-        anim,
-        if (sequentialAnimation) lastFrameTimeNanos else AnimationConstants.UnspecifiedTime,
-        block,
-    )
-}
-
-public suspend fun <T, V : AnimationVector> AnimationState<T, V>.animateDecay(
-    animationSpec: DecayAnimationSpec<T>,
-    sequentialAnimation: Boolean = false,
-    block: AnimationScope<T, V>.() -> Unit = {},
-) {
-    val anim =
-        DecayAnimation<T, V>(
-            animationSpec = animationSpec,
-            initialValue = value,
-            initialVelocityVector = velocityVector,
-            typeConverter = typeConverter,
         )
     animate(
         anim,
@@ -195,7 +164,7 @@ internal val CoroutineContext.durationScale: Float
         return scale
     }
 
-internal fun <T, V : AnimationVector> AnimationScope<T, V>.updateState(
+private fun <T, V : AnimationVector> AnimationScope<T, V>.updateState(
     state: AnimationState<T, V>
 ) {
     state.value = value

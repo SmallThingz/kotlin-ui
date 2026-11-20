@@ -5,7 +5,7 @@
  */
 package smallthingz.ui.scroll
 
-import smallthingz.ui.animation.core.DecayAnimationSpec
+import smallthingz.ui.animation.core.FloatDecayAnimationSpec
 import smallthingz.ui.animation.core.TargetBasedAnimation
 import smallthingz.ui.animation.core.VectorConverter
 import smallthingz.ui.animation.core.spring
@@ -43,7 +43,7 @@ fun interface NativeVerticalDragScope {
  */
 class NativeVerticalScrollOwner(
     private val engine: NativeVerticalScrollEngine,
-    private val decay: DecayAnimationSpec<Float>,
+    private val decay: FloatDecayAnimationSpec,
     private val frames: MonotonicFrameClock,
     private val flingHost: NativeVerticalFlingHost,
     private val overscroll: NativeVerticalOverscroll? = null,

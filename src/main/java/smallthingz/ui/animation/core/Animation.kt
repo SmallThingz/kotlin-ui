@@ -212,102 +212,23 @@ internal constructor(
     }
 }
 
-public class DecayAnimation<T, V : AnimationVector> 
-constructor(
-    private val animationSpec: VectorizedDecayAnimationSpec<V>,
-    override val typeConverter: TwoWayConverter<T, V>,
-    public val initialValue: T,
-    initialVelocityVector: V,
-) : Animation<T, V> {
-    private val initialValueVector: V = typeConverter.convertToVector(initialValue)
-    public val initialVelocityVector: V = initialVelocityVector.copy()
-    private val endVelocity: V
+internal class FloatDecayAnimation(
+    private val spec: FloatDecayAnimationSpec,
+    private val initialVelocity: Float,
+) {
+    private val velocityThreshold = spec.absVelocityThreshold
+    private val targetValue = spec.getTargetValue(0f, initialVelocity)
+    private val durationNanos = maxOf(0L, spec.getDurationNanos(0f, initialVelocity))
+    private val endVelocity = spec.getVelocityFromNanos(durationNanos, 0f, initialVelocity)
+        .coerceIn(-velocityThreshold, velocityThreshold)
 
-    override val targetValue: T =
-        typeConverter.convertFromVector(
-            animationSpec.getTargetValue(initialValueVector, initialVelocityVector)
-        )
-    @get:Suppress("MethodNameUnits") override val durationNanos: Long
+    fun isFinishedFromNanos(playTimeNanos: Long): Boolean = playTimeNanos >= durationNanos
 
-    // DecayAnimation finishes by design
-    override val isInfinite: Boolean = false
+    fun getValueFromNanos(playTimeNanos: Long): Float =
+        if (isFinishedFromNanos(playTimeNanos)) targetValue
+        else spec.getValueFromNanos(playTimeNanos, 0f, initialVelocity)
 
-    
-    public constructor(
-        animationSpec: DecayAnimationSpec<T>,
-        typeConverter: TwoWayConverter<T, V>,
-        initialValue: T,
-        initialVelocityVector: V,
-    ) : this(
-        animationSpec.vectorize(typeConverter),
-        typeConverter,
-        initialValue,
-        initialVelocityVector,
-    )
-
-    
-    public constructor(
-        animationSpec: DecayAnimationSpec<T>,
-        typeConverter: TwoWayConverter<T, V>,
-        initialValue: T,
-        initialVelocity: T,
-    ) : this(
-        animationSpec.vectorize(typeConverter),
-        typeConverter,
-        initialValue,
-        typeConverter.convertToVector(initialVelocity),
-    )
-
-    init {
-        durationNanos = animationSpec.getDurationNanos(initialValueVector, initialVelocityVector)
-        endVelocity =
-            animationSpec
-                .getVelocityFromNanos(durationNanos, initialValueVector, initialVelocityVector)
-                .copy()
-        for (i in 0 until endVelocity.size) {
-            endVelocity[i] =
-                endVelocity[i].coerceIn(
-                    -animationSpec.absVelocityThreshold,
-                    animationSpec.absVelocityThreshold,
-                )
-        }
-    }
-
-    override fun getValueFromNanos(playTimeNanos: Long): T {
-        if (!isFinishedFromNanos(playTimeNanos)) {
-            return typeConverter.convertFromVector(
-                animationSpec.getValueFromNanos(
-                    playTimeNanos,
-                    initialValueVector,
-                    initialVelocityVector,
-                )
-            )
-        } else {
-            return targetValue
-        }
-    }
-
-    override fun getVelocityVectorFromNanos(playTimeNanos: Long): V {
-        if (!isFinishedFromNanos(playTimeNanos)) {
-            return animationSpec.getVelocityFromNanos(
-                playTimeNanos,
-                initialValueVector,
-                initialVelocityVector,
-            )
-        } else {
-            return endVelocity
-        }
-    }
+    fun getVelocityFromNanos(playTimeNanos: Long): Float =
+        if (isFinishedFromNanos(playTimeNanos)) endVelocity
+        else spec.getVelocityFromNanos(playTimeNanos, 0f, initialVelocity)
 }
-
-public fun DecayAnimation(
-    animationSpec: FloatDecayAnimationSpec,
-    initialValue: Float,
-    initialVelocity: Float = 0f,
-): DecayAnimation<Float, AnimationVector1D> =
-    DecayAnimation(
-        animationSpec.generateDecayAnimationSpec(),
-        Float.VectorConverter,
-        initialValue,
-        AnimationVector(initialVelocity),
-    )

@@ -98,9 +98,7 @@ public class FloatExponentialDecaySpec(
     }
 }
 
-internal fun FloatDecayAnimationSpec.createAnimation(
-    startValue: Float,
-    startVelocity: Float = 0f,
-): Animation<Float, AnimationVector1D> {
-    return DecayAnimation(this, startValue, startVelocity)
-}
+public fun exponentialDecay(
+    @FloatRange(from = 0.0, fromInclusive = false) frictionMultiplier: Float = 1f,
+    @FloatRange(from = 0.0, fromInclusive = false) absVelocityThreshold: Float = 0.1f,
+): FloatDecayAnimationSpec = FloatExponentialDecaySpec(frictionMultiplier, absVelocityThreshold)

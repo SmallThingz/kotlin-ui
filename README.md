@@ -113,6 +113,24 @@ actual fill changes for caller-owned contrast invalidation.
 Use `NativeSettingsRow` as row content when a setting needs a title, description,
 and a value. A `NativeToggleRow` supplies one checked action for the whole row.
 
+## Progress
+
+Use `NativeCircularProgress` for an indeterminate spinner,
+`NativeIndeterminateLinearProgress` for an unknown total, and
+`NativeDeterminateLinearProgress` for a known fraction. Linear views take palette
+colors and density; the spinner takes a color and uses its Context's density.
+The indeterminate views take the window's `MonotonicFrameClock`,
+an owner-scoped `CoroutineScope`, and a duration-scale provider; they release
+their frame work and setting listeners on detach. Call `motionScaleChanged()`
+when an injected scale changes without a platform setting notification.
+
+For a retained offscreen spinner, `setPresentationActive(false)` freezes its
+current pose. Determinate `bind` takes an operation ID and terminal flag so a
+new operation resets smoothing while accessibility reports the authoritative
+fraction. Both linear views share drawing, measurement and localized progress
+semantics. Use `bindAccessibility` when the host supplies custom clipping and
+coordinate mapping; each returned lease can retire only its own binding.
+
 ## Top bars and icon actions
 
 `NativeTopBarLayout` owns retained action hit routing and the fixed start/center/end
@@ -248,6 +266,11 @@ those immutable inputs change; palette updates alone do not require recreation.
 velocity on interruption, including Color and IntSize conversion; transition
 channels retain raw vector momentum. Callers supply their own tween durations,
 visibility policies, and final paint/property updates.
+
+`Animatable.animateTo` suspends until completion and returns `Unit`; read the
+retained state or use its frame callback for samples. Unused bounds and result
+APIs are removed. Fling trajectories use `FloatDecayAnimationSpec` directly;
+generic vector decay and suspended decay entry points are removed.
 
 The main-thread owners in `smallthingz.ui.animation.view` connect those samplers
 to frames. `ViewFrameLoop` uses an attached View and the caller's window clock;
