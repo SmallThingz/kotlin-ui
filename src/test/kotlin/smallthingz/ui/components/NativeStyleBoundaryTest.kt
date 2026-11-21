@@ -8,8 +8,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import smallthingz.ui.text.NativeTypography
 import smallthingz.ui.text.NativeTypographyRole
+import smallthingz.ui.text.PlatformTextStyle
+import smallthingz.ui.text.TextStyle
 import smallthingz.ui.text.font.FontFamily
 import smallthingz.ui.text.font.FontStyle
+import smallthingz.ui.unit.em
 import smallthingz.ui.unit.sp
 
 class NativeStyleBoundaryTest {
@@ -94,6 +97,21 @@ class NativeStyleBoundaryTest {
             assertThrows("letter spacing: $value", IllegalArgumentException::class.java) { NativeTextStyle(letterSpacing = value) }
             assertThrows("letter spacing sp: $value", IllegalArgumentException::class.java) { NativeTextStyle(letterSpacingSp = value) }
         }
+    }
+
+    @Test fun nativeTextUsesRoleFallbacksAndConvertsRelativeMetrics() {
+        val title = NativeTypographyRole.TITLE_LARGE
+        val body = NativeTypographyRole.BODY_MEDIUM
+        val typography = NativeTypography(mapOf(
+            title to TextStyle(fontSize = 1.em, lineHeight = 1.5.em, letterSpacing = .02.em,
+                platformStyle = PlatformTextStyle(includeFontPadding = true)),
+            body to TextStyle(fontSize = 17.sp, letterSpacing = .5.sp),
+        ))
+        val appearance = NativeUiAppearance(typography = typography)
+        assertEquals(NativeTextStyle(sizeSp = 22f, lineHeightSp = 33f, weight = 700,
+            letterSpacing = .02f, includeFontPadding = true), appearance.modals.typography.nativeTextStyle(title))
+        assertEquals(NativeTextStyle(sizeSp = 17f, lineHeightSp = 20f, letterSpacingSp = .5f),
+            appearance.compactField.style.textStyle)
     }
 
     @Test fun compactFieldInheritsWindowBodyTypographyUntilExplicitlyOverridden() {
