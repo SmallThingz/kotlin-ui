@@ -18,7 +18,7 @@ import kotlin.math.roundToLong
  * This differs intentionally from Animatable: scale uses Double/roundToLong and interruptions
  * retain raw velocity vectors and the transition's play-time origin.
  */
-internal class NativeMenuTransition {
+internal class NativeMenuTransition(style: NativeAnchoredMenuMotionStyle = NativeAnchoredMenuMotionStyle.Default) {
     private class Child(initial: Float, private val spec: SpringSpec<Float>) {
         var value = initial
         var target = initial
@@ -39,8 +39,9 @@ internal class NativeMenuTransition {
             if (active.isFinishedFromNanos(time)) animation = null
         }
     }
-    private val scaleChild = Child(.8f, SpringSpec(dampingRatio = .9f, stiffness = 1400f))
-    private val alphaChild = Child(0f, SpringSpec(dampingRatio = 1f, stiffness = 3800f))
+    private val collapsedScale = style.collapsedScale
+    private val scaleChild = Child(collapsedScale, style.scaleSpring)
+    private val alphaChild = Child(0f, style.alphaSpring)
     private var startTime: Long? = null
     private var playTime = 0L
     var targetExpanded = false
@@ -63,7 +64,7 @@ internal class NativeMenuTransition {
         }
         currentExpanded = targetExpanded
         targetExpanded = expanded
-        scaleChild.retarget(if (expanded) 1f else .8f, playTime)
+        scaleChild.retarget(if (expanded) 1f else collapsedScale, playTime)
         alphaChild.retarget(if (expanded) 1f else 0f, playTime)
     }
 

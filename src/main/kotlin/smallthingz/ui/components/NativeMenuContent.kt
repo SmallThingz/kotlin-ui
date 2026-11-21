@@ -9,7 +9,6 @@ package smallthingz.ui.components
 import smallthingz.ui.interaction.view.isNativeClickActivationKey
 
 import smallthingz.ui.geometry.roundedGroupGeometry
-import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.scroll.NativeVerticalNestedHost
 import smallthingz.ui.scroll.NativeVerticalScrollSource
 import smallthingz.ui.scroll.NativeVerticalScrollState
@@ -25,7 +24,6 @@ import smallthingz.ui.text.view.ParagraphView
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Outline
-import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
 import android.os.Build
@@ -49,23 +47,18 @@ import kotlin.math.roundToInt
 /** A source Surface: shadow outside its rounded content clip; no tonal overlay at 0dp. */
 internal class NativeMenuContent<I>(
     context: Context,
-    private val density: Density,
+    density: Density,
     labelLarge: TextStyle,
     resolver: FontFamily.Resolver,
     palette: NativeMenuColors,
-    private val icons: NativeMenuIcons<I>,
+    recipe: NativeAnchoredMenuRecipe,
+    icons: NativeMenuIcons<I>,
     state: NativeVerticalScrollState,
     frames: MonotonicFrameClock,
     scope: CoroutineScope,
     /** Current source gesture-connection interest, supplied by the popup phase owner. */
-    private val interestedParent: (MotionEvent) -> Boolean,
-) : ViewGroup(context), AutoCloseable {
-    private val radius = 18f * density.density
-    private val pad = (8f * density.density).roundToInt()
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
-    private val fillMotion = ViewColorTransition(this, intArrayOf(palette.raised), ::publishFill)
-    private fun publishFill() { fill.color = fillMotion.color(0); invalidate() }
-    private val clip = NativeMenuClip(context, radius)
+    interestedParent: (MotionEvent) -> Boolean,
+) : NativeMenuSurface(context, density, recipe, palette.raised), AutoCloseable {
     val column = NativeMenuColumn(context, labelLarge, density, resolver, icons, interestedParent)
     val viewport = NativeVerticalViewport(
         context, state, density, frames, scope,
@@ -78,29 +71,12 @@ internal class NativeMenuContent<I>(
     )
 
     init {
-        setWillNotDraw(false)
-        clipChildren = false
-        clipToPadding = false
-        elevation = 3f * density.density
-        outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(view: View, out: Outline) {
-                out.setRoundRect(0, 0, view.width, view.height, radius)
-            }
-        }
-        clipToOutline = false
-        if (Build.VERSION.SDK_INT >= 28) {
-            outlineAmbientShadowColor = android.graphics.Color.BLACK
-            outlineSpotShadowColor = android.graphics.Color.BLACK
-        }
-        if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
-        fill.color = palette.raised
         viewport.setContent(column)
-        clip.addView(viewport)
-        addView(clip)
+        setBody(viewport)
     }
 
     fun <T> bind(content: NativeMenuChoices<T>, palette: NativeMenuColors, select: (T) -> Unit) {
-        fillMotion.retarget(palette.raised)
+        bindFill(palette.raised)
         column.bind(content, palette, select)
         requestLayout()
         invalidate()
@@ -108,67 +84,21 @@ internal class NativeMenuContent<I>(
 
     /** Released Incidents/Library use default12dp horizontal/zero vertical item padding. */
     fun bindActions(actions: List<NativeMenuAction<I>>, palette: NativeMenuColors, background: Int = palette.surfaceContainerHigh) {
-        fillMotion.retarget(background)
+        bindFill(background)
         column.bindActions(actions, palette)
         requestLayout()
         invalidate()
     }
 
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+    override fun measureBody(body: View, widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val availableWidth = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED)
             Int.MAX_VALUE else MeasureSpec.getSize(widthMeasureSpec)
         val width = column.maxIntrinsicWidth().coerceAtMost(availableWidth)
-        val availableHeight = MeasureSpec.getSize(heightMeasureSpec)
-        viewport.measure(exact(width), atMost((availableHeight - 2 * pad).coerceAtLeast(0)))
-        // padding(vertical=8.dp) is OUTSIDE verticalScroll; it does not scroll with the items.
-        val height = resolveSize(viewport.measuredHeight + 2 * pad, heightMeasureSpec)
-        clip.measure(exact(width), exact(height))
-        setMeasuredDimension(width, height)
+        // The surface's vertical padding is outside the scrolling viewport.
+        body.measure(exact(width), atMost(MeasureSpec.getSize(heightMeasureSpec)))
     }
 
-    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        clip.layout(0, 0, width, height)
-        viewport.layout(0, pad, viewport.measuredWidth, pad + viewport.measuredHeight)
-        invalidateOutline()
-    }
-
-    override fun onDraw(canvas: Canvas) {
-        canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), radius, radius, fill)
-    }
-    // Surface's inert pointerInput shields its rectangular allocated area.
-    override fun onTouchEvent(event: MotionEvent) = true
     override fun close() = column.close()
-}
-
-/** Clipping belongs after background/shadow, with Android Outline on the hardware path. */
-private class NativeMenuClip(context: Context, private val radius: Float) : ViewGroup(context) {
-    private val path = Path()
-    init {
-        clipChildren = false
-        clipToPadding = false
-        clipToOutline = true
-        outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(view: View, out: Outline) {
-                out.setRoundRect(0, 0, view.width, view.height, radius)
-            }
-        }
-        if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
-    }
-    override fun onMeasure(w: Int, h: Int) = setMeasuredDimension(MeasureSpec.getSize(w), MeasureSpec.getSize(h))
-    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) = Unit
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        path.rewind()
-        path.addRoundRect(0f,0f,w.toFloat(),h.toFloat(),radius,radius,Path.Direction.CW)
-        invalidateOutline()
-    }
-    override fun dispatchDraw(canvas: Canvas) {
-        if (canvas.isHardwareAccelerated) super.dispatchDraw(canvas)
-        else {
-            val save = canvas.save()
-            try { canvas.clipPath(path); super.dispatchDraw(canvas) }
-            finally { canvas.restoreToCount(save) }
-        }
-    }
 }
 
 internal class NativeMenuColumn<I>(

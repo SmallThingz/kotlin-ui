@@ -380,6 +380,28 @@ flags/secure inheritance, candidate placement and transition behavior follow the
 source-derived component. The intrinsic popup title stays in library translations;
 domain row labels stay with their owner.
 
+For mixed content in an existing `PopupWindow`, use the same surface and motion
+through `appearance.modals.anchoredPanel`.
+
+```kotlin
+val panel = appearance.modals.anchoredPanel.createPanel(body, density, palette)
+val popup = PopupWindow(panel, widthPx, heightPx, true)
+panel.applyWindowStyle(popup)
+panel.expanded(true)
+popup.showAsDropDown(anchor)
+
+// From the app's close action
+panel.expanded(false, popup::dismiss)
+```
+
+The panel measures the supplied unattached body inside its vertical padding.
+The window owner continues to choose size, anchor, focus, outside touch and
+dismissal. The child keeps its own keyboard, touch and accessibility behavior.
+Call `bindPalette` to update a retained panel. To align motion with the actual
+placement, pass physical origin fractions to `setAnimationPivot`. It defaults
+to the center of the top edge. A new expand request or window detach retires
+a pending collapse callback. The panel uses the platform animator duration scale.
+
 ## Action sheets and floating windows
 
 `NativeActionSheet` owns a real `ComponentDialog`, its two-anchor state, phase

@@ -25,6 +25,7 @@ import smallthingz.ui.text.Paragraph
 import smallthingz.ui.text.PlatformTextStyle
 import smallthingz.ui.text.TextStyle
 import smallthingz.ui.text.font.FontFamily
+import smallthingz.ui.text.font.FontStyle
 import smallthingz.ui.text.font.FontWeight
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.text.style.LineHeightStyle
@@ -677,6 +678,7 @@ open class NativeLabeledTextField(
         text = fieldLabel,
         style = TextStyle(
             color = TextColor.Black, fontSize = style.sizeSp.sp, fontWeight = FontWeight(style.weight),
+            fontStyle = if (style.italic) FontStyle.Italic else null,
             fontFamily = labelFamilies.getOrPut(style.fontFamily) { FontFamily.system(style.fontFamily) },
             letterSpacing = style.letterSpacingSp?.sp ?: style.letterSpacing.em,
             lineHeight = style.lineHeightSp?.sp ?: TextUnit.Unspecified,

@@ -110,6 +110,22 @@ accessibility focus.
 
 ## Browser tabs
 
+For an address or search editor, `appearance.compactField` supplies the raised
+fill, body typography, padding, and spacing for relative compound drawables.
+It can construct a new `NativeTextField` or bind an existing standalone editor.
+
+```kotlin
+val recipe = appearance.compactField
+val address = recipe.createField(context, colors)
+address.hint = localizedAddressHint
+address.setCompoundDrawablesRelativeWithIntrinsicBounds(addressGlyph, null, null, null)
+```
+
+Call `recipe.bind(address, colors)` when the palette changes or when adopting
+the recipe on a retained editor. Keep input type, single-line mode, draft text,
+selection, and IME actions with the app. Android continues to own its native
+hint when the editor uses compound drawables.
+
 For a standalone New Tab action, bind a `NativeMaterialButtonView` with
 `appearance.buttons.filled` and `setLeadingIcon` as usual. Mount
 `NativeButtonTouchTarget(newTabButton)` so the Android parent can deliver

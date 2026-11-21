@@ -45,10 +45,12 @@ class NativeUiAppearance(
     val groupSurfaces: NativeGroupSurfaceRecipes = NativeGroupSurfaceRecipes.Default,
     val backdrops: NativeBackdropStyle = NativeBackdropStyle.Default,
     val captureControls: NativeCaptureControlsStyle = NativeCaptureControlsStyle.Default,
+    compactField: NativeCompactFieldRecipe? = null,
 ) {
     private val settingsSelectorsOverride = settingsSelectors
     private val buttonsOverride = buttons
     private val outlinedFieldOverride = outlinedField
+    private val compactFieldOverride = compactField
     private val modalsOverride = modals
     private val readoutTypographyOverride = readoutTypography
     private val statusContentOverride = statusContent
@@ -57,6 +59,7 @@ class NativeUiAppearance(
     val buttons: NativeButtonRecipes = buttons ?: NativeButtonRecipes(labelStyle = typography.buttonLabelStyle,
         explicitLabelStyle = typography[NativeTypographyRole.LABEL_LARGE])
     val outlinedField: NativeOutlinedFieldRecipe = outlinedField ?: NativeOutlinedFieldRecipe(typography = typography)
+    val compactField: NativeCompactFieldRecipe = compactField ?: NativeCompactFieldRecipe(typography)
     val modals: NativeModalRecipes = modals ?: NativeModalRecipes(typography)
     val readoutTypography: NativeReadoutTypography = readoutTypography ?: NativeReadoutTypography(typography)
     val statusContent: NativeCenteredStatusStyle = statusContent ?: NativeCenteredStatusStyle(typography)
@@ -88,6 +91,7 @@ class NativeUiAppearance(
         groupSurfaces: NativeGroupSurfaceRecipes = this.groupSurfaces,
         backdrops: NativeBackdropStyle = this.backdrops,
         captureControls: NativeCaptureControlsStyle = this.captureControls,
+        compactField: NativeCompactFieldRecipe? = compactFieldOverride,
     ): NativeUiAppearance = NativeUiAppearance(
         colorScheme = colorScheme,
         typography = typography,
@@ -114,6 +118,7 @@ class NativeUiAppearance(
         groupSurfaces = groupSurfaces,
         backdrops = backdrops,
         captureControls = captureControls,
+        compactField = compactField,
     )
 
     fun resolveColorScheme(context: Context, darkTheme: Boolean): NativeColorScheme =

@@ -1,7 +1,16 @@
 package smallthingz.ui.components
 
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import smallthingz.ui.text.NativeTypography
+import smallthingz.ui.text.NativeTypographyRole
+import smallthingz.ui.text.font.FontFamily
+import smallthingz.ui.text.font.FontStyle
+import smallthingz.ui.unit.sp
 
 class NativeStyleBoundaryTest {
     private val nonnegative: List<Pair<String, (Float) -> Any>> = listOf(
@@ -9,6 +18,7 @@ class NativeStyleBoundaryTest {
         "choice trailing icon" to { NativeChoiceStyle(trailingIconSizeDp = it) },
         "text field radius" to { NativeTextFieldStyle(radiusDp = it) },
         "text field vertical padding" to { NativeTextFieldStyle(verticalPaddingDp = it) },
+        "text field compound gap" to { NativeTextFieldStyle(compoundDrawablePaddingDp = it) },
         "slider minimum height" to { NativeSliderStyle(minHeightDp = it) },
         "slider vertical padding" to { NativeSliderStyle(verticalPaddingDp = it) },
         "labeled outline" to { NativeLabeledTextFieldStyle(errorColor = 0, outlineWidthDp = it) },
@@ -17,6 +27,11 @@ class NativeStyleBoundaryTest {
         "settings detail gap" to { NativeSettingsRowStyle(detailGapDp = it) },
         "corner top start" to { NativeCornerRadii(it, 1f, 1f, 1f) },
         "corner bottom start" to { NativeCornerRadii(1f, 1f, 1f, it) },
+        "menu corner radius" to { NativeAnchoredMenuRecipe(cornerRadiusDp = it) },
+        "menu vertical padding" to { NativeAnchoredMenuRecipe(verticalPaddingDp = it) },
+        "menu shadow" to { NativeAnchoredMenuRecipe(shadowDp = it) },
+        "menu window shadow inset" to { NativeAnchoredMenuRecipe(windowShadowInsetDp = it) },
+        "menu collapsed scale" to { NativeAnchoredMenuMotionStyle(collapsedScale = it) },
     )
     private val positiveText: List<Pair<String, (Float) -> Any>> = listOf(
         "settings title" to { NativeSettingsRowStyle(titleSizeSp = it) },
@@ -79,5 +94,31 @@ class NativeStyleBoundaryTest {
             assertThrows("letter spacing: $value", IllegalArgumentException::class.java) { NativeTextStyle(letterSpacing = value) }
             assertThrows("letter spacing sp: $value", IllegalArgumentException::class.java) { NativeTextStyle(letterSpacingSp = value) }
         }
+    }
+
+    @Test fun compactFieldInheritsWindowBodyTypographyUntilExplicitlyOverridden() {
+        val appearance = NativeUiAppearance.Default
+        val default = appearance.compactField.style
+        assertTrue(default.filled)
+        assertFalse(default.outlined)
+        assertEquals(48f, default.minHeightDp, 0f)
+        assertEquals(8f, checkNotNull(default.compoundDrawablePaddingDp), 0f)
+        assertEquals(14f, default.textStyle.sizeSp, 0f)
+        assertEquals(20f, checkNotNull(default.textStyle.lineHeightSp), 0f)
+        val role = NativeTypographyRole.BODY_MEDIUM
+        val typography = NativeTypography(mapOf(role to appearance.typography[role].copy(
+            fontSize = 20.sp, lineHeight = 26.sp, fontFamily = FontFamily.Monospace,
+            fontStyle = FontStyle.Italic,
+        )))
+        val inherited = appearance.copy(typography = typography).compactField.style.textStyle
+        assertEquals(20f, inherited.sizeSp, 0f)
+        assertEquals(26f, checkNotNull(inherited.lineHeightSp), 0f)
+        assertEquals("monospace", inherited.fontFamily)
+        assertTrue(inherited.italic)
+
+        val explicit = NativeCompactFieldRecipe(default.copy(horizontalPaddingDp = 18f))
+        val customized = appearance.copy(compactField = explicit).copy(typography = typography)
+        assertSame(explicit, customized.compactField)
+        assertEquals(inherited, customized.copy(compactField = null).compactField.style.textStyle)
     }
 }

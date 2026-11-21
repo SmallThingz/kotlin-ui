@@ -44,6 +44,7 @@ data class NativeTextStyle(
     val includeFontPadding: Boolean? = false,
     val fontFamily: String = "sans-serif",
     val lineHeightStyle: LineHeightStyle? = null,
+    val italic: Boolean = false,
 ) {
     init {
         require(sizeSp.isFinite() && sizeSp > 0f)
@@ -64,11 +65,14 @@ data class NativeTextFieldStyle(
     val outlined: Boolean = true,
     val startPaddingDp: Float? = null,
     val endPaddingDp: Float? = null,
+    val filled: Boolean = false,
+    val compoundDrawablePaddingDp: Float? = null,
 ) {
     init {
         require(floatArrayOf(radiusDp, minHeightDp, horizontalPaddingDp, verticalPaddingDp).all { it.isFinite() && it >= 0f })
         require(startPaddingDp == null || startPaddingDp.isFinite() && startPaddingDp >= 0f)
         require(endPaddingDp == null || endPaddingDp.isFinite() && endPaddingDp >= 0f)
+        require(compoundDrawablePaddingDp == null || compoundDrawablePaddingDp.isFinite() && compoundDrawablePaddingDp >= 0f)
     }
 }
 
@@ -92,7 +96,7 @@ internal fun TextView.componentTypography(style: NativeTextStyle) {
     val fontPx = with(density) { style.sizeSp.sp.toPx() }
     setTextSize(TypedValue.COMPLEX_UNIT_PX, fontPx)
     style.includeFontPadding?.let { includeFontPadding = it }
-    typeface = Typeface.create(Typeface.create(style.fontFamily, Typeface.NORMAL), style.weight, false)
+    typeface = Typeface.create(Typeface.create(style.fontFamily, Typeface.NORMAL), style.weight, style.italic)
     letterSpacing = style.letterSpacingSp?.let {
         val emWidth = textSize * textScaleX
         if (emWidth.isFinite() && emWidth != 0f) with(density) { it.sp.toPx() } / emWidth else 0f
@@ -245,6 +249,7 @@ open class NativeTextField(
     private var componentPalette = palette
     private var componentStyle = style
     private val componentMetrics = ComponentMetrics()
+    private var originalCompoundDrawablePadding: Int? = null
     private var colorSurface:StateColorSurface?=null
     private var chromeMotion:ViewColorTransition?=null
     // Superclass constructors can call the public mode setters before these fields initialize.
@@ -384,6 +389,15 @@ open class NativeTextField(
         applyPaint()
         componentMetrics.update(context, textScaleX)
     }
+
+    internal fun bindAppearance(palette: ControlPalette, style: NativeTextFieldStyle) {
+        if (componentStyle == style) {
+            applyPalette(palette)
+            return
+        }
+        componentPalette = palette
+        applyStyle(style)
+    }
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         refreshMetrics(force = true)
@@ -467,6 +481,16 @@ open class NativeTextField(
             context.componentDp(componentStyle.endPaddingDp ?: componentStyle.horizontalPaddingDp),
             context.componentDp(componentStyle.verticalPaddingDp),
         )
+        val gap = componentStyle.compoundDrawablePaddingDp
+        if (gap != null) {
+            if (originalCompoundDrawablePadding == null) originalCompoundDrawablePadding = compoundDrawablePadding
+            val gapPx = context.componentDp(gap)
+            if (compoundDrawablePadding != gapPx) compoundDrawablePadding = gapPx
+        } else {
+            val original = originalCompoundDrawablePadding
+            originalCompoundDrawablePadding = null
+            if (original != null && compoundDrawablePadding != original) compoundDrawablePadding = original
+        }
     }
     private fun applyPaint() {
         val palette = componentPalette
@@ -474,7 +498,8 @@ open class NativeTextField(
         val controls = ControlStyle(context, palette)
         backgroundTintList = null
         val states=arrayOf(intArrayOf(-android.R.attr.state_enabled),intArrayOf(android.R.attr.state_focused),intArrayOf())
-        val fills=if(style.outlined)ColorStateList(states,intArrayOf(palette.surface,palette.raised,palette.raised)) else ColorStateList.valueOf(0)
+        val hasSurface = style.outlined || style.filled
+        val fills=if(hasSurface)ColorStateList(states,intArrayOf(palette.surface,palette.raised,palette.raised)) else ColorStateList.valueOf(0)
         val strokes=if(style.outlined)ColorStateList(states,intArrayOf(palette.outline,palette.accent,palette.outline)) else ColorStateList.valueOf(0)
         val ink=controls.foregroundStates(palette.content,palette.content)
         val hint=ColorStateList.valueOf(palette.muted)
@@ -486,7 +511,7 @@ open class NativeTextField(
             publishInk={text,placeholder,highlight->setTextColor(text);applyComponentHintColors(ColorStateList.valueOf(placeholder));highlightColor=highlight})
         colorSurface=retained
         retained.bind(fills,strokes,ink,none,radius,stroke,hint,selection,palette.surface)
-        val next=if(style.outlined)retained.background else null
+        val next=if(hasSurface)retained.background else null
         if(background !== next)background=next
         val chrome=chromeMotion
         if(chrome==null) {

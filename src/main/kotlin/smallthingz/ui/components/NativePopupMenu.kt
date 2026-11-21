@@ -6,7 +6,6 @@
  */
 package smallthingz.ui.components
 
-import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.os.Build
@@ -14,7 +13,6 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.window.OnBackInvokedCallback
@@ -43,6 +41,7 @@ class NativePopupMenu<I> private constructor(
     private val anchor: View,
     private val menu: NativeMenuContent<I>,
     private val density: Density,
+    private val recipe: NativeAnchoredMenuRecipe,
     private val frames: MonotonicFrameClock,
     private val scope: CoroutineScope,
     private val input: NativeMenuPointerBinding<I>,
@@ -57,16 +56,23 @@ class NativePopupMenu<I> private constructor(
 ), AutoCloseable {
     private constructor(anchor: View, density: Density, frames: MonotonicFrameClock,
                         scope: CoroutineScope, parts: Parts<I>, onDismissRequest: () -> Unit,
-                        onTerminal: () -> Unit) :
-        this(anchor, parts.content, density, frames, scope, parts.input, onDismissRequest, onTerminal)
+                        onTerminal: () -> Unit, recipe: NativeAnchoredMenuRecipe) :
+        this(anchor, parts.content, density, recipe, frames, scope, parts.input, onDismissRequest, onTerminal)
 
     constructor(anchor: View, density: Density, textStyle: TextStyle, resolver: FontFamily.Resolver,
                 colors: NativeMenuColors, state: NativeVerticalScrollState,
                 frames: MonotonicFrameClock, scope: CoroutineScope, icons: NativeMenuIcons<I>,
                 onDismissRequest: () -> Unit, onTerminal: () -> Unit) :
+        this(anchor, density, textStyle, resolver, colors, state, frames, scope, icons,
+            NativeAnchoredMenuRecipe.Default, onDismissRequest, onTerminal)
+
+    constructor(anchor: View, density: Density, textStyle: TextStyle, resolver: FontFamily.Resolver,
+                colors: NativeMenuColors, state: NativeVerticalScrollState,
+                frames: MonotonicFrameClock, scope: CoroutineScope, icons: NativeMenuIcons<I>,
+                recipe: NativeAnchoredMenuRecipe, onDismissRequest: () -> Unit, onTerminal: () -> Unit) :
         this(anchor, density, frames, scope,
-            Parts(anchor, density, textStyle, resolver, colors, state, frames, scope, icons),
-            onDismissRequest, onTerminal)
+            Parts(anchor, density, textStyle, resolver, colors, state, frames, scope, icons, recipe),
+            onDismissRequest, onTerminal, recipe)
 
     fun <T> bindChoices(choices: NativeMenuChoices<T>, colors: NativeMenuColors, select: (T) -> Unit) {
         menu.bind(choices, colors, select)
@@ -81,12 +87,13 @@ class NativePopupMenu<I> private constructor(
 
     private class Parts<I>(anchor: View, density: Density, style: TextStyle, resolver: FontFamily.Resolver,
                            colors: NativeMenuColors, state: NativeVerticalScrollState,
-                           frames: MonotonicFrameClock, scope: CoroutineScope, icons: NativeMenuIcons<I>) {
+                           frames: MonotonicFrameClock, scope: CoroutineScope, icons: NativeMenuIcons<I>,
+                           recipe: NativeAnchoredMenuRecipe) {
         val content: NativeMenuContent<I>
         val input: NativeMenuPointerBinding<I>
         init {
             lateinit var binding: NativeMenuPointerBinding<I>
-            content = NativeMenuContent(anchor.context, density, style, resolver, colors, icons,
+            content = NativeMenuContent(anchor.context, density, style, resolver, colors, recipe, icons,
                 state, frames, scope) { event -> binding.interestedParent(event) }
             binding = NativeMenuPointerBinding(content, density)
             input = binding
@@ -108,8 +115,7 @@ class NativePopupMenu<I> private constructor(
     }
     private val visibleFrame = Rect()
     private val location = IntArray(2)
-    private val transition = NativeMenuTransition()
-    private val animationLayer = NativeMenuAnimationLayer(menu)
+    private val animationLayer = NativeAnchoredMenuPanel(menu, density, recipe, drivesMotion = false)
     private var frameJob: Job? = null
     private var back: Any? = null
     private var added = false
@@ -142,18 +148,15 @@ class NativePopupMenu<I> private constructor(
         // Compose enters an eligible menu item in keyboard mode; touch mode keeps root focus.
         descendantFocusability = FOCUS_AFTER_DESCENDANTS
         super.setLayoutDirection(anchor.layoutDirection)
-        elevation = 8f * density.density
+        elevation = recipe.windowShadowInsetDp * density.density
         outlineProvider = NativeWindowShadowOutline
         if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
-        animationLayer.scaleX = transition.scale
-        animationLayer.scaleY = transition.scale
-        animationLayer.alpha = 0f
         addView(animationLayer)
     }
 
     fun show() {
         check(!added && !closed)
-        transition.retarget(true)
+        animationLayer.retargetMotion(true)
         // Mark before addView, because its synchronous attach callback starts the frame owner.
         added = true
         try { manager.addView(this,params) }
@@ -166,10 +169,10 @@ class NativePopupMenu<I> private constructor(
 
     fun expanded(expanded: Boolean) {
         if (closed) return
-        transition.retarget(expanded)
+        animationLayer.retargetMotion(expanded)
         // AndroidMenu's condition is outside DropdownMenuContent/updateTransition. A close before
         // first entry settles removes the popup immediately, rather than inventing an exit tween.
-        if (!transition.shouldExist) onTerminal()
+        if (!animationLayer.motionShouldExist) onTerminal()
     }
 
     override fun onAttachedToWindow() {
@@ -181,11 +184,8 @@ class NativePopupMenu<I> private constructor(
                 frames.withFrameNanos { time ->
                     if (!closed) {
                         updatePosition()
-                        transition.frame(time,readCachedAnimatorDurationScale(context))
-                        animationLayer.scaleX = transition.scale
-                        animationLayer.scaleY = transition.scale
-                        animationLayer.alpha = if (positioned && anchor.isAttachedToWindow) transition.alpha else 0f
-                        if (!transition.shouldExist) onTerminal()
+                        animationLayer.advanceMotion(time, visible = positioned && anchor.isAttachedToWindow)
+                        if (!animationLayer.motionShouldExist) onTerminal()
                     }
                 }
             }
@@ -304,30 +304,6 @@ class NativePopupMenu<I> private constructor(
         }
         cleanup { menu.close() }
         failure?.let { throw it }
-    }
-}
-
-/** Menu.kt applies motion outside Surface's separate shadow/background/content layers. */
-private class NativeMenuAnimationLayer<I>(private val menu: NativeMenuContent<I>) : ViewGroup(menu.context) {
-    init {
-        clipChildren = false
-        clipToPadding = false
-        clipToOutline = false
-        isFocusable = false
-        isClickable = false
-        descendantFocusability = FOCUS_AFTER_DESCENDANTS
-        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-        if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
-        addView(menu)
-    }
-
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        menu.measure(widthMeasureSpec, heightMeasureSpec)
-        setMeasuredDimension(menu.measuredWidth, menu.measuredHeight)
-    }
-
-    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        menu.layout(0, 0, menu.measuredWidth, menu.measuredHeight)
     }
 }
 
