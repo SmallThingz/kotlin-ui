@@ -14,7 +14,8 @@ and [permission activity](https://github.com/RikkaApps/Shizuku/blob/b844bc491f17
 It uses a centered request and vertically joined, equally toned Allow/Deny actions with
 56dp minimum height. A compact icon/name identity row and optional scope body are explicit
 consumer requirements. Colors come from the supplied native/Reverb scheme, not Shizuku
-resource copies.
+resource copies. Both actions use primary/onPrimary, with the normal dialog background
+unchanged. Consumer-owned scope selections should use primary for their selected accent.
 
 Actions enter busy state before invoking the consumer once. Clear busy only for a deliberate
 retry or terminal error. setAllowEnabled(false) survives busy transitions. Optional

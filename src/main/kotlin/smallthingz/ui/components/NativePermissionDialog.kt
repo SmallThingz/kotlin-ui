@@ -296,7 +296,8 @@ class NativePermissionDialog(
     }
 
     private fun bindActions() {
-        val palette = colors.buttonPalette.copy(tonalSurface = colors.primaryContainer, onTonal = colors.onPrimaryContainer)
+        // Permission actions use the primary pair; keep the normal dialog surface unchanged.
+        val palette = colors.buttonPalette.copy(tonalSurface = colors.primary, onTonal = colors.onPrimary)
         allow.bind(allowLabel.toString(), allowEnabled && !busy, palette)
         deny.bind(denyLabel.toString(), !busy, palette)
     }
