@@ -1,0 +1,13 @@
+// Opt-in JVM Android view tests for the standalone library.
+gradle.beforeProject { project ->
+    project.pluginManager.withPlugin('com.android.library') {
+        project.android.sourceSets.test.kotlin.srcDir('tests/permission-dialog/src')
+        project.android.testOptions.unitTests.includeAndroidResources = true
+        project.dependencies.add('testImplementation', 'org.robolectric:robolectric:4.15.1')
+        project.tasks.withType(Test).configureEach {
+            maxParallelForks = 1
+            maxHeapSize = '640m'
+            systemProperty 'robolectric.dependency.repo.url', 'https://repo.maven.apache.org/maven2'
+        }
+    }
+}
