@@ -2,6 +2,9 @@ package smallthingz.ui.components
 
 import androidx.core.graphics.Insets
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class NativeChromeRecipesTest {
@@ -64,6 +67,23 @@ class NativeChromeRecipesTest {
         assertEquals(variantAlias.onSurfaceVariant, style.content(variantAlias))
         val primaryAlias = variantAlias.copy(primary = palette.surfaceVariant)
         assertEquals(primaryAlias.onPrimary, style.content(primaryAlias))
+    }
+
+    @Test fun permissionDialogRecipeRetainsWindowOverridesAndRejectsInvalidGeometry() {
+        val defaults = NativeUiAppearance.Default
+        val base = defaults.modals.permissionDialog
+        assertEquals(360, base.maxWidthDp)
+        assertEquals(56, base.actionMinimumHeightDp)
+        assertNull(base.dimAmount)
+        val alternate = base.copy(noiseSeed = null, dimAmount = 0f, windowAnimations = 0)
+        val changed = defaults.copy(modals = defaults.modals.copy(permissionDialog = alternate))
+        assertSame(alternate, changed.copy().modals.permissionDialog)
+        assertEquals(1f, checkNotNull(base.copy(dimAmount = 1f).dimAmount), 0f)
+        for (invalid in floatArrayOf(-.01f, 1.01f, Float.NaN, Float.POSITIVE_INFINITY)) {
+            assertThrows(IllegalArgumentException::class.java) { base.copy(dimAmount = invalid) }
+        }
+        assertThrows(IllegalArgumentException::class.java) { base.copy(maxWidthDp = 0) }
+        assertThrows(IllegalArgumentException::class.java) { base.copy(actionMinimumHeightDp = 47) }
     }
 
     @Test fun layeredMarkCacheKeepsTheFractionalFillBoundsRounding() {

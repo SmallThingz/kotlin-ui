@@ -24,6 +24,7 @@ data class NativeModalRecipes(
     val floating: NativeFloatingPanelRecipe = NativeFloatingPanelRecipe(),
     val statusBar: NativeStatusBarStyle = NativeStatusBarStyle(),
     val anchoredPanel: NativeAnchoredMenuRecipe = NativeAnchoredMenuRecipe.Default,
+    val permissionDialog: NativePermissionDialogRecipe = NativePermissionDialogRecipe(),
 ) {
     fun actionSheetStyle(density: Density, resolver: FontFamily.Resolver, palette: NativeColorScheme): NativeActionSheetStyle =
         NativeActionSheetStyle(density, resolver,

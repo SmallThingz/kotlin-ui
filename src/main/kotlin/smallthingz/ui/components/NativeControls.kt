@@ -20,6 +20,9 @@ import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.controls.ControlStyle
 import smallthingz.ui.controls.StateColorSurface
 import smallthingz.ui.animation.view.ViewColorTransition
+import smallthingz.ui.text.NativeTypography
+import smallthingz.ui.text.NativeTypographyRole
+import smallthingz.ui.text.font.FontStyle
 import smallthingz.ui.text.style.LineHeightStyle
 import smallthingz.ui.unit.Density
 import smallthingz.ui.unit.sp
@@ -53,6 +56,27 @@ data class NativeTextStyle(
         require(letterSpacingSp == null || letterSpacingSp.isFinite())
         require(fontFamily.isNotBlank())
     }
+}
+
+/** Resolve an appearance role for a framework TextView or editor. */
+internal fun NativeTypography.nativeTextStyle(role: NativeTypographyRole): NativeTextStyle {
+    val text = this[role]
+    val size = if (text.fontSize.isSp) text.fontSize.value else role.style.fontSizeSp
+    return NativeTextStyle(
+        sizeSp = size,
+        lineHeightSp = when {
+            text.lineHeight.isSp -> text.lineHeight.value
+            text.lineHeight.isEm -> text.lineHeight.value * size
+            else -> role.style.lineHeightSp
+        },
+        weight = text.fontWeight?.weight ?: role.style.fontWeight,
+        letterSpacing = if (text.letterSpacing.isEm) text.letterSpacing.value else 0f,
+        letterSpacingSp = if (text.letterSpacing.isSp) text.letterSpacing.value else null,
+        includeFontPadding = text.platformStyle?.includeFontPadding ?: false,
+        fontFamily = text.fontFamily?.familyName ?: "sans-serif",
+        lineHeightStyle = text.lineHeightStyle,
+        italic = text.fontStyle == FontStyle.Italic,
+    )
 }
 
 enum class NativeTextRole { CONTENT, MUTED, ACCENT, ON_ACCENT }
