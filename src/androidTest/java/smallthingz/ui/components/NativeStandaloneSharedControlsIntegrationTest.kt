@@ -26,6 +26,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
 import java.util.concurrent.CountDownLatch
@@ -208,14 +209,21 @@ class NativeStandaloneSharedControlsIntegrationTest {
     @Test fun joinedInkRemainsReadableInActualIntermediateDraw() {
         assumeTrue("Requires Android animations enabled", ValueAnimator.areAnimatorsEnabled())
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val light = NativeColorScheme.fallback(darkTheme = false).copy(surfaceContainerLow = Color.WHITE,
-            onSurface = Color.BLACK, onSurfaceVariant = Color.BLACK)
-        val dark = NativeColorScheme.fallback(darkTheme = true).copy(surfaceContainerLow = Color.BLACK,
-            onSurface = Color.WHITE, onSurfaceVariant = Color.WHITE)
+        // Keep every interior fill in the contrast-sensitive range. A fixed white-to-black
+        // grayscale band can fit entirely between two frames at the device's motion scale.
+        val rawInk = Color.rgb(128, 128, 128)
+        val light = NativeColorScheme.fallback(darkTheme = false).copy(surfaceContainerLow = Color.rgb(160, 160, 160),
+            onSurface = rawInk, onSurfaceVariant = rawInk, error = rawInk)
+        val dark = NativeColorScheme.fallback(darkTheme = true).copy(surfaceContainerLow = Color.rgb(80, 80, 80),
+            onSurface = rawInk, onSurfaceVariant = rawInk, error = rawInk)
         val finished = CountDownLatch(1)
         var bitmap: Bitmap? = null
         var canvas: Canvas? = null
-        var sawMidpoint = false
+        var fillSampleY = 0
+        var durationScale = Float.NaN
+        var intermediateFrames = 0
+        var firstPaintMismatch: Pair<Int, Int>? = null
+        var maximumRawContrast = 0.0
         var minimumContrast = Double.POSITIVE_INFINITY
         try {
             withWindow(observe = {
@@ -233,12 +241,20 @@ class NativeStandaloneSharedControlsIntegrationTest {
                     val frame = bitmap ?: return@createGroup
                     val surface = view as NativeGroupLayout
                     val sampledFill = surface.paintedFillColor
-                    if (sampledFill == Color.BLACK) finished.countDown()
-                    if (Color.red(sampledFill) !in 75..180) return@createGroup
-                    val paint = checkNotNull(canvas)
+                    if (sampledFill == dark.field) {
+                        finished.countDown()
+                        return@createGroup
+                    }
+                    if (sampledFill == light.field) return@createGroup
+                    intermediateFrames++
                     frame.eraseColor(Color.TRANSPARENT)
-                    surface.draw(paint)
-                    val fill = frame.getPixel(minOf(frame.width, surface.width) / 2, minOf(frame.height, surface.height) - 8)
+                    surface.draw(checkNotNull(canvas))
+                    val fill = frame.getPixel(frame.width / 2, fillSampleY)
+                    if (fill != sampledFill) {
+                        if (firstPaintMismatch == null) firstPaintMismatch = sampledFill to fill
+                        return@createGroup
+                    }
+                    maximumRawContrast = maxOf(maximumRawContrast, ColorUtils.calculateContrast(rawInk, fill))
                     val placeholder = (0 until hint.childCount).asSequence().map(hint::getChildAt)
                         .filterIsInstance<NativeText>().single { it.text?.toString() == "Enter value" }
                     val inset = (28f * surface.resources.displayMetrics.density).roundToInt()
@@ -256,20 +272,29 @@ class NativeStandaloneSharedControlsIntegrationTest {
                         ColorUtils.calculateContrast(body.editor.currentTextColor, fill),
                         ColorUtils.calculateContrast(body.supportingView.currentTextColor, fill),
                         ColorUtils.calculateContrast(placeholder.currentTextColor, fill))
-                    if (Color.red(fill) in 75..180) sawMidpoint = true
                 })
                 activity.setContentView(group.view)
                 return@withWindow {
                     assertTrue(body.editor.requestFocus())
                     assertFalse(label.editor.hasFocus())
                     assertTrue(group.view.isAttachedToWindow && group.view.isShown)
+                    val bottomInset = (4f * group.view.resources.displayMetrics.density).roundToInt().coerceAtLeast(1)
+                    assertTrue("Expected a blank fill band below the last field",
+                        hint.bottom < group.view.height - bottomInset)
+                    fillSampleY = (hint.bottom + group.view.height - bottomInset) / 2
                     val frame = Bitmap.createBitmap(group.view.width, group.view.height, Bitmap.Config.ARGB_8888)
                     bitmap = frame
                     canvas = Canvas(frame)
+                    durationScale = readCachedAnimatorDurationScale(activity)
+                    assertEquals(light.field, group.view.paintedFillColor)
                     group.bindPalette(dark)
+                    assertEquals("An attached shown group must start from its current paint at scale $durationScale",
+                        light.field, group.view.paintedFillColor)
                 }
             }
-            assertTrue("Expected an intermediate surface in the rendered transition", sawMidpoint)
+            assertTrue("Expected a nonendpoint paint sample at animator scale $durationScale", intermediateFrames > 0)
+            assertEquals("Sampled fill and actual bitmap pixel must match", null, firstPaintMismatch)
+            assertTrue("Every sampled frame must challenge raw ink ($maximumRawContrast)", maximumRawContrast in 1.0..<4.5)
             assertTrue("Label, body, placeholder, and error ink must reach 4.5:1 contrast ($minimumContrast)", minimumContrast >= 4.5)
         } finally {
             instrumentation.runOnMainSync {

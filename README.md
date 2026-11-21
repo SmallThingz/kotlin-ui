@@ -74,6 +74,11 @@ See [Settings and browser controls](docs/appearance-controls.md) for retained
 selectors, editable fields, toolbar actions, and a separate close action in a
 selectable row.
 
+Use [NativePermissionDialog](docs/permission-dialog.md) for an app-owned permission
+request with joined Allow/Deny actions and optional scope controls. Its default
+recipe lives in `appearance.modals.permissionDialog`; authorization and localized
+request text remain with the caller. Do not vendor a second copy of the component.
+
 Keep the returned controls for the owner’s lifetime. Rebind labels, enabled
 state, actions and palette on the same views. For font or display changes, obtain
 a new `Density` and shared font resolver from the current window and call
