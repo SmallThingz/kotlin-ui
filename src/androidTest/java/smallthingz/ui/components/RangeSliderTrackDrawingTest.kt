@@ -1,8 +1,10 @@
 package smallthingz.ui.components
 
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.util.DisplayMetrics
 import android.view.View
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -91,6 +93,51 @@ class RangeSliderTrackDrawingTest {
         checkDrawing(Color.RED)
         slider.isEnabled = true
         checkDrawing(Color.CYAN)
+    }
+
+    @Test
+    fun legacySingleSliderRetainsEnabledAndDisabledPixels() = onMain { owner ->
+        val mdpi = owner.context.createConfigurationContext(Configuration().apply {
+            densityDpi = DisplayMetrics.DENSITY_MEDIUM
+        })
+        val slider = NativeSlider(mdpi, palette, NativeSliderStyle(steps = 3)).apply {
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            max = 100
+            progress = 50
+            measure(View.MeasureSpec.makeMeasureSpec(200, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(64, View.MeasureSpec.EXACTLY))
+            layout(0, 0, 200, 64)
+        }
+        // Pre-extraction NativeSlider at 74ac40d, at 1 px/dp with the default geometry.
+        // The track spans x=2..198, with radius 8 and center y=32. Its midpoint thumb
+        // has an 8px clearance from center to track; interior ticks are at 55 and 145.
+        val bitmap = Bitmap.createBitmap(200, 64, Bitmap.Config.ARGB_8888)
+        try {
+            fun pixel(part: String, x: Int, y: Int, expected: Int) {
+                assertEquals(part, expected, bitmap.getPixel(x, y))
+            }
+
+            slider.draw(Canvas(bitmap))
+            pixel("enabled active track", 30, 32, Color.BLUE)
+            pixel("enabled inactive track: green under 18% black", 165, 32, 0xff00d100.toInt())
+            pixel("active tick", 55, 32, Color.GREEN)
+            pixel("inactive tick", 145, 32, Color.BLUE)
+            pixel("right stop indicator", 190, 32, Color.BLUE)
+            pixel("thumb above the track", 100, 16, Color.BLUE)
+            pixel("thumb clearance", 95, 32, Color.TRANSPARENT)
+            pixel("rounded outer corner", 3, 25, Color.TRANSPARENT)
+
+            slider.isEnabled = false
+            bitmap.eraseColor(Color.TRANSPARENT)
+            slider.draw(Canvas(bitmap))
+            pixel("disabled active track: 38% black", 30, 32, 0x61000000)
+            pixel("disabled inactive track: 12% black", 165, 32, 0x1f000000)
+            pixel("disabled thumb: 38% black over white", 100, 16, 0xff9e9e9e.toInt())
+            pixel("disabled thumb clearance", 95, 32, Color.TRANSPARENT)
+            pixel("disabled rounded outer corner", 3, 25, Color.TRANSPARENT)
+        } finally {
+            bitmap.recycle()
+        }
     }
 
     private fun onMain(action: (View) -> Unit) {

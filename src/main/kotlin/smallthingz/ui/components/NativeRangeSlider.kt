@@ -62,7 +62,14 @@ class NativeRangeSlider(
     private var ready = false
 
     // The object identity guards completion if a preview synchronously rebinds the control.
-    private inner class Edit(var thumb: Thumb?, val pointer: Int = -1, val key: Int = -1, val time: Long = 0)
+    private inner class Edit(var thumb: Thumb?, val pointer: Int = -1, val key: Int = -1, val time: Long = 0) {
+        private val startLeft = trackLeft
+        private val startRight = trackRight
+        private val startRtl = rtl
+
+        fun pointerMappingChanged() = pointer >= 0 &&
+            (trackLeft != startLeft || trackRight != startRight || rtl != startRtl)
+    }
 
     init {
         setWillNotDraw(false)
@@ -81,6 +88,7 @@ class NativeRangeSlider(
         if (this.style == style) return
         this.style = style
         track.applyStyle(style)
+        cancelIfPointerMappingChanged()
         requestLayout()
         invalidate()
     }
@@ -94,6 +102,10 @@ class NativeRangeSlider(
     fun cancelInteraction() {
         retire()
         show(bound, preview = true)
+    }
+
+    private fun cancelIfPointerMappingChanged() {
+        if (edit?.pointerMappingChanged() == true) cancelInteraction()
     }
 
     private fun retire() {
@@ -163,7 +175,10 @@ class NativeRangeSlider(
             MeasureSpec.makeMeasureSpec(handleHeight, MeasureSpec.EXACTLY))
     }
 
-    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) = positionThumbs()
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        cancelIfPointerMappingChanged()
+        positionThumbs()
+    }
 
     private fun positionThumbs() {
         for (index in 0 until childCount) {
@@ -205,6 +220,8 @@ class NativeRangeSlider(
             invalidate()
             return true
         }
+        // Padding and direction can change before Android delivers the next layout.
+        cancelIfPointerMappingChanged()
         val owner = edit ?: return false
         if (owner.pointer < 0 || owner.time != event.downTime) return false
         val index = event.findPointerIndex(owner.pointer)
@@ -214,15 +231,19 @@ class NativeRangeSlider(
             event.actionMasked == MotionEvent.ACTION_MOVE || event.actionMasked == MotionEvent.ACTION_UP -> {
                 val physicalX = event.getX(index)
                 val released = event.actionMasked == MotionEvent.ACTION_UP
+                val withinSlop = !dragStarted && abs(physicalX - downX) <= touchSlop
+                if (withinSlop && !released) return true
                 if (!released && !dragStarted) {
-                    if (abs(physicalX - downX) < touchSlop) return true
                     dragStarted = true
                     parent?.requestDisallowInterceptTouchEvent(true)
                 }
                 val pointerValue = valueAt(physicalX)
                 val anchor = touchedValue
-                val target = if (anchor == null || physicalX <= trackLeft || physicalX >= trackRight) pointerValue
-                    else anchor + (pointerValue - valueAt(downX))
+                val target = when {
+                    withinSlop && anchor != null -> anchor.toDouble()
+                    anchor == null || physicalX <= trackLeft || physicalX >= trackRight -> pointerValue
+                    else -> anchor + (pointerValue - valueAt(downX))
+                }
                 val thumb = owner.thumb ?: (if (target < lower) low else high).also { owner.thumb = it }
                 if (!canEdit(thumb)) {
                     cancelInteraction()
@@ -294,6 +315,15 @@ class NativeRangeSlider(
             isFocusableInTouchMode = true
             defaultFocusHighlightEnabled = true
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
+        }
+
+        override fun focusSearch(direction: Int): View? {
+            val peer = if (isLower) high else low
+            val towardPeer = if (isLower != rtl) FOCUS_RIGHT else FOCUS_LEFT
+            // Spatial search cannot order siblings with identical hit rectangles.
+            if (direction == towardPeer && isLaidOut && left == peer.left && right == peer.right &&
+                top == peer.top && bottom == peer.bottom && canEdit(peer)) return peer
+            return super.focusSearch(direction)
         }
 
         private fun clamped(requested: Double) = grid.snap(requested).coerceIn(first, last)
