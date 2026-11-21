@@ -7,29 +7,36 @@ import android.view.ViewGroup
 import kotlin.math.roundToInt
 
 /** Explicit48dp minimum-target routing; never a permanent whole-screen touch delegate. */
-open class NativeTopBarLayout(context: Context) : ViewGroup(context) {
+open class NativeTopBarLayout(context: Context, initialStyle: NativeToolbarStyle = NativeToolbarStyle.Default) : ViewGroup(context) {
     protected var touchDensity = resources.displayMetrics.density
+    protected var toolbarStyle = initialStyle
+        private set
     private var delegated: View? = null
     init { clipChildren = false; clipToPadding = false }
     enum class Slot { START, CENTER, END }
     class ActionLayoutParams(val slot: Slot, val minimumVisualOffset: Boolean = false) :
         ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     private var topInsetPx = 0
-    private var contentHeightDp = 66f
-    fun bindMetrics(density: Float, topInsetPx: Int = 0, contentHeightDp: Float = 66f) {
-        if (touchDensity == density && this.topInsetPx == topInsetPx && this.contentHeightDp == contentHeightDp) return
-        touchDensity = density; this.topInsetPx = topInsetPx; this.contentHeightDp = contentHeightDp
+    fun bindMetrics(density: Float, topInsetPx: Int = 0, contentHeightDp: Float = NativeToolbarStyle.Default.compactHeightDp) =
+        bindStyle(density, topInsetPx, if (contentHeightDp == toolbarStyle.compactHeightDp) toolbarStyle else
+            toolbarStyle.copy(compactHeightDp = contentHeightDp))
+
+    fun bindStyle(density: Float, topInsetPx: Int, style: NativeToolbarStyle) {
+        if (touchDensity == density && this.topInsetPx == topInsetPx && toolbarStyle == style) return
+        touchDensity = density
+        this.topInsetPx = topInsetPx
+        toolbarStyle = style
         requestLayout()
     }
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val size = (46f * touchDensity).roundToInt()
+        val size = (toolbarStyle.action.sizeDp * touchDensity).roundToInt()
         for (index in 0 until childCount) getChildAt(index).measure(topBarExact(size), topBarExact(size))
         setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec),
-            resolveSize(topInsetPx + (contentHeightDp * touchDensity).roundToInt(), heightMeasureSpec))
+            resolveSize(topInsetPx + toolbarStyle.compactHeightPx(touchDensity), heightMeasureSpec))
     }
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
-        val inset = (14f * touchDensity).roundToInt()
-        val size = (46f * touchDensity).roundToInt()
+        val inset = (toolbarStyle.compactEdgeInsetDp * touchDensity).roundToInt()
+        val size = (toolbarStyle.action.sizeDp * touchDensity).roundToInt()
         val y = topInsetPx + ((height - topInsetPx - size) / 2f).roundToInt()
         for (index in 0 until childCount) {
             val child = getChildAt(index)
@@ -43,7 +50,7 @@ open class NativeTopBarLayout(context: Context) : ViewGroup(context) {
             val x = if (params?.slot == Slot.CENTER || layoutDirection != LAYOUT_DIRECTION_RTL) logicalX
                 else width - logicalX - size
             val residual = if (params?.minimumVisualOffset == true)
-                nativeMinimumInteractiveVisualOffset(size, (48f * touchDensity).roundToInt()) else 0
+                nativeMinimumInteractiveVisualOffset(size, (toolbarStyle.action.minimumTargetDp * touchDensity).roundToInt()) else 0
             child.layout(x + residual, y + residual, x + residual + size, y + residual + size)
         }
     }
@@ -61,7 +68,7 @@ open class NativeTopBarLayout(context: Context) : ViewGroup(context) {
                 bounds += shape
             }
             val hit = nativeTopBarHitIndex(bounds, event.x, event.y,
-                event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER, 48f * touchDensity)
+                event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER, toolbarStyle.action.minimumTargetDp * touchDensity)
             delegated = hit?.let(eligible::get)
         }
         val target = delegated ?: return super.dispatchTouchEvent(event)

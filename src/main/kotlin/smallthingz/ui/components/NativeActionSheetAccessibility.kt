@@ -18,7 +18,10 @@ import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import smallthingz.ui.geometry.Offset
 import smallthingz.ui.geometry.Rect as ComposeRect
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.max
+import kotlin.math.min
 
 /** One cursor per actual sheet Window; bodies explicitly share it instead of creating another. */
 class NativeActionSheetAccessibility internal constructor(
@@ -88,7 +91,16 @@ class NativeActionSheetAccessibility internal constructor(
         val semanticHeight=if(view is SheetRoot)view.sourceSemanticsHeight else view.height
         val capture=geometry.capture(view,Offset.Zero,
             ComposeRect(-x,-y,view.width+x,semanticHeight+y))?:return NativeSourceAccessibilityNode.absent()
-        val bounds=nativeMergedRoleBoundsInScreen(capture,view.isLaidOut)
+        val visible = if (view === scrim && surface.painted.isShown) {
+            val painted = surface.painted
+            val covered = geometry.capture(painted, Offset.Zero,
+                ComposeRect(0f, 0f, painted.width.toFloat(), painted.height.toFloat()))?.visibleBoundsInRoot
+            capture.copy(visibleBoundsInRoot = nativeSheetBackdropRegion(capture.visibleBoundsInRoot, covered))
+        } else capture
+        if (view === scrim && visible.visibleBoundsInRoot.isEmpty) {
+            return NativeSourceAccessibilityNode(false, true, false, Rect())
+        }
+        val bounds=nativeMergedRoleBoundsInScreen(visible,view.isLaidOut)
         return NativeSourceAccessibilityNode(!bounds.isEmpty,hidden,!hidden&&!bounds.isEmpty,bounds)
     }
     private fun bindDescription(view:View,speaking:Boolean,click:Boolean):AutoCloseable {
@@ -100,12 +112,15 @@ class NativeActionSheetAccessibility internal constructor(
                 super.onInitializeAccessibilityNodeInfo(host,info)
                 helper.populate(info)
                 val facts=sourceNode(host)
-                info.isClickable=click;info.isLongClickable=false;info.isFocusable=false;info.isFocused=false
-                info.isScreenReaderFocusable=speaking&&!facts.hidden
+                info.isClickable=click&&facts.present;info.isLongClickable=false;info.isFocusable=false;info.isFocused=false
+                info.isScreenReaderFocusable=speaking&&facts.present&&!facts.hidden
                 facts.populate(info)
-                if(click)info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK)
+                if(info.isClickable)info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK)
+                else if(click)info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK)
             }
             override fun performAccessibilityAction(host:View,action:Int,args:Bundle?):Boolean {
+                if (action == AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS)
+                    return super.performAccessibilityAction(host, action, args)
                 if(!sourceNode(host).present)return false
                 return helper.performAction(action,args)?:when(action) {
                     AccessibilityNodeInfo.ACTION_CLICK->if(click){host.performClick();true}else false
@@ -124,4 +139,24 @@ class NativeActionSheetAccessibility internal constructor(
         handle.mark.sourceNode=null;surface.sourceChildPresent=null
         root.accessibilityDelegate=null;surface.accessibilityDelegate=null
     }
+}
+
+/** One node can describe one rectangle. Prefer the largest actual backdrop strip. */
+internal fun nativeSheetBackdropRegion(backdrop: ComposeRect, sheet: ComposeRect?): ComposeRect {
+    if (sheet == null || sheet.isEmpty || backdrop.isEmpty) return backdrop
+    val left = max(backdrop.left, floor(sheet.left))
+    val top = max(backdrop.top, floor(sheet.top))
+    val right = min(backdrop.right, ceil(sheet.right))
+    val bottom = min(backdrop.bottom, ceil(sheet.bottom))
+    if (left >= right || top >= bottom) return backdrop
+
+    var best = ComposeRect.Zero
+    fun consider(rect: ComposeRect) {
+        if (!rect.isEmpty && rect.width * rect.height > best.width * best.height) best = rect
+    }
+    consider(ComposeRect(backdrop.left, backdrop.top, backdrop.right, top))
+    consider(ComposeRect(backdrop.left, bottom, backdrop.right, backdrop.bottom))
+    consider(ComposeRect(backdrop.left, backdrop.top, left, backdrop.bottom))
+    consider(ComposeRect(right, backdrop.top, backdrop.right, backdrop.bottom))
+    return best
 }

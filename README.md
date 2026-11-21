@@ -23,19 +23,17 @@ surface, an outer border, and optional dividers.
 
 ```kotlin
 import android.content.Context
-import android.graphics.Color
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import smallthingz.ui.components.NativeGroupLayout
-import smallthingz.ui.components.NativeMaterialButtonStyle
 import smallthingz.ui.components.NativeMaterialButtonView
-import smallthingz.ui.text.TextStyle
+import smallthingz.ui.components.NativeUiAppearance
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
-import smallthingz.ui.unit.sp
 
 fun actions(
     context: Context,
+    darkTheme: Boolean,
     saveLabel: String,
     resetLabel: String,
     onSave: () -> Unit,
@@ -43,15 +41,15 @@ fun actions(
 ): Triple<NativeGroupLayout, NativeMaterialButtonView, NativeMaterialButtonView> {
     val density = Density(context)
     val resolver = createFontFamilyResolver(context)
-    val textStyle = TextStyle(fontSize = 14.sp)
-    val style = NativeMaterialButtonStyle(horizontalPaddingDp = 16, minimumHeightDp = 48)
-    val save = NativeMaterialButtonView(context, true, textStyle, density, resolver, style, onClick = onSave)
-    val reset = NativeMaterialButtonView(context, false, textStyle, density, resolver, style, onClick = onReset)
-    save.bind(saveLabel, true, 0xff193b73.toInt(), Color.WHITE)
-    reset.bind(resetLabel, true, Color.TRANSPARENT, 0xff193b73.toInt())
+    val appearance = NativeUiAppearance.Default
+    val colors = appearance.resolveColorScheme(context, darkTheme)
+    val save = NativeMaterialButtonView(context, appearance.buttons.filled, density, resolver, onClick = onSave)
+    val reset = NativeMaterialButtonView(context, appearance.buttons.neutralText, density, resolver, onClick = onReset)
+    save.bind(saveLabel, true, colors.buttonPalette)
+    reset.bind(resetLabel, true, colors.buttonPalette)
 
     val group = NativeGroupLayout(context)
-    group.setPaletteImmediately(Color.WHITE, 0xff777777.toInt())
+    group.setPaletteImmediately(colors.field, colors.border)
     group.addRow(save, NativeGroupLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
     group.addRow(reset, NativeGroupLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
         dividerTop = true
@@ -64,6 +62,17 @@ Mount the group in an existing Activity or Fragment. The default button input
 handles ordinary Android touch and keys. Supply `NativeButtonInputPolicy` when
 the host needs an explicit input root, an owner revision key, or delayed press
 admission under a scrolling parent.
+
+Use `setLeadingIcon` for a tinted decorative drawable on a labeled action. The
+selected recipe supplies its size, gap, typography, and enabled/disabled paint.
+Use `buttons.tonal` for a filled secondary action and `buttons.text` for a text
+action. `buttons.footerBack` and `buttons.footerContinue` use their parent's
+assigned button bounds. If the natural-width button is wrapped in a larger hit
+target, use `minimumTouchTargetDp` to size that wrapper.
+
+See [Settings and browser controls](docs/appearance-controls.md) for retained
+selectors, editable fields, toolbar actions, and a separate close action in a
+selectable row.
 
 Keep the returned controls for the owner’s lifetime. Rebind labels, enabled
 state, actions and palette on the same views. For font or display changes, obtain
@@ -192,20 +201,35 @@ Consumers import the direct View DSL from `smallthingz.ui.dsl`.
 ## Localized theme selector
 
 `smallthingz.ui.components.NativeThemeSelector` owns its Theme/Auto/Light/Dark
-copy, translations, icons and radio-row geometry. Supply a `ControlPalette`, a
-`NativeThemeMode`, and an `onSelectionRequest` callback; the owner binds the
-authoritative selection through `bind`. Persisted theme codes remain the
-application's responsibility. Call `close` when the logical owner retires.
-The optional `NativeThemePresentation` adapts retained title/surface rendering
-without supplying or replacing intrinsic copy; the default uses `NativeText`
-and `NativeSurface`. `inputAllowed` adds the host's admission policy to the
-component's attachment, visibility, focus and enabled checks.
+copy, translations, icons and radio-row geometry. Create it with
+`appearance.settingsSelectors.createThemeSelector`, using the window's shared
+`Density` and font resolver. The preset owns the paragraph title and animated
+group surface. Supply a `ControlPalette`, a `NativeThemeMode`, and an
+`onSelectionRequest` callback. Bind the authoritative selection through `bind`
+and call `close` when the logical owner retires. The app owns persisted theme
+codes. `inputAllowed` adds the host's admission policy to the component's
+attachment, visibility, focus and enabled checks.
 
-Both Theme and app-defined options use `NativeSegmentedControl`: bind retained
-`NativeChoice` values and the authoritative selected ID, and provide a Boolean
-selection callback. `NativeSegmentedPresentation` optionally adapts the capsule
-surface; the default uses `NativeSurface`. Theme adds only localized options,
-icons and title layout to this same capsule.
+```kotlin
+val theme = appearance.settingsSelectors.createThemeSelector(
+    context, palette, selected, density, resolver,
+    onSelectionRequest = onThemeRequested,
+)
+theme.bind(selected, palette, density, resolver)
+```
+
+Both Theme and app-defined options use `NativeSegmentedControl`. Use
+`appearance.settingsSelectors.createSegmentedControl` for the same grouped
+capsule with app-defined choices. Bind retained `NativeChoice` values and the
+authoritative selected ID, and provide a Boolean selection callback. Direct
+`NativeSegmentedControl` construction supports custom capsule presentation
+through `NativeSegmentedPresentation`.
+
+The capsule uses the bound labels and icons to determine its preferred width.
+Longer labels, larger fonts or a small window can increase its height and wrap
+the same choices into additional rows. Theme places the capsule below its title
+when they cannot fit comfortably side by side. Reflow keeps the bound selection
+and the existing option views.
 
 The segmented row's immediate parent implements
 `smallthingz.ui.input.NativeAndroidInteropHost`, preserving one owner-scoped
@@ -421,6 +445,10 @@ no runtime performance improvement.
 
 ## API migration
 
+- Move Theme calls that omitted `NativeThemePresentation` to
+  `appearance.settingsSelectors.createThemeSelector` and rebuild against the
+  library. The direct `NativeThemeSelector` constructor requires an explicit
+  custom presentation.
 - Use `NativeGroupLayout` for grouped settings, and opt each divider in through
   its row's layout parameters. [Control source records](SOURCE-controls.json)
 - Choose `NativeActionSheet` or `NativeFloatingDialog` when moving a dialog to

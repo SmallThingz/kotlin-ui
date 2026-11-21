@@ -15,8 +15,12 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.annotation.ColorInt
 import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.controls.ControlStyle
+import smallthingz.ui.controls.StateColorSurface
+import smallthingz.ui.controls.selectionForeground
+import smallthingz.ui.controls.selectionIndication
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -57,6 +61,11 @@ data class NativeSettingsRowStyle(
     }
 }
 
+/** Apply the sampled color directly to a transparent accessory, without starting another tween. */
+fun interface NativeAccessoryForeground {
+    fun paint(@ColorInt color: Int)
+}
+
 /** A labelled settings row whose trailing control keeps its identity during responsive reflow. */
 open class NativeSettingsRow(
     context: Context,
@@ -77,7 +86,14 @@ open class NativeSettingsRow(
     private var appliedDensity = Float.NaN
     private var appliedFontScale = Float.NaN
     private var initialized = false
-    private var colorSurface:smallthingz.ui.controls.StateColorSurface?=null
+    private var colorSurface:StateColorSurface?=null
+    private var hasPublishedInk = false
+    private var publishedIconInk = 0
+    private var selectedAccessoryInk = palette.onAccent
+    private var normalAccessoryInk = palette.content
+    private var accessoryForeground: NativeAccessoryForeground? = null
+    private var lastAccessoryInk = 0
+    private var hasPublishedAccessoryInk = false
     private var stacked = false
     private var topHeight = 0
     private var contentHeight = 0
@@ -146,13 +162,23 @@ open class NativeSettingsRow(
      * The caller owns its enabled/checked/listener state and accessible label. If the row and
      * accessory are separate actions, each needs its own meaningful accessibility description.
      */
-    fun setAccessory(view: View?, params: FrameLayout.LayoutParams? = null) {
+    fun setAccessory(view: View?, params: FrameLayout.LayoutParams? = null) = setAccessory(view, params, null)
+
+    /** Follow the row's sampled paint while keeping the accessory's activation and enabled state independent. */
+    fun setAccessory(
+        view: View?,
+        params: FrameLayout.LayoutParams? = null,
+        onForegroundChanged: NativeAccessoryForeground?,
+    ) {
+        require(view != null || onForegroundChanged == null)
         val current = if (accessory.childCount == 0) null else accessory.getChildAt(0)
         if (current === view) {
             if (view != null && params != null && view.layoutParams !== params) view.layoutParams = params
+            setAccessoryForeground(onForegroundChanged)
             return
         }
         require(view == null || view.parent == null) { "Accessory already belongs to another parent" }
+        setAccessoryForeground(null)
         accessory.removeAllViews()
         if (view != null) {
             val supplied = view.layoutParams
@@ -166,7 +192,11 @@ open class NativeSettingsRow(
         }
         accessory.visibility = if (view == null) GONE else VISIBLE
         requestLayout()
+        setAccessoryForeground(onForegroundChanged)
     }
+
+    /** Foreground for a separate accessory on the row's settled normal or selected surface. */
+    val accessoryContentColor: Int get() = if (isSelected) selectedAccessoryInk else normalAccessoryInk
 
     fun applyPalette(palette: ControlPalette) {
         val density = resources.displayMetrics.density
@@ -186,27 +216,28 @@ open class NativeSettingsRow(
                 detailView.layoutParams = detailParams.apply { topMargin = detailGap }
             }
         }
-        titleView.applyPalette(palette)
-        detailView.applyPalette(palette)
-        valueView.applyPalette(palette)
-        if (!style.dimDisabledContent) {
-            titleView.animateTextColor(palette.content)
-            detailView.animateTextColor(palette.muted)
-            valueView.animateTextColor(palette.muted)
-        }
         val iconColor = palette.roleColor(style.iconRole)
-        val iconColors = if (style.dimDisabledContent) paint.foregroundStates(normal = iconColor)
-            else paint.foregroundStates(normal = iconColor, disabled = iconColor)
-        val states=arrayOf(intArrayOf(android.R.attr.state_selected),intArrayOf())
+        val states = arrayOf(intArrayOf(android.R.attr.state_selected), intArrayOf())
         val selectedFill = if (style.containerFill) Color(palette.selection).compositeOver(Color(palette.surface)).toArgb() else palette.selection
+        val selectedInk = selectionForeground(selectedFill, palette.surface, palette.onAccent, palette.content)
+        selectedAccessoryInk = selectedInk
+        normalAccessoryInk = palette.content
+        fun ink(normal: Int) = if (style.dimDisabledContent) paint.foregroundStates(normal, selectedInk)
+            else paint.foregroundStates(normal, selectedInk, disabled = normal)
+        val iconColors = ink(iconColor)
+        val titleColors = ink(palette.content)
+        val detailColors = ink(palette.muted)
         val fills=ColorStateList(states,intArrayOf(selectedFill,if(style.containerFill)palette.surface else 0))
         val strokes=ColorStateList(arrayOf(intArrayOf(android.R.attr.state_enabled,android.R.attr.state_focused),intArrayOf()),intArrayOf(palette.accent,0))
-        val ripple=ColorStateList.valueOf((palette.accent and 0xFFFFFF) or (40 shl 24))
-        val colors=colorSurface ?: smallthingz.ui.controls.StateColorSurface(this,fills,strokes,iconColors,ripple,
-            (style.cornerRadiusDp*density),density,underlay=palette.surface,publishInk={ink,_,_->
-                iconView.imageTintList=ColorStateList.valueOf(ink)
-            }).also {colorSurface=it}
-        colors.bind(fills,strokes,iconColors,ripple,style.cornerRadiusDp*density,density,underlay=palette.surface)
+        val selectedRipple = selectionIndication(selectedFill, palette.surface, selectedInk, palette.accent)
+        val ripple = ColorStateList(states, intArrayOf(rippleColor(selectedRipple), rippleColor(palette.accent)))
+        val radius = style.cornerRadiusDp * density
+        val colors = colorSurface ?: StateColorSurface(this, fills, strokes, iconColors, ripple, radius, density,
+            titleColors, detailColors, palette.surface, publishInk = ::publishInk).also {
+            it.qualifyAccentInk = true
+            colorSurface = it
+        }
+        colors.bind(fills, strokes, iconColors, ripple, radius, density, titleColors, detailColors, palette.surface)
         if(background !== colors.background)background=colors.background
         appliedPalette = palette
         appliedDensity = density
@@ -224,6 +255,9 @@ open class NativeSettingsRow(
         if (initialized) updateLabelState()
     }
 
+    // The row's selection is visual and semantic state for its own action.
+    override fun dispatchSetSelected(selected: Boolean) = Unit
+
     override fun performClick(): Boolean = acceptsNativeInput() && super.performClick()
 
     private fun updateLabelState() {
@@ -231,13 +265,41 @@ open class NativeSettingsRow(
         detailView.isEnabled = isEnabled
         valueView.isEnabled = isEnabled
         iconView.isEnabled = isEnabled
-        if(!style.dimDisabledContent)appliedPalette?.let {palette->
-            titleView.animateTextColor(palette.content)
-            detailView.animateTextColor(palette.muted)
-            valueView.animateTextColor(palette.muted)
-        }
         // The caller owns a trailing switch/editor's enabled, checked and listener state.
     }
+
+    private fun publishInk(icon: Int, title: Int, detail: Int) {
+        if (!hasPublishedInk || publishedIconInk != icon) {
+            publishedIconInk = icon
+            iconView.imageTintList = ColorStateList.valueOf(icon)
+        }
+        // A single owner samples the fill and all three inks on the same frame.
+        if (!hasPublishedInk || titleView.currentTextColor != title) titleView.setTextColor(title)
+        if (!hasPublishedInk || detailView.currentTextColor != detail) detailView.setTextColor(detail)
+        if (!hasPublishedInk || valueView.currentTextColor != detail) valueView.setTextColor(detail)
+        hasPublishedInk = true
+        publishAccessoryForeground()
+    }
+
+    private fun setAccessoryForeground(painter: NativeAccessoryForeground?) {
+        if (accessoryForeground === painter) return
+        accessoryForeground = painter
+        hasPublishedAccessoryInk = false
+        publishAccessoryForeground()
+    }
+
+    private fun publishAccessoryForeground() {
+        val painter = accessoryForeground ?: return
+        // An independently enabled action remains readable even when the row is disabled.
+        val alternate = if (isSelected) normalAccessoryInk else selectedAccessoryInk
+        val ink = checkNotNull(colorSurface).foregroundOnSurface(accessoryContentColor, alternate)
+        if (hasPublishedAccessoryInk && lastAccessoryInk == ink) return
+        lastAccessoryInk = ink
+        hasPublishedAccessoryInk = true
+        painter.paint(ink)
+    }
+
+    private fun rippleColor(color: Int) = (color and 0xFFFFFF) or (40 shl 24)
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val bounded = MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED

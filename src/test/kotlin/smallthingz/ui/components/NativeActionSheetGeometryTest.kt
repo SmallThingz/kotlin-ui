@@ -2,8 +2,19 @@ package smallthingz.ui.components
 
 import org.junit.Assert.*
 import org.junit.Test
+import smallthingz.ui.geometry.Rect
 
 class NativeActionSheetGeometryTest {
+    @Test fun scrimSemanticRegionTracksOnlyUncoveredViewport() {
+        val window = Rect(0f, 0f, 1000f, 1200f)
+        assertEquals(Rect(0f, 0f, 1000f, 640f),
+            nativeSheetBackdropRegion(window, Rect(0f, 640.8f, 1000f, 1200f)))
+        assertEquals(Rect(0f, 0f, 300f, 1200f),
+            nativeSheetBackdropRegion(window, Rect(300f, 80f, 700f, 1200f)))
+        assertEquals(Rect.Zero, nativeSheetBackdropRegion(window, window))
+        assertEquals(window, nativeSheetBackdropRegion(window, Rect(0f, 1200f, 1000f, 1400f)))
+    }
+
     @Test fun predictivePivotIsTheRootRelativeBottomAndInnerCompensationUsesItsOwnHeight() {
         val outer=nativeSheetPredictiveTransform(400f,300f,500f,500f,1f,1f)
         assertEquals(.88f,outer.scaleX,0f)

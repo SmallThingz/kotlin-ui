@@ -1,0 +1,27 @@
+{
+  "source_repository": "https://github.com/SmallThingz/reverb",
+  "source_commit": "88446459ac2ce5e43ad224eb27af18fa80208e98",
+  "license": "Apache-2.0",
+  "files": {
+    "app/src/main/java/app/smallthingz/reverb/nativeui/HomeBufferInk.kt": {
+      "source_sha256": "cd0d76a1c55d708d2b506263efcff989e44a863162c719e87c988fe658ea5053",
+      "target": "src/main/kotlin/smallthingz/ui/components/NativeBufferSegmentInk.kt"
+    },
+    "app/src/main/java/app/smallthingz/reverb/nativeui/SrgbLuminance.kt": {
+      "source_sha256": "469ef8a956e2bc90ea2a8c6ae9769b68a857b361d8026b4a74886c9d567f34d7",
+      "target": "src/main/kotlin/smallthingz/ui/components/NativeBufferSegmentInk.kt"
+    },
+    "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbHomeControls.kt": {
+      "source_sha256": "442d0e91e2ef8a9fb7ee9410b4b7a096be021e3fe9698942aef88c86b6cddf9e",
+      "targets": [
+        "src/main/kotlin/smallthingz/ui/components/NativeBufferSegmentStyle.kt",
+        "src/main/kotlin/smallthingz/ui/components/NativeRoundedControlSurface.kt"
+      ]
+    },
+    "app/src/testReliability/java/app/smallthingz/reverb/nativeui/SrgbLuminanceTest.kt": {
+      "source_sha256": "5ba3e0580a7f905d4764b477579f0e26c105b752bb23f867795de57fbfabe356",
+      "target": "src/test/kotlin/smallthingz/ui/components/SrgbLuminanceTest.kt"
+    }
+  },
+  "scope": "First-party Home rounded fill, clip, hit geometry, selector appearance and retained contrast policy. App actions, state authority and motion clock stay with the host."
+}

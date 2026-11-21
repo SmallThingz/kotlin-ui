@@ -3,11 +3,13 @@ package smallthingz.ui.components
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Rect
+import android.graphics.drawable.Drawable
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.core.graphics.ColorUtils
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.geometry.roundedGroupContains
 import smallthingz.ui.geometry.roundedGroupGeometry
@@ -29,15 +31,20 @@ open class NativeTopBarAction(
     initialTint: Int,
     onPaintedSurfaceChanged: (View) -> Unit = {},
     foreground: (View, Int) -> Int = { _, tint -> tint },
+    private var actionStyle: NativeToolbarActionStyle = NativeToolbarActionStyle.Default,
 ) : ViewGroup(context), NativeTopBarHitTarget {
     /** Caller-owned glyph/branding. Geometry, input and semantics stay owned by this action. */
     var iconPainter: ((Canvas, Rect, Int) -> Unit)? = null
         set(value) { field = value; leaf.invalidate() }
-    private val surface = if (sharedSurface) null else NativeGroupLayout(context, 15f,
+    private var glyph: Drawable? = null
+    private var glyphTint = initialTint
+    private var morph: NativePathMorph? = null
+    private var morphProgress = 0f
+    private var morphTint: (() -> Int)? = null
+    private val surface = if (sharedSurface) null else NativeGroupLayout(context, actionStyle.radiusDp,
         onPaintedSurfaceChanged = onPaintedSurfaceChanged)
     private val leaf = NativeTopBarActionLeaf(context, density, inputRoot, description,
-        if (sharedSurface) 0f else 15f, rolePresent, initialTint, foreground,
-        { canvas, bounds, tint -> iconPainter?.invoke(canvas, bounds, tint) })
+        sharedSurface, actionStyle, rolePresent, initialTint, foreground, ::drawGlyph)
     val accessibilityAction: View get() = leaf
     val visual: View get() = leaf
     val sampledIconTint: Int get() = leaf.sampledTint
@@ -50,8 +57,48 @@ open class NativeTopBarAction(
         }
     }
     fun bindAction(density: Float, enabled: Boolean, tint: Int, indicationColor: Int, onClick: () -> Unit) {
+        if (this.density != density) requestLayout()
         this.density = density
         leaf.bind(density, enabled, tint, indicationColor, onClick)
+    }
+    fun bindStyle(style: NativeToolbarActionStyle) {
+        if (actionStyle == style) return
+        actionStyle = style
+        surface?.setCornerRadiusDp(style.radiusDp)
+        leaf.bindStyle(style)
+        requestLayout()
+    }
+
+    fun setGlyph(drawable: Drawable, initialTint: Int) {
+        glyph = drawable
+        glyphTint = initialTint
+        leaf.invalidate()
+    }
+
+    fun setGlyphMorph(renderer: NativePathMorph?, progress: Float, targetTint: () -> Int) {
+        morph = renderer
+        morphProgress = progress.coerceIn(0f, 1f)
+        morphTint = targetTint
+        leaf.invalidate()
+    }
+
+    private fun drawGlyph(canvas: Canvas, bounds: Rect, tint: Int) {
+        iconPainter?.let { it(canvas, bounds, tint); return }
+        val moving = morph
+        val direction = leaf.layoutDirection
+        if (moving != null && morphProgress > 0f) {
+            val sampled = ColorUtils.blendARGB(sampledIconTint, checkNotNull(morphTint).invoke(), morphProgress)
+            moving.draw(canvas, bounds, morphProgress, sampled, direction == LAYOUT_DIRECTION_RTL)
+            return
+        }
+        val drawable = glyph ?: return
+        drawable.layoutDirection = direction
+        drawable.bounds = bounds
+        if (glyphTint != tint) {
+            glyphTint = tint
+            drawable.setTint(tint)
+        }
+        drawable.draw(canvas)
     }
     fun setSurfacePaletteImmediately(fill: Int, border: Int) { surface?.setPaletteImmediately(fill, border) }
     fun setDescription(value: String) = leaf.setDescription(value)
@@ -68,17 +115,17 @@ open class NativeTopBarAction(
     override fun hitBounds() = NativeTopBarHitBounds(
         left + (surface?.left ?: 0).toFloat(), top + (surface?.top ?: 0).toFloat(),
         (surface?.width ?: width).toFloat(), (surface?.height ?: height).toFloat(),
-        if (sharedSurface) 0f else 15f * density,
+        if (sharedSurface) 0f else actionStyle.radiusDp * density,
     )
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val outer = ((if (selectionWrapper) 48f else 46f) * density).roundToInt()
-        val visual = ((if (sharedSurface) 48f else 46f) * density).roundToInt()
+        val outer = ((if (selectionWrapper) actionStyle.selectionSizeDp else actionStyle.sizeDp) * density).roundToInt()
+        val visual = ((if (sharedSurface) actionStyle.selectionSizeDp else actionStyle.sizeDp) * density).roundToInt()
         (surface ?: leaf).measure(actionExact(visual), actionExact(visual))
         setMeasuredDimension(resolveSize(outer, widthMeasureSpec), resolveSize(outer, heightMeasureSpec))
     }
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         if (surface == null) { leaf.layout(0, 0, width, height); return }
-        val minimum = (48f * density).roundToInt()
+        val minimum = (actionStyle.minimumTargetDp * density).roundToInt()
         val x = ((width - surface.measuredWidth) / 2f).roundToInt() +
             nativeMinimumInteractiveVisualOffset(surface.measuredWidth, minimum)
         val y = ((height - surface.measuredHeight) / 2f).roundToInt() +
@@ -97,7 +144,8 @@ private class NativeTopBarActionLeaf(
     private var density: Float,
     inputRoot: () -> View?,
     description: String,
-    private val cornerRadiusDp: Float,
+    private val sharedSurface: Boolean,
+    private var actionStyle: NativeToolbarActionStyle,
     private val rolePresent: Boolean,
     initialTint: Int,
     private val foreground: (View, Int) -> Int,
@@ -107,6 +155,7 @@ private class NativeTopBarActionLeaf(
     private var click: (() -> Unit)? = null
     private val iconBounds = Rect()
     private val colorMotion = ViewColorTransition(this, intArrayOf(initialTint), ::invalidate)
+    private val cornerRadiusDp get() = if (sharedSurface) 0f else actionStyle.radiusDp
     val sampledTint: Int get() = colorMotion.color(0)
     private val descriptionView = NativeActionDescriptionView(context, description)
     private val accessibilityChildren = listOf(descriptionView)
@@ -119,7 +168,7 @@ private class NativeTopBarActionLeaf(
     private val indication = RowIndication.install(this, initialTint, { readCachedAnimatorDurationScale(context) })
     private val controller = ViewClickController(this, object : NativeClickEnvironment {
         override val nativeInputRoot: View? get() = inputRoot()
-        override val minimumTouchWidthPx get() = 48f * density
+        override val minimumTouchWidthPx get() = actionStyle.minimumTargetDp * density
         override val minimumTouchHeightPx get() = minimumTouchWidthPx
         override fun admitDown(event: MotionEvent) = roundedGroupGeometry(width.toFloat(), height.toFloat(),
             density, cornerRadiusDp).acceptsPointer(event.x, event.y,
@@ -131,6 +180,9 @@ private class NativeTopBarActionLeaf(
     override fun containsPointerLayer(x: Float, y: Float) =
         roundedGroupContains(width.toFloat(), height.toFloat(), density, cornerRadiusDp, x, y)
     init {
+        mergedRowAccessibility.enableStandaloneAccessibility({ click != null }) {
+            descriptionView.contentDescription
+        }
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         // The actual Icon child owns the description; Settings retains its explicit button role.
         isClickable = true
@@ -146,11 +198,16 @@ private class NativeTopBarActionLeaf(
         click = callback
         isEnabled = enabled
         isFocusable = enabled
-        colorMotion.retarget(if (enabled) tint else (tint and 0x00FFFFFF) or (97 shl 24))
+        colorMotion.retarget(if (enabled) tint else srgbColorWithAlpha(tint, actionStyle.disabledAlpha))
         indication.updateColor(indicationColor)
         controller.bind(NativeClickBinding(identity, enabled, onClick = { performClick() }))
         updateGeometry(width, height)
         invalidate()
+    }
+    fun bindStyle(style: NativeToolbarActionStyle) {
+        actionStyle = style
+        requestLayout()
+        updateGeometry(width, height)
     }
     fun setDescription(value: String) { descriptionView.contentDescription = value }
     fun cancelInput() = controller.cancel()
@@ -163,7 +220,7 @@ private class NativeTopBarActionLeaf(
         if (mergedRowAccessibility.isNodePresent()) super.createAccessibilityNodeInfo() else null
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val w = MeasureSpec.getSize(widthMeasureSpec); val h = MeasureSpec.getSize(heightMeasureSpec)
-        val size = (23f * density).roundToInt()
+        val size = (actionStyle.glyphDp * density).roundToInt()
         descriptionView.measure(actionExact(min(size, w)), actionExact(min(size, h)))
         if (rolePresent) mergedRowAccessibility.roleView.measure(actionExact(w), actionExact(h))
         setMeasuredDimension(w, h)
@@ -176,7 +233,7 @@ private class NativeTopBarActionLeaf(
     }
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) = updateGeometry(w, h)
     private fun updateGeometry(w: Int, h: Int) {
-        val size = (23f * density).roundToInt()
+        val size = (actionStyle.glyphDp * density).roundToInt()
         val glyphWidth = min(size, w)
         val glyphHeight = min(size, h)
         val x = ((w - glyphWidth) / 2f).roundToInt()

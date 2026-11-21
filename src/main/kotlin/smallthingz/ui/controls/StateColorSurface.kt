@@ -43,6 +43,7 @@ class StateColorSurface(
     private var radius=radiusPx
     private var strokeWidth=strokePx
     private var ready=false
+    internal var qualifyAccentInk=false
     internal var paintFill=true
         set(value) {field=value;view.invalidate()}
     internal var parentOwnsForeground=false
@@ -85,6 +86,9 @@ class StateColorSurface(
     val background=RippleDrawable(ColorStateList.valueOf(motion.color(3)),surface,mask)
     private var publishedRippleColor = motion.color(3)
     internal val animatedRippleColor: Int get() = motion.color(3)
+    internal fun foregroundOnSurface(preferred: Int, alternate: Int): Int =
+        selectionForeground(motion.color(0), motion.color(6), preferred, alternate)
+
     internal fun publishParentRipple(color: Int) {
         if (parentOwnsForeground) publishRipple(color)
     }
@@ -113,7 +117,8 @@ class StateColorSurface(
     private fun publish() {
         fun readable(color:Int)=if(!parentOwnsForeground&&motion.isInterpolating&&color ushr 24==255&&motion.color(6) ushr 24==255)
             selectionForeground(motion.color(0),motion.color(6),color,color) else color
-        publishInk(readable(motion.color(2)),readable(motion.color(4)),motion.color(5))
+        val accent = motion.color(5)
+        publishInk(readable(motion.color(2)),readable(motion.color(4)),if (qualifyAccentInk) readable(accent) else accent)
         if (!parentOwnsForeground) publishRipple(motion.color(3))
         surface.invalidateSelf()
     }

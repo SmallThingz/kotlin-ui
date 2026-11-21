@@ -1,10 +1,10 @@
 package smallthingz.ui.components
 
+import android.content.Context
 import android.content.res.Configuration
 import android.os.LocaleList
 import android.view.View
 import android.view.ViewGroup
-import android.widget.TextView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
@@ -13,6 +13,9 @@ import org.junit.runner.RunWith
 import smallthingz.ui.R
 import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.input.NativeAndroidInteropHost
+import smallthingz.ui.text.font.createFontFamilyResolver
+import smallthingz.ui.text.view.ParagraphView
+import smallthingz.ui.unit.Density
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -49,9 +52,9 @@ class NativeThemeSelectorIntegrationTest {
                 setLocales(LocaleList(Locale.forLanguageTag(language)))
             }
             val context = instrumentation.targetContext.createConfigurationContext(config)
-            val selector = NativeThemeSelector(context, palette, NativeThemeMode.SYSTEM) { error("No input expected") }
+            val selector = createSelector(context) { error("No input expected") }
             try {
-                assertEquals(expected.first(), (selector.getChildAt(0) as TextView).text.toString())
+                assertEquals(expected.first(), (selector.getChildAt(0) as ParagraphView).getText())
                 assertEquals(expected, listOf(context.getString(R.string.native_theme_title)) +
                     NativeThemeMode.entries.map { context.getString(it.labelRes) })
                 val row = requireNotNull(choices(selector))
@@ -62,8 +65,14 @@ class NativeThemeSelectorIntegrationTest {
 
     @Test fun ownerBindingRetainsChoicesAndInteropRequests() = main {
         val context = instrumentation.targetContext
-        val selector = NativeThemeSelector(context, palette, NativeThemeMode.SYSTEM) { error("Binding must be silent") }
-        assertTrue(selector.getChildAt(1) is NativeSegmentedControl)
+        val density = Density(context)
+        val resolver = createFontFamilyResolver(context)
+        val selector = NativeUiAppearance.Default.settingsSelectors.createThemeSelector(
+            context, palette, NativeThemeMode.SYSTEM, density, resolver,
+        ) { error("Binding must be silent") }
+        val title = selector.getChildAt(0) as ParagraphView
+        val capsule = selector.getChildAt(1) as NativeSegmentedControl
+        val surface = capsule.getChildAt(0) as NativeGroupLayout
         val row = requireNotNull(choices(selector))
         val children = NativeThemeMode.entries.map { row.choiceView(it.name)!! }
         val parent = row.parent as NativeAndroidInteropHost
@@ -73,13 +82,17 @@ class NativeThemeSelectorIntegrationTest {
         old.close()
         row.requestDisallowInterceptTouchEvent(true)
         assertEquals(true, requested)
+        val reboundPalette = palette.copy(surface = 0xffeee4da.toInt())
         NativeThemeMode.entries.forEach { selected ->
-            selector.bind(selected, palette)
+            selector.bind(selected, reboundPalette, density, resolver)
+            assertSame(title, selector.getChildAt(0))
+            assertSame(surface, capsule.getChildAt(0))
             NativeThemeMode.entries.forEachIndexed { index, mode ->
                 assertSame(children[index], row.choiceView(mode.name))
                 assertEquals(mode == selected, children[index].isChecked)
             }
         }
+        assertEquals(reboundPalette.surface, surface.paintedFillColor)
         val width = (360 * context.resources.displayMetrics.density).roundToInt()
         selector.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
@@ -92,7 +105,7 @@ class NativeThemeSelectorIntegrationTest {
     }
 
     @Test fun unattachedDisabledAndClosedOwnersRejectSelection() = main {
-        val selector = NativeThemeSelector(instrumentation.targetContext, palette, NativeThemeMode.SYSTEM,
+        val selector = createSelector(instrumentation.targetContext,
             inputAllowed = { false }) { error("Inactive owner callback executed") }
         val row = requireNotNull(choices(selector))
         assertFalse(selector.acceptsNativeInput)
@@ -104,4 +117,57 @@ class NativeThemeSelectorIntegrationTest {
         assertFalse(selector.acceptsNativeInput)
         assertEquals(NativeThemeMode.SYSTEM.name, row.selectedId)
     }
+
+    @Test fun largeGermanLabelsStackAndKeepTheSameOptions() = main {
+        val host = instrumentation.targetContext
+        val context = host.createConfigurationContext(Configuration(host.resources.configuration).apply {
+            setLocales(LocaleList(Locale.GERMAN))
+            fontScale = 2f
+        })
+        val density = Density(context)
+        val resolver = createFontFamilyResolver(context)
+        val selector = NativeUiAppearance.Default.settingsSelectors.createThemeSelector(
+            context, palette, NativeThemeMode.DARK, density, resolver,
+        ) { error("Reflow must not request a selection") }
+        try {
+            selector.layoutDirection = View.LAYOUT_DIRECTION_RTL
+            val title = selector.getChildAt(0)
+            val capsule = selector.getChildAt(1)
+            val row = requireNotNull(choices(selector))
+            val options = NativeThemeMode.entries.map { requireNotNull(row.choiceView(it.name)) }
+            val unconstrained = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            selector.measure(unconstrained, unconstrained)
+            assertTrue(selector.measuredWidth > 0)
+            fun layout(widthDp: Int) {
+                val width = (widthDp * density.density).roundToInt()
+                selector.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+                selector.layout(0, 0, selector.measuredWidth, selector.measuredHeight)
+            }
+            layout(168)
+            assertTrue(capsule.top >= title.bottom)
+            assertTrue(options.map { it.top }.distinct().size > 1)
+            for (option in options) {
+                val textLayout = requireNotNull(option.layout)
+                assertTrue(option.width > 0 && option.height > 0)
+                assertEquals(option.text.length, textLayout.getLineEnd(textLayout.lineCount - 1))
+                assertEquals(0, (0 until textLayout.lineCount).sumOf(textLayout::getEllipsisCount))
+                assertTrue(textLayout.height <= option.height - option.compoundPaddingTop - option.compoundPaddingBottom)
+            }
+            layout(600)
+            assertTrue(capsule.top < title.bottom)
+            NativeThemeMode.entries.forEachIndexed { index, mode -> assertSame(options[index], row.choiceView(mode.name)) }
+            assertEquals(NativeThemeMode.DARK.name, row.selectedId)
+            assertTrue(options.last().isChecked)
+        } finally { selector.close() }
+    }
+
+    private fun createSelector(
+        context: Context,
+        inputAllowed: () -> Boolean = { true },
+        onSelectionRequest: (NativeThemeMode) -> Boolean,
+    ): NativeThemeSelector = NativeUiAppearance.Default.settingsSelectors.createThemeSelector(
+        context, palette, NativeThemeMode.SYSTEM, Density(context), createFontFamilyResolver(context),
+        inputAllowed = inputAllowed, onSelectionRequest = onSelectionRequest,
+    )
 }

@@ -1,13 +1,16 @@
 package smallthingz.ui.components
 
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Rect
 import android.graphics.drawable.RippleDrawable
 import kotlin.math.pow
 import android.text.Spanned
 import android.text.style.LineHeightSpan
 import smallthingz.ui.text.style.LineHeightStyle
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.Button
 import android.widget.FrameLayout
@@ -53,6 +56,55 @@ class NativeSegmentedIntegrationTest {
         assertTrue(size.isChecked)
         assertFalse(time.isChecked)
         group.close()
+    }
+
+    @Test fun providerAccessoryMeasuresIntrinsicWidthAndReflows() = main {
+        val host = InstrumentationRegistry.getInstrumentation().targetContext
+        val context = host.createConfigurationContext(Configuration(host.resources.configuration).apply { fontScale = 1f })
+        val density = context.resources.displayMetrics.density
+        fun dp(value: Int) = (value * density).roundToInt()
+        val selector = NativeUiAppearance.Default.settingsSelectors.createSegmentedControl(context, palette, density)
+        val provider = NativeSettingsRow(context, palette)
+        val options = listOf(NativeChoice("chatgpt", "ChatGPT"), NativeChoice("cloudflare", "Cloudflare"))
+        try {
+            selector.bind(options, "cloudflare", palette, density)
+            selector.onSelectionRequest = { error("Measuring or rebinding must not request selection") }
+            provider.bind("Provider")
+            provider.setAccessory(selector)
+            val unconstrained = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            fun layout(widthDp: Int) {
+                provider.measure(View.MeasureSpec.makeMeasureSpec(dp(widthDp), View.MeasureSpec.EXACTLY), unconstrained)
+                provider.layout(0, 0, provider.measuredWidth, provider.measuredHeight)
+            }
+            fun bounds(child: View) = Rect(0, 0, child.width, child.height).also {
+                provider.offsetDescendantRectToMyCoords(child, it)
+            }
+            selector.measure(unconstrained, unconstrained)
+            val preferred = selector.measuredWidth
+            assertTrue(preferred > 0)
+            layout(384)
+            assertEquals(preferred, selector.width)
+            val titleBounds = bounds(provider.titleView)
+            val accessoryBounds = bounds(selector)
+            assertTrue(titleBounds.right <= accessoryBounds.left)
+            assertTrue(titleBounds.top < accessoryBounds.bottom && accessoryBounds.top < titleBounds.bottom)
+            val surface = selector.getChildAt(0) as NativeGroupLayout
+            val hostView = surface.pointerContent.getChildAt(0) as ViewGroup
+            val choices = hostView.getChildAt(0) as NativeSegmentedChoice
+            val cloudflare = requireNotNull(choices.choiceView("cloudflare"))
+            val chatgpt = requireNotNull(choices.choiceView("chatgpt"))
+            layout(132)
+            assertTrue(bounds(selector).top >= bounds(provider.titleView).bottom)
+            assertTrue(chatgpt.top < cloudflare.top)
+            assertSame(cloudflare, choices.choiceView("cloudflare"))
+            val layout = requireNotNull(cloudflare.layout)
+            assertEquals("Cloudflare".length, layout.getLineEnd(layout.lineCount - 1))
+            assertTrue(layout.height <= cloudflare.height - cloudflare.compoundPaddingTop - cloudflare.compoundPaddingBottom)
+            assertTrue(cloudflare.isChecked)
+            layout(384)
+            assertSame(chatgpt, choices.choiceView("chatgpt"))
+            assertEquals(preferred, selector.width)
+        } finally { selector.close() }
     }
 
     @Test fun controlledActivationHonorsOwnerGateDisabledStateAndPermanentRetirement() = main {

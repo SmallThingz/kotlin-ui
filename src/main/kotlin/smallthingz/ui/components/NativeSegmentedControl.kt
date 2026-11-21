@@ -17,26 +17,64 @@ interface NativeSegmentedPresentation {
     val paintedSurfaceColor: Int? get() = null
 }
 
-/** A single-row capsule with owner-bound selection and a stable Android pointer interop host. */
-class NativeSegmentedControl(
+/** Dimensions and paint roles for a retained single-row segmented control. */
+data class NativeSegmentedStyle(
+    val surfaceRadiusDp: Float = 30f,
+    val insetDp: Float = 4f,
+    val choiceStyle: NativeChoiceStyle = NativeChoiceStyle(
+        radiusDp = 22f, minHeightDp = 34f, horizontalPaddingDp = 0f, verticalPaddingDp = 0f,
+        outlined = false, selectedOutlined = false, iconSizeDp = 16f, iconGapDp = 6f,
+        normalTextRole = NativeTextRole.CONTENT, selectedTextRole = NativeTextRole.ON_ACCENT,
+        normalIconRole = NativeTextRole.CONTENT, selectedIconRole = NativeTextRole.ON_ACCENT,
+        textStyle = NativeTextStyle(sizeSp = 14f, lineHeightSp = 20f, weight = 400),
+    ),
+) {
+    init {
+        require(surfaceRadiusDp.isFinite() && surfaceRadiusDp >= 0f)
+        require(insetDp.isFinite() && insetDp >= 0f)
+        require((2 * insetDp + choiceStyle.minHeightDp).isFinite())
+    }
+
+    companion object {
+        val Default = NativeSegmentedStyle()
+    }
+}
+
+/** A compact capsule that reflows its retained choices when text needs more space. */
+class NativeSegmentedControl private constructor(
     context: Context,
     palette: ControlPalette,
-    presentation: NativeSegmentedPresentation? = null,
-    private var density: Float = context.resources.displayMetrics.density,
-    private var inputAllowed: (() -> Boolean)? = { true },
+    presentation: NativeSegmentedPresentation?,
+    private var density: Float,
+    private var inputAllowed: (() -> Boolean)?,
+    private val style: NativeSegmentedStyle,
 ) : ViewGroup(context), NativeInputGate, AutoCloseable {
+    constructor(
+        context: Context,
+        palette: ControlPalette,
+        presentation: NativeSegmentedPresentation? = null,
+        density: Float = context.resources.displayMetrics.density,
+        inputAllowed: (() -> Boolean)? = { true },
+    ) : this(context, palette, presentation, density, inputAllowed, NativeSegmentedStyle.Default)
+
+    constructor(
+        context: Context,
+        palette: ControlPalette,
+        style: NativeSegmentedStyle,
+        density: Float = context.resources.displayMetrics.density,
+        inputAllowed: (() -> Boolean)? = { true },
+        presentation: NativeSegmentedPresentation? = null,
+    ) : this(context, palette, presentation, density, inputAllowed, style)
+
     private var closed = false
-    private val presentation = presentation ?: DefaultSegmentedPresentation(context, palette)
+    private val presentation = presentation ?: DefaultSegmentedPresentation(context, palette, style.surfaceRadiusDp)
     private val row = SegmentHost(context)
-    private val choices = NativeSegmentedChoice(context, palette,
-        NativeChoiceStyle(radiusDp = 22f, minHeightDp = 34f, horizontalPaddingDp = 0f,
-            verticalPaddingDp = 0f, outlined = false, selectedOutlined = false, iconSizeDp = 16f, iconGapDp = 6f,
-            normalTextRole = NativeTextRole.CONTENT, selectedTextRole = NativeTextRole.ON_ACCENT,
-            normalIconRole = NativeTextRole.CONTENT, selectedIconRole = NativeTextRole.ON_ACCENT,
-            textStyle = NativeTextStyle(sizeSp = 14f, lineHeightSp = 20f, weight = 400),
-            animateSelection = true), gapDp = 0f, activateOnFocusNavigation = false, singleRow = true,
+    private val choices = NativeSegmentedChoice(context, palette, style.choiceStyle,
+        gapDp = 0f, activateOnFocusNavigation = false, singleRow = true,
         movingSelectionBackground = true)
     var onSelectionRequest: ((String) -> Boolean)? = null
+    internal var preferredWidthPixels = 0
+        private set
 
     override val acceptsNativeInput: Boolean
         get() = !closed && isEnabled && isAttachedToWindow && isShown && hasWindowFocus() && inputAllowed?.invoke() == true
@@ -62,7 +100,17 @@ class NativeSegmentedControl(
     }
 
     override fun onMeasure(w: Int, h: Int) {
-        presentation.surface.measure(w, h)
+        choices.probeCapsuleCells()
+        preferredWidthPixels = (choices.preferredCellWidth.toLong() * choices.childCount + 2L * dp(style.insetDp))
+            .coerceAtMost(View.MEASURED_SIZE_MASK.toLong()).toInt()
+        // The probe measured retained chips unconstrained. Every wrapper on their measure path
+        // must participate in restoring final cell sizes, even if the resolved surface spec is unchanged.
+        var child: View? = choices
+        while (child != null && child !== this) {
+            child.forceLayout()
+            child = child.parent as? View
+        }
+        presentation.surface.measure(exact(resolveSize(preferredWidthPixels, w)), h)
         setMeasuredDimension(presentation.surface.measuredWidth, presentation.surface.measuredHeight)
     }
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
@@ -77,6 +125,7 @@ class NativeSegmentedControl(
     }
 
     private inner class SegmentHost(context: Context) : ViewGroup(context), NativeAndroidInteropHost {
+        private var horizontalInset = 0
         override val nativeInteropRequests = NativeAndroidInteropRequests()
         override fun requestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {
             nativeInteropRequests.request(disallowIntercept)
@@ -84,22 +133,37 @@ class NativeSegmentedControl(
         }
         override fun onMeasure(w: Int, h: Int) {
             val width = MeasureSpec.getSize(w)
-            choices.measure(exact((width - 2 * dp(4)).coerceAtLeast(0)), exact(dp(34)))
-            setMeasuredDimension(resolveSize(width, w), resolveSize(dp(42), h))
+            horizontalInset = minOf(dp(style.insetDp), ((width - 1).coerceAtLeast(0) / 2))
+            val minChoiceHeight = dp(style.choiceStyle.minHeightDp)
+            val innerWidth = (width - 2 * horizontalInset).coerceAtLeast(0)
+            val preferredCell = choices.preferredCellWidth.coerceAtLeast(1)
+            val maxColumns = (innerWidth / preferredCell).coerceAtLeast(1)
+            val wrap = choices.preferredCellWidth.toLong() * choices.childCount > innerWidth
+            choices.capsuleColumns = if (wrap) maxColumns else null
+            choices.measure(exact(innerWidth), if (wrap) MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+                else exact(maxOf(minChoiceHeight, choices.preferredCellContentHeight)))
+            val originalHeight = dp(2 * style.insetDp + style.choiceStyle.minHeightDp)
+            val desiredHeight = originalHeight + (choices.measuredHeight - minChoiceHeight).coerceAtLeast(0)
+            setMeasuredDimension(resolveSize(width, w), resolveSize(desiredHeight, h))
         }
         override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-            choices.layout(dp(4), dp(4), dp(4) + choices.measuredWidth, dp(4) + choices.measuredHeight)
+            val top = dp(style.insetDp)
+            choices.layout(horizontalInset, top, horizontalInset + choices.measuredWidth, top + choices.measuredHeight)
         }
     }
-    private fun dp(value: Int) = (value * density).roundToInt()
+    private fun dp(value: Float) = (value * density).roundToInt()
     private fun exact(value: Int) = MeasureSpec.makeMeasureSpec(value, MeasureSpec.EXACTLY)
 }
 
-internal class DefaultSegmentedPresentation(context: Context, palette: ControlPalette) : NativeSegmentedPresentation {
-    override val surface = NativeSurface(context, NativeSurfaceStyle(palette.surface, cornerRadiusDp = 30f,
+internal class DefaultSegmentedPresentation(
+    context: Context,
+    palette: ControlPalette,
+    private val radiusDp: Float,
+) : NativeSegmentedPresentation {
+    override val surface = NativeSurface(context, NativeSurfaceStyle(palette.surface, cornerRadiusDp = radiusDp,
         outlineColor = palette.outline))
     override fun bindSurface(palette: ControlPalette) {
-        surface.applyStyle(NativeSurfaceStyle(palette.surface, cornerRadiusDp = 30f, outlineColor = palette.outline))
+        surface.applyStyle(NativeSurfaceStyle(palette.surface, cornerRadiusDp = radiusDp, outlineColor = palette.outline))
     }
     override val paintedSurfaceColor: Int get() = surface.paintedFillColor
 }

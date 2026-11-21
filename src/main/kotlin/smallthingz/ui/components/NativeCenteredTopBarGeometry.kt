@@ -30,9 +30,9 @@ internal fun centeredTopBarPlacement(
     navigationWidth: Int, navigationHeight: Int,
     titleWidth: Int, titleHeight: Int,
     actionWidth: Int, actionHeight: Int,
-    density: Float, rtl: Boolean,
+    density: Float, rtl: Boolean, titleStartDp: Float = NativeToolbarStyle.Default.centeredTitleStartDp,
 ): CenteredTopBarPlacement {
-    val start = max((12f * density).roundToInt(), navigationWidth)
+    val start = max((titleStartDp * density).roundToInt(), navigationWidth)
     val end = actionWidth
     // Alignment.CenterHorizontally uses Float half then roundToInt, not integer division.
     var titleStart = ((width - titleWidth) * .5f).roundToInt()

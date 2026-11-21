@@ -41,6 +41,9 @@ data class NativeMergedRowAccessibilityState(
     val longClickable: Boolean = false,
     val longClickLabel: CharSequence? = null,
     val rolePresent: Boolean = true,
+    val stateDescription: CharSequence? = null,
+    val readOnlyScreenReaderFocusable: Boolean = false,
+    val standaloneChildren: List<View> = emptyList(),
 )
 
 /** Existing row facts, read on demand; no copied text or second semantic/render tree. */
@@ -64,6 +67,8 @@ internal data class NativeMergedRowAccessibilitySnapshot(
     val longClickable: Boolean,
     val longClickLabel: CharSequence?,
     val rolePresent: Boolean,
+    val stateDescription: CharSequence?,
+    val readOnlyScreenReaderFocusable: Boolean,
 )
 
 /**
@@ -186,8 +191,9 @@ class MergedRowAccessibility(
                 bounds.offset(rootLocation[0], rootLocation[1])
             }
             return NativeMergedRowAccessibilitySnapshot(present, !present, present, state.enabled,
-                state.checked, state.clickLabel, emptyList(), 0, bounds, bounds, state.selected,
-                standaloneDescription?.invoke(), state.clickable, state.longClickable, state.longClickLabel, state.rolePresent)
+                state.checked, state.clickLabel, state.standaloneChildren, 0, bounds, bounds, state.selected,
+                standaloneDescription?.invoke(), state.clickable, state.longClickable, state.longClickLabel,
+                state.rolePresent, state.stateDescription, state.readOnlyScreenReaderFocusable)
         }
         val localBounds = (host as? NativeMergedRowAccessibilityHost)?.accessibilityBoundsInView
             ?: ComposeRect(0f, 0f, host.width.toFloat(), host.height.toFloat())
@@ -208,7 +214,8 @@ class MergedRowAccessibility(
             },
             state.orderedChildren.size,
             node?.boundsInScreen ?: bounds, bounds, state.selected, state.contentDescription,
-            state.clickable, state.longClickable, state.longClickLabel, state.rolePresent)
+            state.clickable, state.longClickable, state.longClickLabel, state.rolePresent,
+            state.stateDescription, state.readOnlyScreenReaderFocusable)
     }
 
     fun isNodePresent(): Boolean = host.isAttachedToWindow && snapshot().present
@@ -247,7 +254,7 @@ class MergedRowAccessibility(
         compat.roleDescription = null
         compat.stateDescription = if (role == NativeMergedRowRole.SWITCH) host.context.getString(
             if (current.checked == true) smallthingz.ui.R.string.state_on
-            else smallthingz.ui.R.string.state_off) else null
+            else smallthingz.ui.R.string.state_off) else current.stateDescription
         info.isCheckable = role == NativeMergedRowRole.SWITCH
         info.isChecked = role == NativeMergedRowRole.SWITCH && current.checked == true
         info.isSelected = current.selected == true
@@ -268,7 +275,8 @@ class MergedRowAccessibility(
         info.isFocused = current.enabled && host.isFocused
         info.isImportantForAccessibility = !current.hidden
         info.isVisibleToUser = current.present && current.visibleToUser
-        info.isScreenReaderFocusable = !current.hidden && (current.clickable || current.originalChildCount == 0)
+        info.isScreenReaderFocusable = !current.hidden &&
+            (current.clickable || current.originalChildCount == 0 || current.readOnlyScreenReaderFocusable)
         info.maxTextLength = -1
         info.setBoundsInScreen(current.parentBoundsInScreen)
         info.movementGranularities = 0

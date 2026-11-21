@@ -35,6 +35,7 @@ internal class NativeMaterialButtonInput(
     private val inputHost: View,
     private val indicationHost: View,
     private val radiusDp: Float?,
+    private val minimumTouchTargetDp: Int,
     filled: Boolean,
     private val policy: NativeButtonInputPolicy,
     setElevationPx: (Float) -> Unit,
@@ -87,13 +88,20 @@ internal class NativeMaterialButtonInput(
     }
     private val environment = object : NativeClickEnvironment {
         override val nativeInputRoot: View? get() = policy.inputRoot?.invoke()
-        override val minimumTouchWidthPx: Float get() = 48f * inputHost.resources.displayMetrics.density
+        override val minimumTouchWidthPx: Float get() = minimumTouchTargetDp * inputHost.resources.displayMetrics.density
         override val minimumTouchHeightPx: Float get() = minimumTouchWidthPx
+        override fun isWithinStandaloneFingerTarget(x: Float, y: Float): Boolean? =
+            (inputHost.parent as? NativeButtonTouchTarget)?.containsFingerTarget(x, y)
+
         override fun admitDown(event: MotionEvent): Boolean {
             val density = inputHost.resources.displayMetrics.density
             val radius = radiusDp ?: min(inputHost.width, inputHost.height) / (2f * density)
-            return roundedGroupGeometry(inputHost.width.toFloat(), inputHost.height.toFloat(), density, radius)
-                .acceptsPointer(event.x, event.y, event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER, minimumTouchWidthPx)
+            val geometry = roundedGroupGeometry(inputHost.width.toFloat(), inputHost.height.toFloat(), density, radius)
+            val finger = event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER
+            val target = if (finger) inputHost.parent as? NativeButtonTouchTarget else null
+            if (target == null) return geometry.acceptsPointer(event.x, event.y, finger, minimumTouchWidthPx)
+            return target.containsFingerTarget(event.x, event.y) &&
+                (target.expandsFingerTarget || geometry.contains(event.x, event.y))
         }
         // Standalone fixture fallback; native root phase delivery supplies per-change interest.
         override fun interestedParent(event: MotionEvent): Boolean = policy.delayPressForParent

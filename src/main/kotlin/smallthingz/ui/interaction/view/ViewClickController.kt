@@ -61,6 +61,8 @@ interface NativeClickEnvironment {
     fun longPressOwnershipChanged(owns: Boolean)
     val minimumTouchWidthPx: Float
     val minimumTouchHeightPx: Float
+    /** A standalone parent may supply actual allocated bounds in child coordinates. */
+    fun isWithinStandaloneFingerTarget(x: Float, y: Float): Boolean? = null
 }
 
 /**
@@ -230,7 +232,9 @@ class ViewClickController(
                 val handled = ownsTouchStream
                 val gesture = pointer
                 if (gesture != null) {
-                    if (consumedByOther && !gesture.longTriggered) {
+                    val outsideTarget = event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER &&
+                        environment.isWithinStandaloneFingerTarget(event.x, event.y) == false
+                    if ((consumedByOther || outsideTarget) && !gesture.longTriggered) {
                         cancelPointer()
                     } else {
                         consumeChanges?.invoke(false)
@@ -261,10 +265,15 @@ class ViewClickController(
     private fun anyPointerOutside(event: MotionEvent): Boolean {
         for (index in 0 until event.pointerCount) {
             val touch = event.getToolType(index) == MotionEvent.TOOL_TYPE_FINGER
-            val horizontal = if (touch) max(0f, environment.minimumTouchWidthPx - host.width) / 2f else 0f
-            val vertical = if (touch) max(0f, environment.minimumTouchHeightPx - host.height) / 2f else 0f
             val x = event.getX(index)
             val y = event.getY(index)
+            val withinTarget = if (touch) environment.isWithinStandaloneFingerTarget(x, y) else null
+            if (withinTarget != null) {
+                if (!withinTarget) return true
+                continue
+            }
+            val horizontal = if (touch) max(0f, environment.minimumTouchWidthPx - host.width) / 2f else 0f
+            val vertical = if (touch) max(0f, environment.minimumTouchHeightPx - host.height) / 2f else 0f
             // Match isOutOfBounds exactly: right/bottom equality is still inside. No touch-slop test.
             if (x < -horizontal || x > host.width + horizontal ||
                 y < -vertical || y > host.height + vertical

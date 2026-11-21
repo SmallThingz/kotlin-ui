@@ -1,0 +1,21 @@
+{
+  "source_repository": "https://github.com/SmallThingz/reverb",
+  "source_commit": "88446459ac2ce5e43ad224eb27af18fa80208e98",
+  "license": "Apache-2.0",
+  "files": {
+    "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbHomeControlSurface.kt": {
+      "source_sha256": "1e03850552b8bb4a72899493dd7d51f83aecf4a9e5ef44705c474ab7299dde36",
+      "target": "src/main/kotlin/smallthingz/ui/components/NativeCaptureControlSurface.kt"
+    },
+    "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbHomeGeometry.kt": {
+      "source_sha256": "970f89b6552d8a13885f6bcde169bb3dd1e049cd5f82a041aa12757c8763a278",
+      "target": "src/main/kotlin/smallthingz/ui/components/NativeCaptureControlSurface.kt"
+    },
+    "app/src/main/java/app/smallthingz/reverb/NativeHomePointerRoot.kt": {
+      "source_sha256": "f1597715e958df991c0de144d9b90625903260170f02446f0f518836662ac8d4",
+      "target": "src/main/kotlin/smallthingz/ui/input/phase/NativeNestedPointerRoot.kt"
+    }
+  },
+  "scope": "Two-lobe control surface path, alpha border cache, content clip, retained pointer shape and nested phase root. App content, placements and actions stay in their owners.",
+  "upstream_provenance": "Generic border drawing adapted from AndroidX foundation 1.11.2 Border.kt, Copyright 2020 The Android Open Source Project. The Apache-2.0 source notice is retained."
+}

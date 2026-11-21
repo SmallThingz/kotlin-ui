@@ -5,8 +5,10 @@ import android.graphics.Bitmap
 import android.graphics.BlendMode
 import android.graphics.BlendModeColorFilter
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
@@ -44,6 +46,31 @@ fun fitCachedPathIcon(density: Float, width: Int, height: Int): CachedPathIconFi
     )
 }
 
+/** Borrowed, immutable path assets. Separate parts retain their drawing order. */
+class NativePathIconMask(
+    private val path: Path,
+    private val secondPath: Path? = null,
+    private val strokeWidth: Float? = null,
+) {
+    internal fun draw(canvas: Canvas, paint: Paint) {
+        paint.color = Color.BLACK
+        paint.shader = null
+        paint.colorFilter = null
+        paint.pathEffect = null
+        paint.strokeMiter = 4f
+        if (strokeWidth == null) {
+            paint.style = Paint.Style.FILL
+        } else {
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = strokeWidth
+            paint.strokeCap = Paint.Cap.ROUND
+            paint.strokeJoin = Paint.Join.ROUND
+        }
+        canvas.drawPath(path, paint)
+        secondPath?.let { canvas.drawPath(it, paint) }
+    }
+}
+
 /**
  * Cached native renderer for monochrome paths in a 24 x 24 viewport.
  *
@@ -63,12 +90,27 @@ fun fitCachedPathIcon(density: Float, width: Int, height: Int): CachedPathIconFi
  * deliberately unsupported: Compose uses a different bitmap configuration for
  * those, and no supported icon needs that broader contract.
  */
-open class CachedPathIconDrawable(
+open class CachedPathIconDrawable private constructor(
     private val density: Float,
     tint: Int,
-    private val mirroredInRtl: Boolean = false,
-    private val drawMask: (Canvas, Paint) -> Unit,
+    private val mirroredInRtl: Boolean,
+    private val drawMask: ((Canvas, Paint) -> Unit)?,
+    private val pathMask: (() -> NativePathIconMask)?,
 ) : Drawable() {
+    constructor(
+        density: Float,
+        tint: Int,
+        mirroredInRtl: Boolean = false,
+        drawMask: (Canvas, Paint) -> Unit,
+    ) : this(density, tint, mirroredInRtl, drawMask, null)
+
+    constructor(
+        pathMask: () -> NativePathIconMask,
+        density: Float,
+        tint: Int,
+        mirroredInRtl: Boolean = false,
+    ) : this(density, tint, mirroredInRtl, null, pathMask)
+
     private val intrinsicSize = (24f * density).roundToInt()
     private val maskPaint = Paint(PAINT_FLAGS)
     private val compositePaint = Paint(PAINT_FLAGS)
@@ -131,7 +173,8 @@ open class CachedPathIconDrawable(
             val checkpoint = target.save()
             try {
                 target.scale(fit.drawWidth / VIEWPORT_SIZE, fit.drawHeight / VIEWPORT_SIZE)
-                drawMask(target, maskPaint)
+                if (pathMask != null) pathMask().draw(target, maskPaint)
+                else checkNotNull(drawMask)(target, maskPaint)
             } finally {
                 target.restoreToCount(checkpoint)
             }

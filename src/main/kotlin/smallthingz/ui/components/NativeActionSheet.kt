@@ -103,9 +103,9 @@ class NativeActionSheet(
     private val handle=NativeSheetDragHandle(context,style,{pointer.inputRoot},runtime,::handleClick,::requestAnimatedDismiss)
     private val appContent=NativeSheetContent(context,style,title,{pointer.inputRoot},closeIcon,contentBackground) {onOwnerDismiss()}
     private val surface=NativeSheetSurface(context,style,handle,appContent)
-    private val scrim=SheetScrim(context,style.palette.scrim,::requestAnimatedDismiss)
+    private val scrim=SheetScrim(context,style.palette.scrim,style.recipe.scrimAlpha,::requestAnimatedDismiss)
     private val root:SheetRoot=SheetRoot(context,pointer,state,surface,scrim,style.textDensity.density,
-        ::measured,::applyMotion)
+        style.recipe.maxWidthDp,::measured,::applyMotion)
     private val dragChannel=NativeActionSheetDragChannel(state,runtime.scope,::settleToDismiss)
     private val dragNode=NativeActionSheetDragNode(surface,state,dragChannel)
     private val nested=NativeActionSheetNestedScroll(state,::settleToDismiss)
@@ -156,7 +156,7 @@ class NativeActionSheet(
         root.setViewTreeViewModelStoreOwner(anchor.findViewTreeViewModelStoreOwner())
         root.setViewTreeSavedStateRegistryOwner(anchor.findViewTreeSavedStateRegistryOwner())
         root.layoutDirection=anchor.layoutDirection
-        root.elevation=8f*style.textDensity.density
+        root.elevation=style.recipe.shadowDp*style.textDensity.density
         root.outlineProvider = NativeWindowShadowOutline
         if(Build.VERSION.SDK_INT>=29)root.isForceDarkAllowed=false
         updateWindowParameters()
@@ -217,7 +217,9 @@ class NativeActionSheet(
         surface.updateStyle(next)
         appContent.updateStyle(next)
         handle.updateStyle(next)
-        scrim.bindColor(next.palette.scrim)
+        scrim.bindColor(next.palette.scrim,next.recipe.scrimAlpha)
+        root.elevation=next.recipe.shadowDp*next.textDensity.density
+        root.bindMaxWidth(next.recipe.maxWidthDp)
         updateWindowColors()
     }
     /** Busy-policy correction: admission precedes M3's hide-then-callback path. */
@@ -379,8 +381,9 @@ internal class SheetRoot(
     context:Context,pointer:SheetPointerOwner,
     private val state:NativeActionSheetState,
     private val surface:NativeSheetSurface,
-    private val scrim:View,
+    private val scrim:SheetScrim,
     private val density:Float,
+    private var maxWidthDp:Float,
     private val measured:()->Unit,
     private val motion:()->Unit,
 ):PhasePointerRoot(context,pointer.geometry::rootToScreen,pointer.geometry::coordinates,
@@ -390,6 +393,8 @@ internal class SheetRoot(
     val sourceSemanticsHeight get()=max(0,height-imeBottom)
     private var safe=Insets.NONE
     private var measuring=false
+    private val hoverCoordinates = NativeWindowPointerCoordinates { this }
+    private val hoverPoint = FloatArray(2)
     init {
         clipChildren=false;clipToPadding=false
         importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_YES
@@ -408,6 +413,11 @@ internal class SheetRoot(
         updateContentInsets()
         requestLayout()
     }
+    fun bindMaxWidth(value:Float) {
+        if(maxWidthDp==value)return
+        maxWidthDp=value
+        requestLayout()
+    }
     private fun updateContentInsets():Boolean {
         val topConsumed=if(state.offset.isNaN())0 else state.offset.toInt().coerceAtLeast(0)
         return surface.insets.update(max(0,safe.top-topConsumed),max(0,safe.bottom-imeBottom))
@@ -419,7 +429,7 @@ internal class SheetRoot(
             val available=max(0,height-imeBottom)
             updateContentInsets()
             scrim.measure(sheetWindowExact(width),sheetWindowExact(available))
-            surface.measure(sheetWindowExact(min(width,(640f*density).roundToInt())),sheetWindowAtMost(available))
+            surface.measure(sheetWindowExact(min(width,(maxWidthDp*density).roundToInt())),sheetWindowAtMost(available))
             setMeasuredDimension(width,height)
             state.measured(available,surface.measuredHeight)
         } finally {measuring=false}
@@ -437,16 +447,38 @@ internal class SheetRoot(
         if(!state.offset.isNaN()&&surface.isLaidOut)surface.offsetTopAndBottom(state.offset.roundToInt()-surface.top)
         updateContentInsets()
     }
+
+    override fun dispatchHoverEvent(event: MotionEvent): Boolean {
+        val previous = scrim.hoverOccluded
+        scrim.hoverOccluded = event.actionMasked != MotionEvent.ACTION_HOVER_EXIT && overPaintedSheet(event)
+        return try { super.dispatchHoverEvent(event) } finally { scrim.hoverOccluded = previous }
+    }
+
+    private fun overPaintedSheet(event: MotionEvent): Boolean {
+        val painted = surface.painted
+        if (!painted.isShown || !painted.isLaidOut ||
+            surface.predictiveLayer.scaleX == 0f || surface.predictiveLayer.scaleY == 0f) return false
+        hoverCoordinates.begin(event)
+        hoverPoint[0] = event.x
+        hoverPoint[1] = event.y
+        hoverCoordinates.coordinates(painted).rootToLocal.mapPoints(hoverPoint)
+        val x = hoverPoint[0]
+        val y = hoverPoint[1]
+        return x.isFinite() && y.isFinite() && surface.containsShape(Offset(x, y))
+    }
+
     override fun getAccessibilityClassName():CharSequence="android.view.View"
 }
-internal class SheetScrim(context:Context,color:Int,private val action:()->Unit):View(context) {
+internal class SheetScrim(context:Context,color:Int,alpha:Float,private val action:()->Unit):View(context) {
     private val paint=Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
-    private var sourceColor=sheetColorWithAlpha(color,.32f)
+    private var sourceColor=sheetColorWithAlpha(color,alpha)
     private val colorMotion:ViewColorTransition by lazy {ViewColorTransition(this,intArrayOf(sourceColor),{
         sourceColor=colorMotion.color(0);invalidate()
     })}
     var opacity=0f
         set(value) {if(field!=value){field=value;invalidate()}}
+    var hoverOccluded = false
+    private var hoveringBackdrop = false
     init {
         contentDescription=context.getString(smallthingz.ui.R.string.close_sheet)
         importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_YES
@@ -456,10 +488,39 @@ internal class SheetScrim(context:Context,color:Int,private val action:()->Unit)
         // Source Scrim has pointer/semantic actions, but no keyboard FocusTarget.
         isFocusable=false
     }
-    fun bindColor(color:Int) {
-        val next=sheetColorWithAlpha(color,.32f)
+    fun bindColor(color:Int,alpha:Float) {
+        val next=sheetColorWithAlpha(color,alpha)
         colorMotion.retarget(next)
     }
+
+    override fun dispatchHoverEvent(event: MotionEvent): Boolean {
+        val action = event.actionMasked
+        if (hoverOccluded || action == MotionEvent.ACTION_HOVER_EXIT) {
+            if (!hoveringBackdrop) return false
+            hoveringBackdrop = false
+            val handled = dispatchHoverAction(event, MotionEvent.ACTION_HOVER_EXIT)
+            return action == MotionEvent.ACTION_HOVER_EXIT && handled
+        }
+        // ViewGroup may continue tracking this full-size child when foreground hover falls through.
+        // Restore its actual enter/exit pairs as the pointer crosses the painted sheet boundary.
+        val entering = !hoveringBackdrop
+        hoveringBackdrop = true
+        val entered = entering && action == MotionEvent.ACTION_HOVER_MOVE &&
+            dispatchHoverAction(event, MotionEvent.ACTION_HOVER_ENTER)
+        return super.dispatchHoverEvent(event) || entered
+    }
+
+    private fun dispatchHoverAction(event: MotionEvent, action: Int): Boolean {
+        val previous = event.action
+        event.action = action
+        return try { super.dispatchHoverEvent(event) } finally { event.action = previous }
+    }
+
+    override fun onDetachedFromWindow() {
+        hoveringBackdrop = false
+        super.onDetachedFromWindow()
+    }
+
     override fun onDraw(canvas:Canvas) {
         // DrawScope.configurePaint(color,alpha) multiplies source alpha before roundToInt.
         paint.color=sheetColorWithAlpha(sourceColor,Color.alpha(sourceColor)/255f*opacity)

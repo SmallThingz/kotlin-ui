@@ -3,6 +3,7 @@ package smallthingz.ui.animation.view
 import android.animation.ValueAnimator
 import android.view.Choreographer
 import android.view.View
+import androidx.core.graphics.ColorUtils
 import smallthingz.ui.animation.ColorTransition
 import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
 
@@ -68,4 +69,13 @@ class ViewColorTransition(
         closed=true;state.snapToTarget();choreographer.removeFrameCallback(this);posted=false
         view.removeOnAttachStateChangeListener(this)
     }
+}
+
+/** Preserve the endpoints while keeping an opaque foreground readable during interpolation. */
+fun transitionForegroundInk(motion: ViewColorTransition?, fill: Int, ink: Int): Int {
+    if (motion?.isInterpolating != true || fill ushr 24 != 255 || ink ushr 24 != 255 ||
+        ColorUtils.calculateContrast(ink, fill) >= 4.5) return ink
+    val black = android.graphics.Color.BLACK
+    val white = android.graphics.Color.WHITE
+    return if (ColorUtils.calculateContrast(black, fill) >= ColorUtils.calculateContrast(white, fill)) black else white
 }

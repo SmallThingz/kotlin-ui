@@ -1,0 +1,66 @@
+package smallthingz.ui.components
+
+import android.content.Context
+import android.util.TypedValue
+import android.view.View
+import smallthingz.ui.animation.view.ViewColorTransition
+import smallthingz.ui.graphics.NoiseDrawable
+
+/** Backdrops for a rendered page and its framework window during handoff. */
+data class NativeBackdropStyle(
+    val pageGrainSeed: Int? = NoiseDrawable.SEED_BACKGROUND,
+    val windowGrainSeed: Int? = NoiseDrawable.SEED_BACKGROUND,
+    val panelScrimAlpha: Float = .32f,
+) {
+    fun pageBackground(palette: NativeColorScheme) = NoiseDrawable(palette.surface, pageGrainSeed)
+
+    fun panelScrimColor(palette: NativeColorScheme): Int = srgbColorWithAlpha(palette.scrim, panelScrimAlpha)
+
+    fun attachPage(view: View, palette: NativeColorScheme, onPaintChanged: () -> Unit = {}): NativeBackdropBinding =
+        NativeBackdropBinding(view, pageGrainSeed, palette.surface, onPaintChanged)
+
+    fun bindPage(binding: NativeBackdropBinding, palette: NativeColorScheme) =
+        binding.bind(pageGrainSeed, palette.surface)
+
+    fun windowBackground(context: Context): NoiseDrawable? {
+        val value = TypedValue()
+        if (!context.theme.resolveAttribute(android.R.attr.colorBackground, value, true)) return null
+        val color = if (value.resourceId != 0) context.getColor(value.resourceId) else value.data
+        return NoiseDrawable(color, windowGrainSeed)
+    }
+
+    companion object {
+        val Default = NativeBackdropStyle()
+    }
+}
+
+/** One retained drawable; only its fill color animates. */
+open class NativeBackdropBinding(
+    view: View,
+    private var grainSeed: Int?,
+    initialColor: Int,
+    private val onPaintChanged: () -> Unit = {},
+) {
+    private val drawable = NoiseDrawable(initialColor, grainSeed)
+    private var published = initialColor
+    private val motion: ViewColorTransition = ViewColorTransition(view, intArrayOf(initialColor), ::publish)
+
+    init { view.background = drawable }
+
+    fun bind(grainSeed: Int?, color: Int) {
+        if (this.grainSeed != grainSeed) {
+            this.grainSeed = grainSeed
+            drawable.setGrainSeed(grainSeed)
+            onPaintChanged()
+        }
+        motion.retarget(color)
+    }
+
+    private fun publish() {
+        val color = motion.color(0)
+        if (color == published) return
+        published = color
+        drawable.setBackgroundColor(color)
+        onPaintChanged()
+    }
+}

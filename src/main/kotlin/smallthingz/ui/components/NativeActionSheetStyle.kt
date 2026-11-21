@@ -27,6 +27,7 @@ data class NativeActionSheetStyle(
     val palette: NativeActionSheetColors,
     val titleStyle: TextStyle,
     val tooltipStyle: TextStyle,
+    val recipe: NativeActionSheetRecipe = NativeActionSheetRecipe(grainSeed = null),
 ) {
     internal fun title(context: Context, text: String) = paragraph(context,text,titleStyle,palette.title)
     internal fun tooltip(context: Context, text: String) = paragraph(context,text,tooltipStyle,palette.inverseOnSurface)

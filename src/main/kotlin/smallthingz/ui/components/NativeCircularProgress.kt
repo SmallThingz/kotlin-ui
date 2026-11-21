@@ -36,8 +36,9 @@ open class NativeCircularProgress(
     private val frames: MonotonicFrameClock,
     private val scope: CoroutineScope,
     private val durationScale: () -> Float,
-    private val strokeWidthDp: Float = 2f,
+    strokeWidthDp: Float = 2f,
 ) : View(context) {
+    private var thicknessDp = strokeWidthDp
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
@@ -64,6 +65,12 @@ open class NativeCircularProgress(
     }
 
     fun setColor(value: Int) {colorMotion.retarget(value)}
+
+    fun setStrokeWidthDp(value: Float) {
+        if (thicknessDp == value) return
+        thicknessDp = value
+        invalidate()
+    }
 
     /** Retained panels can be offscreen without changing View visibility. Keep their last pose. */
     fun setPresentationActive(active: Boolean) {
@@ -144,7 +151,7 @@ open class NativeCircularProgress(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        paint.strokeWidth = strokeWidthDp * resources.displayMetrics.density
+        paint.strokeWidth = thicknessDp * resources.displayMetrics.density
         val inset = paint.strokeWidth / 2f
         // Released drawCircularIndicator uses width for both arc dimensions, even if nonsquare.
         arc.set(inset, inset, width - inset, width - inset)

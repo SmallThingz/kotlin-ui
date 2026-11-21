@@ -18,13 +18,13 @@ import androidx.annotation.ColorInt
  */
 class NoiseDrawable(
     @ColorInt backgroundColor: Int? = null,
-    private val seed: Int = SEED_BACKGROUND,
+    private var seed: Int? = SEED_BACKGROUND,
 ) : Drawable() {
     private val backgroundPaint = Paint(PAINT_FLAGS)
     private val noisePaint = Paint(PAINT_FLAGS).apply {
         // ShaderBrush.applyTo sets black, alpha=1, no color filter, and SrcOver blending.
         color = Color.BLACK
-        shader = NoiseTexture.shader(seed)
+        shader = seed?.let(NoiseTexture::shader)
     }
     private var drawsBackground = backgroundColor != null
     private var drawableAlpha = 255
@@ -32,13 +32,14 @@ class NoiseDrawable(
     private var compositePaint: Paint? = null
     private var textSurfaceRange = backgroundColor?.let(::grainSurfaceRange) ?: 0L
 
-    /** Bounds include the unchanged black/white grain (alpha5..17), not just its base color. */
+    /** Bounds enclose the solid fill and any black/white grain. */
     val paintedTextSurface: Long
         get() = if (drawsBackground && drawableAlpha == 255 && outputColorFilter == null)
             textSurfaceRange else 0L
 
     private fun grainSurfaceRange(color: Int): Long {
         if (color ushr 24 != 255) return 0L
+        if (seed == null) return smallthingz.ui.controls.textSurfaceRange(color)
         var darkest = 0xff000000.toInt()
         var lightest = 0xff000000.toInt()
         for (shift in 0..16 step 8) {
@@ -52,7 +53,16 @@ class NoiseDrawable(
 
     init {
         backgroundColor?.let { backgroundPaint.color = it }
-        NoiseTexture.observe(this)
+        if (seed != null) NoiseTexture.observe(this)
+    }
+
+    fun setGrainSeed(value: Int?) {
+        if (seed == value) return
+        seed = value
+        noisePaint.shader = value?.let(NoiseTexture::shader)
+        if (value != null && noisePaint.shader == null) NoiseTexture.observe(this)
+        textSurfaceRange = if (drawsBackground) grainSurfaceRange(backgroundPaint.color) else 0L
+        invalidateSelf()
     }
 
     fun setBackgroundColor(@ColorInt color: Int?) {
@@ -81,7 +91,8 @@ class NoiseDrawable(
                 canvas.saveLayer(0f, 0f, width, height, paint)
             }
             if (drawsBackground) canvas.drawRect(0f, 0f, width, height, backgroundPaint)
-            if (noisePaint.shader == null) noisePaint.shader = NoiseTexture.shader(seed)
+            val currentSeed = seed
+            if (noisePaint.shader == null && currentSeed != null) noisePaint.shader = NoiseTexture.shader(currentSeed)
             // First launch may draw before background generation finishes. Keep the exact base
             // color, with no launch gate/fade; completion invalidates this drawable once.
             if (noisePaint.shader != null) canvas.drawRect(0f, 0f, width, height, noisePaint)

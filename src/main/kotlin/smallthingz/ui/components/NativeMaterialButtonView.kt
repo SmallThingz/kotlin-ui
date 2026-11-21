@@ -1,6 +1,7 @@
 package smallthingz.ui.components
 
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Outline
@@ -15,6 +16,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.ImageView
+import androidx.annotation.ColorInt
 import androidx.core.graphics.ColorUtils
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.geometry.roundedGroupContains
@@ -48,22 +51,46 @@ data class NativeMaterialButtonStyle(
     val showLabel: Boolean = true,
 )
 
-open class NativeMaterialButtonView(
+open class NativeMaterialButtonView private constructor(
     context: Context,
     private val filled: Boolean,
     textStyle: TextStyle,
     private var density: Density,
     resolver: FontFamily.Resolver,
     private val style: NativeMaterialButtonStyle,
-    inputPolicy: NativeButtonInputPolicy = NativeButtonInputPolicy.Default,
+    inputPolicy: NativeButtonInputPolicy,
     onClick: () -> Unit,
+    private val recipe: NativeButtonRecipe?,
 ) : ViewGroup(context), NativeClickPhaseHost, NativePointerLayerShape, NativeMergedRowAccessibilityHost, AutoCloseable {
+    constructor(
+        context: Context,
+        filled: Boolean,
+        textStyle: TextStyle,
+        density: Density,
+        resolver: FontFamily.Resolver,
+        style: NativeMaterialButtonStyle,
+        inputPolicy: NativeButtonInputPolicy = NativeButtonInputPolicy.Default,
+        onClick: () -> Unit,
+    ) : this(context, filled, textStyle, density, resolver, style, inputPolicy, onClick, null)
+
+    constructor(
+        context: Context,
+        recipe: NativeButtonRecipe,
+        density: Density,
+        resolver: FontFamily.Resolver,
+        inputPolicy: NativeButtonInputPolicy = NativeButtonInputPolicy.Default,
+        onClick: () -> Unit,
+    ) : this(context, recipe.elevated, recipe.labelStyle, density, resolver, recipe.surface, inputPolicy, onClick, recipe)
+
+    val minimumTouchTargetDp: Int get() = recipe?.minimumTouchTargetDp ?: 48
     private var action = onClick
     private var closed = false
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
     private var colorMotion: ViewColorTransition? = null
     private var icon: Drawable? = null
     private var leading: View? = null
+    private var hasLeadingImageTint = false
+    private var leadingImageTint = 0
     private val hasLeading get() = icon != null || leading != null
     private var leadingOriginalImportance = IMPORTANT_FOR_ACCESSIBILITY_AUTO
     private var leadingExposed = false
@@ -137,7 +164,7 @@ open class NativeMaterialButtonView(
             }
         }
     }
-    private val input = NativeMaterialButtonInput(this, content, style.radiusDp, filled, inputPolicy) { elevation = it }
+    private val input = NativeMaterialButtonInput(this, content, style.radiusDp, minimumTouchTargetDp, filled, inputPolicy) { elevation = it }
     override val nativeClickEndpoint get() = input.pointerEndpoint
     override val mergedRowAccessibility = MergedRowAccessibility(this, NativeMergedRowRole.BUTTON,
         { NativeMergedRowAccessibilityState(isEnabled, null, null, accessibilityChildren) },
@@ -187,9 +214,25 @@ open class NativeMaterialButtonView(
         motion.retarget(container, contentColor)
     }
 
+    fun bind(
+        text: String,
+        enabled: Boolean,
+        palette: NativeButtonPalette,
+        emphasized: Boolean = true,
+        busy: Boolean = false,
+        onClick: () -> Unit = action,
+    ) {
+        val paint = requireNotNull(recipe).paint(enabled, emphasized, busy)
+        val fill = paint.container.resolve(palette, paint.containerOpacity)
+        val ink = paint.content.resolve(palette, paint.contentOpacity)
+        bind(text, enabled, fill, ink, onClick, paint.indication?.resolve(palette) ?: ink)
+    }
+
     override fun setEnabled(enabled: Boolean) {
-        if (isEnabled != enabled && inputReady && !closed) input.bind(enabled, indicationInk)
+        val changed = isEnabled != enabled && inputReady && !closed
+        if (changed) input.bind(enabled, indicationInk)
         super.setEnabled(enabled && !closed)
+        if (changed && hasLeadingImageTint) publishLeadingImageTint()
     }
 
     fun bindTypography(textStyle: TextStyle, next: Density, resolver: FontFamily.Resolver) {
@@ -198,6 +241,9 @@ open class NativeMaterialButtonView(
         density = next
         label.setTypography(textStyle, next, resolver)
     }
+
+    fun bindTypography(next: Density, resolver: FontFamily.Resolver) =
+        bindTypography(requireNotNull(recipe).labelStyle, next, resolver)
 
     fun setLeadingIcon(value: Drawable?) {
         if (closed || icon === value) return
@@ -223,10 +269,28 @@ open class NativeMaterialButtonView(
         if (replacing) content.addView(value, 0)
     }
 
+    /** Keeps parent-sampled ink on an external image and reapplies recipe opacity after enabled changes. */
+    fun setLeadingImageTint(@ColorInt color: Int) {
+        if (closed) return
+        check(leading is ImageView && recipe != null)
+        if (hasLeadingImageTint && leadingImageTint == color) return
+        hasLeadingImageTint = true
+        leadingImageTint = color
+        publishLeadingImageTint()
+    }
+
+    private fun publishLeadingImageTint() {
+        val image = leading as ImageView
+        val opacity = checkNotNull(recipe).paint(isEnabled, emphasized = true).contentOpacity
+        val tint = if (opacity == null) leadingImageTint else srgbColorWithAlpha(leadingImageTint, opacity)
+        if (image.imageTintList?.defaultColor != tint) image.imageTintList = ColorStateList.valueOf(tint)
+    }
+
     private fun releaseLeadingView() {
         val former = leading ?: return
         val importance = leadingOriginalImportance
         leading = null
+        hasLeadingImageTint = false
         leadingExposed = false
         accessibilityChildren = labelChildren
         try { content.removeView(former) }

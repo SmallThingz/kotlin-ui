@@ -46,11 +46,20 @@ import kotlin.math.roundToInt
  */
 class NativeFloatingDialog(
     private val anchor: View,
-    density: Float,
+    private val density: Float,
     onDismiss: () -> Unit,
     statusBarProtection: NativeStatusBarProtection?,
+    private var shadowDp: Float,
     createContent: (android.content.Context, NativeModalWindowRuntime, () -> Unit) -> NativeFloatingDialogContent,
 ) : ComponentDialog(ContextThemeWrapper(anchor.context, smallthingz.ui.R.style.FloatingDialogWindowTheme)) {
+    constructor(
+        anchor: View,
+        density: Float,
+        onDismiss: () -> Unit,
+        statusBarProtection: NativeStatusBarProtection?,
+        createContent: (android.content.Context, NativeModalWindowRuntime, () -> Unit) -> NativeFloatingDialogContent,
+    ) : this(anchor, density, onDismiss, statusBarProtection, NativeFloatingPanelRecipe.Default.shadowDp, createContent)
+
     constructor(
         anchor: View,
         density: Float,
@@ -159,7 +168,7 @@ class NativeFloatingDialog(
         inheritSecurePolicy()
         root.layoutDirection = anchor.layoutDirection
         contentOwner.bindWindowAccessibility(root)
-        root.elevation = 8f * density
+        root.elevation = shadowDp * density
         root.outlineProvider = NativeWindowShadowOutline
         if (Build.VERSION.SDK_INT >= 29) root.isForceDarkAllowed = false
         (window.decorView as? ViewGroup)?.disableClippingUntil(root)
@@ -193,8 +202,14 @@ class NativeFloatingDialog(
     }
 
     /** Rebind the caller callback and inherited window policy without replacing content. */
-    fun bind(onDismiss: () -> Unit) {
+    fun bind(onDismiss: () -> Unit) = bind(onDismiss, shadowDp)
+
+    fun bind(onDismiss: () -> Unit, shadowDp: Float) {
         currentOnDismiss = onDismiss
+        if (this.shadowDp != shadowDp) {
+            this.shadowDp = shadowDp
+            root.elevation = shadowDp * density
+        }
         root.layoutDirection = anchor.layoutDirection
         inheritSecurePolicy()
     }

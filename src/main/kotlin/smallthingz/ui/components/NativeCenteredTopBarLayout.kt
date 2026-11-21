@@ -15,6 +15,7 @@ open class NativeCenteredTopBarLayout(
     val navigationView: View,
     val titleView: View,
     val actionView: View,
+    private var toolbarStyle: NativeToolbarStyle = NativeToolbarStyle.Default,
 ) : ViewGroup(context) {
     private var logicalHeight = 0
     private var titleWrapperWidth = 0
@@ -33,31 +34,38 @@ open class NativeCenteredTopBarLayout(
         clipChildren = false; clipToPadding = false
         addView(navigation); addView(title); addView(done)
     }
-    fun bindDensity(value: Float) { if (density != value) { density = value; requestLayout() } }
+    fun bindDensity(value: Float) = bindStyle(value, toolbarStyle)
+
+    fun bindStyle(value: Float, style: NativeToolbarStyle) {
+        if (density == value && toolbarStyle == style) return
+        density = value
+        toolbarStyle = style
+        requestLayout()
+    }
     private fun dp(value: Float) = (value * density).roundToInt()
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val w = MeasureSpec.getSize(widthMeasureSpec)
         val maxH = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED) Int.MAX_VALUE
             else MeasureSpec.getSize(heightMeasureSpec)
         val childH = if (maxH == Int.MAX_VALUE) unspecified() else atMost(maxH)
-        navigationPadding = dp(4f)
-        actionPadding = dp(4f)
+        navigationPadding = dp(toolbarStyle.centeredPaddingDp)
+        actionPadding = dp(toolbarStyle.centeredPaddingDp)
         navigation.measure(atMost((w - navigationPadding).coerceAtLeast(0)), childH)
         done.measure(atMost((w - actionPadding).coerceAtLeast(0)), childH)
         navigationWrapperWidth = min(w, navigation.measuredWidth + navigationPadding)
         actionWrapperWidth = min(w, done.measuredWidth + actionPadding)
         val titleMax = (w - navigationWrapperWidth - actionWrapperWidth).coerceAtLeast(0)
-        titlePadding = dp(4f)
+        titlePadding = dp(toolbarStyle.centeredPaddingDp)
         title.measure(atMost((titleMax - titlePadding * 2).coerceAtLeast(0)), childH)
         titleWrapperWidth = min(titleMax, title.measuredWidth + titlePadding * 2)
-        logicalHeight = max(dp(64f), title.measuredHeight)
+        logicalHeight = max(dp(toolbarStyle.centeredHeightDp), title.measuredHeight)
         setMeasuredDimension(w, resolveSize(logicalHeight, heightMeasureSpec))
     }
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         val rtl = layoutDirection == LAYOUT_DIRECTION_RTL
         val p = centeredTopBarPlacement(width, logicalHeight, navigationWrapperWidth,
             navigation.measuredHeight, titleWrapperWidth, title.measuredHeight,
-            actionWrapperWidth, done.measuredHeight, density, rtl)
+            actionWrapperWidth, done.measuredHeight, density, rtl, toolbarStyle.centeredTitleStartDp)
         // Placeable apparentToRealOffset centers a source layout that exceeds constraints.
         val yOffset = (height - logicalHeight) / 2
         val nx = p.navigationX + if (rtl)

@@ -7,6 +7,8 @@ import android.view.ViewGroup
 import androidx.annotation.StringRes
 import smallthingz.ui.R
 import smallthingz.ui.controls.ControlPalette
+import smallthingz.ui.text.font.FontFamily
+import smallthingz.ui.unit.Density
 import kotlin.math.roundToInt
 
 /** Presentation only: applications own persisted codes and their system-theme resolution. */
@@ -14,35 +16,46 @@ enum class NativeThemeMode(@param:StringRes @field:StringRes val labelRes: Int) 
     SYSTEM(R.string.native_theme_system), LIGHT(R.string.native_theme_light), DARK(R.string.native_theme_dark),
 }
 
-/** Optional retained rendering adapter; localized copy and all selector geometry remain library-owned. */
+/** Explicit custom retained rendering. Localized copy and selector layout remain library-owned. */
 interface NativeThemePresentation : NativeSegmentedPresentation {
     val title: View
     fun bindTitle(titleText: String, palette: ControlPalette, titleColor: Int)
 }
 
 /** A complete localized theme row. A selection request never changes the owner's bound selection. */
-class NativeThemeSelector(
+class NativeThemeSelector internal constructor(
     context: Context,
     palette: ControlPalette,
     selected: NativeThemeMode,
-    titleColor: Int = palette.content,
-    presentation: NativeThemePresentation? = null,
-    density: Float = context.resources.displayMetrics.density,
-    inputAllowed: () -> Boolean = { true },
+    titleColor: Int,
+    private val presentation: NativeThemePresentation,
+    density: Float,
+    inputAllowed: () -> Boolean,
+    segmented: NativeSegmentedStyle,
     onSelectionRequest: (NativeThemeMode) -> Boolean,
 ) : ViewGroup(context), NativeInputGate, AutoCloseable {
+    constructor(
+        context: Context,
+        palette: ControlPalette,
+        selected: NativeThemeMode,
+        titleColor: Int = palette.content,
+        presentation: NativeThemePresentation,
+        density: Float = context.resources.displayMetrics.density,
+        inputAllowed: () -> Boolean = { true },
+        onSelectionRequest: (NativeThemeMode) -> Boolean,
+    ) : this(context, palette, selected, titleColor, presentation, density, inputAllowed,
+        NativeSegmentedStyle.Default, onSelectionRequest)
+
     private var closed = false
     private var onSelectionRequest: ((NativeThemeMode) -> Boolean)? = onSelectionRequest
-    private val presentation = presentation ?: DefaultThemePresentation(context, palette)
-    private val capsule = NativeSegmentedControl(context, palette, this.presentation, density, inputAllowed)
+    private val capsule = NativeSegmentedControl(context, palette, segmented, density, inputAllowed, presentation)
+    private val contentLayout = NativeLabeledSegmentedLayout(presentation.title, capsule)
     private var palette = palette
     private var titleColor = titleColor
     private var selected = selected
     private var optionDensity = Float.NaN
     private var optionLocales = ""
     private var options: List<NativeChoice> = emptyList()
-    private var rowHeight = 0
-    private var gap = 0
     private var density = density
 
     override val acceptsNativeInput: Boolean
@@ -50,7 +63,7 @@ class NativeThemeSelector(
 
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-        addView(this.presentation.title)
+        addView(presentation.title)
         addView(capsule)
         capsule.onSelectionRequest = { id ->
             val mode = NativeThemeMode.entries.singleOrNull { it.name == id }
@@ -79,32 +92,29 @@ class NativeThemeSelector(
         requestLayout()
     }
 
+    /** Rebind the retained title and choices when the host's font or display configuration changes. */
+    fun bind(selected: NativeThemeMode, palette: ControlPalette, textDensity: Density,
+             fontResolver: FontFamily.Resolver) {
+        if (closed) return
+        (presentation as? SettingsThemePresentation)?.bindTypography(textDensity, fontResolver)
+        bind(selected, palette, palette.content, textDensity.density)
+    }
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         bind(selected, palette, titleColor)
     }
 
     override fun onMeasure(w: Int, h: Int) {
-        val width = MeasureSpec.getSize(w)
+        val width = if (MeasureSpec.getMode(w) == MeasureSpec.UNSPECIFIED)
+            contentLayout.preferredWidth(dp(16)) + 2 * dp(16) else MeasureSpec.getSize(w)
         val available = (width - 2 * dp(16)).coerceAtLeast(0)
-        presentation.title.measure(MeasureSpec.makeMeasureSpec(available, MeasureSpec.AT_MOST),
-            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-        gap = minOf(dp(16), (available - presentation.title.measuredWidth).coerceAtLeast(0))
-        capsule.measure(exact((available - presentation.title.measuredWidth - gap).coerceAtLeast(0)),
-            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-        rowHeight = maxOf(presentation.title.measuredHeight, capsule.measuredHeight)
-        setMeasuredDimension(resolveSize(width, w), resolveSize(2 * dp(12) + rowHeight + dp(12), h))
+        contentLayout.measure(available, inlineGap = dp(16), stackedGap = dp(8))
+        setMeasuredDimension(resolveSize(width, w), resolveSize(2 * dp(12) + contentLayout.measuredHeight + dp(12), h))
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        place(presentation.title, dp(16))
-        place(capsule, dp(16) + presentation.title.measuredWidth + gap)
-    }
-
-    private fun place(child: View, start: Int) {
-        val x = if (layoutDirection == LAYOUT_DIRECTION_RTL) width - start - child.measuredWidth else start
-        val y = dp(12) + ((rowHeight - child.measuredHeight) / 2f).roundToInt()
-        child.layout(x, y, x + child.measuredWidth, y + child.measuredHeight)
+        contentLayout.layout(width, dp(16), dp(12), layoutDirection == LAYOUT_DIRECTION_RTL)
     }
 
     override fun close() {
@@ -115,15 +125,4 @@ class NativeThemeSelector(
     }
 
     private fun dp(value: Int) = (value * density).roundToInt()
-    private fun exact(value: Int) = MeasureSpec.makeMeasureSpec(value, MeasureSpec.EXACTLY)
-}
-
-private class DefaultThemePresentation(context: Context, palette: ControlPalette) : NativeThemePresentation,
-    NativeSegmentedPresentation by DefaultSegmentedPresentation(context, palette) {
-    override val title = NativeText(context, palette, NativeTextStyle(sizeSp = 19f, lineHeightSp = 26f, weight = 500))
-    override fun bindTitle(titleText: String, palette: ControlPalette, titleColor: Int) {
-        title.text = titleText
-        title.applyPalette(palette)
-        title.animateTextColor(titleColor)
-    }
 }

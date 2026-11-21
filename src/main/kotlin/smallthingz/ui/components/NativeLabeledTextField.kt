@@ -20,6 +20,7 @@ import smallthingz.ui.animation.core.AnimationVector1D
 import smallthingz.ui.animation.core.SpringSpec
 import smallthingz.ui.animation.view.ViewSpringDriver
 import smallthingz.ui.controls.ControlPalette
+import smallthingz.ui.controls.textSurfaceForeground
 import smallthingz.ui.text.Paragraph
 import smallthingz.ui.text.PlatformTextStyle
 import smallthingz.ui.text.TextStyle
@@ -92,6 +93,8 @@ open class NativeLabeledTextField(
 ) : ViewGroup(context) {
     private var componentPalette = palette
     private var componentStyle = style
+    private var fieldErrorColor = style.errorColor
+    private var joinedUnderlay = 0L
     private var fieldLabel = label.toString()
     private var placeholderText: String? = editor.hint?.toString()?.takeIf { it.isNotEmpty() && it != fieldLabel }
     private var supportingText: String? = null
@@ -283,15 +286,29 @@ open class NativeLabeledTextField(
         syncLeadingEnabled()
     }
 
-    fun applyPalette(palette: ControlPalette) {
-        if (componentPalette == palette) return
+    fun applyPalette(palette: ControlPalette) = applyPalette(palette, fieldErrorColor)
+
+    internal fun applyPalette(palette: ControlPalette, errorColor: Int) {
+        if (componentPalette == palette && fieldErrorColor == errorColor) return
         componentPalette = palette
+        fieldErrorColor = errorColor
         applyPaint()
     }
 
+    internal fun bindJoinedUnderlay(next: Long) {
+        if (joinedUnderlay == next) return
+        joinedUnderlay = next
+        writeDecorationColors()
+        invalidate()
+    }
+
     fun applyStyle(style: NativeLabeledTextFieldStyle) {
-        if (componentStyle == style) return
+        if (componentStyle == style) {
+            applyPalette(componentPalette, style.errorColor)
+            return
+        }
         componentStyle = style
+        fieldErrorColor = style.errorColor
         applyEditorStyle()
         supportingView.applyStyle(style.supportingStyle)
         placeholderView.applyStyle(placeholderStyle())
@@ -582,7 +599,7 @@ open class NativeLabeledTextField(
     private fun applyPaint() {
         val palette = componentPalette
         val enabled = isEnabled && editor.isEnabled
-        editor.applyPalette(if (validationError != null && enabled) palette.copy(accent = componentStyle.errorColor) else palette)
+        editor.applyPalette(if (validationError != null && enabled) palette.copy(accent = fieldErrorColor) else palette)
         editor.setHintTextColor(Color.TRANSPARENT)
         placeholderView.applyPalette(palette)
         supportingView.applyPalette(palette)
@@ -596,13 +613,13 @@ open class NativeLabeledTextField(
         val enabled=isEnabled&&editor.isEnabled
         val stroke=when {
             !enabled->withAlpha(palette.content,style.disabledOutlineAlpha)
-            validationError!=null->style.errorColor
+            validationError!=null->fieldErrorColor
             editor.hasFocus()->style.focusedOutlineColor ?: palette.accent
             else->style.outlineColor ?: palette.outline
         }
         val support=when {
             !enabled->withAlpha(palette.content,style.disabledContentAlpha)
-            validationError!=null->style.errorColor
+            validationError!=null->fieldErrorColor
             else->style.supportingColor ?: palette.muted
         }
         val text=if(enabled)palette.content else withAlpha(palette.content,style.disabledContentAlpha)
@@ -622,16 +639,23 @@ open class NativeLabeledTextField(
     private fun writeDecorationColors() {
         val colors=decorationColors ?: return
         border.setColor(colors.color(0))
-        supportingView.setTextColor(colors.color(2))
-        editor.setTextColor(colors.color(3))
-        placeholderView.setTextColor(colors.color(4))
+        supportingView.setTextColor(joinedInk(colors.color(2), validationError != null))
+        editor.setTextColor(joinedInk(colors.color(3)))
+        placeholderView.setTextColor(joinedInk(colors.color(4)))
     }
 
     private fun paintSupportingText()=updateDecorationColors()
-    private fun labelColor():Int=decorationColors?.color(1) ?: targetLabelColor()
+    private fun labelColor(): Int = joinedInk(decorationColors?.color(1) ?: targetLabelColor(), validationError != null)
+    private fun joinedInk(preferred: Int, error: Boolean = false): Int {
+        if (joinedUnderlay == 0L || !isEnabled || !editor.isEnabled) return preferred
+        val readable = textSurfaceForeground(joinedUnderlay, preferred)
+        return if (error && readable != preferred && fieldErrorColor ushr 24 == 255)
+            textSurfaceForeground(joinedUnderlay, fieldErrorColor) else readable
+    }
+
     private fun targetLabelColor(): Int = when {
         !isEnabled || !editor.isEnabled -> withAlpha(componentPalette.content, componentStyle.disabledContentAlpha)
-        validationError != null -> componentStyle.errorColor
+        validationError != null -> fieldErrorColor
         editor.hasFocus() -> componentStyle.focusedOutlineColor ?: componentPalette.accent
         else -> componentStyle.labelColor ?: componentPalette.muted
     }

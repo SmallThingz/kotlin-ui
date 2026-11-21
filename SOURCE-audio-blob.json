@@ -1,0 +1,57 @@
+{
+  "source_repository": "https://github.com/SmallThingz/reverb",
+  "source_commit": "88446459ac2ce5e43ad224eb27af18fa80208e98",
+  "license": "Apache-2.0",
+  "files": {
+    "app/src/main/java/app/smallthingz/reverb/AudioBlobView.kt": {
+      "source_sha256": "fc228b2434721949e7f579f5a8835b23efdf28eed797e1771f47e7312cbe68c3",
+      "target": "src/main/kotlin/smallthingz/ui/components/blob/AudioReactiveBlobView.kt",
+      "scope": "View body, motion and renderers. Reverb keeps its controller and its audio frame type."
+    },
+    "app/src/main/java/app/smallthingz/reverb/AudioBlobMaterial.kt": {
+      "source_sha256": "046fa855960a60c9b9ff36baf417f3b5b3686978adf5648a4c9df8832f8fe68d",
+      "target": "src/main/kotlin/smallthingz/ui/components/blob/AudioBlobMaterial.kt"
+    },
+    "app/src/main/java/app/smallthingz/reverb/AudioBlobMotion.kt": {
+      "source_sha256": "b9ee21662191e6f826c85b33df6dec65d4d46948b0b73fe9deede8c5f158e8d5",
+      "target": "src/main/kotlin/smallthingz/ui/components/blob/AudioBlobMotion.kt"
+    },
+    "app/src/main/java/app/smallthingz/reverb/SilenceBlobColor.kt": {
+      "source_sha256": "64bc837670808bffa8826e81ee1e965eb4dc7844bca00a1a59f4d2605c71e4e2",
+      "target": "src/main/kotlin/smallthingz/ui/components/blob/SilenceBlobColor.kt"
+    },
+    "app/src/test/java/app/smallthingz/reverb/AudioBlobMaterialTest.kt": {
+      "source_sha256": "9fda08d598fab9bf1163f328fe989251e61a6e7d85c8b084d34fdf46cee26044",
+      "target": "src/test/kotlin/smallthingz/ui/components/blob/AudioBlobMaterialTest.kt"
+    },
+    "app/src/test/java/app/smallthingz/reverb/AudioBlobMotionTest.kt": {
+      "source_sha256": "f2c280752d2449ef10bff86d46d9119eae671e5721e38c6d09cfc58c0e015e91",
+      "target": "src/test/kotlin/smallthingz/ui/components/blob/AudioBlobMotionTest.kt"
+    },
+    "app/src/test/java/app/smallthingz/reverb/SilenceBlobFeedbackTest.kt": {
+      "source_sha256": "9aa36d67d6f11ba454cf30154c355e5fd98a2fc055f2a83188ae2024adcf5717",
+      "target": "src/test/kotlin/smallthingz/ui/components/blob/AudioBlobSilenceTest.kt",
+      "scope": "Five visual cases. The two PCM gate cases stay in Reverb."
+    },
+    "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbHomeBlobControl.kt": {
+      "source_sha256": "7abd03c6232a458e984a2777741c9f1f226efeae5c4f1a9b5cb922abfdcedc65",
+      "targets": [
+        "src/main/kotlin/smallthingz/ui/components/blob/NativeAudioBlobReadout.kt",
+        "src/main/kotlin/smallthingz/ui/components/blob/NativeAudioBlobControlView.kt",
+        "src/main/kotlin/smallthingz/ui/components/blob/NativeAudioBlobAppearance.kt"
+      ],
+      "scope": "Readout measurement/support/drawable presentation, focus geometry, control composition, and default visual transform/press style. Reverb retains input, strings and asset bindings.",
+      "previous_migration_sha256": "740566d3bfdb5e58a51a7f21fb891a8e0f6a8b576eebcb1614af66c487651096"
+    },
+    "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbRangeExportContent.kt": {
+      "source_sha256": "94a96d552ce5adaf22d6ac7ea916576713fa834cd4fa8b45bcc50052c85f6e57",
+      "target": "src/main/kotlin/smallthingz/ui/components/blob/NativeBlobHandoffLayer.kt",
+      "scope": "Only the above-child handoff circle, whose scale and color match the initial waveform frame. Reverb supplies frozen coordinates and switching state."
+    }
+  },
+  "notes": [
+    "First-party live Reverb blob renderer and visual math from ItsMeSamey and Codex authored source with owner authorization.",
+    "The library owns paint, shader, frame scheduling, material sampling and band peak copying. The application keeps recorder frames, subscriptions and attachment lifetime.",
+    "Four exact originals remain only in the Reverb reliability source set for fixtures naming the old renderer. Current-UI fixtures use the actual library renderer."
+  ]
+}

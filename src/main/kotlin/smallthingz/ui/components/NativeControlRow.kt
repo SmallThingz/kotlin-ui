@@ -19,10 +19,11 @@ abstract class NativeControlRow(
     protected open val accessibilityClickLabel: CharSequence? get() = null
     protected abstract fun accessibilityChildren(): List<View>
 
-    final override val mergedRowAccessibility = MergedRowAccessibility(this, role, {
+    protected open fun accessibilityState(): NativeMergedRowAccessibilityState =
         NativeMergedRowAccessibilityState(rowInputEnabled, rowChecked, accessibilityClickLabel,
             accessibilityChildren())
-    }, {
+
+    final override val mergedRowAccessibility = MergedRowAccessibility(this, role, ::accessibilityState, {
         if (canActivate()) { activateRow(); true } else false
     })
 

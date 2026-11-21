@@ -1,0 +1,21 @@
+{
+  "source_repository": "https://github.com/SmallThingz/reverb",
+  "source_commit": "88446459ac2ce5e43ad224eb27af18fa80208e98",
+  "license": "Apache-2.0",
+  "files": {
+    "app/src/main/java/app/smallthingz/reverb/nativeui/OnboardingContentViews.kt": {
+      "source_sha256": "1e5dd40022f220ee2e43c8369e976e5afb293b99e11a1162952adf68ebe2a3c2",
+      "target": "src/main/kotlin/smallthingz/ui/components/NativeDetailCardRow.kt",
+      "scope": "Onboarding marker and card presentation and responsive geometry. App supplies existing glyph views."
+    },
+    "app/src/main/java/app/smallthingz/reverb/nativeui/OnboardingPermissionGroup.kt": {
+      "source_sha256": "3d19755b787524ed0ce0e20d358cad52f88d7ade151a426607cfe9f2c5dce205",
+      "target": "src/main/kotlin/smallthingz/ui/components/NativePermissionRow.kt",
+      "scope": "Permission card display/action semantics. App retains permission identities, action admission, lifecycle and launcher requests."
+    }
+  },
+  "notes": [
+    "First-party presentation migration. Default marker and row dimensions and paint roles are retained.",
+    "Granted state uses one app-supplied localized status, without exposing a request action. Independent accessory identity and activation remain separate."
+  ]
+}

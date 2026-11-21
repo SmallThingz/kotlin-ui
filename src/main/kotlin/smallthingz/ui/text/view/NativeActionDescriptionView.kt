@@ -8,7 +8,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
 /** Actual source Icon/Image semantic child; drawing stays on the existing unchanged renderer. */
-class NativeActionDescriptionView(context: Context, description: String) : View(context) {
+open class NativeActionDescriptionView(context: Context, description: String) : View(context) {
     private var sourceNode: (() -> NativeSourceAccessibilityNode)? = null
     private var text: PlainTextAccessibility? = null
     private var token: Any? = null
@@ -26,6 +26,19 @@ class NativeActionDescriptionView(context: Context, description: String) : View(
             descriptionOnly = true)
         return AutoCloseable {
             if (token === next) { token = null; sourceNode = null; text = null }
+        }
+    }
+    /** Bind description-only actions when the containing control already owns the node geometry. */
+    fun bindDescriptionExposure(cursor: PlainTextAccessibilityWindowScope,
+        exposed: () -> Boolean): AutoCloseable {
+        val next = Any()
+        token = next
+        sourceNode = null
+        text = PlainTextAccessibility(this, cursor,
+            snapshot = { PlainTextAccessibilitySnapshot(contentDescription?.toString().orEmpty(), { null }, { null }) },
+            exposed = exposed, descriptionOnly = true)
+        return AutoCloseable {
+            if (token === next) { token = null; text = null }
         }
     }
     override fun createAccessibilityNodeInfo(): AccessibilityNodeInfo? =

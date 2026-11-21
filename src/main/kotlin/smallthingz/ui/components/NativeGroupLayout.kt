@@ -38,7 +38,7 @@ private const val GROUP_PAINT_FLAGS = Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG
  */
 class NativeGroupLayout(
     context: Context,
-    private val cornerRadiusDp: Float = 16f,
+    private var cornerRadiusDp: Float = 16f,
     orientation: Int = LinearLayout.VERTICAL,
     private val onPaintedSurfaceChanged: (View) -> Unit = {},
 ) : FrameLayout(context) {
@@ -86,6 +86,10 @@ class NativeGroupLayout(
         content.addView(child, params)
     }
 
+    fun addRow(index: Int, child: View, params: LayoutParams) {
+        content.addView(child, index, params)
+    }
+
     fun removeRow(child: View) {
         content.removeView(child)
     }
@@ -93,6 +97,14 @@ class NativeGroupLayout(
     fun setRowOrientation(orientation: Int) {
         require(orientation == LinearLayout.HORIZONTAL || orientation == LinearLayout.VERTICAL)
         if (content.orientation != orientation) content.orientation = orientation
+    }
+
+    fun setCornerRadiusDp(value: Float) {
+        require(value.isFinite() && value >= 0f)
+        if (cornerRadiusDp == value) return
+        cornerRadiusDp = value
+        updateShape()
+        invalidate()
     }
 
     /** Actual source clip, shared with the window's phase hit tree; no geometry approximation. */

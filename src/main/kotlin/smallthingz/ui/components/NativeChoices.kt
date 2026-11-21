@@ -219,6 +219,8 @@ class NativeChip(
     var onActivationRequest: (() -> Boolean)? = null
     internal var preserveIconColors = false
     internal var uniformSelectionEligible = false
+    internal var measuredContentHeight: Int = 0
+        private set
     internal fun hasUniformSelectionContent(): Boolean {
         if (!uniformSelectionEligible) return false
         val currentLayout = layout
@@ -561,6 +563,7 @@ class NativeChip(
             contentHeight = paddingTop + paddingBottom + max(bodyHeight, trailingIcon?.bounds?.height() ?: 0)
         }
         val minimum = choiceStyle.visualMinHeightDp
+        measuredContentHeight = contentHeight
         val inset = if (minimum == null) 0 else
             max(0, (measuredHeight - max(dp(minimum), contentHeight)) / 2)
         if (visualInsetPx != inset) { visualInsetPx = inset; invalidate() }
@@ -790,6 +793,23 @@ open class NativeSegmentedChoice(
     private val selectionIndicator = if (movingSelectionBackground && style.selectedFill)
         NativeSelectionIndicator(this, palette.selection) else null
     private var uniformSelectionForeground: NativeSelectionForeground? = null
+    internal var capsuleColumns: Int? = null
+    internal var preferredCellWidth = 0
+        private set
+    internal var preferredCellContentHeight = 0
+        private set
+
+    internal fun probeCapsuleCells() {
+        preferredCellWidth = 0
+        preferredCellContentHeight = 0
+        val unconstrained = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+        for (index in 0 until childCount) {
+            val child = getChildAt(index) as NativeChip
+            child.measure(unconstrained, unconstrained)
+            preferredCellWidth = max(preferredCellWidth, child.measuredWidth)
+            preferredCellContentHeight = max(preferredCellContentHeight, child.measuredContentHeight)
+        }
+    }
 
     /** Capsule presentation uses matching text/icon roles; other choice styles retain their own ink. */
     internal fun useUniformSelectionForeground(surfaceColor: () -> Int?) {
@@ -964,12 +984,12 @@ open class NativeSegmentedChoice(
         // A compact-row owner may admit the standard 48dp minimum target outside visual bounds.
         // Only DOWN needs projection into a child; subsequent motion retains its real geometry.
         val extra = max(0f, (48f * density - height) / 2f)
-        if (singleRow && event.actionMasked == MotionEvent.ACTION_UP &&
+        if (singleRow && capsuleColumns == null && event.actionMasked == MotionEvent.ACTION_UP &&
             (event.x < 0f || event.x >= width || event.y < -extra || event.y >= height + extra)) {
             val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
             return try { super.dispatchTouchEvent(cancel) } finally { cancel.recycle() }
         }
-        if (singleRow && event.actionMasked == MotionEvent.ACTION_DOWN && height > 0 &&
+        if (singleRow && capsuleColumns == null && event.actionMasked == MotionEvent.ACTION_DOWN && height > 0 &&
             event.x >= 0f && event.x < width && event.y >= -extra && event.y < height + extra &&
             (event.y < 0f || event.y >= height)) {
             val projected = MotionEvent.obtain(event)
@@ -1008,14 +1028,15 @@ open class NativeSegmentedChoice(
             state = combineMeasuredStates(state, child.measuredState)
         }
         naturalWidth += gap.toLong() * max(0, count - 1)
-        val effectiveFixedColumns = fixedColumns?.let { requested ->
+        val compact = singleRow && capsuleColumns == null
+        val effectiveFixedColumns = (capsuleColumns ?: fixedColumns)?.let { requested ->
             if (widthMode == MeasureSpec.UNSPECIFIED) requested else min(requested,
                 max(1, ((available.toLong() + gap) / max(1L, minimumCell.toLong() + gap)).toInt()))
         }
-        val singleRowColumns = if (singleRow) count else effectiveFixedColumns ?: count
+        val singleRowColumns = if (compact) count else effectiveFixedColumns ?: count
         val equalWidth = largest.toLong() * singleRowColumns + gap.toLong() * max(0, singleRowColumns - 1)
         val fillCells = fillWrappedCells || effectiveFixedColumns != null
-        val equal = if (singleRow) true else if (effectiveFixedColumns != null) count <= effectiveFixedColumns else
+        val equal = if (compact) true else if (effectiveFixedColumns != null) count <= effectiveFixedColumns else
             arrangement == ChoiceArrangement.EqualWidth && count <= maxColumns &&
                 minimumCell.toLong() * count + gap.toLong() * max(0, count - 1) <= available
         val intrinsicColumns = effectiveFixedColumns ?: min(count, maxColumns)
@@ -1031,7 +1052,7 @@ open class NativeSegmentedChoice(
         measuredColumns = 0
         if (count > 0 && equal) {
             measuredColumns = singleRowColumns
-            val rowGap = if (singleRow && singleRowColumns > 1)
+            val rowGap = if (compact && singleRowColumns > 1)
                 min(gap, contentWidth / (singleRowColumns - 1)) else gap
             val usable = max(0, contentWidth - rowGap * (singleRowColumns - 1))
             val cellWidth = usable / singleRowColumns
@@ -1040,7 +1061,7 @@ open class NativeSegmentedChoice(
             for (i in 0 until count) {
                 val child = getChildAt(i)
                 val width = cellWidth + if (i < remainder) 1 else 0
-                val boundedHeight = if (singleRow && MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED)
+                val boundedHeight = if (compact && MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED)
                     MeasureSpec.makeMeasureSpec(max(0, MeasureSpec.getSize(heightMeasureSpec) - verticalPadding), MeasureSpec.getMode(heightMeasureSpec))
                     else MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
                 child.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), boundedHeight)

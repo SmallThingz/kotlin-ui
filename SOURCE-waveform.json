@@ -1,0 +1,47 @@
+{
+  "source_repository": "https://github.com/SmallThingz/reverb",
+  "source_commit": "88446459ac2ce5e43ad224eb27af18fa80208e98",
+  "license": "Apache-2.0",
+  "files": {
+    "app/src/main/java/app/smallthingz/reverb/nativeui/ProgressiveWaveformView.kt": {
+      "source_sha256": "539d718e9e0591654f76efe63ffc7ee8edaf5edbb4c35226d3ce11a2613ed5ba",
+      "target": "src/main/kotlin/smallthingz/ui/components/waveform/ProgressiveWaveformView.kt"
+    },
+    "app/src/main/java/app/smallthingz/reverb/nativeui/ProgressiveWaveformGeometry.kt": {
+      "source_sha256": "5851c70884e94a2c6efb29fb23e4cbc324ac8ac8d954e2e4dbf4a1e9fc97bb5f",
+      "target": "src/main/kotlin/smallthingz/ui/components/waveform/ProgressiveWaveformGeometry.kt"
+    },
+    "app/src/main/java/app/smallthingz/reverb/nativeui/ProgressiveWaveformContourCache.kt": {
+      "source_sha256": "25dbeceeb9e5f20fa8df198e24af852b328191a07edbec732a22c61ac204c9cc",
+      "target": "src/main/kotlin/smallthingz/ui/components/waveform/ProgressiveWaveformContourCache.kt"
+    },
+    "app/src/main/java/app/smallthingz/reverb/nativeui/ReverbTimelineMarkerView.kt": {
+      "source_sha256": "3d17973d1e2504dde563b2e17524785f6acbeff0b9c18ef7a959088fcb298872",
+      "target": "src/main/kotlin/smallthingz/ui/components/waveform/WaveformMarkerView.kt"
+    },
+    "app/src/main/java/app/smallthingz/reverb/nativeui/PlaybackPlayheadLine.kt": {
+      "source_sha256": "b024ca2f9e79c11923bffa15812bb2f6aae16f8d4077008b8592136eea9d8351",
+      "target": "src/main/kotlin/smallthingz/ui/components/waveform/WaveformPlayheadView.kt"
+    },
+    "app/src/test/java/app/smallthingz/reverb/nativeui/ProgressiveWaveformGeometryTest.kt": {
+      "source_sha256": "1090b9145e3116cb4810bcd00dacbc6cb42199ad91434944059f4ac7837722c8",
+      "target": "src/test/kotlin/smallthingz/ui/components/waveform/ProgressiveWaveformGeometryTest.kt"
+    },
+    "app/src/test/java/app/smallthingz/reverb/nativeui/ProgressiveWaveformContourCacheTest.kt": {
+      "source_sha256": "a73c28c7a49b512dcc0f2445b6b7c652b3a5018d26c8d77f913f9866a1037770",
+      "target": "src/test/kotlin/smallthingz/ui/components/waveform/ProgressiveWaveformContourCacheTest.kt"
+    }
+  },
+  "other_source": {
+    "app/src/main/java/app/smallthingz/reverb/ProgressiveWaveform.kt": {
+      "source_sha256": "b2d348e73fa9b173c63384c0b62ec7bc8ad5691477cc4090c6d8fbe84ecf8f4c",
+      "target": "src/main/kotlin/smallthingz/ui/components/waveform/ProgressiveWaveformGeometry.kt",
+      "scope": "Only contour point budgets and settled geometry. PCM work and historical parity inputs stay in Reverb."
+    }
+  },
+  "notes": [
+    "First-party Reverb renderer, selected from ItsMeSamey and Codex authored history with the repository owner's authorization. Released Compose fixtures and the upstream animation/text dependencies retain their original provenance.",
+    "The renderer consumes immutable envelope snapshots and scalar frames. The host retains the sampled-audio pass, actual playback position, selection, accessibility actions and transport.",
+    "The waveform, boundary and playhead share a resolved color style and renderer-owned geometry."
+  ]
+}

@@ -15,6 +15,7 @@ import android.view.ViewOutlineProvider
 import smallthingz.ui.dsl.child
 import smallthingz.ui.dsl.nativeView
 import smallthingz.ui.geometry.Offset
+import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.animation.view.ViewColorTransition
 import kotlin.math.max
 import kotlin.math.min
@@ -112,13 +113,13 @@ internal class NativeSheetSurface(
         private var radius=0f
         init {setWillNotDraw(false);addView(clip)}
         fun updateStyle(next:NativeActionSheetStyle) {
-            val densityChanged=env.textDensity!=next.textDensity
+            val shapeChanged=env.textDensity!=next.textDensity || env.recipe.radiusDp!=next.recipe.radiusDp
             env=next;colorMotion.retarget(next.palette.surfaceContainerLow)
-            if(densityChanged)onSizeChanged(width,height,width,height)
+            if(shapeChanged)onSizeChanged(width,height,width,height)
             invalidate()
         }
         override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int) {
-            val raw=28f*env.textDensity.density
+            val raw=env.recipe.radiusDp*env.textDensity.density
             // CornerBasedShape first normalizes each start/end pair against minDimension;
             // the path backend then normalizes the top pair if it exceeds the actual width.
             val minimum=min(w,h).toFloat()
@@ -211,7 +212,7 @@ internal class NativeSheetContent(
     title:String,
     inputRoot:()->View?,
     private val closeIcon: NativeActionSheetIcon,
-    contentBackground: android.graphics.drawable.Drawable?,
+    private val contentBackground: android.graphics.drawable.Drawable?,
     dismiss:()->Unit,
 ):ViewGroup(context) {
     private var currentDismiss=dismiss
@@ -223,11 +224,13 @@ internal class NativeSheetContent(
     private var actions:View?=null
     private var topBody=0
     private var topActions=0
+    private var grain: NoiseDrawable? = if (contentBackground == null)
+        style.recipe.grainSeed?.let { NoiseDrawable(seed = it) } else null
     private val density get()=style.textDensity.density
     val minimumTouchTargetPx:Float get()=48f*density
     init {
         clipChildren=false;clipToPadding=false;importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO
-        background=contentBackground
+        background=contentBackground ?: grain
         addView(header)
         bindClose(style,dismiss)
     }
@@ -242,11 +245,22 @@ internal class NativeSheetContent(
     }
     fun updateStyle(next:NativeActionSheetStyle) {
         if(style===next)return
-        val densityChanged=style.textDensity!=next.textDensity
+        val layoutChanged=style.textDensity!=next.textDensity || style.recipe!=next.recipe
         style=next
+        if (contentBackground == null) bindGrain(next.recipe.grainSeed)
         next.bindTitle(titleView)
         bindClose(next,currentDismiss)
-        if(densityChanged)requestLayout()
+        if(layoutChanged)requestLayout()
+    }
+    private fun bindGrain(seed: Int?) {
+        val current = grain
+        if (current == null && seed != null) {
+            grain = NoiseDrawable(seed = seed).also { background = it }
+        } else if (current != null) {
+            current.setGrainSeed(seed)
+            val nextBackground = if (seed != null) current else null
+            if (background !== nextBackground) background = nextBackground
+        }
     }
     private fun bindClose(value:NativeActionSheetStyle,dismiss:()->Unit) {
         closeIcon.setColor(value.palette.onSurfaceVariant)
@@ -255,25 +269,25 @@ internal class NativeSheetContent(
     }
     override fun onMeasure(widthMeasureSpec:Int,heightMeasureSpec:Int) {
         val width=MeasureSpec.getSize(widthMeasureSpec)
-        val pad=(24f*density).roundToInt()
+        val pad=(style.recipe.horizontalPaddingDp*density).roundToInt()
         val inner=max(0,width-pad*2)
         val bounded=MeasureSpec.getMode(heightMeasureSpec)!=MeasureSpec.UNSPECIFIED
         val maximum=if(bounded)MeasureSpec.getSize(heightMeasureSpec)else Int.MAX_VALUE
-        val bottom=min(pad,maximum)
+        val bottom=min((style.recipe.bottomPaddingDp*density).roundToInt(),maximum)
         var used=0
         var remaining=max(0,maximum-bottom)
         fun childHeight()=if(bounded)sheetSurfaceAtMost(remaining)else MeasureSpec.makeMeasureSpec(0,MeasureSpec.UNSPECIFIED)
         header.measure(sheetSurfaceExact(inner),childHeight());used+=header.measuredHeight;remaining-=header.measuredHeight
-        val gap12=min((12f*density).roundToInt(),remaining);used+=gap12;remaining-=gap12
+        val bodyGap=min((style.recipe.bodyGapDp*density).roundToInt(),remaining);used+=bodyGap;remaining-=bodyGap
         topBody=used
         body?.let {it.measure(sheetSurfaceExact(inner),childHeight());used+=it.measuredHeight;remaining-=it.measuredHeight}
-        val gap20=min((20f*density).roundToInt(),remaining);used+=gap20;remaining-=gap20
+        val actionsGap=min((style.recipe.actionsGapDp*density).roundToInt(),remaining);used+=actionsGap;remaining-=actionsGap
         topActions=used
         actions?.let {it.measure(sheetSurfaceExact(inner),childHeight());used+=it.measuredHeight}
         setMeasuredDimension(width,resolveSize(used+bottom,heightMeasureSpec))
     }
     override fun onLayout(changed:Boolean,l:Int,t:Int,r:Int,b:Int) {
-        val pad=(24f*density).roundToInt()
+        val pad=(style.recipe.horizontalPaddingDp*density).roundToInt()
         header.layout(pad,0,pad+header.measuredWidth,header.measuredHeight)
         body?.let {it.layout(pad,topBody,pad+it.measuredWidth,topBody+it.measuredHeight)}
         actions?.let {it.layout(pad,topActions,pad+it.measuredWidth,topActions+it.measuredHeight)}
