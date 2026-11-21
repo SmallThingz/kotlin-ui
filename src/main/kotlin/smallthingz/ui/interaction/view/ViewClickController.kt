@@ -368,8 +368,12 @@ class ViewClickController(
             KeyEvent.ACTION_UP -> {
                 val gesture = keys.remove(keyCode) ?: return false
                 gesture.longPress?.let(main::removeCallbacks)
-                enqueue(gesture.generation) { deliverRelease(gesture.press) }
-                if (!gesture.longTriggered) binding?.onClick?.invoke()
+                if (event.isCanceled) {
+                    enqueue(gesture.generation) { deliverCancel(gesture.press) }
+                } else {
+                    enqueue(gesture.generation) { deliverRelease(gesture.press) }
+                    if (!gesture.longTriggered) binding?.onClick?.invoke()
+                }
                 true
             }
             else -> false
