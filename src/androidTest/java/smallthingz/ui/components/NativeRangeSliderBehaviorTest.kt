@@ -8,6 +8,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
@@ -26,7 +27,7 @@ class NativeRangeSliderBehaviorTest {
     private val palette = ControlPalette(-1, -1, 0xff202020.toInt(), 0xff606060.toInt(),
         0xff3458a0.toInt(), -1, 0xff3458a0.toInt(), 0xffaaaaaa.toInt())
 
-    private class Trace(val slider: NativeRangeSlider, val gap: Int) {
+    private class Trace(val slider: NativeRangeSlider, val gap: Int, val min: Int, val last: Int, val step: Int) {
         val previews = mutableListOf<Pair<Int, Int>>()
         val commits = mutableListOf<Pair<Int, Int>>()
         val values get() = slider.lower to slider.upper
@@ -38,15 +39,17 @@ class NativeRangeSliderBehaviorTest {
 
         private fun record(events: MutableList<Pair<Int, Int>>, lower: Int, upper: Int) {
             assertEquals(values, lower to upper)
-            assertTrue(lower >= 3 && upper <= 43 && upper - lower >= gap)
-            assertEquals(0, (lower - 3) % 4)
-            assertEquals(0, (upper - 3) % 4)
+            assertTrue(lower >= min && upper <= last && upper - lower >= gap)
+            assertEquals(0, (lower - min) % step)
+            assertEquals(0, (upper - min) % step)
             events.add(lower to upper)
         }
 
-        fun touch(action: Int, downTime: Long, fraction: Float) {
+        fun touch(action: Int, downTime: Long, fraction: Float) = touchAt(action, downTime, slider.width * fraction)
+
+        fun touchAt(action: Int, downTime: Long, x: Float) {
             val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action,
-                slider.width * fraction, slider.height * .5f, 0)
+                x, slider.height * .5f, 0)
             try { slider.dispatchTouchEvent(event) } finally { event.recycle() }
         }
     }
@@ -60,12 +63,13 @@ class NativeRangeSliderBehaviorTest {
         }
     }
 
-    private fun withSlider(lower: Int = 11, upper: Int = 35, minGap: Int = 5, test: Trace.() -> Unit) =
+    private fun withSlider(lower: Int = 11, upper: Int = 35, minGap: Int = 5,
+        min: Int = 3, max: Int = 46, step: Int = 4, test: Trace.() -> Unit) =
         withActivity { activity ->
             val instrumentation = InstrumentationRegistry.getInstrumentation()
             lateinit var slider: NativeRangeSlider
             instrumentation.runOnMainSync {
-                slider = NativeRangeSlider(activity, palette, 3, 46, 4, lower, upper,
+                slider = NativeRangeSlider(activity, palette, min, max, step, lower, upper,
                     "Lower", "Upper", minGap = minGap)
                 slider.layoutDirection = View.LAYOUT_DIRECTION_LTR
                 activity.setContentView(slider, android.view.ViewGroup.LayoutParams(-1,
@@ -74,7 +78,7 @@ class NativeRangeSliderBehaviorTest {
             instrumentation.waitForIdleSync()
             instrumentation.runOnMainSync {
                 assertTrue(slider.isLaidOut)
-                Trace(slider, ((minGap + 3) / 4) * 4).test()
+                Trace(slider, ((minGap + step - 1) / step) * step, min, min + (max - min) / step * step, step).test()
             }
         }
 
@@ -341,6 +345,112 @@ class NativeRangeSliderBehaviorTest {
             scroll(0, forward, max - 4, max - 3)
             scroll(1, forward, max - 4, max - 2)
             scroll(1, backward, max - 4, max - 3)
+        }
+    }
+
+    @Test fun coincidentThumbBoundsNavigateToPeerInBothDirections() = withActivity { activity ->
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val midpoint = 500_100
+        var touchMode = false
+        instrumentation.runOnMainSync { touchMode = activity.window.decorView.isInTouchMode }
+        try {
+            instrumentation.setInTouchMode(false)
+            for (rtl in listOf(false, true)) for (gap in 0..1) {
+                var callbacks = 0
+                lateinit var slider: NativeRangeSlider
+                instrumentation.runOnMainSync {
+                    slider = NativeRangeSlider(activity, palette, 0, 1_000_000, 1,
+                        midpoint, midpoint + gap, "Lower", "Upper", minGap = gap)
+                    slider.layoutDirection = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+                    activity.setContentView(slider)
+                    slider.onRangePreview = { _, _ -> callbacks++ }
+                    slider.onRangeCommitted = { _, _ -> callbacks++ }
+                }
+                instrumentation.waitForIdleSync()
+                instrumentation.runOnMainSync {
+                    val lower = slider.getChildAt(0)
+                    val upper = slider.getChildAt(1)
+                    assertTrue(lower.width > 0)
+                    assertEquals(lower.left, upper.left)
+                    assertEquals(lower.right, upper.right)
+                    assertTrue(lower.requestFocus())
+                }
+                for (destination in listOf(1, 0)) {
+                    val right = (destination == 1) != rtl
+                    instrumentation.sendKeyDownUpSync(if (right) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT)
+                    instrumentation.waitForIdleSync()
+                    instrumentation.runOnMainSync {
+                        assertSame(slider.getChildAt(destination), activity.currentFocus)
+                        assertEquals(midpoint to (midpoint + gap), slider.lower to slider.upper)
+                        assertEquals(0, callbacks)
+                    }
+                }
+            }
+        } finally { instrumentation.setInTouchMode(touchMode) }
+    }
+
+    @Test fun denseGridIgnoresThumbReleaseJitterButAcceptsTrackTapsAndDrags() =
+        withSlider(250_000, 750_000, 0, min = 0, max = 1_000_000, step = 1) {
+            fun center() = slider.getChildAt(0).let { (it.left + it.right) / 2f }
+            val start = center()
+            val slop = ViewConfiguration.get(slider.context).scaledTouchSlop
+            for (offset in listOf(0, 1, slop - 1)) {
+                val time = SystemClock.uptimeMillis()
+                touchAt(MotionEvent.ACTION_DOWN, time, start)
+                touchAt(MotionEvent.ACTION_UP, time, start + offset)
+                assertEquals(250_000 to 750_000, values)
+                assertTrue(previews.isEmpty())
+                assertTrue(commits.isEmpty())
+            }
+            val tapX = slider.width * .4f
+            val tap = SystemClock.uptimeMillis()
+            touchAt(MotionEvent.ACTION_DOWN, tap, tapX)
+            touchAt(MotionEvent.ACTION_UP, tap, tapX)
+            assertTrue(slider.lower in 250_001 until 500_000)
+            assertEquals(750_000, slider.upper)
+            val tapped = values
+            assertEquals(listOf(tapped), commits)
+            val drag = SystemClock.uptimeMillis()
+            touchAt(MotionEvent.ACTION_DOWN, drag, center())
+            touchAt(MotionEvent.ACTION_MOVE, drag, start)
+            val dragged = values
+            assertTrue(dragged.first < tapped.first)
+            assertEquals(tapped.second, dragged.second)
+            assertEquals(dragged, previews.last())
+            assertEquals(listOf(tapped), commits)
+            touchAt(MotionEvent.ACTION_UP, drag, start)
+            assertEquals(listOf(tapped, dragged), commits)
+        }
+
+    private enum class Change { STYLE, WIDTH, PADDING, DIRECTION, PALETTE }
+
+    @Test fun stationaryReleaseAfterTrackGeometryChangesRollsBackButPalettePreservesDrag() {
+        for (change in Change.values()) withSlider {
+            val start = slider.getChildAt(0).let { (it.left + it.right) / 2f }
+            val end = slider.width * .4f
+            val time = SystemClock.uptimeMillis()
+            touchAt(MotionEvent.ACTION_DOWN, time, start)
+            touchAt(MotionEvent.ACTION_MOVE, time, end)
+            val draft = values
+            assertTrue(draft.first > 11)
+            assertEquals(draft, previews.last())
+            assertTrue(commits.isEmpty())
+            when (change) {
+                Change.STYLE -> slider.applyStyle(NativeSliderStyle(horizontalPaddingDp = 12f))
+                Change.WIDTH -> slider.layout(slider.left, slider.top, slider.right - slider.width / 4, slider.bottom)
+                Change.PADDING -> slider.setPadding(slider.width / 8, 0, 0, 0)
+                Change.DIRECTION -> slider.layoutDirection = View.LAYOUT_DIRECTION_RTL
+                Change.PALETTE -> slider.applyPalette(palette.copy(accent = 0xffb34830.toInt()))
+            }
+            touchAt(MotionEvent.ACTION_UP, time, end)
+            if (change == Change.PALETTE) {
+                assertEquals(draft, values)
+                assertEquals(listOf(draft), commits)
+            } else {
+                assertEquals(change.name, 11 to 35, values)
+                assertEquals(change.name, values, previews.last())
+                assertTrue(change.name, commits.isEmpty())
+            }
         }
     }
 }
