@@ -155,6 +155,14 @@ growth, constrained full-width title centering, RTL placement and content clippi
 `NativeTopBarInsets.remaining` computes bars/cutout union minus ancestor consumption;
 the window owner applies those remaining insets once.
 
+Use `NativeToolbarContentAction` for an app mark or other decorative View that
+fills the action bounds. Pass `inputRoot = null` and
+`standaloneAccessibility = true` in an ordinary Android hierarchy, supply a
+localized description, and call `bindAction` with the current action. Android
+accessibility exposes one named button across the allocated bounds. Toolbars
+with source-window accessibility can bind their geometry and description child
+through `bindAccessibility`.
+
 `NativeTopBarAction` owns the rounded 46dp action, optional 48dp wrapper, described
 23dp icon semantics, source-node accessibility bindings and phase-input endpoint.
 A caller supplies `iconPainter`; application glyphs and branding stay outside the

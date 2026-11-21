@@ -124,11 +124,17 @@ class MergedRowAccessibility(
     private var sourceGeometryWasBound = false
     private var standaloneExposure: (() -> Boolean)? = null
     private var standaloneDescription: (() -> CharSequence?)? = null
+    private var standaloneRolePresent: Boolean? = null
 
     /** Native bounds are available only until a source window first takes over. */
-    internal fun enableStandaloneAccessibility(exposed: () -> Boolean, description: () -> CharSequence?) {
+    internal fun enableStandaloneAccessibility(
+        exposed: () -> Boolean,
+        rolePresent: Boolean? = null,
+        description: () -> CharSequence?,
+    ) {
         standaloneExposure = exposed
         standaloneDescription = description
+        standaloneRolePresent = rolePresent
     }
 
     fun sourceOrderedChildren(): List<View> = sourceState().orderedChildren
@@ -193,7 +199,7 @@ class MergedRowAccessibility(
             return NativeMergedRowAccessibilitySnapshot(present, !present, present, state.enabled,
                 state.checked, state.clickLabel, state.standaloneChildren, 0, bounds, bounds, state.selected,
                 standaloneDescription?.invoke(), state.clickable, state.longClickable, state.longClickLabel,
-                state.rolePresent, state.stateDescription, state.readOnlyScreenReaderFocusable)
+                standaloneRolePresent ?: state.rolePresent, state.stateDescription, state.readOnlyScreenReaderFocusable)
         }
         val localBounds = (host as? NativeMergedRowAccessibilityHost)?.accessibilityBoundsInView
             ?: ComposeRect(0f, 0f, host.width.toFloat(), host.height.toFloat())

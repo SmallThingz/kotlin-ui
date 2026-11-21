@@ -36,15 +36,21 @@ import smallthingz.ui.text.view.PlainTextAccessibilityWindowScope
 import smallthingz.ui.text.view.bindActionDescriptionAccessibility
 import kotlin.math.min
 
-/** A round action around caller-owned content, with one retained semantics and input owner. */
-open class NativeToolbarContentAction(
+/**
+ * A round action around caller-owned decorative content.
+ *
+ * Enable [standaloneAccessibility] for a single named button in an ordinary Android hierarchy.
+ * A host that binds source accessibility keeps ownership of the description child and geometry.
+ */
+open class NativeToolbarContentAction @JvmOverloads constructor(
     context: Context,
     private val content: View,
     description: String,
-    inputRoot: View,
+    inputRoot: View?,
     private var density: Float,
     private var minimumTargetDp: Float,
     initialIndicationColor: Int,
+    private val standaloneAccessibility: Boolean = false,
 ) : ViewGroup(context), NativeClickPhaseHost, NativePointerLayerShape,
     NativeMergedRowAccessibilityHost, NativeTopBarHitTarget {
     override fun hitBounds() = NativeTopBarHitBounds(left.toFloat(), top.toFloat(), width.toFloat(), height.toFloat(), min(width, height) / 2f)
@@ -55,13 +61,13 @@ open class NativeToolbarContentAction(
         this, NativeMergedRowRole.BUTTON,
         sourceState = { NativeMergedRowAccessibilityState(isEnabled, null, null,
             accessibilityChildren, rolePresent = false) },
-        invokeSourceClick = { click?.let { it(); true } ?: false },
+        invokeSourceClick = { currentClick()?.let { it(); true } ?: false },
     )
     private val softwareClip = Path()
     private var click: (() -> Unit)? = null
     private val indication = RowIndication.install(this, initialIndicationColor, { readCachedAnimatorDurationScale(context) })
     private val controller = ViewClickController(this, object : NativeClickEnvironment {
-        override val nativeInputRoot: View = inputRoot
+        override val nativeInputRoot: View? = inputRoot
         override val minimumTouchWidthPx get() = minimumTargetDp * density
         override val minimumTouchHeightPx get() = minimumTouchWidthPx
         override fun admitDown(event: MotionEvent) = roundedGroupGeometry(width.toFloat(), height.toFloat(),
@@ -75,13 +81,19 @@ open class NativeToolbarContentAction(
         roundedGroupContains(width.toFloat(), height.toFloat(), density,
             min(width, height) / (2f * density), x, y)
     init {
-        isClickable = true
-        isFocusable = true
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         accessibilityDelegate = mergedRowAccessibility
+        if (standaloneAccessibility) {
+            descendantFocusability = FOCUS_BLOCK_DESCENDANTS
+            mergedRowAccessibility.enableStandaloneAccessibility({ click != null }, rolePresent = true) {
+                descriptionView.contentDescription
+            }
+        }
         addView(content)
         addView(descriptionView)
-        setOnClickListener { click?.invoke() }
+        setOnClickListener { currentClick()?.invoke() }
+        isClickable = !standaloneAccessibility
+        isFocusable = !standaloneAccessibility
         clipToOutline = true
         outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) {
@@ -94,9 +106,33 @@ open class NativeToolbarContentAction(
         this.density = density
         this.minimumTargetDp = minimumTargetDp
         click = callback
+        if (standaloneAccessibility) {
+            isClickable = true
+            isFocusable = isEnabled
+        }
         indication.updateColor(indicationColor)
-        controller.bind(NativeClickBinding(identity, true, onClick = { performClick() }))
+        bindInput()
     }
+
+    fun setDescription(value: String) { descriptionView.contentDescription = value }
+
+    override fun setEnabled(enabled: Boolean) {
+        if (isEnabled == enabled) return
+        super.setEnabled(enabled)
+        if (click != null) {
+            if (standaloneAccessibility) isFocusable = enabled
+            bindInput()
+        }
+    }
+
+    private fun bindInput() {
+        controller.bind(if (click == null) null else NativeClickBinding(identity, isEnabled, onClick = { performClick() }))
+    }
+
+    private fun currentClick(): (() -> Unit)? = click?.takeIf { isEnabled && isAttachedToWindow && isShown }
+
+    override fun performClick(): Boolean = currentClick() != null && super.performClick()
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         content.measure(widthMeasureSpec, heightMeasureSpec)
         descriptionView.measure(contentActionExact(content.measuredWidth), contentActionExact(content.measuredHeight))
@@ -140,7 +176,7 @@ open class NativeToolbarContentAction(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         controller.attached()
-        controller.bind(if (click == null) null else NativeClickBinding(identity, isEnabled, onClick = { performClick() }))
+        bindInput()
         controller.focusChanged(isFocused)
     }
     override fun onDetachedFromWindow() { controller.detached(); super.onDetachedFromWindow() }
