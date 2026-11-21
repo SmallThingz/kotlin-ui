@@ -1,15 +1,18 @@
 package smallthingz.ui.components
 
 import android.app.Activity
+import android.app.UiAutomation
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Rect
 import android.os.SystemClock
 import android.view.Gravity
+import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -133,18 +136,14 @@ class NativeTopBarAccessibilityIntegrationTest {
 
             assertTrue(action.requestFocusFromTouch())
             assertTrue(checkNotNull(action.createAccessibilityNodeInfo()).isFocused)
-            assertFalse(mark.isFocused)
+            assertFalse(mark.hasFocus())
             assertTrue(action.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
             assertEquals(1, clicks)
             for (eventAction in intArrayOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
                 assertTrue(action.dispatchKeyEvent(KeyEvent(eventAction, KeyEvent.KEYCODE_DPAD_CENTER)))
             }
             assertEquals(2, clicks)
-            val time = SystemClock.uptimeMillis()
-            for (eventAction in intArrayOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
-                val event = MotionEvent.obtain(time, time, eventAction, size / 5f, size / 2f, 0)
-                try { assertTrue(action.dispatchTouchEvent(event)) } finally { event.recycle() }
-            }
+            dispatchContentTap(root, action)
             assertEquals(3, clicks)
 
             action.setDescription("Info")
@@ -173,6 +172,77 @@ class NativeTopBarAccessibilityIntegrationTest {
             assertEquals(3, clicks)
         }
 
+    @Test fun standaloneContentActionOwnsParentDispatchedTouchAndHover() =
+        withAttachedView(::contentToolbar) { (root, action, mark, density) ->
+            var clicks = 0
+            var childTouches = 0
+            var childHovers = 0
+            val decoration = (mark as ViewGroup).getChildAt(0)
+            decoration.setOnTouchListener { _, _ -> childTouches++; true }
+            decoration.setOnHoverListener { _, _ -> childHovers++; true }
+            action.bindAction(density, 48f, Color.BLACK) { clicks++ }
+
+            assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS, mark.importantForAccessibility)
+            assertNull(action.getChildAt(1).createAccessibilityNodeInfo())
+            dispatchContentTap(root, action)
+            assertEquals(1, clicks)
+            action.isEnabled = false
+            dispatchContentTap(root, action)
+            assertEquals(1, clicks)
+            assertEquals(0, childTouches)
+
+            action.isEnabled = true
+            val time = SystemClock.uptimeMillis()
+            for (kind in intArrayOf(MotionEvent.ACTION_HOVER_ENTER, MotionEvent.ACTION_HOVER_EXIT)) {
+                val hover = MotionEvent.obtain(time, time, kind,
+                    action.left + action.width / 2f, action.top + action.height / 2f, 0)
+                try {
+                    hover.source = InputDevice.SOURCE_TOUCHSCREEN
+                    root.dispatchGenericMotionEvent(hover)
+                } finally {
+                    hover.recycle()
+                }
+            }
+            assertEquals(0, childHovers)
+            assertNull(action.getChildAt(1).createAccessibilityNodeInfo())
+        }
+
+    @Test fun enabledContentRelabelPublishesHostAccessibilityChange() =
+        withAttachedView(::contentToolbar, runOnMainThread = false) { (_, action, _, density) ->
+            val instrumentation = InstrumentationRegistry.getInstrumentation()
+            val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+            instrumentation.runOnMainSync {
+                action.bindAction(density, 48f, Color.BLACK) {}
+                assertEquals("Ueber Control", checkNotNull(action.createAccessibilityNodeInfo()).contentDescription.toString())
+            }
+            automation.waitForIdle(100, 5_000)
+            val changed = automation.executeAndWaitForEvent(
+                { instrumentation.runOnMainSync { action.setDescription("Control information") } },
+                { event ->
+                    if (event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED ||
+                        (event.contentChangeTypes and AccessibilityEvent.CONTENT_CHANGE_TYPE_CONTENT_DESCRIPTION) == 0) {
+                        false
+                    } else {
+                        val source = event.source
+                        try {
+                            source != null && source.className.toString() == "android.widget.Button" &&
+                                source.contentDescription?.toString() == "Control information"
+                        } finally {
+                            source?.recycle()
+                        }
+                    }
+                },
+                5_000,
+            )
+            changed.recycle()
+            instrumentation.runOnMainSync {
+                val node = checkNotNull(action.createAccessibilityNodeInfo())
+                assertTrue(node.isEnabled)
+                assertEquals("Control information", node.contentDescription.toString())
+                assertTrue(node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK })
+            }
+        }
+
     @Test fun scopedContentActionRetainsItsDescriptionChildAfterStandaloneTakeover() =
         withAttachedView(::contentToolbar) { (root, action, _, density) ->
             action.bindAction(density, 48f, Color.BLACK) {}
@@ -184,19 +254,23 @@ class NativeTopBarAccessibilityIntegrationTest {
                 NativeTextSemanticsClip.Unclipped
             })
             val bounds = Rect(10, 20, 80, 90)
-            val lease = action.bindAccessibility(cursor, geometry) {
-                NativeSourceAccessibilityNode(true, false, true, bounds)
-            }
+            val sourceNode = { _: View -> NativeSourceAccessibilityNode(true, false, true, bounds) }
+            val previous = action.bindAccessibility(cursor, geometry, sourceNode)
+            val lease = action.bindAccessibility(cursor, geometry, sourceNode)
+            val description = action.getChildAt(1)
             try {
+                previous.close()
                 val source = checkNotNull(action.createAccessibilityNodeInfo())
                 assertEquals("android.view.View", source.className.toString())
                 assertNull(source.contentDescription)
                 assertEquals(bounds, Rect().also(source::getBoundsInScreen))
-                val child = nativeAccessibilityChildren(action).single()
-                assertEquals("Ueber Control", checkNotNull(child.createAccessibilityNodeInfo()).contentDescription.toString())
+                assertSame(description, nativeAccessibilityChildren(action).single())
+                assertEquals("Ueber Control", checkNotNull(description.createAccessibilityNodeInfo()).contentDescription.toString())
             } finally {
                 lease.close()
             }
+            assertNull(description.createAccessibilityNodeInfo())
+            assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS, description.importantForAccessibility)
             assertNull(action.createAccessibilityNodeInfo())
             assertFalse(action.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
         }
@@ -214,9 +288,13 @@ class NativeTopBarAccessibilityIntegrationTest {
         arrayListOf<View>().also(parent::addChildrenForAccessibility)
 
     private fun withToolbar(rolePresent: Boolean = false, test: (Fixture) -> Unit) =
-        withAttachedView({ toolbar(it, rolePresent) }, test)
+        withAttachedView({ toolbar(it, rolePresent) }, test = test)
 
-    private fun <T : Any> withAttachedView(build: (Activity) -> T, test: (T) -> Unit) {
+    private fun <T : Any> withAttachedView(
+        build: (Activity) -> T,
+        runOnMainThread: Boolean = true,
+        test: (T) -> Unit,
+    ) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -224,7 +302,7 @@ class NativeTopBarAccessibilityIntegrationTest {
             lateinit var fixture: T
             instrumentation.runOnMainSync { fixture = build(activity) }
             instrumentation.waitForIdleSync()
-            instrumentation.runOnMainSync { test(fixture) }
+            if (runOnMainThread) instrumentation.runOnMainSync { test(fixture) } else test(fixture)
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
         }
@@ -233,9 +311,12 @@ class NativeTopBarAccessibilityIntegrationTest {
     private fun contentToolbar(activity: Activity): ContentFixture {
         val density = activity.resources.displayMetrics.density
         val root = FrameLayout(activity)
-        val mark = View(activity).apply {
+        val mark = FrameLayout(activity).apply {
             contentDescription = "Decorative mark"
-            isFocusableInTouchMode = true
+            addView(View(activity).apply {
+                contentDescription = "Decorative detail"
+                isFocusableInTouchMode = true
+            }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         }
         val action = NativeToolbarContentAction(activity, mark, "Ueber Control", inputRoot = null,
             density = density, minimumTargetDp = 48f, initialIndicationColor = Color.BLACK, standaloneAccessibility = true)
@@ -243,6 +324,19 @@ class NativeTopBarAccessibilityIntegrationTest {
         root.addView(action, FrameLayout.LayoutParams(size, size, Gravity.CENTER))
         activity.setContentView(root)
         return ContentFixture(root, action, mark, density)
+    }
+
+    private fun dispatchContentTap(root: FrameLayout, action: NativeToolbarContentAction) {
+        val time = SystemClock.uptimeMillis()
+        for (kind in intArrayOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+            val event = MotionEvent.obtain(time, time, kind,
+                action.left + action.width / 5f, action.top + action.height / 2f, 0)
+            try {
+                assertTrue(root.dispatchTouchEvent(event))
+            } finally {
+                event.recycle()
+            }
+        }
     }
 
     private fun toolbar(activity: Activity, rolePresent: Boolean): Fixture {

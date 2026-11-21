@@ -126,6 +126,11 @@ class MergedRowAccessibility(
     private var standaloneDescription: (() -> CharSequence?)? = null
     private var standaloneRolePresent: Boolean? = null
 
+    internal val isStandaloneAccessibilityActive: Boolean
+        get() = standaloneExposure != null && !sourceGeometryWasBound
+
+    internal val hasSourceGeometry: Boolean get() = geometryToken != null
+
     /** Native bounds are available only until a source window first takes over. */
     internal fun enableStandaloneAccessibility(
         exposed: () -> Boolean,

@@ -6,6 +6,7 @@ import android.graphics.Outline
 import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
+import android.os.Bundle
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -55,7 +56,13 @@ open class NativeToolbarContentAction @JvmOverloads constructor(
     NativeMergedRowAccessibilityHost, NativeTopBarHitTarget {
     override fun hitBounds() = NativeTopBarHitBounds(left.toFloat(), top.toFloat(), width.toFloat(), height.toFloat(), min(width, height) / 2f)
     private val identity = Any()
-    private val descriptionView = NativeActionDescriptionView(context, description)
+    private val descriptionView = object : NativeActionDescriptionView(context, description) {
+        override fun createAccessibilityNodeInfo(): AccessibilityNodeInfo? =
+            if (exposesScopedDescription()) super.createAccessibilityNodeInfo() else null
+
+        override fun performAccessibilityAction(action: Int, args: Bundle?): Boolean =
+            exposesScopedDescription() && super.performAccessibilityAction(action, args)
+    }
     private val accessibilityChildren = listOf(descriptionView)
     override val mergedRowAccessibility = MergedRowAccessibility(
         this, NativeMergedRowRole.BUTTON,
@@ -85,8 +92,11 @@ open class NativeToolbarContentAction @JvmOverloads constructor(
         accessibilityDelegate = mergedRowAccessibility
         if (standaloneAccessibility) {
             descendantFocusability = FOCUS_BLOCK_DESCENDANTS
+            content.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            updateDescriptionImportance()
+            contentDescription = description
             mergedRowAccessibility.enableStandaloneAccessibility({ click != null }, rolePresent = true) {
-                descriptionView.contentDescription
+                contentDescription
             }
         }
         addView(content)
@@ -114,7 +124,21 @@ open class NativeToolbarContentAction @JvmOverloads constructor(
         bindInput()
     }
 
-    fun setDescription(value: String) { descriptionView.contentDescription = value }
+    fun setDescription(value: String) {
+        descriptionView.contentDescription = value
+        if (mergedRowAccessibility.isStandaloneAccessibilityActive) contentDescription = value
+    }
+
+    private fun exposesScopedDescription(): Boolean =
+        !standaloneAccessibility || mergedRowAccessibility.hasSourceGeometry
+
+    private fun updateDescriptionImportance() {
+        descriptionView.importantForAccessibility = if (exposesScopedDescription()) {
+            IMPORTANT_FOR_ACCESSIBILITY_YES
+        } else {
+            IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        }
+    }
 
     override fun setEnabled(enabled: Boolean) {
         if (isEnabled == enabled) return
@@ -143,8 +167,21 @@ open class NativeToolbarContentAction @JvmOverloads constructor(
         descriptionView.layout(0, 0, width, height)
     }
     fun bindAccessibility(cursor: PlainTextAccessibilityWindowScope,
-        geometry: NativePlainTextViewGeometry, sourceNode: (View) -> NativeSourceAccessibilityNode): AutoCloseable =
-        bindActionDescriptionAccessibility(this, mergedRowAccessibility, descriptionView, cursor, geometry, sourceNode)
+        geometry: NativePlainTextViewGeometry, sourceNode: (View) -> NativeSourceAccessibilityNode): AutoCloseable {
+        val lease = bindActionDescriptionAccessibility(
+            this, mergedRowAccessibility, descriptionView, cursor, geometry, sourceNode,
+        )
+        if (!standaloneAccessibility) return lease
+        contentDescription = null
+        updateDescriptionImportance()
+        return AutoCloseable {
+            try {
+                lease.close()
+            } finally {
+                updateDescriptionImportance()
+            }
+        }
+    }
     override fun addChildrenForAccessibility(outChildren: ArrayList<View>) =
         mergedRowAccessibility.addChildrenForAccessibility(outChildren)
     override fun createAccessibilityNodeInfo(): AccessibilityNodeInfo? =
@@ -162,6 +199,12 @@ open class NativeToolbarContentAction @JvmOverloads constructor(
             finally { canvas.restoreToCount(checkpoint) }
         }
     }
+    override fun onInterceptTouchEvent(event: MotionEvent): Boolean =
+        standaloneAccessibility || super.onInterceptTouchEvent(event)
+
+    override fun onInterceptHoverEvent(event: MotionEvent): Boolean =
+        !exposesScopedDescription() || super.onInterceptHoverEvent(event)
+
     override fun onTouchEvent(event: MotionEvent) = controller.touch(event)
     override fun onKeyDown(code: Int, event: KeyEvent): Boolean =
         if (isNativeClickActivationKey(code)) controller.key(event) else super.onKeyDown(code, event)
