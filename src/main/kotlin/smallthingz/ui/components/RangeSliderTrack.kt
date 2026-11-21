@@ -1,45 +1,30 @@
 package smallthingz.ui.components
 
 import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.RectF
-import androidx.core.graphics.ColorUtils
+import android.view.View
 import smallthingz.ui.controls.ControlPalette
 import kotlin.math.ceil
-import kotlin.math.roundToInt
 
 /** Draws the track and both thumbs in the caller's physical canvas coordinates. */
-internal class RangeSliderTrack(style: NativeSliderStyle, palette: ControlPalette, density: Float) {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val path = Path()
-    private val bounds = RectF()
-    private val radii = FloatArray(8)
-    private val trackRadius = style.trackHeightDp * density / 2f
-    private val insideRadius = (style.trackInsideCornerDp * density).coerceAtMost(trackRadius)
-    private val thumbHalfHeight = style.thumbHeightDp * density / 2f
-    private val thumbHalfWidth = style.thumbWidthDp * density / 2f
-    private val pressedThumbHalfWidth = style.pressedThumbWidthDp * density / 2f
-    private val thumbGap = style.thumbTrackGapDp * density
-    private val steps = style.steps
-    private val tickRadius = style.tickSizeDp * density / 2f
-    private val stopRadius = if (style.showStopIndicator) style.stopIndicatorSizeDp * density / 2f else 0f
+internal class RangeSliderTrack(
+    private val owner: View,
+    private var style: NativeSliderStyle,
+    palette: ControlPalette,
+    grid: RangeSliderGrid,
+) {
+    private val intervals = grid.intervals
+    private val paint = SliderPaint(owner, palette, style.colors)
 
-    private val colors = style.colors
-    private val mutedInk = ColorUtils.setAlphaComponent(palette.content, (.38f * 255).roundToInt())
-    private val faintInk = ColorUtils.setAlphaComponent(palette.content, (.12f * 255).roundToInt())
-    private val activeTrack = colors.activeTrackColor ?: palette.accent
-    private val inactiveTrack = colors.inactiveTrackColor
-        ?: ColorUtils.compositeColors(ColorUtils.setAlphaComponent(Color.BLACK, (.18f * 255).roundToInt()), palette.selection)
-    private val activeTick = colors.activeTickColor ?: colors.inactiveTrackColor ?: palette.selection
-    private val inactiveTick = colors.inactiveTickColor ?: activeTrack
-    private val thumb = colors.thumbColor ?: palette.accent
-    private val disabledActiveTrack = colors.disabledActiveTrackColor ?: mutedInk
-    private val disabledInactiveTrack = colors.disabledInactiveTrackColor ?: faintInk
-    private val disabledActiveTick = colors.disabledActiveTickColor ?: faintInk
-    private val disabledInactiveTick = colors.disabledInactiveTickColor ?: mutedInk
-    private val disabledThumb = colors.disabledThumbColor ?: ColorUtils.compositeColors(mutedInk, palette.surface)
+    fun applyPalette(palette: ControlPalette) = paint.applyPalette(palette)
+
+    fun applyStyle(style: NativeSliderStyle) {
+        if (this.style == style) return
+        this.style = style
+        paint.applyColors(style.colors)
+        owner.invalidate()
+    }
+
+    fun onEnabledChanged() = paint.onEnabledChanged()
 
     fun draw(
         canvas: Canvas,
@@ -48,11 +33,21 @@ internal class RangeSliderTrack(style: NativeSliderStyle, palette: ControlPalett
         centerY: Float,
         lowerX: Float,
         upperX: Float,
-        enabled: Boolean,
         lowerPressed: Boolean,
         upperPressed: Boolean,
     ) {
         if (right <= left) return
+        val density = owner.resources.displayMetrics.density
+        val enabled = owner.isEnabled
+        val trackHeight = style.trackHeightDp * density
+        val trackRadius = trackHeight / 2f
+        val insideRadius = style.trackInsideCornerDp * density
+        val thumbHalfHeight = style.thumbHeightDp * density / 2f
+        val thumbHalfWidth = style.thumbWidthDp * density / 2f
+        val pressedThumbHalfWidth = style.pressedThumbWidthDp * density / 2f
+        val thumbGap = style.thumbTrackGapDp * density
+        val tickRadius = style.tickSizeDp * density / 2f
+        val stopRadius = if (style.showStopIndicator) style.stopIndicatorSizeDp * density / 2f else 0f
         val lowerHalfWidth = if (enabled && lowerPressed) pressedThumbHalfWidth else thumbHalfWidth
         val upperHalfWidth = if (enabled && upperPressed) pressedThumbHalfWidth else thumbHalfWidth
         val lowerGap = if (thumbGap > 0f) thumbGap + lowerHalfWidth else 0f
@@ -68,78 +63,48 @@ internal class RangeSliderTrack(style: NativeSliderStyle, palette: ControlPalett
         val activeEnd = (lastX - lastGap).coerceIn(left, right)
         val rightStart = (lastX + lastGap).coerceIn(left, right)
 
-        val activeColor = if (enabled) activeTrack else disabledActiveTrack
-        val inactiveColor = if (enabled) inactiveTrack else disabledInactiveTrack
-        if (trackRadius > 0f) {
-            drawSegment(canvas, left, leftEnd, centerY, trackRadius, insideRadius, inactiveColor)
-            drawSegment(canvas, activeStart, activeEnd, centerY, insideRadius, insideRadius, activeColor)
-            drawSegment(canvas, rightStart, right, centerY, insideRadius, trackRadius, inactiveColor)
+        if (trackHeight > 0f) {
+            paint.drawSegment(canvas, left, leftEnd, centerY, trackHeight, trackRadius, insideRadius,
+                paint.inactiveTrack)
+            paint.drawSegment(canvas, activeStart, activeEnd, centerY, trackHeight, insideRadius, insideRadius,
+                paint.activeTrack)
+            paint.drawSegment(canvas, rightStart, right, centerY, trackHeight, insideRadius, trackRadius,
+                paint.inactiveTrack)
 
-            if (steps > 0 && tickRadius > 0f) {
-                val intervals = steps + 1
+            if (intervals > 1L && tickRadius > 0f) {
                 val width = right - left
-                // Skip subpixel repetitions on dense grids while retaining their original spacing.
-                val stride = ceil(intervals.toDouble() / width.coerceAtLeast(1f)).toInt().coerceAtLeast(1)
-                val activeTickColor = if (enabled) activeTick else disabledActiveTick
-                val inactiveTickColor = if (enabled) inactiveTick else disabledInactiveTick
-                var index = 1
+                // Sample only actual grid indices, coalescing subpixel pins for very dense ranges.
+                val stride = ceil(intervals.toDouble() / width.coerceAtLeast(1f)).toLong().coerceAtLeast(1L)
+                val rtl = lowerX > upperX || (lowerX == upperX && owner.layoutDirection == View.LAYOUT_DIRECTION_RTL)
+                var index = (stride / 2L).coerceAtLeast(1L)
                 while (index < intervals) {
-                    val x = left + width * (index.toDouble() / intervals).toFloat()
+                    val fraction = index.toDouble() / intervals
+                    val x = (left + width * if (rtl) 1.0 - fraction else fraction).toFloat()
                     if (x > activeStart && x < activeEnd) {
-                        paint.color = activeTickColor
-                        canvas.drawCircle(x, centerY, tickRadius, paint)
+                        paint.drawDot(canvas, x, centerY, tickRadius, paint.activeTick)
                     } else if (x < leftEnd || x > rightStart) {
-                        paint.color = inactiveTickColor
-                        canvas.drawCircle(x, centerY, tickRadius, paint)
+                        paint.drawDot(canvas, x, centerY, tickRadius, paint.inactiveTick)
                     }
-                    if (intervals - index <= stride) break
                     index += stride
                 }
             }
 
             if (stopRadius > 0f) {
                 val inset = maxOf(trackRadius, stopRadius)
-                paint.color = activeColor
                 if (left + inset + stopRadius <= leftEnd) {
-                    canvas.drawCircle(left + inset, centerY, stopRadius, paint)
+                    paint.drawDot(canvas, left + inset, centerY, stopRadius, paint.activeTrack)
                 }
                 if (right - inset - stopRadius >= rightStart) {
-                    canvas.drawCircle(right - inset, centerY, stopRadius, paint)
+                    paint.drawDot(canvas, right - inset, centerY, stopRadius, paint.activeTrack)
                 }
             }
         }
 
-        paint.color = if (enabled) thumb else disabledThumb
         if (lowerX == upperX) {
-            drawThumb(canvas, lowerX, centerY, minOf(lowerHalfWidth, upperHalfWidth))
+            paint.drawThumb(canvas, lowerX, centerY, minOf(lowerHalfWidth, upperHalfWidth), thumbHalfHeight)
         } else {
-            drawThumb(canvas, lowerX, centerY, lowerHalfWidth)
-            drawThumb(canvas, upperX, centerY, upperHalfWidth)
+            paint.drawThumb(canvas, lowerX, centerY, lowerHalfWidth, thumbHalfHeight)
+            paint.drawThumb(canvas, upperX, centerY, upperHalfWidth, thumbHalfHeight)
         }
-    }
-
-    private fun drawSegment(
-        canvas: Canvas,
-        start: Float,
-        end: Float,
-        centerY: Float,
-        startRadius: Float,
-        endRadius: Float,
-        color: Int,
-    ) {
-        if (end <= start) return
-        radii.fill(startRadius, 0, 2)
-        radii.fill(endRadius, 2, 6)
-        radii.fill(startRadius, 6, 8)
-        bounds.set(start, centerY - trackRadius, end, centerY + trackRadius)
-        path.rewind()
-        path.addRoundRect(bounds, radii, Path.Direction.CW)
-        paint.color = color
-        canvas.drawPath(path, paint)
-    }
-
-    private fun drawThumb(canvas: Canvas, x: Float, centerY: Float, halfWidth: Float) {
-        bounds.set(x - halfWidth, centerY - thumbHalfHeight, x + halfWidth, centerY + thumbHalfHeight)
-        canvas.drawRoundRect(bounds, halfWidth, halfWidth, paint)
     }
 }

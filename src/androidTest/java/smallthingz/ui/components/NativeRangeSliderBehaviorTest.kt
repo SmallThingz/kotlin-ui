@@ -1,5 +1,6 @@
 package smallthingz.ui.components
 
+import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.os.SystemClock
@@ -7,13 +8,18 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.SeekBar
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.controls.ControlPalette
+import java.text.NumberFormat
 
 @RunWith(AndroidJUnit4::class)
 class NativeRangeSliderBehaviorTest {
@@ -45,11 +51,18 @@ class NativeRangeSliderBehaviorTest {
         }
     }
 
-    private fun withSlider(lower: Int = 11, upper: Int = 35, minGap: Int = 5, test: Trace.() -> Unit) {
+    private fun withActivity(test: (Activity) -> Unit) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        try {
+        try { test(activity) } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
+
+    private fun withSlider(lower: Int = 11, upper: Int = 35, minGap: Int = 5, test: Trace.() -> Unit) =
+        withActivity { activity ->
+            val instrumentation = InstrumentationRegistry.getInstrumentation()
             lateinit var slider: NativeRangeSlider
             instrumentation.runOnMainSync {
                 slider = NativeRangeSlider(activity, palette, 3, 46, 4, lower, upper,
@@ -63,10 +76,7 @@ class NativeRangeSliderBehaviorTest {
                 assertTrue(slider.isLaidOut)
                 Trace(slider, ((minGap + 3) / 4) * 4).test()
             }
-        } finally {
-            instrumentation.runOnMainSync { activity.finish() }
         }
-    }
 
     @Test fun constructorAndBindsSilentlyNormalizeOnTheReachableGrid() =
         withSlider(lower = 35, upper = 2) {
@@ -176,5 +186,161 @@ class NativeRangeSliderBehaviorTest {
         assertEquals(listOf(27 to 35, 27 to 43), commits)
         set(handles[1], 43f)
         assertEquals(2, commits.size)
+    }
+
+    private fun right(thumb: View, time: Long, action: Int, repeat: Int = 0, flags: Int = 0): Boolean {
+        val event = KeyEvent(time, maxOf(time, SystemClock.uptimeMillis()), action, KeyEvent.KEYCODE_DPAD_RIGHT,
+            repeat, 0, -1, 0, flags)
+        return thumb.dispatchKeyEvent(event)
+    }
+
+    private fun Trace.verifyRetirement(detach: Boolean) {
+        val parent = slider.parent as ViewGroup
+        val lower = slider.getChildAt(0)
+        val upper = slider.getChildAt(1)
+        val time = SystemClock.uptimeMillis()
+        assertTrue(right(lower, time, KeyEvent.ACTION_DOWN))
+        assertEquals(15 to 35, values)
+        if (detach) parent.removeView(slider) else parent.visibility = View.INVISIBLE
+        assertFalse(slider.isShown)
+        assertEquals(!detach, slider.isAttachedToWindow)
+        assertEquals(11 to 35, values)
+        assertEquals(listOf(15 to 35, 11 to 35), previews)
+        val set = AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS
+        for (thumb in listOf(lower, upper)) {
+            val fresh = time + 1
+            assertFalse(right(thumb, fresh, KeyEvent.ACTION_DOWN))
+            right(thumb, fresh, KeyEvent.ACTION_UP)
+            assertFalse(thumb.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, null))
+            val args = Bundle().apply {
+                putFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE, if (thumb === lower) 19f else 43f)
+            }
+            assertFalse(thumb.performAccessibilityAction(set.id, args))
+        }
+        if (detach) parent.addView(slider) else parent.visibility = View.VISIBLE
+        assertTrue(slider.isShown)
+        right(lower, time, KeyEvent.ACTION_UP)
+        assertEquals(11 to 35, values)
+        assertEquals(listOf(15 to 35, 11 to 35), previews)
+        assertTrue(commits.isEmpty())
+        assertTrue(right(lower, time + 2, KeyEvent.ACTION_DOWN))
+        assertTrue(right(lower, time + 2, KeyEvent.ACTION_UP))
+        assertEquals(listOf(15 to 35), commits)
+    }
+
+    @Test fun hidingAncestorRetiresEditAndRejectsDirectThumbInput() = withSlider {
+        verifyRetirement(detach = false)
+    }
+
+    @Test fun detachingFromWindowRetiresEditAndRejectsDirectThumbInput() = withSlider {
+        verifyRetirement(detach = true)
+    }
+
+    @Test fun ownedRepeatAtBoundAndCanceledKeyUpHaveDistinctOutcomes() = withSlider(lower = 23) {
+        val lower = slider.getChildAt(0)
+        val time = SystemClock.uptimeMillis()
+        for (cancel in listOf(true, false)) {
+            val start = if (cancel) time else time + 5
+            assertTrue(right(lower, start, KeyEvent.ACTION_DOWN))
+            assertEquals(27 to 35, values)
+            assertTrue(right(lower, start, KeyEvent.ACTION_DOWN, repeat = 1))
+            assertEquals(listOf(27 to 35), previews)
+            assertTrue(commits.isEmpty())
+            assertTrue(right(lower, start, KeyEvent.ACTION_UP,
+                flags = if (cancel) KeyEvent.FLAG_CANCELED else 0))
+            if (cancel) {
+                assertEquals(23 to 35, values)
+                assertEquals(listOf(27 to 35, 23 to 35), previews)
+                assertTrue(commits.isEmpty())
+                previews.clear()
+            } else {
+                assertEquals(27 to 35, values)
+                right(lower, start, KeyEvent.ACTION_UP)
+                assertEquals(listOf(27 to 35), commits)
+            }
+        }
+    }
+
+    @Test fun boundaryDpadNavigatesFromLowerToUpperThenToAdjacentButton() = withActivity { activity ->
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        lateinit var slider: NativeRangeSlider
+        lateinit var next: Button
+        val commits = mutableListOf<Pair<Int, Int>>()
+        val previews = mutableListOf<Pair<Int, Int>>()
+        instrumentation.runOnMainSync {
+            val row = LinearLayout(activity).apply { layoutDirection = View.LAYOUT_DIRECTION_LTR }
+            slider = NativeRangeSlider(activity, palette, 0, 100, 5, 60, 100,
+                "Lower", "Upper", minGap = 40)
+            next = Button(activity).apply { text = "Next" }
+            row.addView(slider, LinearLayout.LayoutParams(0, -2, 1f))
+            row.addView(next)
+            activity.setContentView(row)
+            slider.onRangeCommitted = { l, u -> commits.add(l to u) }
+            slider.onRangePreview = { l, u -> previews.add(l to u) }
+        }
+        instrumentation.waitForIdleSync()
+        var wasInTouchMode = false
+        instrumentation.runOnMainSync { wasInTouchMode = slider.isInTouchMode }
+        try {
+            instrumentation.setInTouchMode(false)
+            instrumentation.runOnMainSync {
+                assertTrue(activity.hasWindowFocus())
+                assertTrue(slider.getChildAt(0).requestFocus())
+            }
+            for (destination in listOf(1, 2)) {
+                instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT)
+                instrumentation.waitForIdleSync()
+                instrumentation.runOnMainSync {
+                    assertSame(if (destination == 1) slider.getChildAt(1) else next, activity.currentFocus)
+                    assertEquals(60 to 100, slider.lower to slider.upper)
+                    assertTrue(previews.isEmpty())
+                    assertTrue(commits.isEmpty())
+                }
+            }
+        } finally {
+            instrumentation.setInTouchMode(wasInTouchMode)
+        }
+    }
+
+    @Test fun largeAdjacentIntegersHaveExactSpokenValuesAndSingleStepScrolls() = withActivity { activity ->
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val max = Int.MAX_VALUE
+        lateinit var slider: NativeRangeSlider
+        instrumentation.runOnMainSync {
+            slider = NativeRangeSlider(activity, palette, max - 8, max, 1,
+                max - 4, max - 3, "Lower", "Upper")
+            activity.setContentView(slider)
+        }
+        instrumentation.waitForIdleSync()
+        instrumentation.runOnMainSync {
+            assertTrue(slider.isAttachedToWindow)
+            val format = NumberFormat.getIntegerInstance(activity.resources.configuration.locales[0])
+            val commits = mutableListOf<Pair<Int, Int>>()
+            slider.onRangeCommitted = { l, u -> commits.add(l to u) }
+            fun assertExact(lower: Int, upper: Int) {
+                assertEquals(lower to upper, slider.lower to slider.upper)
+                for ((i, value) in listOf(lower, upper).withIndex()) {
+                    val node = slider.getChildAt(i).createAccessibilityNodeInfo()
+                    try {
+                        assertEquals(format.format(value.toLong()),
+                            AccessibilityNodeInfoCompat.wrap(node).stateDescription?.toString())
+                    } finally { node.recycle() }
+                }
+            }
+            assertExact(max - 4, max - 3)
+            val forward = AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+            val backward = AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+            fun scroll(index: Int, action: Int, lower: Int, upper: Int) {
+                val count = commits.size
+                assertTrue(slider.getChildAt(index).performAccessibilityAction(action, null))
+                assertExact(lower, upper)
+                assertEquals(count + 1, commits.size)
+                assertEquals(lower to upper, commits.last())
+            }
+            scroll(0, backward, max - 5, max - 3)
+            scroll(0, forward, max - 4, max - 3)
+            scroll(1, forward, max - 4, max - 2)
+            scroll(1, backward, max - 4, max - 3)
+        }
     }
 }

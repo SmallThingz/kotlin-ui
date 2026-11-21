@@ -1,6 +1,7 @@
 package smallthingz.ui.components
 
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Rect
 import android.os.Bundle
@@ -12,15 +13,20 @@ import android.view.ViewGroup
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.SeekBar
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import smallthingz.ui.controls.ControlPalette
+import java.text.NumberFormat
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
  * Two independently focusable integer thumbs on one shared track. [step] is anchored at [min].
  * [minGap] rounds up to whole steps and must fit between the reachable endpoints.
+ * The value grid supplies tick positions. Set [NativeSliderStyle.tickSizeDp] to zero to hide them.
  * Bindings normalize silently. User previews include cancellation rollback. A changed touch or
  * key sequence commits once on release, and a changed accessibility action commits immediately.
+ * Each thumb describes its exact integer value. Android's direct-set argument is a Float and
+ * can represent only some large integers. Accessibility scroll actions move by one exact step.
  */
 class NativeRangeSlider(
     context: Context,
@@ -32,7 +38,7 @@ class NativeRangeSlider(
     upper: Int,
     lowerLabel: CharSequence,
     upperLabel: CharSequence,
-    private val style: NativeSliderStyle = NativeSliderStyle(),
+    private var style: NativeSliderStyle = NativeSliderStyle(),
     minGap: Int = 0,
 ) : ViewGroup(context) {
     private val grid = RangeSliderGrid(min, max, step, minGap)
@@ -43,8 +49,8 @@ class NativeRangeSlider(
     var onRangePreview: ((Int, Int) -> Unit)? = null
     var onRangeCommitted: ((Int, Int) -> Unit)? = null
 
-    private val density = resources.displayMetrics.density
-    private val track = RangeSliderTrack(style, palette, density)
+    private val density get() = resources.displayMetrics.density
+    private val track = RangeSliderTrack(this, style, palette, grid)
     private val low = Thumb(true, lowerLabel)
     private val high = Thumb(false, upperLabel)
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
@@ -52,6 +58,8 @@ class NativeRangeSlider(
     private var downX = 0f
     private var dragStarted = false
     private var touchedValue: Int? = null
+    private var detaching = false
+    private var ready = false
 
     // The object identity guards completion if a preview synchronously rebinds the control.
     private inner class Edit(var thumb: Thumb?, val pointer: Int = -1, val key: Int = -1, val time: Long = 0)
@@ -63,6 +71,18 @@ class NativeRangeSlider(
         addView(high)
         low.nextFocusForwardId = high.id
         high.accessibilityTraversalAfter = low.id
+        ready = true
+    }
+
+    fun applyPalette(palette: ControlPalette) = track.applyPalette(palette)
+
+    /** Tick size controls visibility; tick positions always follow the min-anchored value grid. */
+    fun applyStyle(style: NativeSliderStyle) {
+        if (this.style == style) return
+        this.style = style
+        track.applyStyle(style)
+        requestLayout()
+        invalidate()
     }
 
     fun setValues(lower: Int, upper: Int) {
@@ -97,7 +117,7 @@ class NativeRangeSlider(
 
     private fun finish(owner: Edit) {
         if (edit !== owner) return
-        if (!canEdit()) {
+        if (!canEdit(owner.thumb)) {
             cancelInteraction()
             return
         }
@@ -107,7 +127,9 @@ class NativeRangeSlider(
         onRangeCommitted?.invoke(lower, upper)
     }
 
-    private fun canEdit() = isEnabled && acceptsNativeInput()
+    private fun canEdit(thumb: Thumb? = null): Boolean =
+        !detaching && isAttachedToWindow && isShown && windowVisibility == VISIBLE && isEnabled &&
+            acceptsNativeInput() && (thumb == null || thumb.parent === this && thumb.isEnabled && thumb.isShown)
 
     private val trackLeft get() = paddingLeft + inset
     private val trackRight get() = (width - paddingRight - inset).coerceAtLeast(trackLeft)
@@ -156,7 +178,7 @@ class NativeRangeSlider(
     override fun onDraw(canvas: Canvas) {
         val touching = edit?.takeIf { it.pointer >= 0 }?.thumb
         track.draw(canvas, trackLeft, trackRight, (height + paddingTop - paddingBottom) / 2f,
-            x(lower), x(upper), isEnabled, touching === low, touching === high)
+            x(lower), x(upper), touching === low, touching === high)
     }
 
     override fun onInterceptTouchEvent(event: MotionEvent): Boolean = true
@@ -202,6 +224,10 @@ class NativeRangeSlider(
                 val target = if (anchor == null || physicalX <= trackLeft || physicalX >= trackRight) pointerValue
                     else anchor + (pointerValue - valueAt(downX))
                 val thumb = owner.thumb ?: (if (target < lower) low else high).also { owner.thumb = it }
+                if (!canEdit(thumb)) {
+                    cancelInteraction()
+                    return false
+                }
                 thumb.requestFocus()
                 if (edit === owner) thumb.move(target)
                 if (released) finish(owner)
@@ -211,9 +237,19 @@ class NativeRangeSlider(
     }
 
     override fun setEnabled(enabled: Boolean) {
+        val changed = enabled != isEnabled
         super.setEnabled(enabled)
         for (index in 0 until childCount) getChildAt(index).isEnabled = enabled
-        if (!enabled) cancelInteraction()
+        if (ready && changed) {
+            if (!enabled) cancelInteraction()
+            track.onEnabledChanged()
+        }
+        invalidate()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        requestLayout()
         invalidate()
     }
 
@@ -222,9 +258,28 @@ class NativeRangeSlider(
         if (!hasWindowFocus) cancelInteraction()
     }
 
+    override fun onVisibilityChanged(changedView: View, visibility: Int) {
+        super.onVisibilityChanged(changedView, visibility)
+        if (visibility != VISIBLE && edit != null) cancelInteraction()
+    }
+
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility != VISIBLE && edit != null) cancelInteraction()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        detaching = false
+    }
+
     override fun onDetachedFromWindow() {
-        cancelInteraction()
-        super.onDetachedFromWindow()
+        detaching = true
+        try {
+            cancelInteraction()
+        } finally {
+            super.onDetachedFromWindow()
+        }
     }
 
     private inner class Thumb(val isLower: Boolean, label: CharSequence) : View(this@NativeRangeSlider.context) {
@@ -241,8 +296,10 @@ class NativeRangeSlider(
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         }
 
+        private fun clamped(requested: Double) = grid.snap(requested).coerceIn(first, last)
+
         fun move(requested: Double) {
-            val next = grid.snap(requested).coerceIn(first, last)
+            val next = clamped(requested)
             show(if (isLower) next..upper else lower..next, preview = true)
         }
 
@@ -256,12 +313,14 @@ class NativeRangeSlider(
                 KeyEvent.KEYCODE_MOVE_END -> last.toDouble()
                 else -> return super.onKeyDown(keyCode, event)
             }
-            if (!canEdit()) {
+            if (!canEdit(this)) {
                 cancelInteraction()
                 return false
             }
             if (event.repeatCount == 0) {
                 if (edit != null) return false
+                // A fresh boundary press can move focus. An edited hold keeps its matching release.
+                if (clamped(target) == value) return super.onKeyDown(keyCode, event)
                 edit = Edit(this, key = keyCode, time = event.downTime)
             }
             if (!ownsKey(keyCode, event)) return false
@@ -283,13 +342,20 @@ class NativeRangeSlider(
             if (!gainFocus && edit?.thumb === this && edit?.key != -1) cancelInteraction()
         }
 
+        override fun onVisibilityChanged(changedView: View, visibility: Int) {
+            super.onVisibilityChanged(changedView, visibility)
+            if (visibility != VISIBLE && edit?.thumb === this) cancelInteraction()
+        }
+
         override fun getAccessibilityClassName(): CharSequence = SeekBar::class.java.name
 
         override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
             super.onInitializeAccessibilityNodeInfo(info)
+            AccessibilityNodeInfoCompat.wrap(info).stateDescription =
+                NumberFormat.getIntegerInstance(resources.configuration.locales[0]).format(value.toLong())
             info.rangeInfo = AccessibilityNodeInfo.RangeInfo.obtain(AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_INT,
                 first.toFloat(), last.toFloat(), value.toFloat())
-            if (!canEdit() || first == last) return
+            if (!canEdit(this) || first == last) return
             info.isScrollable = true
             info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS)
             if (value < last) info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)
@@ -305,7 +371,7 @@ class NativeRangeSlider(
                     ?.takeIf { it.isFinite() }?.toDouble() ?: return false
                 else -> return super.performAccessibilityAction(action, arguments)
             }
-            if (!canEdit() || edit != null || value == grid.snap(target).coerceIn(first, last)) return false
+            if (!canEdit(this) || edit != null || value == clamped(target)) return false
             val owner = Edit(this)
             edit = owner
             move(target)

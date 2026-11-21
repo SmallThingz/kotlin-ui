@@ -3,13 +3,9 @@ package smallthingz.ui.components
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.ColorFilter
-import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.Rect
-import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.os.SystemClock
@@ -115,7 +111,6 @@ open class NativeSlider(
     style: NativeSliderStyle = NativeSliderStyle(),
     val valueMode: NativeSliderValueMode = NativeSliderValueMode.INTEGER,
 ) : SeekBar(context, null, 0, android.R.style.Widget_Material_SeekBar) {
-    private var componentPalette = palette
     private var componentStyle = style
     private var componentKeyboardPolicy = NativeSliderKeyboardPolicy.DEFAULT
     private var callerListener: OnSeekBarChangeListener? = null
@@ -147,16 +142,9 @@ open class NativeSlider(
         continuousAnnouncementPending = false
         if (isAttachedToWindow && visibility == View.VISIBLE) sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_SELECTED)
     }
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val shapePath = Path()
-    private val shapeBounds = RectF()
-    private val cornerRadii = FloatArray(8)
     private val trackGeometry = GeometryDrawable()
     private val thumbGeometry = GeometryDrawable()
-    private val colorMotion = smallthingz.ui.animation.view.ViewColorTransition(this,
-        intArrayOf(activeTrackColor(),inactiveTrackColor(),activeTickColor(),inactiveTickColor(),thumbColor()),{invalidate()})
-
-    private fun updateColors() = colorMotion.retarget(activeTrackColor(),inactiveTrackColor(),activeTickColor(),inactiveTickColor(),thumbColor())
+    private val sliderPaint = SliderPaint(this, palette, style.colors)
 
     var onValueCommitted: ((Int) -> Unit)? = null
     var onInteractionFinished: ((value: Int, cancelled: Boolean) -> Unit)? = null
@@ -286,10 +274,7 @@ open class NativeSlider(
     }
 
     fun applyPalette(palette: ControlPalette) {
-        if (componentPalette == palette) return
-        componentPalette = palette
-        updateColors()
-        invalidate()
+        sliderPaint.applyPalette(palette)
     }
 
     fun applyStyle(style: NativeSliderStyle) {
@@ -298,7 +283,7 @@ open class NativeSlider(
         if (componentStyle == style) return
         componentStyle = style
         applyGeometry()
-        updateColors()
+        sliderPaint.applyColors(style.colors)
         invalidate()
     }
 
@@ -644,7 +629,10 @@ open class NativeSlider(
 
     override fun drawableStateChanged() {
         super.drawableStateChanged()
-        if (ready) {updateColors();invalidate()}
+        if (ready) {
+            sliderPaint.onEnabledChanged()
+            invalidate()
+        }
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -684,12 +672,15 @@ open class NativeSlider(
         if (layoutDirection == View.LAYOUT_DIRECTION_RTL) canvas.scale(-1f, 1f)
         // Match the recovered default track's RTL start-corner threshold as well as its shape.
         val activeThreshold = if (layoutDirection == View.LAYOUT_DIRECTION_RTL) insideRadius else outerRadius
-        if (activeEnd > activeThreshold) drawSegment(canvas, 0f, activeEnd, trackHeight, outerRadius, insideRadius, colorMotion.color(0))
+        if (activeEnd > activeThreshold) {
+            sliderPaint.drawSegment(canvas, 0f, activeEnd, 0f, trackHeight, outerRadius, insideRadius, sliderPaint.activeTrack)
+        }
         if (valueX < trackWidth - gap - outerRadius) {
-            drawSegment(canvas, inactiveStart, trackWidth, trackHeight, insideRadius, outerRadius, colorMotion.color(1))
+            sliderPaint.drawSegment(canvas, inactiveStart, trackWidth, 0f, trackHeight, insideRadius, outerRadius,
+                sliderPaint.inactiveTrack)
             if (componentStyle.showStopIndicator && componentStyle.stopIndicatorSizeDp > 0f) {
-                paint.color = colorMotion.color(0)
-                canvas.drawCircle(trackWidth - outerRadius, 0f, componentStyle.stopIndicatorSizeDp * density / 2f, paint)
+                sliderPaint.drawDot(canvas, trackWidth - outerRadius, 0f, componentStyle.stopIndicatorSizeDp * density / 2f,
+                    sliderPaint.activeTrack)
             }
         }
         if (componentStyle.steps > 0 && componentStyle.tickSizeDp > 0f) {
@@ -701,8 +692,8 @@ open class NativeSlider(
                 if (!(componentStyle.showStopIndicator && index == intervals)) {
                     val tickX = outerRadius + (trackWidth - 2f * outerRadius).coerceAtLeast(0f) * (index.toFloat() / intervals)
                     if (tickX < valueX - gap || tickX > valueX + gap) {
-                        paint.color = colorMotion.color(if (tickX <= valueX) 2 else 3)
-                        canvas.drawCircle(tickX, 0f, componentStyle.tickSizeDp * density / 2f, paint)
+                        sliderPaint.drawDot(canvas, tickX, 0f, componentStyle.tickSizeDp * density / 2f,
+                            if (tickX <= valueX) sliderPaint.activeTick else sliderPaint.inactiveTick)
                     }
                 }
                 if (intervals - index < stride) break
@@ -711,15 +702,12 @@ open class NativeSlider(
             if (!componentStyle.showStopIndicator && intervals % stride != 0) {
                 val tickX = outerRadius + (trackWidth - 2f * outerRadius).coerceAtLeast(0f)
                 if (tickX < valueX - gap || tickX > valueX + gap) {
-                    paint.color = colorMotion.color(if (tickX <= valueX) 2 else 3)
-                    canvas.drawCircle(tickX, 0f, componentStyle.tickSizeDp * density / 2f, paint)
+                    sliderPaint.drawDot(canvas, tickX, 0f, componentStyle.tickSizeDp * density / 2f,
+                        if (tickX <= valueX) sliderPaint.activeTick else sliderPaint.inactiveTick)
                 }
             }
         }
-        paint.color = colorMotion.color(4)
-        val halfThumbHeight = componentStyle.thumbHeightDp * density / 2f
-        shapeBounds.set(valueX - thumbWidth / 2f, -halfThumbHeight, valueX + thumbWidth / 2f, halfThumbHeight)
-        canvas.drawRoundRect(shapeBounds, thumbWidth / 2f, thumbWidth / 2f, paint)
+        sliderPaint.drawThumb(canvas, valueX, 0f, thumbWidth / 2f, componentStyle.thumbHeightDp * density / 2f)
         canvas.restoreToCount(saved)
     }
 
@@ -904,35 +892,6 @@ open class NativeSlider(
         invalidate()
     }
 
-    private fun drawSegment(canvas: Canvas, start: Float, end: Float, height: Float, startRadius: Float, endRadius: Float, color: Int) {
-        if (end <= start || height <= 0f) return
-        // Keep unequal outer/inner radii; Path normalizes their sum when necessary.
-        val maxRadius = height / 2f
-        val first = startRadius.coerceIn(0f, maxRadius)
-        val last = endRadius.coerceIn(0f, maxRadius)
-        cornerRadii[0] = first; cornerRadii[1] = first
-        cornerRadii[2] = last; cornerRadii[3] = last
-        cornerRadii[4] = last; cornerRadii[5] = last
-        cornerRadii[6] = first; cornerRadii[7] = first
-        shapeBounds.set(start, -height / 2f, end, height / 2f)
-        shapePath.rewind()
-        shapePath.addRoundRect(shapeBounds, cornerRadii, Path.Direction.CW)
-        paint.color = color
-        canvas.drawPath(shapePath, paint)
-    }
-
-    private fun activeTrackColor(): Int = if (isEnabled) componentStyle.colors.activeTrackColor ?: componentPalette.accent
-        else componentStyle.colors.disabledActiveTrackColor ?: withAlpha(componentPalette.content, .38f)
-    private fun inactiveTrackColor(): Int = if (isEnabled) componentStyle.colors.inactiveTrackColor
-        ?: composite(withAlpha(Color.BLACK, .18f), componentPalette.selection)
-        else componentStyle.colors.disabledInactiveTrackColor ?: withAlpha(componentPalette.content, .12f)
-    private fun activeTickColor(): Int = if (isEnabled) componentStyle.colors.activeTickColor ?: componentStyle.colors.inactiveTrackColor ?: componentPalette.selection
-        else componentStyle.colors.disabledActiveTickColor ?: withAlpha(componentPalette.content, .12f)
-    private fun inactiveTickColor(): Int = if (isEnabled) componentStyle.colors.inactiveTickColor ?: componentStyle.colors.activeTrackColor ?: componentPalette.accent
-        else componentStyle.colors.disabledInactiveTickColor ?: withAlpha(componentPalette.content, .38f)
-    private fun thumbColor(): Int = if (isEnabled) componentStyle.colors.thumbColor ?: componentPalette.accent
-        else componentStyle.colors.disabledThumbColor ?: composite(withAlpha(componentPalette.content, .38f), componentPalette.surface)
-
     private class GeometryDrawable : Drawable() {
         var width = 0
         var height = 0
@@ -954,16 +913,6 @@ open class NativeSlider(
         const val KEY_END = 10
         const val KEY_PAGE_UP = -20
         const val KEY_PAGE_DOWN = 20
-        fun withAlpha(color: Int, alpha: Float): Int = (color and 0x00ffffff) or ((255f * alpha).roundToInt() shl 24)
-        fun composite(foreground: Int, background: Int): Int {
-            val a = Color.alpha(foreground) / 255f
-            val b = Color.alpha(background) / 255f
-            val out = a + b * (1f - a)
-            if (out <= 0f) return Color.TRANSPARENT
-            fun channel(f: Int, base: Int): Int = ((f * a + base * b * (1f - a)) / out).roundToInt().coerceIn(0, 255)
-            return Color.argb((out * 255f).roundToInt(), channel(Color.red(foreground), Color.red(background)),
-                channel(Color.green(foreground), Color.green(background)), channel(Color.blue(foreground), Color.blue(background)))
-        }
         inline fun <T> withCleanup(block: () -> T, cleanup: () -> Unit): T {
             var failure: Throwable? = null
             try { return block() } catch (error: Throwable) { failure = error; throw error }
