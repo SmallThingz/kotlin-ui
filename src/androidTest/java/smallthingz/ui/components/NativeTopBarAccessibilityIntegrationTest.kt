@@ -198,12 +198,15 @@ class NativeTopBarAccessibilityIntegrationTest {
                     action.left + action.width / 2f, action.top + action.height / 2f, 0)
                 try {
                     hover.source = InputDevice.SOURCE_TOUCHSCREEN
-                    root.dispatchGenericMotionEvent(hover)
+                    assertTrue(root.dispatchGenericMotionEvent(hover))
                 } finally {
                     hover.recycle()
                 }
             }
             assertEquals(0, childHovers)
+            val node = checkNotNull(action.createAccessibilityNodeInfo())
+            assertEquals("android.widget.Button", node.className.toString())
+            assertTrue(node.isVisibleToUser)
             assertNull(action.getChildAt(1).createAccessibilityNodeInfo())
         }
 
