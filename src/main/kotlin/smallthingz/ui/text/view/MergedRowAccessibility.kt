@@ -11,6 +11,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityManager
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.annotation.MainThread
+import androidx.core.view.ViewCompat
 import smallthingz.ui.geometry.Offset
 import smallthingz.ui.geometry.Rect as ComposeRect
 import smallthingz.ui.unit.roundToIntRect
@@ -201,10 +202,12 @@ class MergedRowAccessibility(
                 host.rootView.getLocationOnScreen(rootLocation)
                 bounds.offset(rootLocation[0], rootLocation[1])
             }
+            val stateDescription = state.stateDescription ?: ViewCompat.getStateDescription(host)
+                .takeIf { role == NativeMergedRowRole.BUTTON }
             return NativeMergedRowAccessibilitySnapshot(present, !present, present, state.enabled,
                 state.checked, state.clickLabel, state.standaloneChildren, 0, bounds, bounds, state.selected,
                 standaloneDescription?.invoke(), state.clickable, state.longClickable, state.longClickLabel,
-                standaloneRolePresent ?: state.rolePresent, state.stateDescription, state.readOnlyScreenReaderFocusable)
+                standaloneRolePresent ?: state.rolePresent, stateDescription, state.readOnlyScreenReaderFocusable)
         }
         val localBounds = (host as? NativeMergedRowAccessibilityHost)?.accessibilityBoundsInView
             ?: ComposeRect(0f, 0f, host.width.toFloat(), host.height.toFloat())
