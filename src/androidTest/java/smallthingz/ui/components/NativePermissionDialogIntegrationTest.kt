@@ -12,6 +12,7 @@ import android.os.Binder
 import android.os.Build
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -125,6 +126,17 @@ class NativePermissionDialogIntegrationTest {
             val attrs = requireNotNull(platform(prompt).window).attributes
             assertEquals(0, attrs.flags and secure)
             assertEquals(.6f, attrs.dimAmount, .001f)
+        } finally { prompt.dismiss() }
+    }
+
+    @Test fun bottomPresentationUsesRecipeInset() = withActivity { activity ->
+        val prompt = prompt(activity)
+        try {
+            prompt.showAtBottom()
+            val window = requireNotNull(platform(prompt).window)
+            val inset = NativeUiAppearance.Default.modals.permissionDialog.windowInsetDp
+            assertEquals(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, window.attributes.gravity)
+            assertEquals(Math.round(inset * window.context.resources.displayMetrics.density), window.attributes.y)
         } finally { prompt.dismiss() }
     }
 

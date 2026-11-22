@@ -14,6 +14,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.view.Window
 import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -44,6 +45,13 @@ data class NativePermissionDialogRecipe(
     val dimAmount: Float? = null,
     val windowAnimations: Int? = null,
 ) {
+    fun placeAtBottom(window: Window) {
+        window.setGravity(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
+        window.attributes = window.attributes.apply {
+            y = (windowInsetDp * window.context.resources.displayMetrics.density).roundToInt()
+        }
+    }
+
     init {
         require(dimAmount == null || dimAmount in 0f..1f)
         require(maxWidthDp > 0 && windowInsetDp >= 0 && contentInsetDp >= 0)
@@ -289,6 +297,11 @@ class NativePermissionDialog(
         val frame = Rect().also(host::getWindowVisibleDisplayFrame)
         val available = minOf(host.width.takeIf { it > 0 } ?: frame.width(), frame.width().takeIf { it > 0 } ?: Int.MAX_VALUE)
         window.setLayout((available - dp(recipe.windowInsetDp * 2)).coerceIn(1, dp(recipe.maxWidthDp)), WRAP_CONTENT)
+    }
+
+    fun showAtBottom() {
+        if (!shown) recipe.placeAtBottom(window)
+        show()
     }
 
     fun show() {
