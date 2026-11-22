@@ -16,8 +16,16 @@ class NativeDialogEdgeTest {
         assertEquals(NativeDialogEdge.BOTTOM, nativeDialogEntryEdge(40, 40, 40, 160))
     }
 
+    @Test fun resizedFreeformAndKeyboardViewportsUseCurrentHostBounds() {
+        assertEquals(NativeDialogEdge.TOP, nativeDialogEntryEdge(800, 920, 839, 160))
+        assertEquals(NativeDialogEdge.BOTTOM, nativeDialogEntryEdge(800, 920, 840, 160))
+        assertEquals(320, nativeDialogBoundedExtent(1080, 320))
+        assertEquals(296, nativeDialogBoundedExtent(296, 320))
+        assertEquals(640, nativeDialogBoundedExtent(640, 0))
+    }
+
     @Test fun bottomMirrorsTheSameFloatingVisibilityAndBackMotionSamples() {
-        assertEquals(-60f, NativeDialogEdge.TOP.orientTopOffset(-60f))
-        assertEquals(60f, NativeDialogEdge.BOTTOM.orientTopOffset(-60f))
+        assertEquals(-60f, NativeDialogEdge.TOP.orientTopOffset(-60f), 0f)
+        assertEquals(60f, NativeDialogEdge.BOTTOM.orientTopOffset(-60f), 0f)
     }
 }

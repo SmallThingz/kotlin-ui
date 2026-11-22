@@ -112,7 +112,10 @@ class NativeFloatingDialog(
         if (entryEdge != null) (owner.predictiveMotionTarget as? NativeFloatingPanelSurface)?.bindDialogEdge(entryEdge)
     }
     private val content = contentOwner.view.apply { alpha = 0f }
-    private val root = FloatingWindowRoot(context, requireNotNull(window), content, statusBarProtection, entryEdge) {
+    private val root = FloatingWindowRoot(
+        context, requireNotNull(window), content, statusBarProtection, entryEdge,
+        host = anchor.rootView.takeIf { entryEdge != null },
+    ) {
         visibilityMotion.setHeight(content.measuredHeight)
         applyMotion()
         requestFrame()
@@ -348,6 +351,7 @@ private class FloatingWindowRoot(
     private val content: View,
     private val statusBarProtection: NativeStatusBarProtection?,
     private val entryEdge: NativeDialogEdge?,
+    private val host: View?,
     private val onContentMeasured: () -> Unit,
 ) : ViewGroup(context) {
     init {
@@ -383,11 +387,16 @@ private class FloatingWindowRoot(
             dialogWindow.attributes.height == LayoutParams.WRAP_CONTENT) height + 1 else height
         val horizontalPadding = paddingLeft + paddingRight
         val verticalPadding = paddingTop + paddingBottom
-        val childWidth = if (widthMode == MeasureSpec.UNSPECIFIED) widthMeasureSpec
-            else MeasureSpec.makeMeasureSpec(max(0, width - horizontalPadding),
+        val hostWidth = host?.width ?: 0
+        val hostHeight = host?.height ?: 0
+        val childWidth = if (widthMode == MeasureSpec.UNSPECIFIED && hostWidth <= 0) widthMeasureSpec
+            else MeasureSpec.makeMeasureSpec(max(0, nativeDialogBoundedExtent(
+                if (widthMode == MeasureSpec.UNSPECIFIED) hostWidth else width, hostWidth) - horizontalPadding),
                 if (entryEdge == null) MeasureSpec.AT_MOST else MeasureSpec.EXACTLY)
-        val childHeight = if (heightMode == MeasureSpec.UNSPECIFIED) heightMeasureSpec
-            else MeasureSpec.makeMeasureSpec(max(0, targetHeight - verticalPadding), MeasureSpec.AT_MOST)
+        val childHeight = if (heightMode == MeasureSpec.UNSPECIFIED && hostHeight <= 0) heightMeasureSpec
+            else MeasureSpec.makeMeasureSpec(max(0, nativeDialogBoundedExtent(
+                if (heightMode == MeasureSpec.UNSPECIFIED) hostHeight else targetHeight, hostHeight) - verticalPadding),
+                MeasureSpec.AT_MOST)
         if (content.visibility == GONE) {
             setMeasuredDimension(if (widthMode == MeasureSpec.EXACTLY) width else horizontalPadding,
                 if (heightMode == MeasureSpec.EXACTLY) height else verticalPadding)
