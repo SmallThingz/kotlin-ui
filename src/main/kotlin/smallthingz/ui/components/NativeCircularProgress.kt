@@ -66,6 +66,10 @@ open class NativeCircularProgress(
 
     fun setColor(value: Int) {colorMotion.retarget(value)}
 
+    internal fun setColorImmediately(value: Int) {
+        if (paint.color != value || colorMotion.isInterpolating) colorMotion.snap(value)
+    }
+
     fun setStrokeWidthDp(value: Float) {
         if (thicknessDp == value) return
         thicknessDp = value
