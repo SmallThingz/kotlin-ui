@@ -7,7 +7,13 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /** Independent standalone touch bounds for an intrinsic button. The button remains the accessible action. */
-class NativeButtonTouchTarget(val button: NativeMaterialButtonView) : ViewGroup(button.context) {
+class NativeButtonTouchTarget @JvmOverloads constructor(
+    val button: NativeMaterialButtonView,
+    private val surfaceAlignment: HorizontalAlignment = HorizontalAlignment.CENTER,
+) : ViewGroup(button.context) {
+    /** Places the painted surface within the touch target using its resolved layout direction. */
+    enum class HorizontalAlignment { CENTER, START, END }
+
     private var targetLeft = 0
     private var targetTop = 0
     private var targetRight = 0
@@ -32,13 +38,20 @@ class NativeButtonTouchTarget(val button: NativeMaterialButtonView) : ViewGroup(
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        val left = ((width - button.measuredWidth) * .5f).roundToInt()
-        val top = ((height - button.measuredHeight) * .5f).roundToInt()
-        button.layout(left, top, left + button.measuredWidth, top + button.measuredHeight)
         val minimum = minimumTargetPx
         val targetWidth = min(width, max(minimum, button.measuredWidth))
         val targetHeight = min(height, max(minimum, button.measuredHeight))
-        targetLeft = ((width - targetWidth) * .5f).roundToInt() - left
+        val targetStart = ((width - targetWidth) * .5f).roundToInt()
+        val rtl = layoutDirection == LAYOUT_DIRECTION_RTL
+        val targetEnd = targetStart + targetWidth - button.measuredWidth
+        val left = when (surfaceAlignment) {
+            HorizontalAlignment.CENTER -> ((width - button.measuredWidth) * .5f).roundToInt()
+            HorizontalAlignment.START -> if (rtl) targetEnd else targetStart
+            HorizontalAlignment.END -> if (rtl) targetStart else targetEnd
+        }
+        val top = ((height - button.measuredHeight) * .5f).roundToInt()
+        button.layout(left, top, left + button.measuredWidth, top + button.measuredHeight)
+        targetLeft = targetStart - left
         targetTop = ((height - targetHeight) * .5f).roundToInt() - top
         targetRight = targetLeft + targetWidth
         targetBottom = targetTop + targetHeight
