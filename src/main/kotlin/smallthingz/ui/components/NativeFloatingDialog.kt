@@ -50,8 +50,26 @@ class NativeFloatingDialog(
     onDismiss: () -> Unit,
     statusBarProtection: NativeStatusBarProtection?,
     private var shadowDp: Float,
+    private val entryEdge: NativeDialogEdge?,
     createContent: (android.content.Context, NativeModalWindowRuntime, () -> Unit) -> NativeFloatingDialogContent,
 ) : ComponentDialog(ContextThemeWrapper(anchor.context, smallthingz.ui.R.style.FloatingDialogWindowTheme)) {
+    constructor(
+        anchor: View,
+        density: Float,
+        onDismiss: () -> Unit,
+        statusBarProtection: NativeStatusBarProtection?,
+        shadowDp: Float,
+        createContent: (android.content.Context, NativeModalWindowRuntime, () -> Unit) -> NativeFloatingDialogContent,
+    ) : this(anchor, density, onDismiss, statusBarProtection, shadowDp, null, createContent)
+
+    constructor(
+        anchor: View,
+        density: Float,
+        onDismiss: () -> Unit,
+        entryEdge: NativeDialogEdge,
+        createContent: (android.content.Context, NativeModalWindowRuntime, () -> Unit) -> NativeFloatingDialogContent,
+    ) : this(anchor, density, onDismiss, null, NativeFloatingPanelRecipe.Default.shadowDp, entryEdge, createContent)
+
     constructor(
         anchor: View,
         density: Float,
@@ -90,9 +108,11 @@ class NativeFloatingDialog(
             else -> Unit
         }
     }
-    private val contentOwner = createContent(context,runtime,::requestDismiss)
+    private val contentOwner = createContent(context, runtime, ::requestDismiss).also { owner ->
+        if (entryEdge != null) (owner.predictiveMotionTarget as? NativeFloatingPanelSurface)?.bindDialogEdge(entryEdge)
+    }
     private val content = contentOwner.view.apply { alpha = 0f }
-    private val root = FloatingWindowRoot(context, requireNotNull(window), content, statusBarProtection) {
+    private val root = FloatingWindowRoot(context, requireNotNull(window), content, statusBarProtection, entryEdge) {
         visibilityMotion.setHeight(content.measuredHeight)
         applyMotion()
         requestFrame()
@@ -149,7 +169,7 @@ class NativeFloatingDialog(
         window.requestFeature(Window.FEATURE_NO_TITLE)
         window.setBackgroundDrawableResource(android.R.color.transparent)
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        window.setGravity(Gravity.TOP)
+        window.setGravity(if (entryEdge == NativeDialogEdge.BOTTOM) Gravity.BOTTOM else Gravity.TOP)
         @Suppress("DEPRECATION")
         window.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN)
         window.attributes = window.attributes.apply {
@@ -242,16 +262,17 @@ class NativeFloatingDialog(
 
     private fun applyMotion() {
         content.translationX = visibilityMotion.translation.x.toFloat()
-        content.translationY = visibilityMotion.translation.y.toFloat()
+        val edge = entryEdge ?: NativeDialogEdge.TOP
+        content.translationY = edge.orientTopOffset(visibilityMotion.translation.y.toFloat())
         content.alpha = visibilityMotion.alpha
         val progress = if (predictiveMotion.active) predictiveMotion.progress.coerceIn(0f, 1f) else 0f
         val target = contentOwner.predictiveMotionTarget
         if (target === content) {
             // A single caller View represents both layers; compose instead of overwriting entry/exit.
-            content.translationY -= target.height * progress
+            content.translationY += edge.orientTopOffset(-target.height * progress)
             content.alpha *= 1f - .22f * progress
         } else {
-            target.translationY = -target.height * progress
+            target.translationY = edge.orientTopOffset(-target.height * progress)
             target.alpha = 1f - .22f * progress
         }
     }
@@ -326,6 +347,7 @@ private class FloatingWindowRoot(
     private val dialogWindow: Window,
     private val content: View,
     private val statusBarProtection: NativeStatusBarProtection?,
+    private val entryEdge: NativeDialogEdge?,
     private val onContentMeasured: () -> Unit,
 ) : ViewGroup(context) {
     init {
@@ -362,7 +384,8 @@ private class FloatingWindowRoot(
         val horizontalPadding = paddingLeft + paddingRight
         val verticalPadding = paddingTop + paddingBottom
         val childWidth = if (widthMode == MeasureSpec.UNSPECIFIED) widthMeasureSpec
-            else MeasureSpec.makeMeasureSpec(max(0, width - horizontalPadding), MeasureSpec.AT_MOST)
+            else MeasureSpec.makeMeasureSpec(max(0, width - horizontalPadding),
+                if (entryEdge == null) MeasureSpec.AT_MOST else MeasureSpec.EXACTLY)
         val childHeight = if (heightMode == MeasureSpec.UNSPECIFIED) heightMeasureSpec
             else MeasureSpec.makeMeasureSpec(max(0, targetHeight - verticalPadding), MeasureSpec.AT_MOST)
         if (content.visibility == GONE) {
@@ -392,7 +415,11 @@ private class FloatingWindowRoot(
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         if (content.visibility == GONE) return
         val l = paddingLeft + (width - content.measuredWidth - paddingLeft - paddingRight) / 2
-        val t = paddingTop + (height - content.measuredHeight - paddingTop - paddingBottom) / 2
+        val t = when (entryEdge) {
+            NativeDialogEdge.TOP -> paddingTop
+            NativeDialogEdge.BOTTOM -> height - paddingBottom - content.measuredHeight
+            null -> paddingTop + (height - content.measuredHeight - paddingTop - paddingBottom) / 2
+        }
         content.layout(l, t, l + content.measuredWidth, t + content.measuredHeight)
     }
 

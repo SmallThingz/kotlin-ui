@@ -45,8 +45,11 @@ data class NativePermissionDialogRecipe(
     val dimAmount: Float? = null,
     val windowAnimations: Int? = null,
 ) {
-    fun placeAtBottom(window: Window) {
-        window.setGravity(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
+    fun placeAtBottom(window: Window) = placeAtEdge(window, NativeDialogEdge.BOTTOM)
+
+    internal fun placeAtEdge(window: Window, edge: NativeDialogEdge) {
+        val gravity = if (edge == NativeDialogEdge.TOP) Gravity.TOP else Gravity.BOTTOM
+        window.setGravity(gravity or Gravity.CENTER_HORIZONTAL)
         window.attributes = window.attributes.apply {
             y = (windowInsetDp * window.context.resources.displayMetrics.density).roundToInt()
         }
@@ -301,6 +304,18 @@ class NativePermissionDialog(
 
     fun showAtBottom() {
         if (!shown) recipe.placeAtBottom(window)
+        show()
+    }
+
+    /** Edge placement is opt-in so callers keep their existing consent flow by default. */
+    fun showAtEdge(edge: NativeDialogEdge) {
+        if (!shown) {
+            recipe.placeAtEdge(window, edge)
+            if (recipe.windowAnimations == null) {
+                window.setWindowAnimations(if (edge == NativeDialogEdge.TOP)
+                    smallthingz.ui.R.style.NativePermissionEnterFromTop else smallthingz.ui.R.style.NativePermissionEnterFromBottom)
+            }
+        }
         show()
     }
 
