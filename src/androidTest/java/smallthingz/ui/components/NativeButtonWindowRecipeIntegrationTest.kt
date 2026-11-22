@@ -8,6 +8,8 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.widget.ImageView
 import android.widget.LinearLayout
+import androidx.core.view.ViewCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
@@ -92,6 +94,38 @@ class NativeButtonWindowRecipeIntegrationTest {
                     }
                     export.close(); cancel.close(); save.close()
                 }
+            }
+        }
+    }
+
+    @Test fun standaloneButtonPublishesItsHostStateDescription() = withWindow { activity ->
+        val density = Density(activity)
+        val resolver = createFontFamilyResolver(activity)
+        val recipe = NativeUiAppearance.Default.buttons.raisedIcon
+        val palette = NativeColorScheme.fallback(darkTheme = false).buttonPalette
+        val button = NativeMaterialButtonView(activity, recipe, density, resolver) {}.apply {
+            contentDescription = "Tabs"
+            bind("", true, palette)
+        }
+        activity.setContentView(LinearLayout(activity).apply {
+            addView(NativeButtonTouchTarget(button), LinearLayout.LayoutParams(-2, -2))
+        })
+        return@withWindow {
+            try {
+                for (state in listOf("1 tab", "10 tabs", null)) {
+                    ViewCompat.setStateDescription(button, state)
+                    val node = checkNotNull(button.createAccessibilityNodeInfo())
+                    try {
+                        assertTrue(node.isClickable)
+                        assertEquals("Tabs", node.contentDescription?.toString())
+                        assertEquals(state, AccessibilityNodeInfoCompat.wrap(node).stateDescription?.toString())
+                        assertEquals(0, node.childCount)
+                    } finally {
+                        node.recycle()
+                    }
+                }
+            } finally {
+                button.close()
             }
         }
     }
