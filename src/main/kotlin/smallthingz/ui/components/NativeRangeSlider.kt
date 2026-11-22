@@ -3,6 +3,7 @@ package smallthingz.ui.components
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Canvas
+import android.graphics.Matrix
 import android.graphics.Rect
 import android.os.Bundle
 import android.view.KeyEvent
@@ -15,6 +16,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.SeekBar
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import smallthingz.ui.controls.ControlPalette
+import smallthingz.ui.input.phase.nativeViewMatrixToWindow
 import java.text.NumberFormat
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -25,6 +27,7 @@ import kotlin.math.roundToInt
  * The value grid supplies tick positions. Set [NativeSliderStyle.tickSizeDp] to zero to hide them.
  * Bindings normalize silently. User previews include cancellation rollback. A changed touch or
  * key sequence commits once on release, and a changed accessibility action commits immediately.
+ * A touch edit rolls back if the track geometry or the view-to-window transform changes.
  * Each thumb describes its exact integer value. Android's direct-set argument is a Float and
  * can represent only some large integers. Accessibility scroll actions move by one exact step.
  */
@@ -54,6 +57,9 @@ class NativeRangeSlider(
     private val low = Thumb(true, lowerLabel)
     private val high = Thumb(false, upperLabel)
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+    private val pointerStartMatrix = Matrix()
+    private val pointerMatrix = Matrix()
+    private val pointerLocation = IntArray(2)
     private var edit: Edit? = null
     private var downX = 0f
     private var dragStarted = false
@@ -67,8 +73,12 @@ class NativeRangeSlider(
         private val startRight = trackRight
         private val startRtl = rtl
 
-        fun pointerMappingChanged() = pointer >= 0 &&
-            (trackLeft != startLeft || trackRight != startRight || rtl != startRtl)
+        fun pointerMappingChanged(): Boolean {
+            if (pointer < 0) return false
+            if (trackLeft != startLeft || trackRight != startRight || rtl != startRtl) return true
+            nativeViewMatrixToWindow(this@NativeRangeSlider, pointerLocation, pointerMatrix)
+            return pointerMatrix != pointerStartMatrix
+        }
     }
 
     init {
@@ -216,6 +226,7 @@ class NativeRangeSlider(
                 else -> high
             }
             touchedValue = if (minOf(lowDistance, highDistance) <= touchSlop) (thumb ?: low).value else null
+            nativeViewMatrixToWindow(this, pointerLocation, pointerStartMatrix)
             edit = Edit(thumb, pointer = event.getPointerId(0), time = event.downTime)
             invalidate()
             return true
