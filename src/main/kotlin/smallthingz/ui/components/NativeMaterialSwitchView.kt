@@ -83,7 +83,10 @@ class NativeMaterialSwitchView(
         if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
         colorMotion=ViewColorTransition(this,intArrayOf(
             colors.track(initialEnabled,initialChecked),colors.thumb(initialEnabled,initialChecked),
-            colors.border(initialEnabled,initialChecked)),{invalidate()})
+            colors.border(initialEnabled,initialChecked)), {
+            updateThumbProgressInk()
+            invalidate()
+        })
     }
 
     /** Shows indeterminate progress without changing the switch or thumb geometry. */
@@ -93,6 +96,7 @@ class NativeMaterialSwitchView(
         thumbProgress?.let(::removeView)
         thumbProgress = progress
         progress?.let { addView(it, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)) }
+        updateThumbProgressInk()
         invalidate()
     }
 
@@ -101,6 +105,7 @@ class NativeMaterialSwitchView(
         colors = MaterialSwitchColors.from(palette)
         boundPalette = palette
         retargetColors()
+        updateThumbProgressInk()
         invalidate()
     }
 
@@ -222,14 +227,19 @@ class NativeMaterialSwitchView(
             originY + trackHeight - inset, borderRadius, borderRadius, borderPaint)
     }
 
-    override fun dispatchDraw(canvas: Canvas) {
-        val content = thumbProgress ?: return
-        if (content.visibility != VISIBLE || drawnThumbRadius <= 0f) return
-        val thumb = ColorUtils.compositeColors(thumbPaint.color, AndroidColor.BLACK or boundPalette.surface)
+    private fun updateThumbProgressInk() {
+        val progress = thumbProgress ?: return
+        val sample = colorMotion?.color(1) ?: colors.thumb(isEnabled, checked)
+        val thumb = ColorUtils.compositeColors(sample, AndroidColor.BLACK or boundPalette.surface)
         val preferred = boundPalette.onSurface
         val ink = if (ColorUtils.calculateContrast(preferred, thumb) >= 4.5) preferred else
             if (ColorUtils.calculateContrast(AndroidColor.BLACK, thumb) >= 4.5) AndroidColor.BLACK else AndroidColor.WHITE
-        content.setColorImmediately(ink)
+        progress.setColorImmediately(ink)
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        val content = thumbProgress ?: return
+        if (content.visibility != VISIBLE || drawnThumbRadius <= 0f) return
         val save = canvas.save()
         thumbClip.rewind()
         thumbClip.addCircle(thumbCenterX, thumbCenterY, drawnThumbRadius, Path.Direction.CW)
