@@ -105,6 +105,60 @@ class NativeStandaloneSharedControlsIntegrationTest {
         }
     }
 
+    @Test fun edgeAlignedSurfacesKeepSeparateFingerTargetsInBothLayoutDirections() {
+        for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
+            withWindow { activity ->
+                val density = Density(activity)
+                val resolver = createFontFamilyResolver(activity)
+                val colors = NativeColorScheme.fallback(darkTheme = false)
+                val raised = NativeUiAppearance.Default.buttons.raisedIcon
+                val recipe = raised.copy(surface = raised.surface.copy(minimumWidthDp = 40, minimumHeightDp = 40))
+                var firstClicks = 0
+                var secondClicks = 0
+                val first = NativeMaterialButtonView(activity, recipe, density, resolver) { firstClicks++ }
+                val second = NativeMaterialButtonView(activity, recipe, density, resolver) { secondClicks++ }
+                first.bind("", true, colors.buttonPalette)
+                second.bind("", true, colors.buttonPalette)
+                val firstTarget = NativeButtonTouchTarget(first, NativeButtonTouchTarget.HorizontalAlignment.END)
+                val secondTarget = NativeButtonTouchTarget(second, NativeButtonTouchTarget.HorizontalAlignment.START)
+                fun dp(value: Int) = (value * density.density).roundToInt()
+                val parent = LinearLayout(activity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    layoutDirection = direction
+                    addView(firstTarget, LinearLayout.LayoutParams(-2, -2))
+                    addView(secondTarget, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(2) })
+                }
+                activity.setContentView(parent)
+                return@withWindow {
+                    val rtl = direction == View.LAYOUT_DIRECTION_RTL
+                    assertEquals(dp(48), firstTarget.width)
+                    assertEquals(dp(48), secondTarget.width)
+                    assertEquals(dp(48), firstTarget.height)
+                    assertEquals(dp(48), secondTarget.height)
+                    assertEquals(dp(40), first.width)
+                    assertEquals(dp(40), second.width)
+                    assertEquals(if (rtl) 0 else firstTarget.width - first.width, first.left)
+                    assertEquals(if (rtl) secondTarget.width - second.width else 0, second.left)
+                    val leftTarget = if (rtl) secondTarget else firstTarget
+                    val rightTarget = if (rtl) firstTarget else secondTarget
+                    assertEquals(dp(2), rightTarget.left - leftTarget.right)
+                    val y = firstTarget.top + firstTarget.height / 2f
+                    val firstOuterEdge = if (rtl) firstTarget.right - .25f else firstTarget.left + .25f
+                    val secondOuterEdge = if (rtl) secondTarget.left + .25f else secondTarget.right - .25f
+                    assertTrue(tap(parent, firstOuterEdge, y, MotionEvent.TOOL_TYPE_FINGER))
+                    assertEquals(1, firstClicks)
+                    assertEquals(0, secondClicks)
+                    assertFalse(tap(parent, (leftTarget.right + rightTarget.left) / 2f, y, MotionEvent.TOOL_TYPE_FINGER))
+                    assertTrue(tap(parent, secondOuterEdge, y, MotionEvent.TOOL_TYPE_FINGER))
+                    assertEquals(1, firstClicks)
+                    assertEquals(1, secondClicks)
+                    first.close()
+                    second.close()
+                }
+            }
+        }
+    }
+
     @Test fun joinedFieldPaletteAndValidationRetainFocusedPasswordEditorAndComposition() = withWindow { activity ->
         val appearance = NativeUiAppearance.Default
         val light = NativeColorScheme.fallback(darkTheme = false)
