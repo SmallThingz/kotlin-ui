@@ -11,6 +11,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
@@ -423,6 +424,73 @@ class NativeRangeSliderBehaviorTest {
         }
 
     private enum class Change { STYLE, WIDTH, PADDING, DIRECTION, PALETTE }
+
+    @Test fun movingSliderDuringDragRollsBackOnRelease() = verifyRootDrag(moved = true) { slider, _ ->
+        slider.offsetLeftAndRight(slider.width / 8)
+    }
+
+    @Test fun translatingAncestorDuringDragRollsBackOnRelease() = verifyRootDrag(moved = true) { slider, parent ->
+        parent.translationX = slider.width / 8f
+    }
+
+    @Test fun translatingAncestorByFractionalPixelRollsBackOnRelease() = verifyRootDrag(moved = true) { _, parent ->
+        parent.translationX = .25f
+    }
+
+    @Test fun translatingAncestorVerticallyRollsBackOnRelease() = verifyRootDrag(moved = true) { slider, parent ->
+        parent.translationY = slider.height / 8f
+    }
+
+    @Test fun stationarySliderCommitsRootDragOnce() = verifyRootDrag(moved = false) { _, _ -> }
+
+    private fun verifyRootDrag(moved: Boolean, relocate: (NativeRangeSlider, FrameLayout) -> Unit) =
+        withActivity { activity ->
+            val instrumentation = InstrumentationRegistry.getInstrumentation()
+            lateinit var root: FrameLayout
+            lateinit var parent: FrameLayout
+            lateinit var slider: NativeRangeSlider
+            instrumentation.runOnMainSync {
+                slider = NativeRangeSlider(activity, palette, 3, 46, 4, 11, 35, "Lower", "Upper", minGap = 5)
+                root = FrameLayout(activity).apply { layoutDirection = View.LAYOUT_DIRECTION_LTR }
+                parent = FrameLayout(activity)
+                parent.addView(slider, FrameLayout.LayoutParams(-1, -2))
+                root.addView(parent, FrameLayout.LayoutParams(-1, -2))
+                activity.setContentView(root)
+            }
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {
+                assertTrue(slider.isAttachedToWindow)
+                assertTrue(slider.isLaidOut)
+                val trace = Trace(slider, gap = 8, min = 3, last = 43, step = 4)
+                val start = slider.getChildAt(0).let { (it.left + it.right) / 2f }
+                val end = slider.width * .45f
+                val time = SystemClock.uptimeMillis()
+                fun dispatch(action: Int, x: Float): Boolean {
+                    val event = MotionEvent.obtain(time, SystemClock.uptimeMillis(), action,
+                        x, slider.height * .5f, 0)
+                    return try { root.dispatchTouchEvent(event) } finally { event.recycle() }
+                }
+                assertTrue(dispatch(MotionEvent.ACTION_DOWN, start))
+                assertTrue(dispatch(MotionEvent.ACTION_MOVE, end))
+                val draft = trace.values
+                assertTrue(draft.first > 11)
+                assertEquals(listOf(draft), trace.previews)
+                assertTrue(trace.commits.isEmpty())
+
+                relocate(slider, parent)
+                dispatch(MotionEvent.ACTION_UP, end)
+
+                if (moved) {
+                    assertEquals(11 to 35, trace.values)
+                    assertEquals(listOf(draft, 11 to 35), trace.previews)
+                    assertTrue(trace.commits.isEmpty())
+                } else {
+                    assertEquals(draft, trace.values)
+                    assertEquals(listOf(draft), trace.previews)
+                    assertEquals(listOf(draft), trace.commits)
+                }
+            }
+        }
 
     @Test fun stationaryReleaseAfterTrackGeometryChangesRollsBackButPalettePreservesDrag() {
         for (change in Change.values()) withSlider {
