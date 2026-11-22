@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import smallthingz.ui.text.NativeTypographyRole
@@ -60,8 +61,8 @@ class NativeRequestContent(
                 addView(text(it, NativeTypographyRole.BODY_SMALL, colors.muted), row(recipe.scopeGapDp))
             }
         }
-        val bodyScroll = ScrollView(context).apply { addView(content, LayoutParams(MATCH_PARENT, WRAP_CONTENT)) }
-        val footerScroll = ScrollView(context).apply { addView(footer, LayoutParams(MATCH_PARENT, WRAP_CONTENT)) }
+        val bodyScroll = ScrollView(context).apply { addView(content, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)) }
+        val footerScroll = ScrollView(context).apply { addView(footer, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)) }
         val panel = RequestContentLayout(context, bodyScroll, footerScroll, maxHeightDp, recipe.scopeGapDp)
         view = panel
         release = {
