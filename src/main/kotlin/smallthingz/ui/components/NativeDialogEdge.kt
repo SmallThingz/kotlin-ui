@@ -38,3 +38,7 @@ internal fun nativeDialogEntryEdge(top: Int, bottom: Int, triggerCenter: Int, to
     return if (band > 0 && triggerCenter >= top && triggerCenter < top + band) NativeDialogEdge.TOP
     else NativeDialogEdge.BOTTOM
 }
+
+/** Limit a hosted panel to its measured owner even if the dialog window is offered a larger frame. */
+internal fun nativeDialogBoundedExtent(offered: Int, host: Int): Int =
+    if (host > 0) minOf(offered, host) else offered
