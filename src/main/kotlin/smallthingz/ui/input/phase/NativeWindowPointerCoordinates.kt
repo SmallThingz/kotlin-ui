@@ -76,7 +76,7 @@ fun nativeViewMatrixToWindow(view: View, location: IntArray): Matrix {
 }
 
 /** Destination is caller-owned scratch; sample before dispatching input callbacks. */
-private fun nativeViewMatrixToWindow(view: View, location: IntArray, result: Matrix) {
+internal fun nativeViewMatrixToWindow(view: View, location: IntArray, result: Matrix) {
     result.reset()
     if (Build.VERSION.SDK_INT >= 29) {
         view.transformMatrixToGlobal(result)
