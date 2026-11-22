@@ -60,4 +60,36 @@ class NativeRequestContentLayoutTest {
             assertEquals(0, root.childCount)
         }
     }
+    @Test fun oversizedFooterLeavesBodyViewportAndHonorsPanelPadding() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync {
+            val context = instrumentation.targetContext
+            fun dp(value: Int) = (value * context.resources.displayMetrics.density).roundToInt()
+            val actions = View(context).apply { minimumHeight = dp(250) }
+            NativeRequestContent(context, NativeColorScheme.fallback(false), "Review request",
+                "Long request body. ".repeat(160), actions).use { content ->
+                val root = content.view as ViewGroup
+                root.setPadding(dp(12), dp(10), dp(18), dp(14))
+                val width = dp(320)
+                val height = dp(200)
+                root.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.AT_MOST))
+                root.layout(0, 0, root.measuredWidth, root.measuredHeight)
+
+                val body = root.getChildAt(0) as ScrollView
+                val footer = root.getChildAt(1) as ScrollView
+                assertEquals(dp(12), body.left)
+                assertEquals(dp(10), body.top)
+                assertEquals(width - dp(18), footer.right)
+                assertEquals(root.measuredHeight - dp(14), footer.bottom)
+                assertTrue(body.height > 0)
+                assertTrue(body.canScrollVertically(1))
+                assertTrue(footer.canScrollVertically(1))
+                footer.scrollTo(0, dp(50))
+                assertTrue(footer.scrollY > 0)
+                assertEquals(0, body.scrollY)
+            }
+        }
+    }
+
 }
