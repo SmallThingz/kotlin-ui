@@ -17,6 +17,14 @@
         <item name="android:windowClipToOutline">false</item>
         <item name="android:backgroundDimEnabled">true</item>
     </style>
+    <style name="NativePermissionEnterFromTop">
+        <item name="android:windowEnterAnimation">@anim/native_permission_enter_top</item>
+        <item name="android:windowExitAnimation">@anim/native_permission_exit_top</item>
+    </style>
+    <style name="NativePermissionEnterFromBottom">
+        <item name="android:windowEnterAnimation">@anim/native_permission_enter_bottom</item>
+        <item name="android:windowExitAnimation">@anim/native_permission_exit_bottom</item>
+    </style>
     <string name="tooltip_label">show tooltip</string>
     <string name="tooltip_description">tooltip</string>
     <string name="not_selected">Not selected</string>
