@@ -15,10 +15,14 @@ import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Canvas
+import android.graphics.Color as AndroidColor
 import android.graphics.Paint
+import android.graphics.Path
 import android.os.Build
 import android.view.Choreographer
 import android.view.View
+import android.view.ViewGroup
+import androidx.core.graphics.ColorUtils
 import smallthingz.ui.animation.core.FloatSpringSpec
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.graphics.Color
@@ -29,7 +33,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * Released M3 Switch(checked, onCheckedChange = null, enabled), with no thumb content.
+ * Released M3 Switch(checked, onCheckedChange = null, enabled). Thumb content is opt-in.
  * The parent owns the row's click target, checked semantics and press feedback. This View adds
  * no click listener, focus stop, minimum 48dp target, ripple or platform Switch styling.
  *
@@ -45,7 +49,7 @@ class NativeMaterialSwitchView(
     palette: NativeMaterialSwitchPalette,
     initialChecked: Boolean = false,
     initialEnabled: Boolean = true,
-) : View(context), Choreographer.FrameCallback {
+) : ViewGroup(context), Choreographer.FrameCallback {
     private val trackPaint = Paint(PAINT_FLAGS)
     private val thumbPaint = Paint(PAINT_FLAGS)
     private val borderPaint = Paint(PAINT_FLAGS).apply { style = Paint.Style.STROKE }
@@ -61,8 +65,15 @@ class NativeMaterialSwitchView(
     private var framePosted = false
     private val choreographer = Choreographer.getInstance()
     private var colorMotion:ViewColorTransition?=null
+    private var thumbProgress: NativeCircularProgress? = null
+    private val thumbClip = Path()
+    private var thumbCenterX = 0f
+    private var thumbCenterY = 0f
+    private var drawnThumbRadius = 0f
 
     init {
+        setWillNotDraw(false)
+        descendantFocusability = FOCUS_BLOCK_DESCENDANTS
         minimumWidth = 0
         minimumHeight = 0
         isFocusable = false
@@ -73,6 +84,16 @@ class NativeMaterialSwitchView(
         colorMotion=ViewColorTransition(this,intArrayOf(
             colors.track(initialEnabled,initialChecked),colors.thumb(initialEnabled,initialChecked),
             colors.border(initialEnabled,initialChecked)),{invalidate()})
+    }
+
+    /** Shows indeterminate progress without changing the switch or thumb geometry. */
+    fun setThumbProgress(progress: NativeCircularProgress?) {
+        if (thumbProgress === progress) return
+        require(progress?.parent == null)
+        thumbProgress?.let(::removeView)
+        thumbProgress = progress
+        progress?.let { addView(it, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)) }
+        invalidate()
     }
 
     fun setPalette(palette: NativeMaterialSwitchPalette) {
@@ -130,6 +151,11 @@ class NativeMaterialSwitchView(
             resolveSize(trackHeight, heightMeasureSpec),
         )
 
+        thumbProgress?.let {
+            val size = MeasureSpec.makeMeasureSpec((12f * density).roundToInt(), MeasureSpec.EXACTLY)
+            it.measure(size, size)
+        }
+
         val targetSize = (if (visuallyPressed) 28f else if (checked) 24f else 16f) * density
         // Preserve the source's px -> dp -> px ordering, rather than algebraically simplifying it.
         val minBound = ((32f - targetSize / density) / 2f) * density
@@ -154,6 +180,11 @@ class NativeMaterialSwitchView(
         }
     }
 
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        // Content has fixed measured bounds. Its draw follows the animated thumb on each frame.
+        thumbProgress?.let { it.layout(0, 0, it.measuredWidth, it.measuredHeight) }
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val size = sizeMotion ?: return
@@ -176,6 +207,11 @@ class NativeMaterialSwitchView(
         } else logicalOffset
         val thumbY = ((trackHeight - actualSize) / 2f).roundToInt()
         val thumbRadius = actualSize / 2f
+        if (thumbProgress != null) {
+            thumbCenterX = originX + thumbX + thumbRadius
+            thumbCenterY = originY + thumbY + thumbRadius
+            drawnThumbRadius = thumbRadius
+        }
         canvas.drawRoundRect(originX + thumbX, originY + thumbY,
             originX + thumbX + actualSize, originY + thumbY + actualSize, thumbRadius, thumbRadius, thumbPaint)
 
@@ -184,6 +220,29 @@ class NativeMaterialSwitchView(
         val borderRadius = (radius - inset).coerceAtLeast(0f)
         canvas.drawRoundRect(originX + inset, originY + inset, originX + trackWidth - inset,
             originY + trackHeight - inset, borderRadius, borderRadius, borderPaint)
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        val content = thumbProgress ?: return
+        if (content.visibility != VISIBLE || drawnThumbRadius <= 0f) return
+        val thumb = ColorUtils.compositeColors(thumbPaint.color, AndroidColor.BLACK or boundPalette.surface)
+        val preferred = boundPalette.onSurface
+        val ink = if (ColorUtils.calculateContrast(preferred, thumb) >= 4.5) preferred else
+            if (ColorUtils.calculateContrast(AndroidColor.BLACK, thumb) >= 4.5) AndroidColor.BLACK else AndroidColor.WHITE
+        content.setColorImmediately(ink)
+        val save = canvas.save()
+        thumbClip.rewind()
+        thumbClip.addCircle(thumbCenterX, thumbCenterY, drawnThumbRadius, Path.Direction.CW)
+        canvas.clipPath(thumbClip)
+        canvas.translate(thumbCenterX - content.width / 2f, thumbCenterY - content.height / 2f)
+        drawChild(canvas, content, drawingTime)
+        canvas.restoreToCount(save)
+    }
+
+    override fun onDescendantInvalidated(child: View, target: View) {
+        super.onDescendantInvalidated(child, target)
+        // The child draws at the animated thumb, beyond its fixed layout rectangle.
+        if (child === thumbProgress) invalidate()
     }
 
     override fun doFrame(frameTimeNanos: Long) {
