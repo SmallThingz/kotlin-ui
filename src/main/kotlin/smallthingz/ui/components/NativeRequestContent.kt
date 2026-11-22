@@ -63,7 +63,8 @@ class NativeRequestContent(
         }
         val bodyScroll = ScrollView(context).apply { addView(content, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)) }
         val footerScroll = ScrollView(context).apply { addView(footer, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)) }
-        val panel = RequestContentLayout(context, bodyScroll, footerScroll, maxHeightDp, recipe.scopeGapDp)
+        val panel = RequestContentLayout(context, bodyScroll, footerScroll, maxHeightDp,
+            recipe.contentInsetDp, recipe.scopeGapDp)
         view = panel
         release = {
             try {
@@ -97,6 +98,7 @@ private class RequestContentLayout(
     private val body: ScrollView,
     private val footer: ScrollView,
     private val maxHeightDp: Int,
+    private val minimumBodyDp: Int,
     private val gapDp: Int,
 ) : ViewGroup(context) {
     private var gap = 0
@@ -118,21 +120,28 @@ private class RequestContentLayout(
         val maxHeight = (maxHeightDp * metrics.density).roundToInt().coerceIn(1, MEASURED_SIZE_MASK)
         val limit = if (MeasureSpec.getMode(heightSpec) == MeasureSpec.UNSPECIFIED) maxHeight
             else minOf(maxHeight, MeasureSpec.getSize(heightSpec))
-        val exactWidth = MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY)
-        footer.measure(exactWidth, MeasureSpec.makeMeasureSpec(limit, MeasureSpec.AT_MOST))
-        val available = (limit - footer.measuredHeight).coerceAtLeast(0)
-        val requestedGap = (gapDp * metrics.density).roundToInt()
-        gap = if (footer.measuredHeight > 0 && available > requestedGap) requestedGap else 0
-        body.measure(exactWidth, MeasureSpec.makeMeasureSpec(available - gap, MeasureSpec.AT_MOST))
-        if (body.measuredHeight == 0 || footer.measuredHeight == 0) gap = 0
+        val innerWidth = (width - paddingLeft - paddingRight).coerceAtLeast(0)
+        val verticalPadding = paddingTop + paddingBottom
+        val innerHeight = (limit - verticalPadding).coerceAtLeast(0)
+        val minimumBody = minOf((minimumBodyDp * metrics.density).roundToInt(), innerHeight / 3)
+        val gapBudget = minOf((gapDp * metrics.density).roundToInt(), innerHeight / 6)
+        val exactWidth = MeasureSpec.makeMeasureSpec(innerWidth, MeasureSpec.EXACTLY)
+        val footerLimit = innerHeight - minimumBody - gapBudget
+        footer.measure(exactWidth, MeasureSpec.makeMeasureSpec(footerLimit, MeasureSpec.AT_MOST))
+        gap = if (footer.measuredHeight > 0) gapBudget else 0
+        val bodyLimit = innerHeight - footer.measuredHeight - gap
+        body.measure(exactWidth, MeasureSpec.makeMeasureSpec(bodyLimit, MeasureSpec.AT_MOST))
+        if (body.measuredHeight == 0) gap = 0
         setMeasuredDimension(resolveSize(width, widthSpec),
-            resolveSize(body.measuredHeight + gap + footer.measuredHeight, heightSpec))
+            resolveSize(minOf(limit, verticalPadding + body.measuredHeight + gap + footer.measuredHeight), heightSpec))
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         if (childCount == 0) return
-        body.layout(0, 0, width, body.measuredHeight)
+        val start = paddingLeft
+        val end = (width - paddingRight).coerceAtLeast(start)
+        body.layout(start, paddingTop, end, paddingTop + body.measuredHeight)
         val footerTop = body.bottom + gap
-        footer.layout(0, footerTop, width, footerTop + footer.measuredHeight)
+        footer.layout(start, footerTop, end, footerTop + footer.measuredHeight)
     }
 }
