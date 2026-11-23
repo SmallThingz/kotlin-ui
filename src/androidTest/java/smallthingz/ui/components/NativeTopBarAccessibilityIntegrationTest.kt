@@ -33,6 +33,51 @@ import kotlin.math.roundToInt
 
 @RunWith(AndroidJUnit4::class)
 class NativeTopBarAccessibilityIntegrationTest {
+    @Test fun compactCenteredBarSharesActionBoundsInBothLayoutDirections() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync {
+            val context = instrumentation.targetContext
+            val style = NativeToolbarStyle.Default.copy(compactHeightDp = 58f)
+            val windowWidth = 451
+            val insetLeft = 17
+            val insetRight = 9
+            val insetTop = 25
+            val density = 2.625f
+            fun exact(size: Int) = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY)
+            val vertical = View.MeasureSpec.makeMeasureSpec(250, View.MeasureSpec.AT_MOST)
+
+            for (direction in intArrayOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
+                val start = View(context)
+                val end = View(context)
+                val compact = NativeTopBarLayout(context, style).apply {
+                    layoutDirection = direction
+                    bindStyle(density, insetTop, style)
+                    setActionInsets(insetLeft, insetRight)
+                    addView(start, NativeTopBarLayout.ActionLayoutParams(NativeTopBarLayout.Slot.START))
+                    addView(end, NativeTopBarLayout.ActionLayoutParams(NativeTopBarLayout.Slot.END))
+                    measure(exact(windowWidth), vertical)
+                    layout(0, 0, measuredWidth, measuredHeight)
+                }
+                val back = View(context)
+                val done = View(context)
+                val title = object : View(context) {
+                    override fun onMeasure(widthSpec: Int, heightSpec: Int) = setMeasuredDimension(0, 0)
+                }
+                val centered = NativeCenteredTopBarLayout(context, density, back, title, done, style,
+                    useCompactActions = true).apply {
+                    layoutDirection = direction
+                    measure(exact(windowWidth - insetLeft - insetRight), vertical)
+                    layout(insetLeft, insetTop, insetLeft + measuredWidth, insetTop + measuredHeight)
+                }
+                fun bounds(view: View, x: Int = 0, y: Int = 0) =
+                    Rect(view.left + x, view.top + y, view.right + x, view.bottom + y)
+                assertEquals(compact.measuredHeight, insetTop + centered.measuredHeight)
+                assertEquals(bounds(start), bounds(back, insetLeft, insetTop))
+                assertEquals(bounds(end), bounds(done, insetLeft, insetTop))
+            }
+        }
+    }
+
     @Test fun standaloneActionExposesTheCurrentLabelAndCallback() = withToolbar { fixture ->
         val (root, action, density) = fixture
         val visual = action.accessibilityAction

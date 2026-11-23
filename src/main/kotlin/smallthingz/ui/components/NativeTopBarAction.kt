@@ -195,10 +195,12 @@ private class NativeTopBarActionLeaf(
     fun bind(nextDensity: Float, enabled: Boolean, tint: Int, indicationColor: Int, callback: () -> Unit) {
         if (density != nextDensity) requestLayout()
         density = nextDensity
+        val firstBind = click == null
         click = callback
         isEnabled = enabled
         isFocusable = enabled
-        colorMotion.retarget(if (enabled) tint else srgbColorWithAlpha(tint, actionStyle.disabledAlpha))
+        val targetTint = if (enabled) tint else srgbColorWithAlpha(tint, actionStyle.disabledAlpha)
+        if (firstBind) colorMotion.snap(targetTint) else colorMotion.retarget(targetTint)
         indication.updateColor(indicationColor)
         controller.bind(NativeClickBinding(identity, enabled, onClick = { performClick() }))
         updateGeometry(width, height)

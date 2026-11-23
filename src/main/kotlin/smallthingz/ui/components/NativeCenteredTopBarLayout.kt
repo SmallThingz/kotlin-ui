@@ -16,6 +16,7 @@ open class NativeCenteredTopBarLayout(
     val titleView: View,
     val actionView: View,
     private var toolbarStyle: NativeToolbarStyle = NativeToolbarStyle.Default,
+    private val useCompactActions: Boolean = false,
 ) : ViewGroup(context) {
     private var logicalHeight = 0
     private var titleWrapperWidth = 0
@@ -48,17 +49,26 @@ open class NativeCenteredTopBarLayout(
         val maxH = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED) Int.MAX_VALUE
             else MeasureSpec.getSize(heightMeasureSpec)
         val childH = if (maxH == Int.MAX_VALUE) unspecified() else atMost(maxH)
-        navigationPadding = dp(toolbarStyle.centeredPaddingDp)
-        actionPadding = dp(toolbarStyle.centeredPaddingDp)
-        navigation.measure(atMost((w - navigationPadding).coerceAtLeast(0)), childH)
-        done.measure(atMost((w - actionPadding).coerceAtLeast(0)), childH)
+        val edgeInset = if (useCompactActions) toolbarStyle.compactEdgeInsetDp else toolbarStyle.centeredPaddingDp
+        navigationPadding = dp(edgeInset)
+        actionPadding = dp(edgeInset)
+        if (useCompactActions) {
+            val actionSize = MeasureSpec.makeMeasureSpec(dp(toolbarStyle.action.sizeDp), MeasureSpec.EXACTLY)
+            navigation.measure(actionSize, actionSize)
+            done.measure(actionSize, actionSize)
+        } else {
+            navigation.measure(atMost((w - navigationPadding).coerceAtLeast(0)), childH)
+            done.measure(atMost((w - actionPadding).coerceAtLeast(0)), childH)
+        }
         navigationWrapperWidth = min(w, navigation.measuredWidth + navigationPadding)
         actionWrapperWidth = min(w, done.measuredWidth + actionPadding)
         val titleMax = (w - navigationWrapperWidth - actionWrapperWidth).coerceAtLeast(0)
         titlePadding = dp(toolbarStyle.centeredPaddingDp)
         title.measure(atMost((titleMax - titlePadding * 2).coerceAtLeast(0)), childH)
         titleWrapperWidth = min(titleMax, title.measuredWidth + titlePadding * 2)
-        logicalHeight = max(dp(toolbarStyle.centeredHeightDp), title.measuredHeight)
+        val minimumHeight = if (useCompactActions) toolbarStyle.compactHeightPx(density)
+            else dp(toolbarStyle.centeredHeightDp)
+        logicalHeight = max(minimumHeight, title.measuredHeight)
         setMeasuredDimension(w, resolveSize(logicalHeight, heightMeasureSpec))
     }
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
@@ -70,14 +80,17 @@ open class NativeCenteredTopBarLayout(
         val yOffset = (height - logicalHeight) / 2
         val nx = p.navigationX + if (rtl)
             navigationWrapperWidth - navigation.measuredWidth - navigationPadding else navigationPadding
-        navigation.layout(nx, p.navigationY + yOffset, nx + navigation.measuredWidth,
-            p.navigationY + yOffset + navigation.measuredHeight)
+        val actionRowHeight = min(height, toolbarStyle.compactHeightPx(density))
+        val navigationY = if (useCompactActions) compactToolbarActionTop(actionRowHeight, navigation.measuredHeight)
+            else p.navigationY + yOffset
+        navigation.layout(nx, navigationY, nx + navigation.measuredWidth, navigationY + navigation.measuredHeight)
         val tx = p.titleX + if (rtl) titleWrapperWidth - title.measuredWidth - titlePadding else titlePadding
         title.layout(tx, p.titleY + yOffset, tx + title.measuredWidth,
             p.titleY + yOffset + title.measuredHeight)
         val ax = p.actionX + if (rtl) actionWrapperWidth - done.measuredWidth else 0
-        done.layout(ax, p.actionY + yOffset, ax + done.measuredWidth,
-            p.actionY + yOffset + done.measuredHeight)
+        val actionY = if (useCompactActions) compactToolbarActionTop(actionRowHeight, done.measuredHeight)
+            else p.actionY + yOffset
+        done.layout(ax, actionY, ax + done.measuredWidth, actionY + done.measuredHeight)
     }
     override fun draw(canvas: Canvas) {
         val save = canvas.save()
