@@ -19,11 +19,13 @@ Branch: `draft/anchored-dropdown-20261123`. This draft is not on main and is not
 
 ## Integration
 
-Create one host per visible screen using its `NativeUiAppearance`, resolved `NativeColorScheme`, `Density` and font resolver. Each returned field retains typed option identity and caller-provided/localized labels. Update the field binding after `onSelected`; dispose fields and the host with their screen. Keep source mutations outside rendering callbacks.
+Create one controller per visible screen using its outer `FrameLayout`, `NativeUiAppearance`, resolved `NativeColorScheme`, `Density` and font resolver. The explicit frame must sit outside scrolling/clipping content. The library mounts a modal layer in that same window, suppresses/restores sibling accessibility and focus, and handles Back. There is no separate popup window or cancelled first draw. Each returned field retains typed option identity and caller-provided/localized labels. Update the field binding after `onSelected`; dispose fields and the controller with their screen. Keep source mutations outside rendering callbacks.
 
 The expansion recipe is `NativeUiAppearance.anchoredDropdown`. Existing components keep their existing behavior unless this host is used.
 
 Option rows retain library typography and input semantics. Immutable palette/icon assets are shared. Only rows entering the current reveal are measured and laid out; rows outside the reveal skip drawing. These remove avoidable opening work, but device timing remains separate evidence from source allocation counts.
+
+New taps reverse from the current reveal and position, using duration proportional to remaining travel. One gesture cannot be handed between two platform windows. The layer is synchronously laid out before the opening click returns, so another tap can reach it before the next frame.
 
 ## Example
 
