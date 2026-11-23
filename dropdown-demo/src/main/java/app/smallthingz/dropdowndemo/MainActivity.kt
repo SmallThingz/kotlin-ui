@@ -95,7 +95,7 @@ class MainActivity : Activity() {
         val input = field("Input device", listOf("default" to "Automatic", "internal" to "Built-in", "usb" to "USB", "bluetooth" to "Bluetooth"))
         audio.addRow(NativeDropdownPair(this, source, input), NativeGroupLayout.LayoutParams(-1, -2).apply { dividerTop = true })
         page.addView(audio)
-        page.addView(paragraph("Drag one step to change the value. Tap the current slot to close, or tap another option to slide it into place.", NativeTypographyRole.BODY_SMALL, true).apply {
+        page.addView(paragraph("Scroll to choose; release to snap into place. Tap the current slot to close, or tap another option to slide it into place.", NativeTypographyRole.BODY_SMALL, true).apply {
             setPadding(dp(4), dp(14), dp(4), dp(8))
         })
         fun button(label: String, action: () -> Unit) {

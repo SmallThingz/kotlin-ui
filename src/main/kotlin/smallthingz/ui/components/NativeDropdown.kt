@@ -69,6 +69,7 @@ class NativeDropdown<T>(
     private var textWidth = 0
     private var iconGap = 0
     private var closed = false
+    internal var optionAccessibilityLabel: CharSequence? = null
     override val hasRowAction get() = content != null
     override fun activateRow() { content?.let { open(this, it) } }
 
@@ -191,9 +192,9 @@ class NativeDropdown<T>(
     override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
         super.onInitializeAccessibilityNodeInfo(info)
         // The released clickable Surface supplies no Role.Button and no parent Text value.
-        info.className = View::class.java.name
+        info.className = if (optionAccessibilityLabel == null) View::class.java.name else "android.widget.Button"
         info.text = null
-        info.contentDescription = null
+        info.contentDescription = optionAccessibilityLabel
     }
     override fun close() {
         if (closed) return
