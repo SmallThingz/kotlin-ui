@@ -46,6 +46,7 @@ class NativeUiAppearance(
     val backdrops: NativeBackdropStyle = NativeBackdropStyle.Default,
     val captureControls: NativeCaptureControlsStyle = NativeCaptureControlsStyle.Default,
     compactField: NativeCompactFieldRecipe? = null,
+    val anchoredDropdown: NativeAnchoredDropdownStyle = NativeAnchoredDropdownStyle(),
 ) {
     private val settingsSelectorsOverride = settingsSelectors
     private val buttonsOverride = buttons
@@ -92,6 +93,7 @@ class NativeUiAppearance(
         backdrops: NativeBackdropStyle = this.backdrops,
         captureControls: NativeCaptureControlsStyle = this.captureControls,
         compactField: NativeCompactFieldRecipe? = compactFieldOverride,
+        anchoredDropdown: NativeAnchoredDropdownStyle = this.anchoredDropdown,
     ): NativeUiAppearance = NativeUiAppearance(
         colorScheme = colorScheme,
         typography = typography,
@@ -119,6 +121,7 @@ class NativeUiAppearance(
         backdrops = backdrops,
         captureControls = captureControls,
         compactField = compactField,
+        anchoredDropdown = anchoredDropdown,
     )
 
     fun resolveColorScheme(context: Context, darkTheme: Boolean): NativeColorScheme =
