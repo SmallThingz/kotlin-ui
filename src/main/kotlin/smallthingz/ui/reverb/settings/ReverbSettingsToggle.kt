@@ -13,19 +13,37 @@ import kotlin.math.roundToInt
 
 enum class ReverbSettingsToggleRole { AUTO_START, OUTPUT_COMPRESSION, SAVE_NOTIFICATION, SILENCE_DETECTION }
 
-class ReverbSettingsToggle(
+class ReverbSettingsToggle private constructor(
     context: Context,
     theme: ReverbTheme,
     initial: ToggleState,
-    role: ReverbSettingsToggleRole,
-    inputRoot: () -> View?,
+    inputRoot: (() -> View?)?,
+    muteDisabledLabel: Boolean,
     onChanged: (Boolean) -> Unit,
 ) : AutoCloseable {
+    /** A standard Settings switch with caller-supplied copy, state, and change handling. */
+    constructor(
+        context: Context,
+        theme: ReverbTheme,
+        initial: ToggleState,
+        inputRoot: (() -> View?)? = null,
+        onChanged: (Boolean) -> Unit,
+    ) : this(context, theme, initial, inputRoot, true, onChanged)
+
+    constructor(
+        context: Context,
+        theme: ReverbTheme,
+        initial: ToggleState,
+        role: ReverbSettingsToggleRole,
+        inputRoot: () -> View?,
+        onChanged: (Boolean) -> Unit,
+    ) : this(context, theme, initial, inputRoot, when (role) {
+        ReverbSettingsToggleRole.AUTO_START, ReverbSettingsToggleRole.OUTPUT_COMPRESSION -> true
+        ReverbSettingsToggleRole.SAVE_NOTIFICATION, ReverbSettingsToggleRole.SILENCE_DETECTION -> false
+    }, onChanged)
+
     private val row = ToggleRow(context, initial, theme.controls, inputRoot,
-        muteDisabledLabel = when (role) {
-            ReverbSettingsToggleRole.AUTO_START, ReverbSettingsToggleRole.OUTPUT_COMPRESSION -> true
-            ReverbSettingsToggleRole.SAVE_NOTIFICATION, ReverbSettingsToggleRole.SILENCE_DETECTION -> false
-        }, paintedSurface = ReverbTextSurface::sample, onChanged = onChanged)
+        muteDisabledLabel = muteDisabledLabel, paintedSurface = ReverbTextSurface::sample, onChanged = onChanged)
     val view: View get() = row.view
 
     fun bind(next: ToggleState, theme: ReverbTheme) = row.bind(next, theme.controls)

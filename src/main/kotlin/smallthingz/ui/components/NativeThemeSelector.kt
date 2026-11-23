@@ -102,6 +102,12 @@ class NativeThemeSelector internal constructor(
         bind(selected, palette, palette.content, textDensity.density)
     }
 
+    internal fun bindEnabled(enabled: Boolean) {
+        if (closed) return
+        isEnabled = enabled
+        capsule.setOptionsEnabled(enabled)
+    }
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         bind(selected, palette, titleColor)
