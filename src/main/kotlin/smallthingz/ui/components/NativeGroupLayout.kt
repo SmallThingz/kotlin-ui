@@ -117,6 +117,21 @@ class NativeGroupLayout(
 
     /** The sampled fill currently painted, including an in-flight palette transition. */
     val paintedFillColor: Int get() = fillPaint.color
+
+    /** Corner ownership of an anchored child, in physical TL/TR/BR/BL order. */
+    internal fun descendantCornerRadii(child: View): FloatArray {
+        val box = Rect(0, 0, child.width, child.height)
+        offsetDescendantRectToMyCoords(child, box)
+        val joined = joinedEdges?.let { joinedGroupGeometry(width.toFloat(), height.toFloat(), resources.displayMetrics.density, it) }
+        val top = joined?.topRadius ?: geometry.radius
+        val bottom = joined?.bottomRadius ?: geometry.radius
+        return floatArrayOf(
+            if (box.left == 0 && box.top == 0) top else 0f,
+            if (box.right == width && box.top == 0) top else 0f,
+            if (box.right == width && box.bottom == height) bottom else 0f,
+            if (box.left == 0 && box.bottom == height) bottom else 0f,
+        )
+    }
     /** Progress overlays are not a uniform text underlay; leave their existing ink owner intact. */
     val paintedTextSurface: Long get() = if (progressFraction == 0f)
         smallthingz.ui.controls.textSurfaceRange(fillPaint.color) else 0L
