@@ -72,7 +72,7 @@ class NativeActionSheet(
     initialStyle:NativeActionSheetStyle,
     title:String,
     onDismiss:()->Unit,
-    closeIcon: NativeActionSheetIcon,
+    closeIcon: NativeActionSheetIcon?,
     contentBackground: android.graphics.drawable.Drawable?,
     private val statusBarProtection: NativeStatusBarProtection?,
 ):ComponentDialog(ContextThemeWrapper(anchor.context,smallthingz.ui.R.style.NativeSheetWindowTheme)) {
@@ -84,6 +84,19 @@ class NativeActionSheet(
         closeIcon: NativeActionSheetIcon,
         contentBackground: android.graphics.drawable.Drawable? = null,
     ) : this(anchor, initialStyle, title, onDismiss, closeIcon, contentBackground, null)
+
+    /**
+     * A sheet without a header close button. The drag handle, backdrop and Back remain available
+     * for dismissal.
+     */
+    constructor(
+        anchor: View,
+        initialStyle: NativeActionSheetStyle,
+        title: String,
+        onDismiss: () -> Unit,
+        contentBackground: android.graphics.drawable.Drawable? = null,
+        statusBarProtection: NativeStatusBarProtection? = null,
+    ) : this(anchor, initialStyle, title, onDismiss, null, contentBackground, statusBarProtection)
 
     var style=initialStyle;private set
     private var onOwnerDismiss=onDismiss
@@ -348,7 +361,7 @@ class NativeActionSheet(
         release {accessibility.close()}
         release {scrollEvents.close()}
         release {handle.close()}
-        release {appContent.close.cancelInput()}
+        release {appContent.close?.cancelInput()}
         release {scrimTargets.close()}
         release {runtime.close()}
         failure?.let {throw it}
@@ -534,7 +547,8 @@ internal class SheetPointerOwner(private val density:Float):AutoCloseable {
     val geometry=NativeWindowPointerCoordinates {checkNotNull(root)}
     private var sheets=emptyList<NativeViewPointerHitLayout>()
     private var contentHits=emptyList<NativeViewPointerHitLayout>()
-    private var fixedContentHits=emptyList<NativeViewPointerHitLayout>()
+    private var closeHit: NativeViewPointerHitLayout? = null
+    private var handleHit: NativeViewPointerHitLayout? = null
     private var combinedContentHits=emptyList<NativeViewPointerHitLayout>()
     private var contentWrapper:((List<NativeViewPointerHitLayout>)->NativeViewPointerHitLayout)?=null
     val layout=object:NativeViewPointerHitLayout {
@@ -550,20 +564,20 @@ internal class SheetPointerOwner(private val density:Float):AutoCloseable {
         app:NativeSheetContent,drag:NativeActionSheetDragNode) {
         this.root=root
         val minimum=NativeMinimumTouchTarget {Size(48f*density,48f*density)}
-        val close=app.close.visual
-        val closeHit=NativeRetainedViewHitLayout(close,geometry,minimum,
-            listOf(NativeClickPhaseNode(close,close.nativeClickEndpoint,drag::interested)),clip={p->
-                val radius=min(close.width,close.height)*.5f
-                val x=p.x-close.width*.5f;val y=p.y-close.height*.5f;x*x+y*y<=radius*radius
-            })
-        val handleHit=NativeRetainedViewHitLayout(handle,geometry,minimum,
+        closeHit = app.close?.visual?.let { close ->
+            NativeRetainedViewHitLayout(close,geometry,minimum,
+                listOf(NativeClickPhaseNode(close,close.nativeClickEndpoint,drag::interested)),clip={p->
+                    val radius=min(close.width,close.height)*.5f
+                    val x=p.x-close.width*.5f;val y=p.y-close.height*.5f;x*x+y*y<=radius*radius
+                })
+        }
+        handleHit=NativeRetainedViewHitLayout(handle,geometry,minimum,
             listOf(handle.tooltip.pointerNode,NativeClickPhaseNode(handle,handle.nativeClickEndpoint,drag::interested)))
         val shield=object:NativeViewPhasePointerNode {
             override val view:View get()=surface.painted
             override fun dispatch(event:NativeDragPointerEvent,pass:NativePointerPass)=Unit
             override fun cancel()=Unit
         }
-        fixedContentHits=listOf(closeHit,handleHit)
         refreshContentHits()
         val contentHit=NativeRetainedViewHitLayout(surface.painted,geometry,minimum,listOf(shield),
             children={combinedContentHits},clip=surface::containsShape)
@@ -583,15 +597,14 @@ internal class SheetPointerOwner(private val density:Float):AutoCloseable {
         refreshContentHits()
     }
     private fun refreshContentHits() {
-        val wrapper=contentWrapper
-        combinedContentHits=if(wrapper==null)contentHits+fixedContentHits else {
-            // Close scrolls with the app content; the drag handle remains outside the viewport.
-            listOf(wrapper(contentHits+fixedContentHits.take(1)))+fixedContentHits.drop(1)
-        }
+        // Close scrolls with the app content. The drag handle stays outside the viewport.
+        val appHits = contentHits + listOfNotNull(closeHit)
+        val wrappedHits = contentWrapper?.let { listOf(it(appHits)) } ?: appHits
+        combinedContentHits = wrappedHits + listOfNotNull(handleHit)
     }
     override fun close() {
         root?.cancelPointerInput()
-        sheets=emptyList();contentHits=emptyList();fixedContentHits=emptyList();combinedContentHits=emptyList();root=null
+        sheets=emptyList();contentHits=emptyList();closeHit=null;handleHit=null;combinedContentHits=emptyList();root=null
         contentWrapper=null
     }
 }
