@@ -90,6 +90,7 @@ class ReverbProductTopBar(context: Context, initialTheme: ReverbTheme, inputRoot
             override fun onViewDetachedFromWindow(view: View) = retire(onWindowDismissed)
         }
         anchor.addOnAttachStateChangeListener(detach)
+        opened.window?.decorView?.filterTouchesWhenObscured = true
         opened.onWindowDismissed { retire(onWindowDismissed) }
         about = opened
         ownerClose = { retire({}) }
