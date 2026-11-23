@@ -17,6 +17,15 @@ open class NativeTopBarLayout(context: Context, initialStyle: NativeToolbarStyle
     class ActionLayoutParams(val slot: Slot, val minimumVisualOffset: Boolean = false) :
         ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     private var topInsetPx = 0
+    private var leftInsetPx = 0
+    private var rightInsetPx = 0
+
+    fun setActionInsets(left: Int, right: Int) {
+        if (leftInsetPx == left && rightInsetPx == right) return
+        leftInsetPx = left
+        rightInsetPx = right
+        requestLayout()
+    }
     fun bindMetrics(density: Float, topInsetPx: Int = 0, contentHeightDp: Float = NativeToolbarStyle.Default.compactHeightDp) =
         bindStyle(density, topInsetPx, if (contentHeightDp == toolbarStyle.compactHeightDp) toolbarStyle else
             toolbarStyle.copy(compactHeightDp = contentHeightDp))
@@ -37,18 +46,19 @@ open class NativeTopBarLayout(context: Context, initialStyle: NativeToolbarStyle
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         val inset = (toolbarStyle.compactEdgeInsetDp * touchDensity).roundToInt()
         val size = (toolbarStyle.action.sizeDp * touchDensity).roundToInt()
-        val y = topInsetPx + ((height - topInsetPx - size) / 2f).roundToInt()
+        val y = topInsetPx + compactToolbarActionTop(height - topInsetPx, size)
+        val safeWidth = (width - leftInsetPx - rightInsetPx).coerceAtLeast(0)
         for (index in 0 until childCount) {
             val child = getChildAt(index)
             val params = child.layoutParams as? ActionLayoutParams
             val logicalX = when (params?.slot ?: Slot.START) {
                 Slot.START -> inset
-                Slot.CENTER -> ((width - size) / 2f).roundToInt()
-                Slot.END -> width - inset - size
+                Slot.CENTER -> ((safeWidth - size) / 2f).roundToInt()
+                Slot.END -> safeWidth - inset - size
             }
             // A centered visual retains physical centering even at odd RTL widths.
-            val x = if (params?.slot == Slot.CENTER || layoutDirection != LAYOUT_DIRECTION_RTL) logicalX
-                else width - logicalX - size
+            val x = leftInsetPx + if (params?.slot == Slot.CENTER || layoutDirection != LAYOUT_DIRECTION_RTL) logicalX
+                else safeWidth - logicalX - size
             val residual = if (params?.minimumVisualOffset == true)
                 nativeMinimumInteractiveVisualOffset(size, (toolbarStyle.action.minimumTargetDp * touchDensity).roundToInt()) else 0
             child.layout(x + residual, y + residual, x + residual + size, y + residual + size)

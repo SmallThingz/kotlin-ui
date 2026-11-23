@@ -8,6 +8,9 @@ import kotlin.math.min
 import kotlin.math.max
 import kotlin.math.roundToInt
 
+internal fun compactToolbarActionTop(contentHeight: Int, actionHeight: Int): Int =
+    ((contentHeight - actionHeight) / 2f).roundToInt()
+
 /** Actual clipped46dp visual bounds, not the optional48dp wrapper's rectangular hit box. */
 data class NativeTopBarHitBounds(
     val left: Float, val top: Float, val width: Float, val height: Float, val radius: Float,
