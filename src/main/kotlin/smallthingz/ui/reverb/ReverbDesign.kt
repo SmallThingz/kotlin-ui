@@ -61,6 +61,9 @@ class ReverbTheme internal constructor(
 ) {
     internal val controls = ControlTheme(appearance, palette, density, fontResolver)
 
+    /** Common semantic controls in the same window use this already-resolved theme. */
+    val controlTheme: ControlTheme get() = controls
+
     @MainThread
     fun paragraph(context: Context, text: String, role: NativeTypographyRole): ParagraphView =
         ParagraphView(context, appearance.typography[role], density, fontResolver, palette.ink).also { it.setText(text) }
