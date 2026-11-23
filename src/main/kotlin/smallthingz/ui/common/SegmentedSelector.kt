@@ -6,8 +6,13 @@ import smallthingz.ui.components.NativeChoice
 import smallthingz.ui.components.NativeLabeledSegmentedLayout
 import smallthingz.ui.components.NativeSegmentedControl
 
-/** Stable identity and display text for a segment. Distinct values may display identical text. */
-data class SegmentOption<T : Any>(val value: T, val label: String, val enabled: Boolean = true)
+/** Stable identity and display text for a segment. [disabledReason] is announced only while disabled. */
+data class SegmentOption<T : Any>(
+    val value: T,
+    val label: String,
+    val enabled: Boolean = true,
+    val disabledReason: String? = null,
+)
 
 /** Retained single-selection capsule. Owners bind the authoritative selection through [bind]. */
 class SegmentedSelector<T : Any> internal constructor(
@@ -44,7 +49,13 @@ class SegmentedSelector<T : Any> internal constructor(
             require(selected in nextIds) { "Selected value must be an option" }
             ids = nextIds
             values = ids.entries.associate { (value, id) -> id to value }
-            nativeOptions = options.map { NativeChoice(ids.getValue(it.value), it.label, enabled = it.enabled) }
+            nativeOptions = options.map { option ->
+                val description = option.disabledReason?.takeIf { !option.enabled }?.let { reason ->
+                    "${option.label}. $reason"
+                }
+                NativeChoice(ids.getValue(option.value), option.label, enabled = option.enabled,
+                    contentDescription = description)
+            }
             lastOptions = options.toList()
         }
         capsule.bind(nativeOptions, ids.getValue(selected), theme.colors.settingsControls, theme.density.density)
