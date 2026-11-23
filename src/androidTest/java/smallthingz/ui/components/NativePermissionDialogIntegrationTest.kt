@@ -41,6 +41,95 @@ class NativeLargeFontPermissionActivity : Activity() {
 /** Attached real-device coverage. This suite must not run in an emulator or a simulated View host. */
 @RunWith(AndroidJUnit4::class)
 class NativePermissionDialogIntegrationTest {
+    @Test fun pullHandleCancelsOnlyAfterBusyClears() = attached { activity ->
+        var allows = 0
+        var denies = 0
+        var cancels = 0
+        val prompt = prompt(activity, deny = { denies++ }, allow = { allows++ },
+            cancel = { cancels++ }, showDragHandle = true)
+        prompt.show()
+        prompt to {
+            val window = platform(prompt)
+            val handle = nodes(window.window!!.decorView).filterIsInstance<NativeSheetDragHandle>().single()
+            val target = handle.parent as View
+            assertTrue(target.isLaidOut)
+            val position = IntArray(2)
+            target.getLocationInWindow(position)
+            val x = position[0] + target.width / 2f
+            val y = position[1] + target.height / 2f
+            val distance = 64f * activity.resources.displayMetrics.density
+
+            fun swipe(flags: Int = 0) {
+                val time = android.os.SystemClock.uptimeMillis()
+                val pointer = MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_FINGER }
+                fun send(action: Int, atY: Float, eventFlags: Int) {
+                    val coords = MotionEvent.PointerCoords().apply { this.x = x; this.y = atY }
+                    val event = MotionEvent.obtain(time, time + 20, action, 1, arrayOf(pointer), arrayOf(coords),
+                        0, 0, 1f, 1f, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, eventFlags)
+                    try { assertTrue(window.dispatchTouchEvent(event)) } finally { event.recycle() }
+                }
+                send(MotionEvent.ACTION_DOWN, y, 0)
+                send(MotionEvent.ACTION_UP, y + distance, flags)
+            }
+
+            swipe(MotionEvent.FLAG_WINDOW_IS_OBSCURED)
+            assertTrue(window.isShowing)
+            assertEquals(0, cancels)
+
+            prompt.setBusy(true)
+            swipe()
+            assertTrue(window.isShowing)
+            assertEquals(0, cancels)
+
+            prompt.setBusy(false)
+            swipe()
+            assertFalse(window.isShowing)
+            window.cancel()
+            assertEquals(1, cancels)
+            assertEquals(0, allows)
+            assertEquals(0, denies)
+        }
+    }
+
+    @Test fun handleAccessibilityDismissRoutesToCancel() = attached { activity ->
+        var cancels = 0
+        val prompt = prompt(activity, deny = { fail("Handle denied the request") },
+            allow = { fail("Handle allowed the request") }, cancel = { cancels++ }, showDragHandle = true)
+        prompt.show()
+        prompt to {
+            val window = platform(prompt)
+            val handle = nodes(window.window!!.decorView).filterIsInstance<NativeSheetDragHandle>().single()
+            prompt.setBusy(true)
+            assertTrue(handle.performAccessibilityAction(AccessibilityNodeInfo.ACTION_DISMISS, null))
+            assertTrue(window.isShowing)
+            assertEquals(0, cancels)
+
+            prompt.setBusy(false)
+            assertTrue(handle.performAccessibilityAction(AccessibilityNodeInfo.ACTION_DISMISS, null))
+            assertFalse(window.isShowing)
+            assertEquals(1, cancels)
+        }
+    }
+
+    @Test fun handleKeyboardActivationRoutesToCancel() = attached { activity ->
+        var cancels = 0
+        val prompt = prompt(activity, deny = { fail("Handle denied the request") },
+            allow = { fail("Handle allowed the request") }, cancel = { cancels++ }, showDragHandle = true)
+        prompt.show()
+        prompt to {
+            val window = platform(prompt)
+            val handle = nodes(window.window!!.decorView).filterIsInstance<NativeSheetDragHandle>().single()
+            assertTrue(handle.requestFocusFromTouch())
+            val down = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER)
+            val up = KeyEvent.changeAction(down, KeyEvent.ACTION_UP)
+            assertTrue(window.dispatchKeyEvent(down))
+            assertEquals(0, cancels)
+            assertTrue(window.dispatchKeyEvent(up))
+            assertFalse(window.isShowing)
+            assertEquals(1, cancels)
+        }
+    }
+
     @Test fun silentTeardownPreservesCallerAndMatchedEscapeCancelsOnlyOnce() = attached { activity ->
         var cancelled = 0
         val first = prompt(activity, cancel = { cancelled++ })
@@ -411,9 +500,9 @@ class NativePermissionDialogIntegrationTest {
 
     private fun prompt(activity: Activity, body: View? = null, summary: String = "Allow access to Injector?",
         appearance: NativeUiAppearance = NativeUiAppearance.Default,
-        allow: () -> Unit = {}, deny: () -> Unit = {}, cancel: () -> Unit = {}) =
+        allow: () -> Unit = {}, deny: () -> Unit = {}, cancel: () -> Unit = {}, showDragHandle: Boolean = false) =
         NativePermissionDialog(activity, NativeColorScheme.fallback(false), null, "Reader", summary,
-            "Deny", "Allow", body, deny, allow, cancel, appearance)
+            "Deny", "Allow", body, deny, allow, cancel, appearance, showDragHandle = showDragHandle)
 
     private fun platform(prompt: NativePermissionDialog): Dialog =
         NativePermissionDialog::class.java.getDeclaredField("dialog").apply { isAccessible = true }.get(prompt) as Dialog

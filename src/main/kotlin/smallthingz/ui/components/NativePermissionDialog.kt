@@ -215,7 +215,7 @@ class NativePermissionDialog(
                 topInset = minOf(inset, limit / 8)
                 handle?.measure(
                     MeasureSpec.makeMeasureSpec(innerWidth, MeasureSpec.AT_MOST),
-                    MeasureSpec.makeMeasureSpec(limit / 4, MeasureSpec.AT_MOST),
+                    MeasureSpec.makeMeasureSpec(limit / 2, MeasureSpec.AT_MOST),
                 )
                 val handleHeight = handle?.measuredHeight ?: 0
                 val innerHeight = limit - topInset * 2 - handleHeight
