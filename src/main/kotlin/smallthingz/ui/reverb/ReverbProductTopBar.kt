@@ -53,6 +53,9 @@ class ReverbProductTopBar(context: Context, initialTheme: ReverbTheme, inputRoot
         countsStrip.bind(theme, insets, counts)
     }
 
+    /** Request keyboard focus on Settings using the current window's focus policy. */
+    fun requestSettingsFocus(): Boolean = bar.requestEndActionFocus()
+
     /**
      * Show About from the retained identity action. A completed user dismissal closes the panel
      * and returns focus. Window teardown retires it independently. Owner close is silent.

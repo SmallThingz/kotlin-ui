@@ -107,6 +107,21 @@ class ReverbProductHeaderIntegrationTest {
                 activity.setContentView(root)
             }
 
+            await("Header should be attached and focused", anchor::hasWindowFocus)
+            var wasInTouchMode = false
+            instrumentation.runOnMainSync { wasInTouchMode = anchor.isInTouchMode }
+            if (wasInTouchMode) instrumentation.setInTouchMode(false)
+            try {
+                await("Header should accept keyboard focus") { !anchor.isInTouchMode }
+                instrumentation.runOnMainSync {
+                    assertTrue(header.requestSettingsFocus())
+                    val focused = root.findFocus()?.createAccessibilityNodeInfo()
+                    assertEquals("Settings", focused?.contentDescription?.toString())
+                }
+            } finally {
+                if (wasInTouchMode) instrumentation.setInTouchMode(true)
+            }
+
             openAbout(1)
             instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
             await("Back should complete the user-dismiss callback") { userDismissals == 1 }
