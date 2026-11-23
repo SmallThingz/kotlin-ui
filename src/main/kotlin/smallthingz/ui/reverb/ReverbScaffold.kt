@@ -21,6 +21,13 @@ open class ReverbScaffold(
     initialPalette: NativeColorScheme,
     initialInsets: ReverbScaffoldInsets = ReverbScaffoldInsets(),
 ) : ViewGroup(context) {
+    constructor(
+        context: Context,
+        toolbar: View,
+        theme: ReverbTheme,
+        initialInsets: ReverbScaffoldInsets = ReverbScaffoldInsets(),
+    ) : this(context, toolbar, theme.palette, initialInsets)
+
     private val backdrops = ReverbDesign.appearance.backdrops
     private val backdrop = backdrops.attachPage(this, initialPalette)
     private var contentInsets = initialInsets
@@ -46,6 +53,8 @@ open class ReverbScaffold(
         contentInsets = value
         requestLayout()
     }
+
+    fun bindTheme(theme: ReverbTheme) = bindScaffoldPalette(theme.palette)
 
     fun bindScaffoldPalette(palette: NativeColorScheme) {
         backdrops.bindPage(backdrop, palette)
