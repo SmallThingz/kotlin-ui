@@ -14,13 +14,18 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.FrameLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeDropdown
+import smallthingz.ui.components.NativeAnchoredDropdown
+import smallthingz.ui.components.NativeDropdownContent
 import smallthingz.ui.components.NativeUiAppearance
+import smallthingz.ui.text.font.createFontFamilyResolver
+import smallthingz.ui.unit.Density
 import java.util.concurrent.atomic.AtomicReference
 
 /** Exercises Android accessibility, touch and key input against the library dropdown. */
@@ -301,6 +306,68 @@ class DropdownInteractionTest {
         var restored: View? = null
         instrumentation.runOnMainSync { restored = activity.currentFocus }
         assertSame(prior, restored)
+    }
+
+    @Test fun throwingDragSelectionRetiresOverlayAndPreservesPrimaryFailure() = withActivity { activity ->
+        val anchor = focusTrigger(activity, "Top edge")
+        val label = "Callback failure test"
+        val primary = IllegalStateException("Selection failed")
+        val cleanup = IllegalArgumentException("Terminal callback failed")
+        val selectedValues = mutableListOf<String>()
+        var terminalCalls = 0
+        var mounted = false
+        lateinit var controller: NativeAnchoredDropdown
+        instrumentation.runOnMainSync {
+            val appearance = NativeUiAppearance.Default
+            val host = activity.findViewById<FrameLayout>(android.R.id.content)
+            val resources = activity.resources
+            controller = NativeAnchoredDropdown(activity, host, appearance, appearance.resolveColorScheme(activity, true),
+                Density(resources.displayMetrics.density, resources.configuration.fontScale), createFontFamilyResolver(activity))
+            val options = NativeDropdownContent(label, "First", listOf("First", "Second")) { it }
+            mounted = controller.open(anchor, options, onTerminal = { terminalCalls++; throw cleanup }) { value ->
+                selectedValues += value
+                throw primary
+            }
+        }
+        assertTrue(mounted)
+        var closeFailure: Throwable? = null
+        try {
+            await("Failure fixture did not finish opening") { scrimAlpha(label) == NativeUiAppearance.Default.anchoredDropdown.scrimOpacity }
+            var thrown: Throwable? = null
+            var remainingPane: View? = null
+            var restoredFocus: View? = null
+            instrumentation.runOnMainSync {
+                val pane = checkNotNull(popupPane(label))
+                val paneOrigin = IntArray(2).also(pane::getLocationOnScreen)
+                val anchorOrigin = IntArray(2).also(anchor::getLocationOnScreen)
+                val x = anchorOrigin[0] - paneOrigin[0] + anchor.width / 2f
+                val y = anchorOrigin[1] - paneOrigin[1] + anchor.height / 2f
+                val down = SystemClock.uptimeMillis()
+                fun dispatch(action: Int, eventY: Float) {
+                    val event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, eventY, 0)
+                    event.source = InputDevice.SOURCE_TOUCHSCREEN
+                    try { pane.dispatchTouchEvent(event) } finally { event.recycle() }
+                }
+                // Catch the caller's deliberate exception on the same stack as normal touch dispatch.
+                thrown = runCatching {
+                    dispatch(MotionEvent.ACTION_DOWN, y)
+                    dispatch(MotionEvent.ACTION_MOVE, y - anchor.height)
+                }.exceptionOrNull()
+                remainingPane = popupPane(label)
+                restoredFocus = activity.currentFocus
+            }
+            assertSame(primary, thrown)
+            assertEquals(listOf(cleanup), primary.suppressed.toList())
+            assertEquals(listOf("Second"), selectedValues)
+            assertEquals(1, terminalCalls)
+            assertNull(remainingPane)
+            assertSame(anchor, restoredFocus)
+            awaitClosed("Three")
+        } finally {
+            instrumentation.runOnMainSync { closeFailure = runCatching { controller.close() }.exceptionOrNull() }
+        }
+        assertNull("Closing a retired session invoked cleanup again", closeFailure)
+        assertEquals(1, terminalCalls)
     }
 
     @Test fun backDuringHeldDragRetiresTheOldPointerStream() = withActivity { activity ->
