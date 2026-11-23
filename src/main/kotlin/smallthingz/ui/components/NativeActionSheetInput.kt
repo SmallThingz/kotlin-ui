@@ -32,21 +32,35 @@ import kotlinx.coroutines.launch
 import kotlin.math.max
 
 /** Actual sheet ancestor for caller-owned native verticalScroll bodies; no second scroll owner. */
+// The state always receives positive motion toward the hidden anchor.
+internal fun NativeDialogEdge.sheetMotionY(y: Float): Float =
+    if (this == NativeDialogEdge.TOP) -y else y
+
 internal class NativeActionSheetNestedScroll(
     private val state: NativeActionSheetState,
+    private val entryEdge: NativeDialogEdge = NativeDialogEdge.BOTTOM,
     private val settleToDismiss: (Float) -> Unit,
 ) : NativeVerticalNestedHost {
-    override fun preScroll(availableY: Float, source: NativeVerticalScrollSource): Float =
-        if (availableY < 0 && source == NativeVerticalScrollSource.USER_INPUT)
-            state.dispatchRawDelta(availableY) else 0f
-    override fun postScroll(consumedY: Float, availableY: Float, source: NativeVerticalScrollSource): Float =
-        if (source == NativeVerticalScrollSource.USER_INPUT) state.dispatchRawDelta(availableY) else 0f
-    override suspend fun preFling(availableY: Float): Float =
-        if (availableY < 0 && state.requireOffset() > checkNotNull(state.anchors).minimum) {
-            settleToDismiss(availableY); availableY
+    override fun preScroll(availableY: Float, source: NativeVerticalScrollSource): Float {
+        val motion = entryEdge.sheetMotionY(availableY)
+        return if (motion < 0 && source == NativeVerticalScrollSource.USER_INPUT) {
+            entryEdge.sheetMotionY(state.dispatchRawDelta(motion))
         } else 0f
+    }
+    override fun postScroll(consumedY: Float, availableY: Float, source: NativeVerticalScrollSource): Float {
+        if (source != NativeVerticalScrollSource.USER_INPUT) return 0f
+        return entryEdge.sheetMotionY(state.dispatchRawDelta(entryEdge.sheetMotionY(availableY)))
+    }
+    override suspend fun preFling(availableY: Float): Float {
+        val motion = entryEdge.sheetMotionY(availableY)
+        if (motion < 0 && state.requireOffset() > checkNotNull(state.anchors).minimum) {
+            settleToDismiss(motion)
+            return availableY
+        }
+        return 0f
+    }
     override suspend fun postFling(consumedY: Float, availableY: Float): Float {
-        settleToDismiss(availableY)
+        settleToDismiss(entryEdge.sheetMotionY(availableY))
         return availableY
     }
 }
@@ -55,6 +69,7 @@ internal class NativeActionSheetNestedScroll(
 internal class NativeActionSheetDragChannel(
     private val state: NativeActionSheetState,
     scope: CoroutineScope,
+    private val entryEdge: NativeDialogEdge = NativeDialogEdge.BOTTOM,
     private val settleToDismiss: (Float) -> Unit,
 ) : NativeDragSink, AutoCloseable {
     private val job = SupervisorJob(scope.coroutineContext[Job])
@@ -88,8 +103,8 @@ internal class NativeActionSheetDragChannel(
         }
         events.trySend(Event.Start)
     }
-    override fun delta(physicalDelta: Offset) { events.trySend(Event.Delta(physicalDelta.y)) }
-    override fun stop(physicalVelocity: Velocity) { events.trySend(Event.Stop(physicalVelocity.y)) }
+    override fun delta(physicalDelta: Offset) { events.trySend(Event.Delta(entryEdge.sheetMotionY(physicalDelta.y))) }
+    override fun stop(physicalVelocity: Velocity) { events.trySend(Event.Stop(entryEdge.sheetMotionY(physicalVelocity.y))) }
     override fun cancel() { events.trySend(Event.Cancel) }
     override fun close() { job.cancel(); listener = null; events.close() }
 }

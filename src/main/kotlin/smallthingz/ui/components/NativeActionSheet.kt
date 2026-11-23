@@ -75,7 +75,18 @@ class NativeActionSheet(
     closeIcon: NativeActionSheetIcon?,
     contentBackground: android.graphics.drawable.Drawable?,
     private val statusBarProtection: NativeStatusBarProtection?,
+    entryEdge: NativeDialogEdge,
 ):ComponentDialog(ContextThemeWrapper(anchor.context,smallthingz.ui.R.style.NativeSheetWindowTheme)) {
+    constructor(
+        anchor: View,
+        initialStyle: NativeActionSheetStyle,
+        title: String,
+        onDismiss: () -> Unit,
+        closeIcon: NativeActionSheetIcon,
+        contentBackground: android.graphics.drawable.Drawable?,
+        statusBarProtection: NativeStatusBarProtection?,
+    ) : this(anchor, initialStyle, title, onDismiss, closeIcon, contentBackground, statusBarProtection, NativeDialogEdge.BOTTOM)
+
     constructor(
         anchor: View,
         initialStyle: NativeActionSheetStyle,
@@ -96,7 +107,8 @@ class NativeActionSheet(
         onDismiss: () -> Unit,
         contentBackground: android.graphics.drawable.Drawable? = null,
         statusBarProtection: NativeStatusBarProtection? = null,
-    ) : this(anchor, initialStyle, title, onDismiss, null, contentBackground, statusBarProtection)
+        entryEdge: NativeDialogEdge = NativeDialogEdge.BOTTOM,
+    ) : this(anchor, initialStyle, title, onDismiss, null, contentBackground, statusBarProtection, entryEdge)
 
     var style=initialStyle;private set
     private var onOwnerDismiss=onDismiss
@@ -115,13 +127,13 @@ class NativeActionSheet(
     private val pointer=SheetPointerOwner(style.textDensity.density)
     private val handle=NativeSheetDragHandle(context,style,{pointer.inputRoot},runtime,::handleClick,::requestAnimatedDismiss)
     private val appContent=NativeSheetContent(context,style,title,{pointer.inputRoot},closeIcon,contentBackground) {onOwnerDismiss()}
-    private val surface=NativeSheetSurface(context,style,handle,appContent)
+    private val surface=NativeSheetSurface(context,style,handle,appContent,entryEdge)
     private val scrim=SheetScrim(context,style.palette.scrim,style.recipe.scrimAlpha,::requestAnimatedDismiss)
     private val root:SheetRoot=SheetRoot(context,pointer,state,surface,scrim,style.textDensity.density,
-        style.recipe.maxWidthDp,::measured,::applyMotion)
-    private val dragChannel=NativeActionSheetDragChannel(state,runtime.scope,::settleToDismiss)
+        style.recipe.maxWidthDp,::measured,::applyMotion,entryEdge)
+    private val dragChannel=NativeActionSheetDragChannel(state,runtime.scope,entryEdge,::settleToDismiss)
     private val dragNode=NativeActionSheetDragNode(surface,state,dragChannel)
-    private val nested=NativeActionSheetNestedScroll(state,::settleToDismiss)
+    private val nested=NativeActionSheetNestedScroll(state,entryEdge,::settleToDismiss)
     private val accessibility=NativeActionSheetAccessibility(root,surface,scrim,handle,appContent)
     private val scrollEvents=NativeWindowScrollAccessibilityEvents(root,runtime.scope,
         onScrollGeometryChanged={root.invalidate()},onBatchFinished={root.invalidate()},onClosed={})
@@ -399,6 +411,7 @@ internal class SheetRoot(
     private var maxWidthDp:Float,
     private val measured:()->Unit,
     private val motion:()->Unit,
+    private val entryEdge: NativeDialogEdge = NativeDialogEdge.BOTTOM,
 ):PhasePointerRoot(context,pointer.geometry::rootToScreen,pointer.geometry::coordinates,
     pointer.layout,pointer.geometry::begin,mouseButtons=true) {
     private var imeBottom=0
@@ -432,8 +445,13 @@ internal class SheetRoot(
         requestLayout()
     }
     private fun updateContentInsets():Boolean {
-        val topConsumed=if(state.offset.isNaN())0 else state.offset.toInt().coerceAtLeast(0)
-        return surface.insets.update(max(0,safe.top-topConsumed),max(0,safe.bottom-imeBottom))
+        val gap = if (state.offset.isNaN()) 0 else state.offset.toInt().coerceAtLeast(0)
+        val availableBottomInset = max(0, safe.bottom - imeBottom)
+        return if (entryEdge == NativeDialogEdge.TOP) {
+            surface.insets.update(safe.top, max(0, availableBottomInset - gap))
+        } else {
+            surface.insets.update(max(0, safe.top - gap), availableBottomInset)
+        }
     }
     override fun onMeasure(widthMeasureSpec:Int,heightMeasureSpec:Int) {
         measuring=true
@@ -451,14 +469,19 @@ internal class SheetRoot(
     override fun onLayout(changed:Boolean,l:Int,t:Int,r:Int,b:Int) {
         scrim.layout(0,0,scrim.measuredWidth,scrim.measuredHeight)
         val x=((width-surface.measuredWidth)*.5f).roundToInt()
-        val y=if(state.offset.isNaN())height else state.offset.roundToInt()
+        val y = sheetTop()
         surface.layout(x,y,x+surface.measuredWidth,y+surface.measuredHeight)
         motion()
     }
     fun placeSheet() {
         if(measuring)return
-        if(!state.offset.isNaN()&&surface.isLaidOut)surface.offsetTopAndBottom(state.offset.roundToInt()-surface.top)
+        if(!state.offset.isNaN()&&surface.isLaidOut)surface.offsetTopAndBottom(sheetTop()-surface.top)
         updateContentInsets()
+    }
+
+    private fun sheetTop(): Int {
+        val offset = if (state.offset.isNaN()) height else state.offset.roundToInt()
+        return entryEdge.sheetTop(sourceSemanticsHeight, surface.measuredHeight, offset)
     }
 
     override fun dispatchHoverEvent(event: MotionEvent): Boolean {
@@ -608,5 +631,8 @@ internal class SheetPointerOwner(private val density:Float):AutoCloseable {
         contentWrapper=null
     }
 }
+internal fun NativeDialogEdge.sheetTop(availableHeight: Int, sheetHeight: Int, bottomOffset: Int): Int =
+    if (this == NativeDialogEdge.TOP) availableHeight - sheetHeight - bottomOffset else bottomOffset
+
 private fun sheetWindowExact(value:Int)=View.MeasureSpec.makeMeasureSpec(value,View.MeasureSpec.EXACTLY)
 private fun sheetWindowAtMost(value:Int)=View.MeasureSpec.makeMeasureSpec(value,View.MeasureSpec.AT_MOST)

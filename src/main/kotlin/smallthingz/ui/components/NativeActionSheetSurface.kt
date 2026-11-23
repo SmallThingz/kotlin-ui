@@ -27,12 +27,14 @@ internal data class NativeSheetPredictiveTransform(
 )
 internal fun nativeSheetPredictiveTransform(
     width: Float, height: Float, offset: Float, minimumAnchor: Float, density: Float, progress: Float,
+    entryEdge: NativeDialogEdge = NativeDialogEdge.BOTTOM,
 ): NativeSheetPredictiveTransform {
     val x = if (width.isNaN() || width == 0f) 1f else 1f-min(48f*density,width)*progress/width
     val y = if (height.isNaN() || height == 0f) 1f else 1f-min(24f*density,height)*progress/height
     val overflow = if (offset < minimumAnchor) minimumAnchor-offset else 0f
     val up = if (height != 0f && overflow > 0f) (height+overflow)/height else 1f
-    return NativeSheetPredictiveTransform(x,y,offset+height,if(y!=0f)x/y else 1f,up,1f/up)
+    val pivotY = if (entryEdge == NativeDialogEdge.TOP) -offset else offset + height
+    return NativeSheetPredictiveTransform(x,y,pivotY,if(y!=0f)x/y else 1f,up,1f/up)
 }
 
 /** Distinct real graphics-layer owners preserve source transform and clip order. */
@@ -58,15 +60,16 @@ internal class NativeSheetSurface(
     private var style:NativeActionSheetStyle,
     handle:View,
     val appContent:NativeSheetContent,
+    private val entryEdge: NativeDialogEdge = NativeDialogEdge.BOTTOM,
 ) : NativeSheetFrame(context) {
     var sourceChildPresent:((View)->Boolean)?=null
     val predictiveLayer=nativeView(context, ::NativeSheetFrame)
     val overflowLayer=nativeView(context, ::NativeSheetFrame)
-    val painted=PaintedSurface(context,style)
+    val painted=PaintedSurface(context,style,entryEdge)
     val insets=SheetInsets(context)
     val predictiveContent=nativeView(context, ::NativeSheetFrame)
     val overflowContent=nativeView(context, ::NativeSheetFrame)
-    val column=SheetColumn(context,handle,appContent)
+    val column=SheetColumn(context,handle,appContent,entryEdge)
     init {
         child(predictiveLayer);predictiveLayer.child(overflowLayer);overflowLayer.child(painted)
         painted.clip.child(insets);insets.child(predictiveContent)
@@ -80,18 +83,24 @@ internal class NativeSheetSurface(
     }
     fun applyMotion(offset:Float,minimumAnchor:Float,progress:Float) {
         val value=nativeSheetPredictiveTransform(width.toFloat(),height.toFloat(),offset,
-            minimumAnchor,style.textDensity.density,progress)
+            minimumAnchor,style.textDensity.density,progress,entryEdge)
         predictiveLayer.pivotX=width*.5f;predictiveLayer.pivotY=value.pivotY
         predictiveLayer.scaleX=value.scaleX;predictiveLayer.scaleY=value.scaleY
-        overflowLayer.pivotX=width*.5f;overflowLayer.pivotY=0f;overflowLayer.scaleY=value.overflowScaleY
-        predictiveContent.pivotX=predictiveContent.width*.5f;predictiveContent.pivotY=0f
+        overflowLayer.pivotX=width*.5f
+        overflowLayer.pivotY=edgePivotY(overflowLayer)
+        overflowLayer.scaleY=value.overflowScaleY
+        predictiveContent.pivotX=predictiveContent.width*.5f
+        predictiveContent.pivotY=edgePivotY(predictiveContent)
         // Source uses this inner layer's size after content window-insets padding.
         val inner=nativeSheetPredictiveTransform(predictiveContent.width.toFloat(),
-            predictiveContent.height.toFloat(),offset,minimumAnchor,style.textDensity.density,progress)
+            predictiveContent.height.toFloat(),offset,minimumAnchor,style.textDensity.density,progress,entryEdge)
         predictiveContent.scaleY=inner.childScaleY
-        overflowContent.pivotX=overflowContent.width*.5f;overflowContent.pivotY=0f
+        overflowContent.pivotX=overflowContent.width*.5f;overflowContent.pivotY=edgePivotY(overflowContent)
         overflowContent.scaleY=inner.overflowChildScaleY
     }
+    private fun edgePivotY(view: View): Float =
+        if (entryEdge == NativeDialogEdge.TOP) view.height.toFloat() else 0f
+
     fun containsShape(p:Offset)=painted.containsShape(p)
 
     override fun addChildrenForAccessibility(outChildren:ArrayList<View>) {
@@ -101,7 +110,11 @@ internal class NativeSheetSurface(
         for(index in outChildren.lastIndex downTo start)if(!present(outChildren[index]))outChildren.removeAt(index)
     }
 
-    internal class PaintedSurface(context:Context,private var env:NativeActionSheetStyle):NativeSheetFrame(context) {
+    internal class PaintedSurface(
+        context: Context,
+        private var env: NativeActionSheetStyle,
+        private val entryEdge: NativeDialogEdge,
+    ) : NativeSheetFrame(context) {
         private val fill=Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
             color=env.palette.surfaceContainerLow
         }
@@ -121,21 +134,26 @@ internal class NativeSheetSurface(
         override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int) {
             val raw=env.recipe.radiusDp*env.textDensity.density
             // CornerBasedShape first normalizes each start/end pair against minDimension;
-            // the path backend then normalizes the top pair if it exceeds the actual width.
+            // the path backend then normalizes the exposed pair if it exceeds the actual width.
             val minimum=min(w,h).toFloat()
             val resolved=if(raw>minimum)raw*(minimum/raw)else raw
             radius=min(resolved,w*.5f)
             shape.rewind()
-            shape.addRoundRect(RectF(0f,0f,w.toFloat(),h.toFloat()),
-                floatArrayOf(resolved,resolved,resolved,resolved,0f,0f,0f,0f),Path.Direction.CW)
+            val rounds = if (entryEdge == NativeDialogEdge.TOP) {
+                floatArrayOf(0f,0f,0f,0f,resolved,resolved,resolved,resolved)
+            } else {
+                floatArrayOf(resolved,resolved,resolved,resolved,0f,0f,0f,0f)
+            }
+            shape.addRoundRect(RectF(0f,0f,w.toFloat(),h.toFloat()),rounds,Path.Direction.CW)
             clip.setShape(shape)
         }
         override fun onDraw(canvas:Canvas) {canvas.drawPath(shape,fill)}
         fun containsShape(p:Offset):Boolean {
             if(p.x<0f||p.y<0f||p.x>=width||p.y>=height)return false
-            if(p.y>=radius || p.x>=radius&&p.x<width-radius)return true
+            val edgeDistance = if (entryEdge == NativeDialogEdge.TOP) height-p.y else p.y
+            if(edgeDistance>=radius || p.x>=radius&&p.x<width-radius)return true
             val cx=if(p.x<radius)radius else width-radius
-            val dx=p.x-cx;val dy=p.y-radius
+            val dx=p.x-cx;val dy=edgeDistance-radius
             return dx*dx+dy*dy<=radius*radius
         }
     }
@@ -181,14 +199,24 @@ internal class NativeSheetSurface(
             getChildAt(0).let {it.layout(0,contentTop,it.measuredWidth,contentTop+it.measuredHeight)}
         }
     }
-    internal class SheetColumn(context:Context,val handle:View,var content:View):ViewGroup(context) {
-        init {clipChildren=false;clipToPadding=false;importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO
-            addView(handle);addView(content)}
+    internal class SheetColumn(
+        context: Context,
+        val handle: View,
+        var content: View,
+        private val entryEdge: NativeDialogEdge,
+    ) : ViewGroup(context) {
+        private val handleAtBottom = entryEdge == NativeDialogEdge.TOP
+        init {
+            clipChildren=false;clipToPadding=false;importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO
+            addView(handle)
+            addView(content, if (handleAtBottom) 0 else 1)
+        }
         fun wrapContent(wrapper:NativeVerticalViewport) {
+            val index = indexOfChild(content)
             removeView(content)
             wrapper.setContent(content)
             content=wrapper
-            addView(wrapper)
+            addView(wrapper, index)
         }
         override fun onMeasure(widthMeasureSpec:Int,heightMeasureSpec:Int) {
             val width=MeasureSpec.getSize(widthMeasureSpec)
@@ -199,8 +227,10 @@ internal class NativeSheetSurface(
         }
         override fun onLayout(changed:Boolean,l:Int,t:Int,r:Int,b:Int) {
             val x=((width-handle.measuredWidth)*.5f).roundToInt()
-            handle.layout(x,0,x+handle.measuredWidth,handle.measuredHeight)
-            content.layout(0,handle.measuredHeight,width,handle.measuredHeight+content.measuredHeight)
+            val handleTop = if (handleAtBottom) content.measuredHeight else 0
+            val contentTop = if (handleAtBottom) 0 else handle.measuredHeight
+            handle.layout(x,handleTop,x+handle.measuredWidth,handleTop+handle.measuredHeight)
+            content.layout(0,contentTop,width,contentTop+content.measuredHeight)
         }
     }
 }
