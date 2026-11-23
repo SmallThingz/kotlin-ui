@@ -23,6 +23,7 @@ import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.text.font.FontFamily
 import smallthingz.ui.text.view.ParagraphView
 import smallthingz.ui.unit.Density
+import smallthingz.ui.util.closePreservingPrimaryFailure
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -56,10 +57,10 @@ class NativeAnchoredDropdown(
     private val density: Density,
     private val resolver: FontFamily.Resolver,
     private val style: NativeAnchoredDropdownStyle = appearance.anchoredDropdown,
+    private val palette: NativeDropdownColors = NativeDropdownColors(colors.field, colors.field, colors.muted, colors.ink, colors.border),
 ) : AutoCloseable {
     private var dismissCurrent: (() -> Unit)? = null
     private var sessionIdentity: Any? = null
-    private val palette = NativeDropdownColors(colors.field, colors.field, colors.muted, colors.ink, colors.border)
     private val titleStyle = appearance.typography[NativeTypographyRole.BODY_SMALL]
     private val selectedStyle = appearance.typography[NativeTypographyRole.BODY_LARGE]
     private val arrowMask = NativePathIconMask(Path().apply {
@@ -74,11 +75,11 @@ class NativeAnchoredDropdown(
         face(content) { anchor, value -> open(anchor, value, onSelected) }
 
     private fun <T> face(content: NativeDropdownContent<T>, activate: (View, NativeDropdownContent<T>) -> Unit): NativeDropdown<T> {
-        val glyph = CachedPathIconDrawable(arrowMaskProvider, density.density, colors.muted)
-        val icon = NativeDecorativeIconView(context, glyph, colors.muted)
+        val glyph = CachedPathIconDrawable(arrowMaskProvider, density.density, palette.muted)
+        val icon = NativeDecorativeIconView(context, glyph, palette.muted)
         return NativeDropdown(context,
-            ParagraphView(context, titleStyle, density, resolver, colors.muted),
-            ParagraphView(context, selectedStyle, density, resolver, colors.ink),
+            ParagraphView(context, titleStyle, density, resolver, palette.muted),
+            ParagraphView(context, selectedStyle, density, resolver, palette.ink),
             NativeDropdownIcon(icon, icon::setColor), palette, { null }, { _, _ -> }, activate,
         ).apply {
             bindDescription(content.label)
@@ -87,16 +88,29 @@ class NativeAnchoredDropdown(
     }
 
     fun <T> open(anchor: View, content: NativeDropdownContent<T>, onSelected: (T) -> Unit) {
+        open(anchor, content, {}, onSelected)
+    }
+
+    /** Returns true when this session is still mounted. Each created session reports terminal once. */
+    fun <T> open(anchor: View, content: NativeDropdownContent<T>, onTerminal: () -> Unit,
+        onSelected: (T) -> Unit): Boolean {
         close()
-        if (!anchor.isAttachedToWindow || !anchor.isShown || anchor.width <= 0 || anchor.height <= 0) return
+        // A terminal callback can synchronously establish a newer session.
+        if (sessionIdentity != null || !anchor.isAttachedToWindow || !anchor.isShown || anchor.width <= 0 || anchor.height <= 0) return false
         val options = content.options.toList()
         val selected = options.indexOf(content.selected)
-        if (options.size < 2 || selected < 0) return
+        if (options.size < 2 || selected < 0) return false
         require(options.distinct().size == options.size) { "Choice identities must be unique" }
-        val session = Session(anchor, content.copy(options = options), selected, onSelected)
+        val session = Session(anchor, content.copy(options = options), selected, onSelected, onTerminal)
         sessionIdentity = session
         dismissCurrent = session::dispose
-        try { session.show() } catch (failure: RuntimeException) { session.dispose(); throw failure }
+        try {
+            session.show()
+        } catch (failure: Throwable) {
+            closePreservingPrimaryFailure(failure, session::dispose)
+            throw failure
+        }
+        return sessionIdentity === session
     }
 
     override fun close() {
@@ -107,6 +121,7 @@ class NativeAnchoredDropdown(
 
     private inner class Session<T>(
         val anchor: View, val content: NativeDropdownContent<T>, val initial: Int, val select: (T) -> Unit,
+        val onTerminal: () -> Unit,
     ) {
         val origin = IntArray(2).also(anchor::getLocationOnScreen)
         val observed = IntArray(2)
@@ -212,7 +227,14 @@ class NativeAnchoredDropdown(
         fun publish(index: Int) {
             val option = plan?.optionAt(index) ?: return
             rows.forEachIndexed { i, row -> row.isSelected = i == index }
-            if (option != lastPublished) { lastPublished = option; select(content.options[option]) }
+            if (option == lastPublished) return
+            lastPublished = option
+            try {
+                select(content.options[option])
+            } catch (failure: Throwable) {
+                closePreservingPrimaryFailure(failure, ::dispose)
+                throw failure
+            }
         }
 
         fun settle(index: Int) {
@@ -233,7 +255,7 @@ class NativeAnchoredDropdown(
             closing = true
             val target = index.coerceIn(0, rows.lastIndex)
             settled = target
-            try { publish(target) } catch (failure: RuntimeException) { dispose(); throw failure }
+            publish(target)
             if (disposed) return
             animate(target.toFloat(), 0f, style.collapseMillis) {
                 if (wheel.pointer < 0) dispose()
@@ -262,12 +284,20 @@ class NativeAnchoredDropdown(
         fun dispose() {
             if (disposed) return
             disposed = true
-            animator?.removeAllListeners(); animator?.cancel(); animator = null
-            if (anchor.viewTreeObserver.isAlive) anchor.viewTreeObserver.removeOnPreDrawListener(geometryGuard)
-            anchor.removeOnAttachStateChangeListener(anchorDetach)
-            rows.forEach { it.close() }; rows.clear()
-            overlay.close()
             if (sessionIdentity === this) { dismissCurrent = null; sessionIdentity = null }
+            val motion = animator
+            animator = null
+            var failure = closePreservingPrimaryFailure(null) { motion?.removeAllListeners() }
+            failure = closePreservingPrimaryFailure(failure) { motion?.cancel() }
+            failure = closePreservingPrimaryFailure(failure) {
+                if (anchor.viewTreeObserver.isAlive) anchor.viewTreeObserver.removeOnPreDrawListener(geometryGuard)
+            }
+            failure = closePreservingPrimaryFailure(failure) { anchor.removeOnAttachStateChangeListener(anchorDetach) }
+            for (row in rows) failure = closePreservingPrimaryFailure(failure, row::close)
+            rows.clear()
+            failure = closePreservingPrimaryFailure(failure, overlay::close)
+            failure = closePreservingPrimaryFailure(failure, onTerminal)
+            failure?.let { throw it }
         }
 
         inner class Wheel : FrameLayout(context) {
@@ -344,11 +374,11 @@ class NativeAnchoredDropdown(
                 }
                 path.rewind(); path.addRoundRect(rectangle, cornerValues, Path.Direction.CW)
                 val saved = canvas.save(); canvas.clipPath(path)
-                paint.style = Paint.Style.FILL; paint.color = colors.field
+                paint.style = Paint.Style.FILL; paint.color = palette.collapsed
                 canvas.drawPath(path, paint)
                 super.draw(canvas)
                 // The slot never moves. Its divider and outline share the existing group border role.
-                paint.style = Paint.Style.STROKE; paint.strokeWidth = density.density; paint.color = colors.border
+                paint.style = Paint.Style.STROKE; paint.strokeWidth = density.density; paint.color = palette.divider
                 canvas.drawLine(0f, anchorY.toFloat(), width.toFloat(), anchorY.toFloat(), paint)
                 canvas.drawLine(0f, (anchorY + rowHeight).toFloat(), width.toFloat(), (anchorY + rowHeight).toFloat(), paint)
                 canvas.restoreToCount(saved)
