@@ -69,6 +69,8 @@ data class ReverbAboutDetails(
     val repositoryTitle: String,
     val repositoryLabel: String,
     val repositoryError: String,
+    val identity: ReverbProductIdentity = ReverbProductIdentity.Reverb,
+    val paneLabel: String? = null,
 )
 
 private class AboutContentAppearance(val theme: ReverbTheme) {
@@ -130,6 +132,7 @@ internal class ReverbAboutContentView private constructor(
     fun bindWindowAccessibility(windowRoot: View) {
         check(accessibilityOwner == null) { "About content already has its native Window cursor" }
         inputRoot = windowRoot
+        ViewCompat.setAccessibilityPaneTitle(windowRoot, details.paneLabel)
         content.repository.row.nativeInputRoot = windowRoot
         accessibilityOwner = AboutContentAccessibilityOwner(windowRoot, this, surface,
             surface.clipHost, surface.viewport, content, handle)
@@ -175,6 +178,7 @@ internal class ReverbAboutContentView private constructor(
     fun bind(theme: ReverbTheme, details: ReverbAboutDetails) {
         val value = AboutContentAppearance(theme)
         this.details = details
+        inputRoot?.let { ViewCompat.setAccessibilityPaneTitle(it, details.paneLabel) }
         appearance = value
         surface.setAppearance(value)
         handle.updateStyle(reverbActionSheetStyle(theme))
@@ -254,7 +258,7 @@ private class AboutColumn(
     private val handle: NativeSheetDragHandle,
     openRepository: () -> Unit,
 ) : ViewGroup(context) {
-    val header = AboutBrandHeader(context, appearance, details.name)
+    val header = AboutBrandHeader(context, appearance, details)
     val name = aboutParagraph(context, appearance, appearance.headlineSmall, appearance.palette.ink)
     val version = aboutParagraph(context, appearance, appearance.bodyMedium, appearance.palette.muted)
     val repository = AboutRepositoryCard(context, appearance, details, openRepository)
@@ -274,7 +278,7 @@ private class AboutColumn(
 
     fun setAppearance(value: AboutContentAppearance, details: ReverbAboutDetails) {
         appearance = value
-        header.bind(value, details.name)
+        header.bind(value, details)
         name.setTypography(value.headlineSmall, value.density, value.fontResolver)
         name.animateTextColor(value.palette.ink)
         version.setTypography(value.bodyMedium, value.density, value.fontResolver)
@@ -331,18 +335,19 @@ private class AboutColumn(
     }
 }
 
-private class AboutBrandHeader(context: Context, private var appearance: AboutContentAppearance, name: String) : ViewGroup(context) {
-    val mark = ReverbBrandMarkView(context, name)
+private class AboutBrandHeader(context: Context, private var appearance: AboutContentAppearance, details: ReverbAboutDetails) : ViewGroup(context) {
+    val mark = ReverbIdentityMarkView(context)
 
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         addView(mark)
+        bind(appearance, details)
     }
 
-    fun bind(value: AboutContentAppearance, name: String) {
+    fun bind(value: AboutContentAppearance, details: ReverbAboutDetails) {
         appearance = value
-        mark.refreshResourcePalette()
-        mark.contentDescription = name
+        mark.bind(details.identity, value.palette)
+        mark.contentDescription = details.name
         requestLayout()
     }
 
