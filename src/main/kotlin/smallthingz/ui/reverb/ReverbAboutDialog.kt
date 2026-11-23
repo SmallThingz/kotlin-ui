@@ -28,6 +28,10 @@ class ReverbAboutDialog(
         dialog.bind(onDismiss, panel.shadowDp)
         content.bind(theme, details)
     }
+    internal fun onWindowDismissed(callback: () -> Unit) {
+        dialog.setOnDismissListener { callback() }
+    }
+
     fun show() = dialog.show()
     fun dismiss() = dialog.dismiss()
     fun requestDismiss() = dialog.requestDismiss()

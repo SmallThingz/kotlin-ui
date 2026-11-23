@@ -51,6 +51,7 @@ data class ReverbTopBarActionContent(
 
 sealed interface ReverbTopBarCenterContent {
     data class Brand(val onClick: () -> Unit, val label: String? = null) : ReverbTopBarCenterContent
+    data class Product(val identity: ReverbProductIdentity, val label: String, val onClick: () -> Unit) : ReverbTopBarCenterContent
     data class Custom(val content: View, val label: String, val onClick: () -> Unit) : ReverbTopBarCenterContent
 }
 
@@ -62,13 +63,14 @@ class ReverbTopBar(
 ) : FrameLayout(context) {
     private val slots = ReverbTopBarLayout(context, initialTheme.density.density, initialTheme.palette)
     private val mark = ReverbBrandMarkView(context)
+    private val productMark = ReverbIdentityMarkView(context)
     private val defaultLabel = context.getString(R.string.reverb_brand_name)
-    private val start = Action(context, initialTheme, inputRoot)
-    private val end = Action(context, initialTheme, inputRoot)
+    private val start = ReverbHeaderActionView(context, initialTheme, inputRoot)
+    private val end = ReverbHeaderActionView(context, initialTheme, inputRoot)
     private var centerView: View = mark
     private var centerAction: ReverbToolbarContentActionView? = null
     private var centerContent: View? = null
-    private var centerLabel: String? = null
+    internal val centerAnchor: View? get() = centerAction
 
     init {
         clipChildren = false
@@ -96,7 +98,6 @@ class ReverbTopBar(
                 centerAction?.removeAllViews()
                 centerAction = null
                 centerContent = null
-                centerLabel = null
                 centerView = mark
                 slots.addToolbarSlot(mark, Slot.CENTER, index = 0)
             }
@@ -104,44 +105,50 @@ class ReverbTopBar(
         }
         val (content, label, callback) = when (center) {
             is ReverbTopBarCenterContent.Brand -> Triple(mark, center.label ?: defaultLabel, center.onClick)
+            is ReverbTopBarCenterContent.Product -> {
+                productMark.bind(center.identity, theme.palette)
+                Triple(productMark, center.label, center.onClick)
+            }
             is ReverbTopBarCenterContent.Custom -> Triple(center.content, center.label, center.onClick)
         }
-        if (centerContent !== content || centerLabel != label || centerAction == null) {
+        if (centerContent !== content || centerAction == null) {
             slots.removeView(centerView)
             centerAction?.removeAllViews()
             centerAction = ReverbToolbarContentActionView(context, content, label, inputRoot,
                 theme.density.density, theme.palette, standaloneAccessibility = true).also {
                 centerView = it
                 centerContent = content
-                centerLabel = label
                 slots.addToolbarSlot(it, Slot.CENTER, index = 0)
             }
         }
-        centerAction?.bindToolbarContent(theme.density.density, theme.palette, callback)
-    }
-
-    private class Action(context: Context, theme: ReverbTheme, inputRoot: View?) : ReverbToolbarActionView(
-        context, theme.density.density, theme.palette, { inputRoot }, "", rolePresent = true,
-    ) {
-        private var icon: ReverbIcon? = null
-        private var density = theme.density.density
-
-        fun bind(theme: ReverbTheme, content: ReverbTopBarActionContent?) {
-            visibility = if (content != null) VISIBLE else GONE
-            if (content == null) {
-                cancelInput()
-                return
-            }
-            val tone = if (content.alert) NativeToolbarActionTone.ALERT else NativeToolbarActionTone.MUTED
-            val nextDensity = theme.density.density
-            if (icon != content.icon || density != nextDensity) {
-                icon = content.icon
-                density = nextDensity
-                setGlyph(ReverbIconDrawable(content.icon, density, sampledIconTint), sampledIconTint)
-            }
-            setDescription(content.label)
-            bindToolbarAction(density, theme.palette, content.enabled, tone, content.onClick)
+        centerAction?.apply {
+            setDescription(label)
+            bindToolbarContent(theme.density.density, theme.palette, callback)
         }
+    }
+}
+
+internal class ReverbHeaderActionView(context: Context, theme: ReverbTheme, inputRoot: View?) : ReverbToolbarActionView(
+    context, theme.density.density, theme.palette, { inputRoot }, "", rolePresent = true,
+) {
+    private var icon: ReverbIcon? = null
+    private var density = theme.density.density
+
+    fun bind(theme: ReverbTheme, content: ReverbTopBarActionContent?) {
+        visibility = if (content != null) VISIBLE else GONE
+        if (content == null) {
+            cancelInput()
+            return
+        }
+        val tone = if (content.alert) NativeToolbarActionTone.ALERT else NativeToolbarActionTone.MUTED
+        val nextDensity = theme.density.density
+        if (icon != content.icon || density != nextDensity) {
+            icon = content.icon
+            density = nextDensity
+            setGlyph(ReverbIconDrawable(content.icon, density, sampledIconTint), sampledIconTint)
+        }
+        setDescription(content.label)
+        bindToolbarAction(density, theme.palette, content.enabled, tone, content.onClick)
     }
 }
 
