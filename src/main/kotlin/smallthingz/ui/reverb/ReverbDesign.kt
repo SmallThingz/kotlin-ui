@@ -59,7 +59,8 @@ class ReverbTheme internal constructor(
     val palette: NativeColorScheme,
     internal val appearance: NativeUiAppearance = ReverbDesign.appearance,
 ) {
-    internal val controls = ControlTheme(appearance, palette, density, fontResolver)
+    /** Resolved theme for common controls in the same window. */
+    val controls: ControlTheme = ControlTheme(appearance, palette, density, fontResolver)
 
     @MainThread
     fun paragraph(context: Context, text: String, role: NativeTypographyRole): ParagraphView =
