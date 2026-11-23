@@ -13,7 +13,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
-import android.view.inspector.WindowInspector
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -28,18 +27,33 @@ import java.util.concurrent.atomic.AtomicReference
 @RunWith(AndroidJUnit4::class)
 class DropdownInteractionTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
+    private val automation get() = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+    private lateinit var activityUnderTest: Activity
+    private var demoWindowId = -1
+    private val focusLostAt = AtomicReference<Long?>()
     private fun report(message: String) {
         instrumentation.sendStatus(0, Bundle().apply { putString("stream", "\n$message\n") })
     }
     private fun all(node: AccessibilityNodeInfo?): List<AccessibilityNodeInfo> {
-        if (node == null) return emptyList()
+        if (node == null || node.windowId != demoWindowId || node.packageName?.toString() != instrumentation.targetContext.packageName) return emptyList()
         return listOf(node) + (0 until node.childCount).flatMap { all(node.getChild(it)) }
     }
-    private fun nodes() = all(instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES).rootInActiveWindow)
+    private fun demoWindow() = automation.windows.firstOrNull { it.id == demoWindowId }
+    private fun nodes(): List<AccessibilityNodeInfo> {
+        assertNull("Demo window $demoWindowId lost focus during this run (uptime ms)", focusLostAt.get())
+        return all(demoWindow()?.root)
+    }
+    private fun guardInput() {
+        var focused = false
+        instrumentation.runOnMainSync { focused = activityUnderTest.hasWindowFocus() }
+        val window = demoWindow()
+        assertTrue("Input withheld: demo window=$demoWindowId decorFocused=$focused windowFocused=${window?.isFocused} active=${window?.isActive} focusLostAt=${focusLostAt.get()}",
+            focused && window?.isFocused == true && window.isActive && focusLostAt.get() == null)
+    }
     private fun await(message: String, detail: () -> String = { "" }, condition: () -> Boolean) {
         val until = SystemClock.uptimeMillis() + 5000
         while (!condition()) {
-            if (SystemClock.uptimeMillis() >= until) fail("$message ${detail()}\n" + nodes().joinToString("\n") {
+            if (SystemClock.uptimeMillis() >= until) fail("$message ${detail()} demoWindow=$demoWindowId focused=${demoWindow()?.isFocused} active=${demoWindow()?.isActive}\n" + nodes().joinToString("\n") {
                 "window=${it.windowId} ${it.className} text=${it.text} desc=${it.contentDescription} selected=${it.isSelected} clickable=${it.isClickable} visible=${it.isVisibleToUser} children=${it.childCount} scroll=${it.isScrollable} bounds=${Rect().also(it::getBoundsInScreen)}"
             })
             SystemClock.sleep(40)
@@ -140,13 +154,32 @@ class DropdownInteractionTest {
         val info = checkNotNull(automation.serviceInfo)
         val originalFlags = info.flags
         try {
-            info.flags = originalFlags and AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS.inv()
+            info.flags = (originalFlags and AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS.inv()) or
+                AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
             automation.serviceInfo = info
             val activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+            activityUnderTest = activity
+            val listener = ViewTreeObserver.OnWindowFocusChangeListener { focused ->
+                if (!focused) focusLostAt.compareAndSet(null, SystemClock.uptimeMillis())
+            }
             try {
-                await("Demo not visible") { nodes().any { it.packageName?.toString() == "app.smallthingz.dropdowndemo" } }
+                await("Demo window did not gain focus") {
+                    var ready = false
+                    instrumentation.runOnMainSync {
+                        val decor = activity.window.decorView
+                        demoWindowId = decor.createAccessibilityNodeInfo().windowId
+                        ready = decor.hasWindowFocus() && demoWindowId >= 0
+                        if (ready) decor.viewTreeObserver.addOnWindowFocusChangeListener(listener)
+                    }
+                    ready
+                }
+                await("Demo window not visible to accessibility") { nodes().isNotEmpty() }
                 block(activity)
-            } finally { instrumentation.runOnMainSync { activity.finish() } }
+            } finally { instrumentation.runOnMainSync {
+                val observer = activity.window.decorView.viewTreeObserver
+                if (observer.isAlive) observer.removeOnWindowFocusChangeListener(listener)
+                activity.finish()
+            } }
         } finally {
             info.flags = originalFlags
             automation.serviceInfo = info
@@ -210,7 +243,7 @@ class DropdownInteractionTest {
     }
 
     private fun tap(bounds: Rect) {
-        val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        guardInput()
         val down = SystemClock.uptimeMillis()
         for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
             val event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, bounds.exactCenterX(), bounds.exactCenterY(), 0)
@@ -262,6 +295,7 @@ class DropdownInteractionTest {
         val prior = focusTrigger(activity, label)
         open(activity, label)
         assertFalse("Background labels remained accessible", nodes().any { it.text?.toString() == "Channels" })
+        guardInput()
         instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
         awaitClosed("16-bit PCM")
         var restored: View? = null
@@ -275,6 +309,7 @@ class DropdownInteractionTest {
         await("Wheel did not fully expand") { scrimAlpha(label) == NativeUiAppearance.Default.anchoredDropdown.scrimOpacity }
         val down = SystemClock.uptimeMillis()
         fun pointer(action: Int, offsetRows: Float) {
+            guardInput()
             val y = slot.exactCenterY() - slot.height() * offsetRows
             val event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, slot.exactCenterX(), y, 0)
             event.source = InputDevice.SOURCE_TOUCHSCREEN
@@ -284,6 +319,7 @@ class DropdownInteractionTest {
         try {
             pointer(MotionEvent.ACTION_MOVE, 1f)
             await("Held drag did not select its first crossed row") { selectedBounds("24-bit PCM") == slot }
+            guardInput()
             instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
             pointer(MotionEvent.ACTION_MOVE, 2f)
         } finally { pointer(MotionEvent.ACTION_UP, 2f) }
@@ -323,7 +359,7 @@ class DropdownInteractionTest {
             for (i in 0 until view.childCount) pane(view.getChildAt(i))?.let { return it }
             return null
         }
-        return WindowInspector.getGlobalWindowViews().firstNotNullOfOrNull(::pane)
+        return pane(activityUnderTest.window.decorView)
     }
 
     private fun scrimAlpha(label: String): Float {
@@ -388,6 +424,7 @@ class DropdownInteractionTest {
         val slot = open(it, "Sample format")
         val down = SystemClock.uptimeMillis()
         fun pointer(action: Int, fraction: Float) {
+            guardInput()
             val event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action,
                 slot.exactCenterX(), slot.exactCenterY() - slot.height() * 2.2f * fraction, 0)
             try { instrumentation.sendPointerSync(event) } finally { event.recycle() }
