@@ -254,6 +254,7 @@ internal class NativeSheetContent(
     private val header=Header(context,titleView,close)
     private var body:View?=null
     private var actions:View?=null
+    private var topHeader=0
     private var topBody=0
     private var topActions=0
     private var grain: NoiseDrawable? = if (contentBackground == null)
@@ -307,8 +308,10 @@ internal class NativeSheetContent(
         val bounded=MeasureSpec.getMode(heightMeasureSpec)!=MeasureSpec.UNSPECIFIED
         val maximum=if(bounded)MeasureSpec.getSize(heightMeasureSpec)else Int.MAX_VALUE
         val bottom=min((style.recipe.bottomPaddingDp*density).roundToInt(),maximum)
-        var used=0
-        var remaining=max(0,maximum-bottom)
+        val available = max(0, maximum - bottom)
+        topHeader = (style.recipe.topPaddingDp * density).roundToInt().coerceIn(0, available)
+        var used = topHeader
+        var remaining = available - topHeader
         fun childHeight()=if(bounded)sheetSurfaceAtMost(remaining)else MeasureSpec.makeMeasureSpec(0,MeasureSpec.UNSPECIFIED)
         header.measure(sheetSurfaceExact(inner),childHeight());used+=header.measuredHeight;remaining-=header.measuredHeight
         val bodyGap=min((style.recipe.bodyGapDp*density).roundToInt(),remaining);used+=bodyGap;remaining-=bodyGap
@@ -321,7 +324,7 @@ internal class NativeSheetContent(
     }
     override fun onLayout(changed:Boolean,l:Int,t:Int,r:Int,b:Int) {
         val pad=(style.recipe.horizontalPaddingDp*density).roundToInt()
-        header.layout(pad,0,pad+header.measuredWidth,header.measuredHeight)
+        header.layout(pad, topHeader, pad + header.measuredWidth, topHeader + header.measuredHeight)
         body?.let {it.layout(pad,topBody,pad+it.measuredWidth,topBody+it.measuredHeight)}
         actions?.let {it.layout(pad,topActions,pad+it.measuredWidth,topActions+it.measuredHeight)}
     }
