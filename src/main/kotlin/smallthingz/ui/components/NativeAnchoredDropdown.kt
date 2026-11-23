@@ -234,7 +234,7 @@ class NativeAnchoredDropdown(
             try { publish(target) } catch (failure: RuntimeException) { dispose(); throw failure }
             if (disposed) return
             animate(target.toFloat(), 0f, style.collapseMillis) {
-                dispose()
+                if (wheel.pointer < 0) dispose()
             }
         }
 
@@ -242,7 +242,8 @@ class NativeAnchoredDropdown(
             animator?.removeAllListeners(); animator?.cancel()
             val startPosition = position; val startReveal = reveal
             animator = ValueAnimator.ofFloat(0f, 1f).apply {
-                this.duration = duration
+                val travel = maxOf(abs(opened - startReveal), if (move) abs(target - startPosition).coerceAtMost(1f) else 0f)
+                this.duration = (duration * travel).toLong()
                 interpolator = PathInterpolator(.2f, 0f, 0f, 1f)
                 addUpdateListener {
                     val t = it.animatedValue as Float
@@ -274,7 +275,8 @@ class NativeAnchoredDropdown(
             val paint = Paint(Paint.ANTI_ALIAS_FLAG)
             var downY = 0f
             var dragging = false
-            var reopening = false
+            var downRow = 0
+            var earlyTap = false
             var pointer = -1
             var gesturePosition = 0f
             val slop = ViewConfiguration.get(context).scaledTouchSlop
@@ -359,26 +361,32 @@ class NativeAnchoredDropdown(
             }
             override fun onInterceptTouchEvent(event: MotionEvent): Boolean = true
             override fun onTouchEvent(event: MotionEvent): Boolean {
-                if (disposed || plan == null) return true
+                if (disposed) return true
+                if (plan == null || earlyTap) {
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> earlyTap = true
+                        MotionEvent.ACTION_UP -> dispose()
+                        MotionEvent.ACTION_CANCEL -> earlyTap = false
+                    }
+                    return true
+                }
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         val edges = extents()
                         if (event.y < edges.first || event.y > edges.second) { collapse(settled); return true }
-                        reopening = closing
-                        closing = false
-                        animator?.removeAllListeners(); animator?.cancel()
                         gesturePosition = position
+                        downRow = (position + (event.y - anchorY) / rowHeight - .5f).roundToInt().coerceIn(0, rows.lastIndex)
                         pointer = event.getPointerId(0); downY = event.y; dragging = false
-                        if (reopening || reveal < 1f) animate(if (reopening) settled.toFloat() else position, 1f,
-                            style.expandMillis, move = reopening) {}
                     }
                     MotionEvent.ACTION_MOVE -> {
                         val i = event.findPointerIndex(pointer)
                         if (i < 0) { pointer = -1; dragging = false; settle(settled); return true }
                         val delta = downY - event.getY(i)
                         if (!dragging && abs(delta) > slop) {
-                            if (reopening) gesturePosition = position
+                            gesturePosition = position
                             dragging = true
+                            closing = false
+                            animate(position, 1f, style.expandMillis, move = false) {}
                         }
                         if (dragging) {
                             position = (gesturePosition + delta / rowHeight).coerceIn(0f, rows.lastIndex.toFloat())
@@ -392,8 +400,10 @@ class NativeAnchoredDropdown(
                         val i = event.findPointerIndex(pointer)
                         if (i < 0) { pointer = -1; dragging = false; settle(settled); return true }
                         val delta = downY - event.getY(i)
-                        if (dragging || abs(delta) > slop) {
-                            if (!dragging && reopening) gesturePosition = position
+                        val moved = dragging || abs(delta) > slop
+                        if (moved) {
+                            if (!dragging) gesturePosition = position
+                            closing = false
                             position = (gesturePosition + delta / rowHeight).coerceIn(0f, rows.lastIndex.toFloat())
                             settled = position.roundToInt()
                             updatePositions()
@@ -401,11 +411,16 @@ class NativeAnchoredDropdown(
                             dragging = false
                             if (!disposed) settle(settled)
                         }
-                        else if (!reopening) collapse((position + (event.y - anchorY) / rowHeight - .5f).roundToInt().coerceIn(0, rows.lastIndex))
                         pointer = -1
+                        if (!moved) {
+                            if (closing) {
+                                closing = false
+                                animate(settled.toFloat(), 1f, style.expandMillis) {}
+                            } else collapse(downRow)
+                        }
                     }
-                    MotionEvent.ACTION_CANCEL -> { pointer = -1; dragging = false; settle(settled) }
-                    MotionEvent.ACTION_POINTER_UP -> if (event.getPointerId(event.actionIndex) == pointer) { pointer = -1; dragging = false; settle(settled) }
+                    MotionEvent.ACTION_CANCEL -> { pointer = -1; dragging = false; if (closing && reveal == 0f) dispose() else settle(settled) }
+                    MotionEvent.ACTION_POINTER_UP -> if (event.getPointerId(event.actionIndex) == pointer) { pointer = -1; dragging = false; if (closing && reveal == 0f) dispose() else settle(settled) }
                 }
                 return true
             }
