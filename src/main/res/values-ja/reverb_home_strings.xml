@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="clear_buffer">消去</string>
+    <string name="record_all_memory">全体をエクスポート</string>
+    <string name="saving">保存中…</string>
+</resources>

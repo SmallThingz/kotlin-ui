@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="allow">Разрешить</string>
+    <string name="recording_settings_title">Аудио</string>
+    <string name="storage_settings_title">Хранилище</string>
+    <string name="onboarding_restart_resume_title">Возобновление записи после перезагрузки устройства</string>
+    <string name="onboarding_restart_resume_body">Разрешите отображение поверх других приложений, чтобы включить автозапуск после перезагрузки устройства в настройках.</string>
+    <string name="settings_restart_access">Проверить разрешение для автозапуска</string>
+</resources>

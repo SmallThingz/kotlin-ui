@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reverb_settings_storage_settings_title">Armazenamento</string>
+    <string name="reverb_settings_default_folder">Padrão</string>
+    <string name="reverb_settings_choose_folder">Escolher</string>
+    <string name="reverb_settings_move_recordings">Mover existentes</string>
+    <string name="reverb_settings_settings_resume_notification_blocked">Os lembretes para retomar a gravação estão bloqueados. Confira as configurações de notificações.</string>
+    <string name="reverb_settings_settings_notification_access">Revisar configurações de notificações</string>
+    <string name="reverb_settings_settings_restart_access_missing">A inicialização automática após reiniciar precisa de permissão para exibir sobre outros aplicativos.</string>
+    <string name="reverb_settings_settings_restart_access">Revisar permissão para inicialização automática</string>
+</resources>

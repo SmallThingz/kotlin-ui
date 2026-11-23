@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reverb_settings_storage_settings_title">保存先</string>
+    <string name="reverb_settings_default_folder">既定</string>
+    <string name="reverb_settings_choose_folder">選択</string>
+    <string name="reverb_settings_move_recordings">既存を移動</string>
+    <string name="reverb_settings_settings_resume_notification_blocked">録音再開のリマインダーがブロックされています。通知設定を確認してください。</string>
+    <string name="reverb_settings_settings_notification_access">通知設定を確認</string>
+    <string name="reverb_settings_settings_restart_access_missing">端末の再起動後に自動開始するには、他のアプリの上に表示する権限が必要です。</string>
+    <string name="reverb_settings_settings_restart_access">自動開始の権限を確認</string>
+</resources>

@@ -42,6 +42,7 @@ internal class NativeSelectionIndicator(
     fun retarget(left: Float, top: Float, right: Float, bottom: Float) {
         if (closed) return
         val changed = !initialized || target.left != left || target.top != top || target.right != right || target.bottom != bottom
+        if (!changed && host.isAttachedToWindow && host.isShown) return
         if (changed) scaleReadDenied = false
         val scale = frameScale()
         val now = System.nanoTime()

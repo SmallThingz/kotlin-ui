@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="clear_buffer">清除</string>
+    <string name="record_all_memory">导出全部</string>
+    <string name="saving">保存中…</string>
+</resources>

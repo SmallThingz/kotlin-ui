@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="allow">허용</string>
+    <string name="recording_settings_title">오디오</string>
+    <string name="storage_settings_title">저장소</string>
+    <string name="onboarding_restart_resume_title">기기 재시작 후 녹음 재개</string>
+    <string name="onboarding_restart_resume_body">설정에서 기기 재시작 후 자동 시작을 사용하려면 다른 앱 위에 표시를 허용하세요.</string>
+    <string name="settings_restart_access">자동 시작 권한 확인</string>
+</resources>

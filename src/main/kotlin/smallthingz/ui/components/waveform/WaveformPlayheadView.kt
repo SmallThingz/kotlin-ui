@@ -14,14 +14,17 @@ class WaveformPlayheadView(context: Context, private var density: Float) : View(
     private var fraction = 0f
     private var shown = false
     private var colorMotion: ViewColorTransition? = null
+    private var targetColor = 0
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         if (android.os.Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
     }
     fun bind(style: WaveformStyle, density: Float, shown: Boolean) {
+        val color = style.markerColor
+        if (colorMotion != null && this.density == density && this.shown == shown && targetColor == color) return
         this.density = density
         this.shown = shown
-        val color = style.markerColor
+        targetColor = color
         val motion = colorMotion ?: ViewColorTransition(this, intArrayOf(color), {
             colorMotion?.let { paint.color = it.color(0); invalidate() }
         }).also { colorMotion = it; paint.color = color }

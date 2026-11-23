@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reverb_settings_storage_settings_title">Stockage</string>
+    <string name="reverb_settings_default_folder">Par défaut</string>
+    <string name="reverb_settings_choose_folder">Choisir</string>
+    <string name="reverb_settings_move_recordings">Déplacer l’existant</string>
+    <string name="reverb_settings_settings_resume_notification_blocked">Les rappels de reprise sont bloqués. Vérifiez les paramètres de notification.</string>
+    <string name="reverb_settings_settings_notification_access">Vérifier les paramètres de notification</string>
+    <string name="reverb_settings_settings_restart_access_missing">Le démarrage automatique après redémarrage nécessite l’autorisation d’affichage par-dessus les autres applications.</string>
+    <string name="reverb_settings_settings_restart_access">Vérifier l’autorisation de démarrage automatique</string>
+</resources>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="allow">Consenti</string>
+    <string name="recording_settings_title">Audio</string>
+    <string name="storage_settings_title">Archiviazione</string>
+    <string name="onboarding_restart_resume_title">Riprendi la registrazione dopo il riavvio</string>
+    <string name="onboarding_restart_resume_body">Consenti la visualizzazione sopra altre app per usare l’avvio automatico dopo il riavvio nelle impostazioni.</string>
+    <string name="settings_restart_access">Controlla l’autorizzazione per l’avvio automatico</string>
+</resources>

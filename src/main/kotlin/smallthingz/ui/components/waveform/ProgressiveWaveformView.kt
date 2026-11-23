@@ -44,6 +44,8 @@ class ProgressiveWaveformView @JvmOverloads constructor(
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
     private var waveform: ProgressiveWaveformData? = null
     private var frame: ProgressiveWaveformFrame? = null
+    private var startFraction = 0f
+    private var endFraction = 0f
     private var styleTarget: WaveformStyle? = null
     private var colorMotion: ViewColorTransition? = null
     private var bodyColor = 0
@@ -67,9 +69,14 @@ class ProgressiveWaveformView @JvmOverloads constructor(
         invalidate()
     }
 
-    fun setFrame(value: ProgressiveWaveformFrame) {
-        if (frame == value) return
+    fun setFrame(value: ProgressiveWaveformFrame) = setFrame(value, value.startFraction, value.endFraction)
+
+    /** Selection can follow the live playhead without allocating a second animation frame. */
+    fun setFrame(value: ProgressiveWaveformFrame, startFraction: Float, endFraction: Float) {
+        if (frame == value && this.startFraction == startFraction && this.endFraction == endFraction) return
         frame = value
+        this.startFraction = startFraction
+        this.endFraction = endFraction
         invalidate()
     }
 
@@ -197,8 +204,8 @@ class ProgressiveWaveformView @JvmOverloads constructor(
 
         val builtRight = w * effectiveVisibleCoarse.coerceIn(0f, 1f)
         val detailRight = w * effectiveVisibleDetail.coerceIn(0f, 1f)
-        val selectedLeft = w * current.startFraction.coerceIn(0f, 1f)
-        val selectedRight = w * current.endFraction.coerceIn(current.startFraction, 1f)
+        val selectedLeft = w * startFraction.coerceIn(0f, 1f)
+        val selectedRight = w * endFraction.coerceIn(startFraction, 1f)
         val materialT = waveformSmoothStep(((morph - 0.06f) / 0.82f).coerceIn(0f, 1f))
         val finalLayerAlpha = if (!current.morphFromBlob) {
             1f

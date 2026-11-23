@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reverb_settings_storage_settings_title">ذخیره‌سازی</string>
+    <string name="reverb_settings_default_folder">پیش‌فرض</string>
+    <string name="reverb_settings_choose_folder">انتخاب</string>
+    <string name="reverb_settings_move_recordings">انتقال ضبط‌های موجود</string>
+    <string name="reverb_settings_settings_resume_notification_blocked">یادآوری‌های ازسرگیری ضبط مسدود هستند. تنظیمات اعلان‌ها را بررسی کنید.</string>
+    <string name="reverb_settings_settings_notification_access">بررسی تنظیمات اعلان‌ها</string>
+    <string name="reverb_settings_settings_restart_access_missing">شروع خودکار پس از راه‌اندازی مجدد به مجوز نمایش روی برنامه‌های دیگر نیاز دارد.</string>
+    <string name="reverb_settings_settings_restart_access">بررسی مجوز نمایش روی برنامه‌های دیگر</string>
+</resources>

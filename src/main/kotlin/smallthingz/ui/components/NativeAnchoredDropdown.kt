@@ -63,24 +63,15 @@ class NativeAnchoredDropdown(
     private var sessionIdentity: Any? = null
     private val titleStyle = appearance.typography[NativeTypographyRole.BODY_SMALL]
     private val selectedStyle = appearance.typography[NativeTypographyRole.BODY_LARGE]
-    private val arrowMask = NativePathIconMask(Path().apply {
-        moveTo(7f, 10f)
-        lineTo(12f, 15f)
-        lineTo(17f, 10f)
-        close()
-    })
-    private val arrowMaskProvider = { arrowMask }
 
     fun <T> createField(content: NativeDropdownContent<T>, onSelected: (T) -> Unit): NativeDropdown<T> =
         face(content) { anchor, value -> open(anchor, value, onSelected) }
 
     private fun <T> face(content: NativeDropdownContent<T>, activate: (View, NativeDropdownContent<T>) -> Unit): NativeDropdown<T> {
-        val glyph = CachedPathIconDrawable(arrowMaskProvider, density.density, palette.muted)
-        val icon = NativeDecorativeIconView(context, glyph, palette.muted)
         return NativeDropdown(context,
             ParagraphView(context, titleStyle, density, resolver, palette.muted),
             ParagraphView(context, selectedStyle, density, resolver, palette.ink),
-            NativeDropdownIcon(icon, icon::setColor), palette, { null }, { _, _ -> }, activate,
+            createDropdownIcon(context, palette.muted), palette, { null }, { _, _ -> }, activate,
         ).apply {
             bindDescription(content.label)
             bind(content, false, palette)

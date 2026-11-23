@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="allow">Autoriser</string>
+    <string name="recording_settings_title">Audio</string>
+    <string name="storage_settings_title">Stockage</string>
+    <string name="onboarding_restart_resume_title">Reprendre l’enregistrement après un redémarrage</string>
+    <string name="onboarding_restart_resume_body">Autorisez l’affichage par-dessus les autres applications pour utiliser le démarrage automatique après redémarrage dans les paramètres.</string>
+    <string name="settings_restart_access">Vérifier l’autorisation de démarrage automatique</string>
+</resources>

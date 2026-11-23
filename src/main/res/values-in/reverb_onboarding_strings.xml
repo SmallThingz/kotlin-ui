@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="allow">Izinkan</string>
+    <string name="recording_settings_title">Audio</string>
+    <string name="storage_settings_title">Penyimpanan</string>
+    <string name="onboarding_restart_resume_title">Lanjutkan perekaman setelah perangkat dimulai ulang</string>
+    <string name="onboarding_restart_resume_body">Izinkan tampil di atas aplikasi lain untuk menggunakan Mulai otomatis setelah perangkat dimulai ulang di Setelan.</string>
+    <string name="settings_restart_access">Periksa izin mulai otomatis</string>
+</resources>

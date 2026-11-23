@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="allow">Permitir</string>
+    <string name="recording_settings_title">Audio</string>
+    <string name="storage_settings_title">Almacenamiento</string>
+    <string name="onboarding_restart_resume_title">Reanudar la grabación tras reiniciar</string>
+    <string name="onboarding_restart_resume_body">Permite que se muestre sobre otras apps para usar el inicio automático tras reiniciar en los ajustes.</string>
+    <string name="settings_restart_access">Revisar el permiso para el inicio automático</string>
+</resources>

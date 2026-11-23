@@ -20,13 +20,16 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import smallthingz.ui.input.phase.NativeClickPhaseHost
+import smallthingz.ui.input.phase.NativeClickPhaseNode
+import smallthingz.ui.input.phase.NativeDragPointerChange
+import smallthingz.ui.input.phase.NativeViewPhasePointerNode
 import smallthingz.ui.input.phase.ViewClickPhaseEndpoint
 import kotlin.math.max
 import kotlin.math.roundToInt
 import smallthingz.ui.animation.view.ViewColorTransition
 
 /** M3's32dp handle box with22dp vertical padding;48dp is touch expansion, not layout width. */
-internal class NativeSheetDragHandle(
+class NativeSheetDragHandle(
     context:Context,
     private var style:NativeActionSheetStyle,
     inputRoot:()->View?,
@@ -35,7 +38,7 @@ internal class NativeSheetDragHandle(
     private val dismissSheet:()->Unit,
 ):ViewGroup(context),NativeClickPhaseHost,AutoCloseable {
     private val identity=Any()
-    val mark=HandleMark(context,style)
+    internal val mark=HandleMark(context,style)
     private val indication=RowIndication.install(this,style.palette.onSurface,
         { readCachedAnimatorDurationScale(context) })
     private val controller=ViewClickController(this,object:NativeClickEnvironment {
@@ -51,7 +54,7 @@ internal class NativeSheetDragHandle(
         override fun longPressOwnershipChanged(owns:Boolean)=Unit
     },RowIndicationSink(indication) {x,y,out->out.set(x,y)})
     override val nativeClickEndpoint=ViewClickPhaseEndpoint(controller)
-    val tooltip=NativeSheetTooltip(this,style,runtime,mark.contentDescription.toString())
+    internal val tooltip=NativeSheetTooltip(this,style,runtime,mark.contentDescription.toString())
     var sourceNode:(()->NativeSourceAccessibilityNode)?=null
     init {
         clipChildren=false;clipToPadding=false
@@ -61,26 +64,35 @@ internal class NativeSheetDragHandle(
         addView(mark)
         controller.bind(NativeClickBinding(identity,true,{performClick()}))
     }
+    fun pointerNodes(interestedParent: (NativeDragPointerChange) -> Boolean): List<NativeViewPhasePointerNode> =
+        listOf(tooltip.pointerNode, NativeClickPhaseNode(this, nativeClickEndpoint, interestedParent))
+
+    fun bindSourceGeometry(source: (View) -> NativeSourceAccessibilityNode) {
+        sourceNode = { source(this) }
+        mark.sourceNode = { source(mark) }
+    }
+
     fun updateStyle(next:NativeActionSheetStyle) {
         if(style===next)return
-        val densityChanged=style.textDensity!=next.textDensity
+        val layoutChanged = style.textDensity != next.textDensity || style.recipe.handleHeightDp != next.recipe.handleHeightDp
         style=next
         mark.bindColor(next.palette.onSurfaceVariant)
         indication.updateColor(next.palette.onSurface)
         tooltip.updateStyle(next)
-        if(densityChanged)requestLayout()
+        if(layoutChanged)requestLayout()
     }
     fun refreshState()=invalidate()
     override fun onMeasure(widthMeasureSpec:Int,heightMeasureSpec:Int) {
         val d=style.textDensity.density
         val w=resolveSize((32f*d).roundToInt(),widthMeasureSpec)
         val pad=(22f*d).roundToInt()
-        val h=resolveSize(pad*2+(4f*d).roundToInt(),heightMeasureSpec)
-        mark.measure(sheetHandleExact(w),sheetHandleExact(max(0,h-pad*2)))
+        val markHeight = (style.recipe.handleHeightDp * d).roundToInt().coerceAtLeast(1)
+        val h=resolveSize(pad*2+markHeight,heightMeasureSpec)
+        mark.measure(sheetHandleExact(w),sheetHandleExact(minOf(h, markHeight)))
         setMeasuredDimension(w,h)
     }
     override fun onLayout(changed:Boolean,l:Int,t:Int,r:Int,b:Int) {
-        val y=(22f*style.textDensity.density).roundToInt().coerceAtMost(height)
+        val y=((height-mark.measuredHeight)*.5f).roundToInt()
         mark.layout(0,y,width,y+mark.measuredHeight)
         indication.onMeasured(width,height,style.textDensity.density)
     }

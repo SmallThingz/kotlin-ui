@@ -1,6 +1,7 @@
 package smallthingz.ui.scroll
 
 import smallthingz.ui.animation.core.exponentialDecay
+import smallthingz.ui.geometry.Offset
 import smallthingz.ui.runtime.MonotonicFrameClock
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
@@ -20,6 +21,36 @@ import org.junit.Test
 
 /** Proposal tests only: no compilation, execution or actual frame-phase qualification credited. */
 class NativeVerticalScrollOwnerTest {
+    @Test fun onlyPointerCancelReturnsTheModalAfterANestedDrag() = boundedTest {
+        val fixture = Fixture()
+        var modalReturns = 0
+        val channel = NativeVerticalDragChannel(fixture.owner, this) { modalReturns++ }
+        try {
+            channel.start(Offset.Zero)
+            while (!fixture.state.isScrollInProgress) yield()
+            val successorEntered = CompletableDeferred<Unit>()
+            val successor = launch(start = CoroutineStart.UNDISPATCHED) {
+                fixture.owner.drag {
+                    successorEntered.complete(Unit)
+                    awaitCancellation()
+                }
+            }
+            successorEntered.await()
+            successor.cancelAndJoin()
+
+            channel.start(Offset.Zero)
+            while (!fixture.state.isScrollInProgress) yield()
+            assertEquals(0, modalReturns)
+            channel.cancel()
+            while (modalReturns == 0) yield()
+            assertEquals(1, modalReturns)
+            assertTrue(fixture.preVelocities.isEmpty())
+            assertTrue(fixture.postVelocities.isEmpty())
+        } finally {
+            channel.close()
+        }
+    }
+
     @Test fun heldUserMutationRejectsDefaultFlingWithoutFinishingTheActiveDrag() = boundedTest {
         val fixture = Fixture()
         val drag = launch(start = CoroutineStart.UNDISPATCHED) {

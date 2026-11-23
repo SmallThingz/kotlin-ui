@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reverb_settings_storage_settings_title">Speicher</string>
+    <string name="reverb_settings_default_folder">Standard</string>
+    <string name="reverb_settings_choose_folder">Wählen</string>
+    <string name="reverb_settings_move_recordings">Vorhandene verschieben</string>
+    <string name="reverb_settings_settings_resume_notification_blocked">Erinnerungen zum Fortsetzen sind blockiert. Prüfe die Benachrichtigungseinstellungen.</string>
+    <string name="reverb_settings_settings_notification_access">Benachrichtigungseinstellungen prüfen</string>
+    <string name="reverb_settings_settings_restart_access_missing">Autostart nach Geräteneustart benötigt die Berechtigung zur Anzeige über anderen Apps.</string>
+    <string name="reverb_settings_settings_restart_access">Autostart-Berechtigung prüfen</string>
+</resources>

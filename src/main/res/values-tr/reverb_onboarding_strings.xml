@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="allow">İzin ver</string>
+    <string name="recording_settings_title">Ses</string>
+    <string name="storage_settings_title">Depolama</string>
+    <string name="onboarding_restart_resume_title">Cihaz yeniden başladıktan sonra kaydı sürdür</string>
+    <string name="onboarding_restart_resume_body">Ayarlarda yeniden başlatmadan sonra otomatik başlatmayı kullanmak için diğer uygulamaların üzerinde görüntülemeye izin verin.</string>
+    <string name="settings_restart_access">Otomatik başlatma iznini kontrol et</string>
+</resources>

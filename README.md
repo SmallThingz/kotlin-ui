@@ -9,6 +9,34 @@ The DSL constructs actual Views directly. It does not retain a second UI tree or
 run a reconciler. This is an implementation boundary, not a measured zero-cost
 claim: text layout, animation, allocation and View operations still have costs.
 
+## Application boundary
+
+Application code supplies content, stable option identities, authoritative state and
+actions. Appearance belongs in this library, including grouping, spacing, colors,
+type, toolbar placement, dialog presentation and motion. Reading a recipe and
+reassembling it in an app creates a second appearance implementation.
+
+- `smallthingz.ui.common` provides retained semantic controls such as `ToggleRow`,
+  `SegmentedSelector` and `DropdownGroup`. Resolve a `ControlTheme` for the window;
+  bind state on the existing controls rather than constructing them on each update.
+- `smallthingz.ui.reverb` owns Reverb's screen compositions and presets, including
+  `ReverbEnvironment`, `ReverbTopBar`, Settings, Library, Incidents, Home and dialogs.
+  Another library application namespace can delegate to these components. It should
+  not copy their drawing or layout implementation into the consuming application.
+- Primitive recipes and the examples below are tools for authors of library
+  components and application namespaces. Consuming apps should use their namespace's
+  semantic API instead of overriding recipes, padding, paint or animation rules.
+
+Recreate window configuration for a language, density or font change, and rebind
+localized domain content without changing option identity. Intrinsic component
+labels come from library resources. Keep permission decisions, recording/storage
+ownership and durable operations in the application. Close retained component
+owners when their logical lifetime ends; hiding a retained screen is a separate
+state from disposing it.
+
+These boundaries do not imply a measured performance improvement. Qualify changed
+behavior and compare equivalent workloads before making latency or memory claims.
+
 ## Getting started
 
 Add `implementation(project(":native-ui"))` when the library is included as an
@@ -366,8 +394,12 @@ statements are not a claim that a new checkout has passed current tests.
 
 First-party code is licensed under Apache-2.0; see `LICENSE.txt`.
 Upstream-derived files retain their existing Apache-2.0 notices and provenance.
+The relocated Reverb OneShot and ExportRange glyph paths retain their explicit
+GPL-3.0 notices; see `src/main/resource-provenance/reverb-icons/`. Their relocation
+does not relicense those paths.
 Dependencies include AndroidX annotation, core, lifecycle, savedstate and emoji2.
-Coroutines and activity-ktx 1.13.0 are exposed by the window/runtime APIs.
+Coroutines, activity-ktx 1.13.0 and RecyclerView 1.4.0 are exposed by the
+window, runtime and retained-list APIs.
 
 ## Anchored menus
 

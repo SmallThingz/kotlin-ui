@@ -1,6 +1,7 @@
 package smallthingz.ui.components
 
 import android.content.Context
+import android.graphics.Rect
 import android.content.res.Configuration
 import android.os.LocaleList
 import android.view.View
@@ -100,6 +101,12 @@ class NativeThemeSelectorIntegrationTest {
         assertEquals((34 * context.resources.displayMetrics.density).roundToInt(), row.height)
         assertEquals((42 * context.resources.displayMetrics.density).roundToInt(), selector.getChildAt(1).height)
         assertFalse(row.activateOnFocusNavigation)
+        val settledCells = children.map { Rect(it.left, it.top, it.right, it.bottom) }
+        selector.bind(NativeThemeMode.SYSTEM, reboundPalette, density, resolver)
+        assertTrue(children.first().isChecked)
+        assertFalse(children.last().isChecked)
+        assertFalse("Only selection changed, so cell measurement remains valid", selector.isLayoutRequested)
+        assertEquals(settledCells, children.map { Rect(it.left, it.top, it.right, it.bottom) })
         current.close()
         selector.close()
     }

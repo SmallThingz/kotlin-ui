@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reverb_settings_storage_settings_title">Archiviazione</string>
+    <string name="reverb_settings_default_folder">Predefinito</string>
+    <string name="reverb_settings_choose_folder">Scegli</string>
+    <string name="reverb_settings_move_recordings">Sposta esistenti</string>
+    <string name="reverb_settings_settings_resume_notification_blocked">I promemoria di ripresa sono bloccati. Controlla le impostazioni delle notifiche.</string>
+    <string name="reverb_settings_settings_notification_access">Controlla le impostazioni delle notifiche</string>
+    <string name="reverb_settings_settings_restart_access_missing">L’avvio automatico dopo il riavvio richiede l’autorizzazione a visualizzare sopra altre app.</string>
+    <string name="reverb_settings_settings_restart_access">Controlla l’autorizzazione per l’avvio automatico</string>
+</resources>

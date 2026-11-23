@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reverb_settings_storage_settings_title">Depolama</string>
+    <string name="reverb_settings_default_folder">Varsayılan</string>
+    <string name="reverb_settings_choose_folder">Seç</string>
+    <string name="reverb_settings_move_recordings">Mevcut kayıtları taşı</string>
+    <string name="reverb_settings_settings_resume_notification_blocked">Kaydı sürdürme hatırlatıcıları engellendi. Bildirim ayarlarını kontrol edin.</string>
+    <string name="reverb_settings_settings_notification_access">Bildirim ayarlarını kontrol et</string>
+    <string name="reverb_settings_settings_restart_access_missing">Yeniden başlatmadan sonra otomatik başlatma için diğer uygulamaların üzerinde görüntüleme izni gerekir.</string>
+    <string name="reverb_settings_settings_restart_access">Otomatik başlatma iznini kontrol et</string>
+</resources>

@@ -112,6 +112,10 @@ class NativeGroupLayout(
         if (joinedEdges == null) geometry.contains(x, y)
         else checkNotNull(joinedShape).acceptsPointer(x, y, false, 0f)
 
+    fun acceptsVisualPointer(x: Float, y: Float, touch: Boolean, minimumTarget: Float): Boolean =
+        if (joinedEdges == null) geometry.acceptsPointer(x, y, touch, minimumTarget)
+        else checkNotNull(joinedShape).acceptsPointer(x, y, touch, minimumTarget)
+
     /** Surface's content layer, rather than its outer draw/border layer. Read-only identity. */
     val pointerContent: ViewGroup get() = content
 
@@ -239,9 +243,7 @@ class NativeGroupLayout(
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
             val touch = event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER
             val minimumTarget = 48f * resources.displayMetrics.density
-            val accepted = if (joinedEdges == null) geometry.acceptsPointer(event.x, event.y, touch, minimumTarget)
-                else checkNotNull(joinedShape).acceptsPointer(event.x, event.y, touch, minimumTarget)
-            if (!accepted) return false
+            if (!acceptsVisualPointer(event.x, event.y, touch, minimumTarget)) return false
         }
         return super.dispatchTouchEvent(event)
     }

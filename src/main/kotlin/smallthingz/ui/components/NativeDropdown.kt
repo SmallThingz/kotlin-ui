@@ -26,13 +26,8 @@ import smallthingz.ui.unit.Density
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-/** Choice identity remains typed even when two labels translate to the same text. */
-data class NativeDropdownContent<T>(
-    val label: String,
-    val selected: T,
-    val options: List<T>,
-    val optionLabel: (T) -> String,
-)
+/** Source-compatible content name for callers of the lower-level native renderer. */
+typealias NativeDropdownContent<T> = smallthingz.ui.common.DropdownContent<T>
 
 data class NativeDropdownColors(
     val collapsed: Int,

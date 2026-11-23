@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="compression_faster">Faster</string>
+    <string name="compression_level">Compression level</string>
+    <string name="compression_smaller">Smaller</string>
+    <string name="output_compression">Output compression</string>
+</resources>

@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 internal class NativeVerticalDragChannel(
     private val owner: NativeVerticalScrollOwner,
     scope: CoroutineScope,
+    private val onPointerDragCancelled: (() -> Unit)?,
 ) : NativeDragSink, AutoCloseable {
     private val nodeJob = SupervisorJob(scope.coroutineContext[Job])
     private val nodeScope = CoroutineScope(scope.coroutineContext + nodeJob)
@@ -46,11 +47,17 @@ internal class NativeVerticalDragChannel(
                             event = events.receive()
                         }
                     }
-                    val velocity = (event as? Event.Stop)?.velocity?.y ?: 0f
+                    val release = event as? Event.Stop
                     // Released ScrollableNode exits UserInput drag before launching its fling.
-                    nodeScope.launch { owner.onScrollStopped(velocity) }
+                    if (release == null && onPointerDragCancelled != null) {
+                        onPointerDragCancelled.invoke()
+                    } else {
+                        nodeScope.launch { owner.onScrollStopped(release?.velocity?.y ?: 0f) }
+                    }
                 } catch (_: CancellationException) {
-                    nodeScope.launch { owner.onScrollStopped(0f) }
+                    // A superseding mutation may already own the modal. Settling either way
+                    // would mistake that interruption for the prior pointer's terminal event.
+                    if (isActive && onPointerDragCancelled == null) nodeScope.launch { owner.onScrollStopped(0f) }
                 }
             }
         }

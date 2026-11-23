@@ -9,6 +9,7 @@ import smallthingz.ui.scroll.NativeVerticalScrollState
 import smallthingz.ui.scroll.NativeVerticalViewport
 
 import smallthingz.ui.animation.view.ViewColorTransition
+import smallthingz.ui.common.NativeModalDragNode
 
 import android.content.Context
 import android.graphics.Canvas
@@ -72,7 +73,7 @@ class NativeActionSheet(
     initialStyle:NativeActionSheetStyle,
     title:String,
     onDismiss:()->Unit,
-    closeIcon: NativeActionSheetIcon,
+    closeIcon: NativeActionSheetIcon?,
     contentBackground: android.graphics.drawable.Drawable?,
     private val statusBarProtection: NativeStatusBarProtection?,
 ):ComponentDialog(ContextThemeWrapper(anchor.context,smallthingz.ui.R.style.NativeSheetWindowTheme)) {
@@ -81,7 +82,7 @@ class NativeActionSheet(
         initialStyle: NativeActionSheetStyle,
         title: String,
         onDismiss: () -> Unit,
-        closeIcon: NativeActionSheetIcon,
+        closeIcon: NativeActionSheetIcon?,
         contentBackground: android.graphics.drawable.Drawable? = null,
     ) : this(anchor, initialStyle, title, onDismiss, closeIcon, contentBackground, null)
 
@@ -106,9 +107,10 @@ class NativeActionSheet(
     private val scrim=SheetScrim(context,style.palette.scrim,style.recipe.scrimAlpha,::requestAnimatedDismiss)
     private val root:SheetRoot=SheetRoot(context,pointer,state,surface,scrim,style.textDensity.density,
         style.recipe.maxWidthDp,::measured,::applyMotion)
-    private val dragChannel=NativeActionSheetDragChannel(state,runtime.scope,::settleToDismiss)
-    private val dragNode=NativeActionSheetDragNode(surface,state,dragChannel)
-    private val nested=NativeActionSheetNestedScroll(state,::settleToDismiss)
+    private val dragChannel=NativeActionSheetDragChannel(state,runtime.scope,::settleToDismiss,::returnAfterCancelledDrag)
+    private val dragNode=NativeModalDragNode(surface, { state.visible && dismissalAllowed() },
+        { state.animationRunning }, dragChannel)
+    private val nested=NativeActionSheetNestedScroll(state,::settleToDismiss,::returnAfterCancelledDrag)
     private val accessibility=NativeActionSheetAccessibility(root,surface,scrim,handle,appContent)
     private val scrollEvents=NativeWindowScrollAccessibilityEvents(root,runtime.scope,
         onScrollGeometryChanged={root.invalidate()},onBatchFinished={root.invalidate()},onClosed={})
@@ -264,6 +266,12 @@ class NativeActionSheet(
             if(!state.visible&&dismissalAllowed())dismissAtRequest()
         }
     }
+    private fun returnAfterCancelledDrag() {
+        if (disposed || state.animationRunning) return
+        val expanded = state.anchors?.expanded ?: return
+        if (state.offset == expanded) return
+        runtime.scope.launch { state.show() }
+    }
     private fun measured() {
         if(state.hasExpandedState&&showEffect==null)showEffect=runtime.scope.launch {state.show()}
         else if(!state.hasExpandedState) {showEffect?.cancel();showEffect=null}
@@ -348,7 +356,7 @@ class NativeActionSheet(
         release {accessibility.close()}
         release {scrollEvents.close()}
         release {handle.close()}
-        release {appContent.close.cancelInput()}
+        release {appContent.close?.cancelInput()}
         release {scrimTargets.close()}
         release {runtime.close()}
         failure?.let {throw it}
@@ -547,23 +555,23 @@ internal class SheetPointerOwner(private val density:Float):AutoCloseable {
         override fun withinLayerBounds(local:Offset)=true
     }
     fun bind(root:SheetRoot,surface:NativeSheetSurface,scrim:SheetScrim,handle:NativeSheetDragHandle,
-        app:NativeSheetContent,drag:NativeActionSheetDragNode) {
+        app:NativeSheetContent,drag:NativeModalDragNode) {
         this.root=root
         val minimum=NativeMinimumTouchTarget {Size(48f*density,48f*density)}
-        val close=app.close.visual
-        val closeHit=NativeRetainedViewHitLayout(close,geometry,minimum,
-            listOf(NativeClickPhaseNode(close,close.nativeClickEndpoint,drag::interested)),clip={p->
-                val radius=min(close.width,close.height)*.5f
-                val x=p.x-close.width*.5f;val y=p.y-close.height*.5f;x*x+y*y<=radius*radius
-            })
-        val handleHit=NativeRetainedViewHitLayout(handle,geometry,minimum,
-            listOf(handle.tooltip.pointerNode,NativeClickPhaseNode(handle,handle.nativeClickEndpoint,drag::interested)))
+        val closeHit = app.close?.visual?.let { close ->
+            NativeRetainedViewHitLayout(close,geometry,minimum,
+                listOf(NativeClickPhaseNode(close,close.nativeClickEndpoint,drag::interested)),clip={p->
+                    val radius=min(close.width,close.height)*.5f
+                    val x=p.x-close.width*.5f;val y=p.y-close.height*.5f;x*x+y*y<=radius*radius
+                })
+        }
+        val handleHit=NativeRetainedViewHitLayout(handle,geometry,minimum,handle.pointerNodes(drag::interested))
         val shield=object:NativeViewPhasePointerNode {
             override val view:View get()=surface.painted
             override fun dispatch(event:NativeDragPointerEvent,pass:NativePointerPass)=Unit
             override fun cancel()=Unit
         }
-        fixedContentHits=listOf(closeHit,handleHit)
+        fixedContentHits=listOfNotNull(closeHit,handleHit)
         refreshContentHits()
         val contentHit=NativeRetainedViewHitLayout(surface.painted,geometry,minimum,listOf(shield),
             children={combinedContentHits},clip=surface::containsShape)
@@ -586,7 +594,7 @@ internal class SheetPointerOwner(private val density:Float):AutoCloseable {
         val wrapper=contentWrapper
         combinedContentHits=if(wrapper==null)contentHits+fixedContentHits else {
             // Close scrolls with the app content; the drag handle remains outside the viewport.
-            listOf(wrapper(contentHits+fixedContentHits.take(1)))+fixedContentHits.drop(1)
+            listOf(wrapper(contentHits+fixedContentHits.dropLast(1)))+fixedContentHits.takeLast(1)
         }
     }
     override fun close() {

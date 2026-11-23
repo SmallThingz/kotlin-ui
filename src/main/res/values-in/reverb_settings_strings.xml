@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reverb_settings_storage_settings_title">Penyimpanan</string>
+    <string name="reverb_settings_default_folder">Bawaan</string>
+    <string name="reverb_settings_choose_folder">Pilih</string>
+    <string name="reverb_settings_move_recordings">Pindahkan rekaman yang ada</string>
+    <string name="reverb_settings_settings_resume_notification_blocked">Pengingat untuk melanjutkan perekaman diblokir. Periksa setelan notifikasi.</string>
+    <string name="reverb_settings_settings_notification_access">Periksa setelan notifikasi</string>
+    <string name="reverb_settings_settings_restart_access_missing">Mulai otomatis setelah perangkat dimulai ulang memerlukan izin untuk tampil di atas aplikasi lain.</string>
+    <string name="reverb_settings_settings_restart_access">Periksa izin mulai otomatis</string>
+</resources>

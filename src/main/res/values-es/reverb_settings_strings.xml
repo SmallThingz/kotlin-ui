@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reverb_settings_storage_settings_title">Almacenamiento</string>
+    <string name="reverb_settings_default_folder">Predeterminado</string>
+    <string name="reverb_settings_choose_folder">Elegir</string>
+    <string name="reverb_settings_move_recordings">Mover existentes</string>
+    <string name="reverb_settings_settings_resume_notification_blocked">Los recordatorios de reanudación están bloqueados. Revisa los ajustes de notificaciones.</string>
+    <string name="reverb_settings_settings_notification_access">Revisar los ajustes de notificaciones</string>
+    <string name="reverb_settings_settings_restart_access_missing">El inicio automático tras reiniciar necesita permiso para mostrarse sobre otras apps.</string>
+    <string name="reverb_settings_settings_restart_access">Revisar el permiso para el inicio automático</string>
+</resources>

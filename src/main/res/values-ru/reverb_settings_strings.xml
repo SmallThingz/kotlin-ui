@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reverb_settings_storage_settings_title">Хранилище</string>
+    <string name="reverb_settings_default_folder">По умолчанию</string>
+    <string name="reverb_settings_choose_folder">Выбрать</string>
+    <string name="reverb_settings_move_recordings">Переместить существующие</string>
+    <string name="reverb_settings_settings_resume_notification_blocked">Напоминания о возобновлении записи заблокированы. Проверьте настройки уведомлений.</string>
+    <string name="reverb_settings_settings_notification_access">Проверить настройки уведомлений</string>
+    <string name="reverb_settings_settings_restart_access_missing">Для автозапуска после перезагрузки устройства нужно разрешение на отображение поверх других приложений.</string>
+    <string name="reverb_settings_settings_restart_access">Проверить разрешение для автозапуска</string>
+</resources>
