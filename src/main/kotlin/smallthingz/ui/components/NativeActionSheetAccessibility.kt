@@ -48,8 +48,10 @@ class NativeActionSheetAccessibility internal constructor(
         app.titleView.isScreenReaderFocusable=true
         leases+=app.titleView.bindPlainTextAccessibility(cursor,geometry,
             sourceNode={sourceNode(app.titleView)}) {sourceNode(app.titleView).present}
-        leases+=app.close.bindAccessibility(cursor,geometry) {view->
-            sourceNode(view,if(view===app.close.visual)app.close.minimumTouchTargetPx else 0f)
+        app.close?.let { close ->
+            leases+=close.bindAccessibility(cursor,geometry) {view->
+                sourceNode(view,if(view===close.visual)close.minimumTouchTargetPx else 0f)
+            }
         }
         handle.sourceNode={sourceNode(handle,app.minimumTouchTargetPx)}
         handle.mark.sourceNode={sourceNode(handle.mark)}

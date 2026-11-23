@@ -7,6 +7,7 @@ import android.os.SystemClock
 import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -16,6 +17,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -84,11 +86,47 @@ class NativeActionSheetHoverIntegrationTest {
 
     @Test fun headerCloseAndPressedBackdropRetainTheirDismissalPaths() {
         withSheet { fixture ->
-            main { tap(fixture.root, centerInRoot(fixture.root, fixture.surface.appContent.close.visual)) }
+            main { tap(fixture.root, centerInRoot(fixture.root, requireNotNull(fixture.surface.appContent.close).visual)) }
             assertTrue(fixture.dismissed.await(3, TimeUnit.SECONDS))
         }
         withSheet { fixture ->
             main { tap(fixture.root, backdropCenter(fixture)) }
+            assertTrue(fixture.dismissed.await(3, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test fun sheetWithoutHeaderCloseUsesFullTitleWidthAndKeepsBackdropDismissal() {
+        withSheet(showHeaderClose = false) { fixture ->
+            main {
+                val app = fixture.surface.appContent
+                val title = app.titleView
+                val header = title.parent as ViewGroup
+                assertNull(app.close)
+                assertEquals(1, header.childCount)
+                assertEquals(header.measuredWidth, title.measuredWidth)
+                assertEquals(title.measuredHeight, header.measuredHeight)
+                assertTrue(fixture.scrim.createAccessibilityNodeInfo().actionList.any {
+                    it.id == AccessibilityNodeInfo.ACTION_CLICK
+                })
+                tap(fixture.root, backdropCenter(fixture))
+            }
+            assertTrue(fixture.dismissed.await(3, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test fun sheetWithoutHeaderCloseRetainsTheDragHandleTouchTarget() {
+        withSheet(showHeaderClose = false) { fixture ->
+            main {
+                val handle = fixture.surface.column.handle
+                tap(fixture.root, centerInRoot(fixture.root, handle))
+            }
+            assertTrue(fixture.dismissed.await(3, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test fun sheetWithoutHeaderCloseKeepsBackDismissal() {
+        withSheet(showHeaderClose = false) { fixture ->
+            main { fixture.sheet.onBackPressedDispatcher.onBackPressed() }
             assertTrue(fixture.dismissed.await(3, TimeUnit.SECONDS))
         }
     }
@@ -106,7 +144,7 @@ class NativeActionSheetHoverIntegrationTest {
     private data class Fixture(val sheet: NativeActionSheet, val root: SheetRoot, val surface: NativeSheetSurface,
         val scrim: SheetScrim, val editor: Editor, val dismissed: CountDownLatch)
 
-    private fun withSheet(test: (Fixture) -> Unit) {
+    private fun withSheet(showHeaderClose: Boolean = true, test: (Fixture) -> Unit) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -114,15 +152,21 @@ class NativeActionSheetHoverIntegrationTest {
         try {
             lateinit var fixture: Fixture
             main {
-                val anchor = FrameLayout(activity)
+                val anchor = FrameLayout(activity).apply {
+                    if (!showHeaderClose) layoutDirection = View.LAYOUT_DIRECTION_RTL
+                }
                 activity.setContentView(anchor)
                 val appearance = NativeUiAppearance.Default
                 val style = appearance.modals.actionSheetStyle(Density(activity), createFontFamilyResolver(activity),
                     NativeColorScheme.fallback(false))
-                val glyph = NativeActionDescriptionView(activity, "Close")
                 val dismissed = CountDownLatch(1)
-                val dialog = NativeActionSheet(anchor, style, "Rename", dismissed::countDown,
-                    NativeActionSheetIcon(glyph, { cursor, node -> glyph.bindAccessibility(cursor) { node(glyph) } }, {}))
+                val dialog = if (showHeaderClose) {
+                    val glyph = NativeActionDescriptionView(activity, "Close")
+                    NativeActionSheet(anchor, style, "Rename", dismissed::countDown,
+                        NativeActionSheetIcon(glyph, { cursor, node -> glyph.bindAccessibility(cursor) { node(glyph) } }, {}))
+                } else {
+                    NativeActionSheet(anchor, style, "Rename", dismissed::countDown)
+                }
                 sheet = dialog
                 val editor = Editor(dialog.context).apply {
                     showSoftInputOnFocus = false
