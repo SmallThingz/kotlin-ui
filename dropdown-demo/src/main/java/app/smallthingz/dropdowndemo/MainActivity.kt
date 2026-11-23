@@ -49,7 +49,6 @@ class MainActivity : Activity() {
         val palette = appearance.resolveColorScheme(this, dark)
         val density = Density(resources.displayMetrics.density, resources.configuration.fontScale)
         val resolver = createFontFamilyResolver(this)
-        val host = NativeAnchoredDropdown(this, appearance, palette, density, resolver).also { popup = it }
         val root = FrameLayout(this).apply {
             background = appearance.backdrops.pageBackground(palette)
             layoutDirection = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
@@ -59,6 +58,7 @@ class MainActivity : Activity() {
                 insets
             }
         }
+        val host = NativeAnchoredDropdown(this, root, appearance, palette, density, resolver).also { popup = it }
         val page = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(8), dp(16), dp(8)) }
         val scroll = ScrollView(this).apply { isFillViewport = true; isVerticalScrollBarEnabled = false; addView(page, FrameLayout.LayoutParams(-1, -2)) }
         root.addView(scroll, FrameLayout.LayoutParams(-1, -1))

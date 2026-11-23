@@ -5,11 +5,10 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
-import android.graphics.drawable.ColorDrawable
+import android.view.FocusFinder
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -20,7 +19,6 @@ import android.view.ViewTreeObserver
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
-import android.widget.PopupWindow
 import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.text.font.FontFamily
 import smallthingz.ui.text.view.ParagraphView
@@ -52,6 +50,7 @@ data class NativeAnchoredDropdownStyle(
  */
 class NativeAnchoredDropdown(
     private val context: Context,
+    private val overlayHost: FrameLayout,
     private val appearance: NativeUiAppearance,
     private val colors: NativeColorScheme,
     private val density: Density,
@@ -112,6 +111,8 @@ class NativeAnchoredDropdown(
         val origin = IntArray(2).also(anchor::getLocationOnScreen)
         val observed = IntArray(2)
         val root = object : FrameLayout(context) {
+            override fun focusSearch(focused: View?, direction: Int): View? =
+                FocusFinder.getInstance().findNextFocus(this, focused, direction) ?: this
             override fun dispatchKeyEvent(event: KeyEvent): Boolean {
                 if (event.keyCode == KeyEvent.KEYCODE_BACK || event.keyCode == KeyEvent.KEYCODE_ESCAPE) {
                     if (event.action == KeyEvent.ACTION_UP) collapse(settled)
@@ -125,7 +126,7 @@ class NativeAnchoredDropdown(
                 return super.dispatchKeyEvent(event)
             }
         }
-        val popup = PopupWindow(root, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, true)
+        val overlay = NativeModalOverlay(overlayHost, root) { collapse(settled) }
         val scrim = View(context).apply { setBackgroundColor(colors.scrim); alpha = 0f; setOnClickListener { collapse(settled) } }
         val wheel = Wheel()
         val rows = ArrayList<NativeDropdown<T>>()
@@ -162,51 +163,38 @@ class NativeAnchoredDropdown(
 
         fun show() {
             root.layoutDirection = anchor.layoutDirection
-            popup.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            popup.elevation = 0f
-            popup.animationStyle = 0
-            popup.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
-            popup.setOnDismissListener { dispose() }
             root.isFocusableInTouchMode = true
             root.addView(scrim, FrameLayout.LayoutParams(-1, -1))
             root.addView(wheel)
             scrim.isFocusable = false
             scrim.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             root.accessibilityPaneTitle = content.label
-            popup.showAtLocation(anchor, Gravity.TOP or Gravity.LEFT, 0, 0)
-            root.requestFocus()
-            root.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
-                override fun onPreDraw(): Boolean {
-                    root.viewTreeObserver.removeOnPreDrawListener(this)
-                    if (disposed || closing) return true
-                    root.getLocationOnScreen(observed)
-                    val x = origin[0] - observed[0]
-                    anchorY = origin[1] - observed[1]
-                    val margin = (style.screenMarginDp * density.density).roundToInt()
-                    val up = ((anchorY - margin) / rowHeight).coerceAtLeast(0)
-                    val down = ((root.height - margin - anchorY - rowHeight) / rowHeight).coerceAtLeast(0)
-                    slotsAbove = up; slotsBelow = down
-                    val layout = NativeAnchoredDropdownPlan(content.options.size, initial, up, down)
-                    plan = layout; settled = layout.selectedPosition; position = settled.toFloat()
-                    wheel.layoutParams = FrameLayout.LayoutParams(rowWidth, root.height).apply {
-                        gravity = Gravity.TOP or Gravity.LEFT; leftMargin = x
-                    }
-                    repeat(layout.count) { i ->
-                        val option = content.options[layout.optionAt(i)]
-                        val row = face(content.copy(selected = option)) { _, _ -> collapse(i) }
-                        row.optionAccessibilityLabel = content.optionLabel(option)
-                        row.isSelected = i == settled
-                        repeat(row.childCount) { child -> row.getChildAt(child).importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS }
-                        rows += row
-                        wheel.addView(row, FrameLayout.LayoutParams(-1, rowHeight))
-                    }
-                    wheel.requestLayout()
-                    anchor.viewTreeObserver.addOnPreDrawListener(geometryGuard)
-                    anchor.addOnAttachStateChangeListener(anchorDetach)
-                    animate(position, 1f, style.expandMillis) {}
-                    return false
-                }
-            })
+            overlay.show()
+            root.getLocationOnScreen(observed)
+            val x = origin[0] - observed[0]
+            anchorY = origin[1] - observed[1]
+            val margin = (style.screenMarginDp * density.density).roundToInt()
+            val up = ((anchorY - margin) / rowHeight).coerceAtLeast(0)
+            val down = ((root.height - margin - anchorY - rowHeight) / rowHeight).coerceAtLeast(0)
+            slotsAbove = up; slotsBelow = down
+            val layout = NativeAnchoredDropdownPlan(content.options.size, initial, up, down)
+            plan = layout; settled = layout.selectedPosition; position = settled.toFloat()
+            wheel.layoutParams = FrameLayout.LayoutParams(rowWidth, root.height).apply {
+                gravity = Gravity.TOP or Gravity.LEFT; leftMargin = x
+            }
+            repeat(layout.count) { i ->
+                val option = content.options[layout.optionAt(i)]
+                val row = face(content.copy(selected = option)) { _, _ -> collapse(i) }
+                row.optionAccessibilityLabel = content.optionLabel(option)
+                row.isSelected = i == settled
+                repeat(row.childCount) { child -> row.getChildAt(child).importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS }
+                rows += row
+                wheel.addView(row, FrameLayout.LayoutParams(-1, rowHeight))
+            }
+            overlay.relayout()
+            anchor.viewTreeObserver.addOnPreDrawListener(geometryGuard)
+            anchor.addOnAttachStateChangeListener(anchorDetach)
+            animate(position, 1f, style.expandMillis) {}
         }
 
         fun publish(index: Int) {
@@ -264,7 +252,7 @@ class NativeAnchoredDropdown(
             if (anchor.viewTreeObserver.isAlive) anchor.viewTreeObserver.removeOnPreDrawListener(geometryGuard)
             anchor.removeOnAttachStateChangeListener(anchorDetach)
             rows.forEach { it.close() }; rows.clear()
-            popup.setOnDismissListener(null); popup.dismiss()
+            overlay.close()
             if (sessionIdentity === this) { dismissCurrent = null; sessionIdentity = null }
         }
 

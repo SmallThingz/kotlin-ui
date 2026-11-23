@@ -1,5 +1,6 @@
 package app.smallthingz.dropdowndemo
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.app.Activity
 import android.app.UiAutomation
@@ -7,6 +8,7 @@ import android.graphics.Rect
 import android.os.SystemClock
 import android.util.Log
 import android.view.InputDevice
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -21,7 +23,7 @@ import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeDropdown
 import smallthingz.ui.components.NativeUiAppearance
 
-/** Exercises public Android accessibility actions against the real library popup window. */
+/** Exercises Android accessibility, touch and key input against the library dropdown. */
 @RunWith(AndroidJUnit4::class)
 class DropdownInteractionTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -111,11 +113,21 @@ class DropdownInteractionTest {
         SystemClock.sleep(300)
     }
     private fun withActivity(block: (Activity) -> Unit) {
-        val activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+        val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        val info = checkNotNull(automation.serviceInfo)
+        val originalFlags = info.flags
         try {
-            await("Demo not visible") { nodes().any { it.packageName?.toString() == "app.smallthingz.dropdowndemo" } }
-            block(activity)
-        } finally { instrumentation.runOnMainSync { activity.finish() } }
+            info.flags = originalFlags and AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS.inv()
+            automation.serviceInfo = info
+            val activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+            try {
+                await("Demo not visible") { nodes().any { it.packageName?.toString() == "app.smallthingz.dropdowndemo" } }
+                block(activity)
+            } finally { instrumentation.runOnMainSync { activity.finish() } }
+        } finally {
+            info.flags = originalFlags
+            automation.serviceInfo = info
+        }
     }
 
     @Test fun scrollSelectsAndTappingAnotherOptionCommitsAndCollapses() = withActivity {
@@ -156,8 +168,11 @@ class DropdownInteractionTest {
     }
 
     @Test fun tappingAnchorDuringCollapseReopensTheSameWheelWithTheTappedChoice() = withActivity {
-        val slot = open(it, "Sample format")
-        val window = checkNotNull(wheel()).windowId
+        val label = "Sample format"
+        val slot = open(it, label)
+        var originalPane: ViewGroup? = null
+        instrumentation.runOnMainSync { originalPane = popupPane(label) }
+        assertNotNull(originalPane)
         val option = Rect()
         await("Second option did not expand") {
             nodes().firstOrNull { it.contentDescription?.toString() == "24-bit PCM" && it.isClickable }
@@ -165,14 +180,36 @@ class DropdownInteractionTest {
         }
         tap(option)
         tap(slot)
-        await("Second tap did not reopen the selected choice at $slot in window $window") {
+        await("Second tap did not reopen the selected choice at $slot") {
             val tree = nodes()
-            wheel(tree)?.windowId == window && selectedBounds("24-bit PCM", tree) == slot
+            wheel(tree) != null && selectedBounds("24-bit PCM", tree) == slot
         }
         SystemClock.sleep(350)
-        assertEquals(window, checkNotNull(wheel()).windowId)
+        var survivingPane: ViewGroup? = null
+        instrumentation.runOnMainSync { survivingPane = popupPane(label) }
+        assertSame(originalPane, survivingPane)
         tap(slot)
         awaitClosed("24-bit PCM")
+    }
+
+    @Test fun backDismissesTheModalAndRestoresKeyboardFocus() = withActivity { activity ->
+        val label = "Sample format"
+        var prior: View? = null
+        instrumentation.runOnMainSync {
+            val icons = ArrayList<View>()
+            activity.window.decorView.findViewsWithText(icons, label, View.FIND_VIEWS_WITH_CONTENT_DESCRIPTION)
+            val trigger = icons.mapNotNull { it.parent as? NativeDropdown<*> }.single()
+            trigger.requestFocusFromTouch()
+            prior = activity.currentFocus
+        }
+        assertTrue(prior is NativeDropdown<*>)
+        open(activity, label)
+        assertFalse("Background labels remained accessible", nodes().any { it.text?.toString() == "Channels" })
+        instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        awaitClosed("16-bit PCM")
+        var restored: View? = null
+        instrumentation.runOnMainSync { restored = activity.currentFocus }
+        assertSame(prior, restored)
     }
 
     private fun popupPane(label: String): ViewGroup? {
