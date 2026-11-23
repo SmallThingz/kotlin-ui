@@ -46,6 +46,16 @@ class ControlStyle(context: Context, val palette: ControlPalette) {
         else -> makeForeground(normal, selected, disabled)
     }
 
+    /** Canonical feedback colors for retained platform ripples, including selected-state contrast. */
+    fun rippleColors(filled: Boolean = false): ColorStateList {
+        val selected = if (filled) palette.accent else palette.selection
+        val preferredRipple = if (filled) palette.onAccent else palette.accent
+        val selectedRipple = selectionIndication(selected, palette.surface,
+            if (filled) palette.onAccent else selectedInk, preferredRipple)
+        return ColorStateList(arrayOf(SELECTED, DEFAULT),
+            intArrayOf(withAlpha(selectedRipple, 40), withAlpha(preferredRipple, 40)))
+    }
+
     /** Each view gets independent mutable drawables; only immutable color lists are reused. */
     fun background(filled: Boolean = false, outlined: Boolean = false, radius: Int = 12): RippleDrawable {
         val normal = if (filled) palette.accent else Color.TRANSPARENT
@@ -60,12 +70,7 @@ class ControlStyle(context: Context, val palette: ControlPalette) {
             addState(SELECTED, shape(selected, radius, if (outlined) palette.accent else null))
             addState(DEFAULT, shape(normal, radius, if (outlined) palette.outline else null))
         }
-        val preferredRipple = if (filled) palette.onAccent else palette.accent
-        val selectedRipple = selectionIndication(selected, palette.surface,
-            if (filled) palette.onAccent else selectedInk, preferredRipple)
-        val rippleColors = ColorStateList(arrayOf(SELECTED, DEFAULT),
-            intArrayOf(withAlpha(selectedRipple, 40), withAlpha(preferredRipple, 40)))
-        return RippleDrawable(rippleColors, states, shape(Color.WHITE, radius))
+        return RippleDrawable(rippleColors(filled), states, shape(Color.WHITE, radius))
     }
 
     /** One-time geometry; semantic values, layout parameters and callbacks stay owned by the app. */
@@ -138,9 +143,7 @@ class ControlStyle(context: Context, val palette: ControlPalette) {
             if(filled)palette.raised else Color.TRANSPARENT,selected,normal,selected,normal))
         val strokes=ColorStateList(states,intArrayOf(if(outlined)palette.outline else 0,0,focus,focus,
             if(outlined)palette.accent else 0,if(outlined)palette.outline else 0))
-        val preferred=if(filled)palette.onAccent else palette.accent
-        val indication=selectionIndication(selected,palette.surface,if(filled)palette.onAccent else selectedInk,preferred)
-        val ripples=ColorStateList(arrayOf(SELECTED,DEFAULT),intArrayOf(withAlpha(indication,40),withAlpha(preferred,40)))
+        val ripples=rippleColors(filled)
         return surface(view,kind,fills,strokes,ink,ripples,radius,ink,ink,publish)
     }
 
