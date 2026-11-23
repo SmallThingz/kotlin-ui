@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_permissions_title">Permissions</string>
+    <string name="onboarding_permissions_body">Reverb needs these for background recording.</string>
+    <string name="onboarding_microphone_title">Microphone</string>
+    <string name="onboarding_microphone_body">Required to capture audio.</string>
+    <string name="onboarding_notifications_title">Notifications</string>
+    <string name="onboarding_notifications_body">Shows recording status.</string>
+    <string name="onboarding_allowed">Allowed</string>
+    <string name="onboarding_background_title">Background recording</string>
+    <string name="onboarding_background_body">Helps recording continue with the screen off.</string>
+    <string name="onboarding_title">Buffers</string>
+    <string name="onboarding_one_shot_title">One-shot</string>
+    <string name="onboarding_one_shot_body">Fills once. It keeps that audio until you clear it.</string>
+    <string name="onboarding_looping_title">Looping</string>
+    <string name="onboarding_looping_body">Keeps the newest audio. Old audio is overwritten.</string>
+    <string name="onboarding_order">When One-shot fills, recording continues in Looping if it is enabled.</string>
+    <string name="onboarding_continue">Continue</string>
+    <string name="onboarding_back">Back</string>
+    <string name="onboarding_get_started">Get started</string>
+    <string name="allow">Allow</string>
+    <string name="recording_settings_title">Audio</string>
+    <string name="storage_settings_title">Storage</string>
+    <string name="all_files_access_settings">Manage all files access</string>
+    <string name="settings_all_files_optional">All files access (optional)</string>
+    <string name="settings_audio_read_missing">Audio access needed</string>
+    <string name="flac_pcm_required">Choose 16-bit capture for FLAC export. WAV preserves the other capture formats.</string>
+    <string name="silence_invalid_settings">Silence settings could not be read. All audio is being kept.</string>
+    <string name="onboarding_restart_resume_title">Resume recording after restart</string>
+    <string name="onboarding_restart_resume_body">Allow display over other apps to use Auto-start after restart in Settings.</string>
+    <string name="settings_restart_access">Review restart access</string>
+</resources>

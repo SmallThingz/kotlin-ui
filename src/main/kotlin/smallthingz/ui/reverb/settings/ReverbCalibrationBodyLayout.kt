@@ -1,9 +1,13 @@
-package smallthingz.ui.components
+package smallthingz.ui.reverb.settings
 
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.ViewCompat
+import smallthingz.ui.components.atMost
+import smallthingz.ui.components.exact
+import smallthingz.ui.components.unspecified
+import smallthingz.ui.reverb.ReverbEnvironment
 import smallthingz.ui.input.NativeAndroidInteropHost
 import smallthingz.ui.input.NativeAndroidInteropRequests
 import smallthingz.ui.text.NativeTypographyRole
@@ -11,11 +15,9 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 /** Lays out the graph, controls and the optional error in their source traversal order. */
-open class NativeCalibrationBodyLayout(
+internal open class ReverbCalibrationBodyLayout(
     context: Context,
-    private var environment: NativeSettingsVisualEnvironment,
-    headingText: String,
-    hintText: String,
+    private var environment: ReverbEnvironment,
 ) : ViewGroup(context), NativeAndroidInteropHost {
     override val nativeInteropRequests = NativeAndroidInteropRequests()
     override fun requestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {
@@ -23,36 +25,28 @@ open class NativeCalibrationBodyLayout(
         super.requestDisallowInterceptTouchEvent(disallowIntercept)
     }
 
-    private val heading = environment.paragraph(context, headingText, NativeTypographyRole.TITLE_SMALL)
-    private val hint = environment.paragraph(context, hintText, NativeTypographyRole.BODY_SMALL, environment.palette.muted)
     private val error = environment.paragraph(context, "", NativeTypographyRole.BODY_SMALL, environment.palette.error)
     private lateinit var curve: View
     private lateinit var buttonRow: CalibrationButtonRow
 
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-        ViewCompat.setAccessibilityHeading(heading, true)
         ViewCompat.setAccessibilityLiveRegion(error, ViewCompat.ACCESSIBILITY_LIVE_REGION_POLITE)
     }
 
     protected fun installControls(curve: View, calibrate: View, fit: View) {
         this.curve = curve
         buttonRow = CalibrationButtonRow(context, calibrate, fit)
-        addView(heading)
-        addView(hint)
         addView(curve)
         addView(buttonRow)
         addView(error)
     }
 
-    protected fun bindContent(next: NativeSettingsVisualEnvironment, errorText: String?) {
+    protected fun bindContent(next: ReverbEnvironment, errorText: String?) {
         environment = next
-        next.bindParagraphStyle(heading, NativeTypographyRole.TITLE_SMALL)
-        next.bindParagraphStyle(hint, NativeTypographyRole.BODY_SMALL, next.palette.muted)
         next.bindParagraphStyle(error, NativeTypographyRole.BODY_SMALL, next.palette.error)
         error.setText(errorText.orEmpty())
         error.visibility = if (!errorText.isNullOrBlank()) VISIBLE else GONE
-        requestLayout()
     }
 
     override fun onMeasure(w:Int,h:Int) {
@@ -60,26 +54,22 @@ open class NativeCalibrationBodyLayout(
         val inner=(width-2*dp(16)).coerceAtLeast(0)
         curve.measure(exact(inner),unspecified())
         buttonRow.measure(exact(inner),unspecified())
-        heading.measure(atMost(inner),unspecified())
-        hint.measure(atMost(inner),unspecified())
         val errorHeight=if(error.visibility==VISIBLE) {
             error.measure(atMost(inner),unspecified())
-            dp(8)+error.measuredHeight
+            dp(6)+error.measuredHeight
         } else 0
-        val height=dp(12)+3*dp(8)+heading.measuredHeight+hint.measuredHeight+curve.measuredHeight+buttonRow.measuredHeight+errorHeight
+        val height = curve.measuredHeight + buttonRow.measuredHeight + errorHeight
         setMeasuredDimension(resolveSize(width,w),resolveSize(height,h))
     }
     override fun onLayout(changed:Boolean,l:Int,t:Int,r:Int,b:Int) {
-        var y=dp(12)
+        var y = 0
         fun place(child:View) {
             val x=if(layoutDirection==LAYOUT_DIRECTION_RTL)width-dp(16)-child.measuredWidth else dp(16)
             child.layout(x,y,x+child.measuredWidth,y+child.measuredHeight)
         }
-        place(heading);y+=heading.measuredHeight+dp(8)
-        place(hint);y+=hint.measuredHeight+dp(8)
-        place(curve);y+=curve.measuredHeight+dp(8)
+        place(curve);y+=curve.measuredHeight
         place(buttonRow)
-        if(error.visibility==VISIBLE) {y+=buttonRow.measuredHeight+dp(8);place(error)}
+        if(error.visibility==VISIBLE) {y+=buttonRow.measuredHeight+dp(6);place(error)}
     }
     private fun dp(value: Int) = (value * environment.textDensity.density).roundToInt()
 }

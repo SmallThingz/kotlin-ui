@@ -46,6 +46,9 @@ open class NativeProgressActionView(
         environment=next;visual.bind(text,enabled,next)
     }
     fun bindProgress(progress:Float?,running:Boolean) = visual.bindProgress(progress,running)
+
+    /** Adds instructions to the button's accessibility label without adding visible text. */
+    internal fun setActionDescription(description: String?) { visual.contentDescription = description }
     override fun onMeasure(w:Int,h:Int) {
         visual.measure(w,h)
         val minimum=(environment.appearance.calibration.actionMinTargetDp * environment.textDensity.density).roundToInt()

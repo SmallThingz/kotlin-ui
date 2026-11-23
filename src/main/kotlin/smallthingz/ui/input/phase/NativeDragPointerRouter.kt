@@ -27,6 +27,7 @@ class NativeDragPointerRouter(
     private val startImmediately: () -> Boolean,
     private val sink: NativeDragSink,
     private val parentInterested: (NativeDragPointerChange) -> Boolean = { false },
+    private val canStartDrag: (Offset) -> Boolean = { true },
 ) {
     private enum class State { DOWN, SLOP, PICKUP, DRAGGING }
     private var state = State.DOWN
@@ -51,7 +52,7 @@ class NativeDragPointerRouter(
         if (change.changedToDown) return enabled
         if (change.changedToUp) return false
         val delta = if (change.consumed) Offset.Zero else change.delta
-        return slop.postSlop(delta, touchSlop(), commit = false) != Offset.Unspecified &&
+        return canStartDrag(delta) && slop.postSlop(delta, touchSlop(), commit = false) != Offset.Unspecified &&
             slop.atAngleOfInterest(delta)
     }
 
@@ -109,7 +110,7 @@ class NativeDragPointerRouter(
                 } else {
                     val threshold = if (change.type == PointerType.Mouse) touchSlop() / 144f else touchSlop()
                     val over = slop.postSlop(change.delta, threshold)
-                    if (over.isSpecified) {
+                    if (over.isSpecified && canStartDrag(over)) {
                         if (!interested(change) && parentInterested(change)) verifyFinal = true
                         else {
                             change.consume()

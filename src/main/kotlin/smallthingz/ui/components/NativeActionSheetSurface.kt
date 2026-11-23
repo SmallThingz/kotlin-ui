@@ -211,15 +211,17 @@ internal class NativeSheetContent(
     private var style:NativeActionSheetStyle,
     title:String,
     inputRoot:()->View?,
-    private val closeIcon: NativeActionSheetIcon,
+    private val closeIcon: NativeActionSheetIcon?,
     private val contentBackground: android.graphics.drawable.Drawable?,
     dismiss:()->Unit,
 ):ViewGroup(context) {
     private var currentDismiss=dismiss
     val titleView=style.title(context,title)
-    val close=NativeStandardIconButtonView(context,style.textDensity.density,style.palette.onSurface,
-        closeIcon.view,closeIcon.bindAccessibility,inputRoot)
-    private val header=Header(context,titleView,close)
+    val close = closeIcon?.let {
+        NativeStandardIconButtonView(context,style.textDensity.density,style.palette.onSurface,
+            it.view,it.bindAccessibility,inputRoot)
+    }
+    private val header: View = close?.let { Header(context,titleView,it) } ?: titleView
     private var body:View?=null
     private var actions:View?=null
     private var topBody=0
@@ -263,8 +265,8 @@ internal class NativeSheetContent(
         }
     }
     private fun bindClose(value:NativeActionSheetStyle,dismiss:()->Unit) {
-        closeIcon.setColor(value.palette.onSurfaceVariant)
-        close.bindAction(value.textDensity.density,context.getString(smallthingz.ui.R.string.close_sheet),
+        closeIcon?.setColor(value.palette.onSurfaceVariant)
+        close?.bindAction(value.textDensity.density,context.getString(smallthingz.ui.R.string.close_sheet),
             true,value.palette.onSurface,dismiss)
     }
     override fun onMeasure(widthMeasureSpec:Int,heightMeasureSpec:Int) {

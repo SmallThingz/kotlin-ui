@@ -121,7 +121,8 @@ class NativeActionSheetStateTest {
         val state=state()
         state.measured(600,300)
         val flings=mutableListOf<Float>()
-        val nested=NativeActionSheetNestedScroll(state) {flings+=it}
+        var cancelled = 0
+        val nested = NativeActionSheetNestedScroll(state, { flings += it }, { cancelled++ })
         assertEquals(0f,nested.preScroll(-100f,NativeVerticalScrollSource.SIDE_EFFECT),0f)
         assertEquals(-100f,nested.preScroll(-100f,NativeVerticalScrollSource.USER_INPUT),0f)
         assertEquals(0f,nested.preScroll(100f,NativeVerticalScrollSource.USER_INPUT),0f)
@@ -130,6 +131,9 @@ class NativeActionSheetStateTest {
         assertEquals(listOf(-500f),flings)
         assertEquals(0f,nested.preFling(500f),0f)
         assertEquals(250f,nested.postFling(0f,250f),0f)
+        assertEquals(listOf(-500f,250f),flings)
+        nested.onPointerDragCancelled()
+        assertEquals(1, cancelled)
         assertEquals(listOf(-500f,250f),flings)
     }
     @Test fun blockedDismissalPreservesOpeningAndKeepsCloseTargetExpanded()=runBlocking {

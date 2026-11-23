@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="clear_buffer">Bersihkan</string>
+    <string name="record_all_memory">Ekspor penuh</string>
+    <string name="saving">Menyimpan…</string>
+</resources>

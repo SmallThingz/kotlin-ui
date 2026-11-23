@@ -53,6 +53,7 @@ data class NativeActionSheetRecipe(
     val grainSeed: Int? = NoiseDrawable.SEED_BACKGROUND,
     val titleRole: NativeTypographyRole = NativeTypographyRole.TITLE_LARGE,
     val tooltipRole: NativeTypographyRole = NativeTypographyRole.BODY_SMALL,
+    val handleHeightDp: Float = 4f,
 )
 
 /** Top-origin panel with a retained rounded viewport and themed brand/detail content. */

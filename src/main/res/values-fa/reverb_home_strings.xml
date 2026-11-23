@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="clear_buffer">پاک کردن</string>
+    <string name="record_all_memory">خروجی کامل</string>
+    <string name="saving">در حال ذخیره…</string>
+</resources>

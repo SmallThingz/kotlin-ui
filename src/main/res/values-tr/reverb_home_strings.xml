@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="clear_buffer">Temizle</string>
+    <string name="record_all_memory">Tümünü dışa aktar</string>
+    <string name="saving">Kaydediliyor…</string>
+</resources>

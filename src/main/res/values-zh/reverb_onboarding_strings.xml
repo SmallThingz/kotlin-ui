@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="allow">允许</string>
+    <string name="recording_settings_title">音频</string>
+    <string name="storage_settings_title">存储</string>
+    <string name="onboarding_restart_resume_title">设备重启后恢复录音</string>
+    <string name="onboarding_restart_resume_body">允许在其他应用上层显示，即可在设置中使用“设备重启后自动启动”。</string>
+    <string name="settings_restart_access">检查自动启动权限</string>
+</resources>

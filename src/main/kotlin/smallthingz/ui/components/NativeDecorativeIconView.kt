@@ -8,17 +8,35 @@ import smallthingz.ui.animation.view.ViewColorTransition
 
 /** Icon whose label is supplied by its enclosing content. */
 class NativeDecorativeIconView(context: Context, private val glyph: Drawable, tint: Int) : View(context) {
-    private val tintMotion: ViewColorTransition = ViewColorTransition(this, intArrayOf(tint), ::publishTint)
+    private var tintMotion: ViewColorTransition? = null
+    private var currentTint = tint
 
     init {
         glyph.setTint(tint)
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
     }
 
-    fun setColor(color: Int) = tintMotion.retarget(color)
+    fun setColor(color: Int) {
+        if (tintMotion == null && currentTint == color) return
+        val motion = tintMotion ?: ViewColorTransition(this, intArrayOf(currentTint), ::publishTint)
+            .also { tintMotion = it }
+        motion.retarget(color)
+    }
+
+    internal fun setColorImmediately(color: Int) {
+        tintMotion?.close()
+        tintMotion = null
+        applyTint(color)
+    }
 
     private fun publishTint() {
-        glyph.setTint(tintMotion.color(0))
+        tintMotion?.let { applyTint(it.color(0)) }
+    }
+
+    private fun applyTint(color: Int) {
+        if (currentTint == color) return
+        currentTint = color
+        glyph.setTint(color)
         invalidate()
     }
 

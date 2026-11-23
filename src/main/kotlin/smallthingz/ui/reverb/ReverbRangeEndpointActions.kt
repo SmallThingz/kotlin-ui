@@ -1,0 +1,247 @@
+package smallthingz.ui.reverb
+
+import smallthingz.ui.text.view.NativeSourceAccessibilityNode
+import smallthingz.ui.text.view.PlainTextAccessibility
+import smallthingz.ui.text.view.PlainTextAccessibilitySnapshot
+import smallthingz.ui.text.view.PlainTextAccessibilityWindowScope
+import android.content.Context
+import android.os.Bundle
+import android.view.KeyEvent
+import android.view.View
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityManager
+import android.view.accessibility.AccessibilityNodeInfo
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+import androidx.annotation.StringRes
+import smallthingz.ui.common.UiInputGesture
+import smallthingz.ui.common.formatRangeTimeInput
+
+/** Existing source endpoint Box, not a stock SeekBar or another pointer recognizer. */
+class NativeRangeEndpointView(context: Context) : View(context) {
+    var sourceAccessibilityNode: (() -> NativeSourceAccessibilityNode)? = null
+    override fun createAccessibilityNodeInfo(): AccessibilityNodeInfo? =
+        if (sourceAccessibilityNode?.invoke()?.present == false) null else super.createAccessibilityNodeInfo()
+}
+
+/**
+ * RangeTimelineBar's original discrete endpoint action/key lease plus pinned Android delegate
+ * progress/custom-action mapping. Pointer scrubs remain with NativeRangeTimelineInput.
+ * One window text cursor is supplied; description traversal does not fabricate text layout boxes.
+ */
+class ReverbRangeEndpointActions(
+    private val view: NativeRangeEndpointView,
+    private val sourceWindow: View,
+    private val input: ReverbRangeEndpointInput,
+    private val interactionEnabled: () -> Boolean,
+    window: PlainTextAccessibilityWindowScope,
+    private val sourceNode: () -> NativeSourceAccessibilityNode,
+) : AutoCloseable {
+    private var alive = true
+    private val keys = RangeEndpointKeyOwner<UiInputGesture>()
+    private val label = view.context.getString(input.label)
+    private val earlier = view.context.getString(input.earlier)
+    private val later = view.context.getString(input.later)
+    private val earlierId = smallthingz.ui.R.id.accessibility_custom_action_0
+    private val laterId = smallthingz.ui.R.id.accessibility_custom_action_1
+    private val textAccessibility = PlainTextAccessibility(view, window,
+        snapshot = { PlainTextAccessibilitySnapshot(label, { null }, { null }) },
+        exposed = { alive && sourceNode().present }, descriptionOnly = true)
+    private val focusListener = View.OnFocusChangeListener { _, focused ->
+        if (focused) selectOrAdjust(null) else keys.clear()
+    }
+    private val keyListener = View.OnKeyListener { _, code, event -> key(code, event) }
+    private val delegate = object : View.AccessibilityDelegate() {
+        override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
+            super.onInitializeAccessibilityNodeInfo(host, info)
+            textAccessibility.populate(info)
+            val limits = input.limits()
+            val enabled = actionEnabled()
+            info.className = if (limits != null) "android.widget.SeekBar" else "android.view.View"
+            info.text = null
+            info.contentDescription = label
+            AccessibilityNodeInfoCompat.wrap(info).stateDescription =
+                formatRangeTimeInput(input.position().toDouble())
+            info.isSelected = input.selected()
+            info.isEnabled = enabled
+            info.isCheckable = false
+            info.isClickable = true // OnClick semantics exists even when disabled; action does not.
+            info.isLongClickable = false
+            info.isFocusable = enabled
+            info.isFocused = view.isFocused
+            info.isScreenReaderFocusable = true
+            info.setBoundsInParent(android.graphics.Rect())
+            sourceNode().populate(info)
+            if (enabled) {
+                info.addAction(if (view.isFocused) AccessibilityNodeInfo.AccessibilityAction.ACTION_CLEAR_FOCUS
+                    else AccessibilityNodeInfo.AccessibilityAction.ACTION_FOCUS)
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK)
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS)
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction(earlierId, earlier))
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction(laterId, later))
+            }
+            if (limits != null) {
+                val current = input.position().coerceIn(limits)
+                info.rangeInfo = AccessibilityNodeInfo.RangeInfo.obtain(
+                    AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_FLOAT, limits.start, limits.endInclusive, current)
+                if (enabled && current < maxOf(limits.start, limits.endInclusive))
+                    info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)
+                if (enabled && current > minOf(limits.start, limits.endInclusive))
+                    info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD)
+            } else info.rangeInfo = null
+        }
+
+        override fun performAccessibilityAction(host: View, action: Int, args: Bundle?): Boolean {
+            if (!alive || !view.isAttachedToWindow) return false
+            val node = sourceNode()
+            if (!node.present) return false
+            textAccessibility.performAction(action, args)?.let { return it }
+            if (action == AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS ||
+                action == AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS)
+                return super.performAccessibilityAction(host, action, args)
+            if (!actionEnabled()) return false
+            return when (action) {
+                AccessibilityNodeInfo.ACTION_CLICK -> {
+                    val result = selectOrAdjust(null)
+                    sendClickedEvent()
+                    result
+                }
+                AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.id -> {
+                    if (args?.containsKey(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE) != true) false
+                    else selectOrAdjust(args.getFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE).toDouble())
+                }
+                AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> {
+                    val limits = input.limits() ?: return false
+                    // Pinned Android delegate slider increment is range/20, unlike the explicit
+                    // earlier/later custom actions'1 second. Do not silently unify these controls.
+                    val current = input.position().coerceIn(limits)
+                    val increment = (maxOf(limits.start, limits.endInclusive) -
+                        minOf(limits.start, limits.endInclusive)) / 20
+                    val requested = current + if (action == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+                        -increment else increment
+                    selectOrAdjust(requested.toDouble())
+                }
+                earlierId -> adjustFromAccessibilityMenu(-1.0, node)
+                laterId -> adjustFromAccessibilityMenu(1.0, node)
+                AccessibilityNodeInfo.ACTION_FOCUS, AccessibilityNodeInfo.ACTION_CLEAR_FOCUS ->
+                    super.performAccessibilityAction(host, action, args)
+                else -> false
+            }
+        }
+    }
+
+    init {
+        view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        view.isClickable = false // Source pointer modifier, not Android's default press/key machine.
+        view.sourceAccessibilityNode = sourceNode
+        view.onFocusChangeListener = focusListener
+        view.setOnKeyListener(keyListener)
+        view.accessibilityDelegate = delegate
+        refresh()
+    }
+
+    fun refresh() {
+        view.isFocusable = actionEnabled()
+        view.isEnabled = actionEnabled()
+    }
+
+    private fun actionEnabled() = interactionEnabled() && input.actionAvailable() &&
+        input.limits() != null
+    private fun ownerReady() = alive && interactionEnabled() && sourceWindow.isAttachedToWindow &&
+        sourceWindow.isShown &&
+        input.resumed() && input.actionAvailable()
+    private fun actionReady() = ownerReady() && sourceWindow.hasWindowFocus()
+    private fun gesture() = input.createGesture(::actionReady)
+    private fun selectOrAdjust(requested: Double?, owner: UiInputGesture = gesture()) =
+        input.edit(requested, owner)
+
+    private fun adjustFromAccessibilityMenu(delta: Double, node: NativeSourceAccessibilityNode): Boolean {
+        if (node.hidden || !node.visibleToUser) return false
+        // A service can invoke this action as its menu closes, before input focus returns.
+        val gesture = input.createGesture {
+            ownerReady() && view.isShown && view.isEnabled && view.windowVisibility == View.VISIBLE &&
+                view.windowToken?.let { it === sourceWindow.windowToken } == true
+        }
+        return selectOrAdjust(input.position().toDouble() + delta, gesture)
+    }
+
+    private fun key(code: Int, event: KeyEvent): Boolean {
+        val requested = when (code) {
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_DOWN -> input.position().toDouble() - 1.0
+            KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_UP -> input.position().toDouble() + 1.0
+            KeyEvent.KEYCODE_MOVE_HOME -> input.limits()?.start?.toDouble() ?: return false
+            KeyEvent.KEYCODE_MOVE_END -> input.limits()?.endInclusive?.toDouble() ?: return false
+            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_SPACE -> null
+            else -> return false
+        }
+        return when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                keys.keyDown(code, event.repeatCount, ::gesture)?.let { selectOrAdjust(requested, it) }
+                true
+            }
+            KeyEvent.ACTION_UP -> { keys.keyUp(code); true }
+            else -> false
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun sendClickedEvent() {
+        val manager = view.context.getSystemService(AccessibilityManager::class.java)
+        if (manager?.isEnabled != true || !view.isAttachedToWindow) return
+        val event = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_VIEW_CLICKED).apply {
+            isEnabled = true
+            className = "android.view.View"
+            packageName = view.context.packageName
+            setSource(view)
+        }
+        view.parent?.requestSendAccessibilityEvent(view, event)
+    }
+
+    override fun close() {
+        if (!alive) return
+        alive = false
+        keys.clear()
+        if (view.onFocusChangeListener === focusListener) view.onFocusChangeListener = null
+        view.setOnKeyListener(null)
+        view.accessibilityDelegate = null
+        view.sourceAccessibilityNode = null
+    }
+}
+
+/** Endpoint data and actions from the current range editor. */
+data class ReverbRangeEndpointInput(
+    @StringRes val label: Int,
+    @StringRes val earlier: Int,
+    @StringRes val later: Int,
+    val limits: () -> ClosedFloatingPointRange<Float>?,
+    val position: () -> Float,
+    val selected: () -> Boolean,
+    val actionAvailable: () -> Boolean,
+    val resumed: () -> Boolean,
+    val createGesture: (ready: () -> Boolean) -> UiInputGesture,
+    val edit: (requestedSeconds: Double?, gesture: UiInputGesture) -> Boolean,
+)
+
+/** Auto-repeat retains its original wheel generation, including a complete intervening scroll. */
+class RangeEndpointKeyOwner<G : UiInputGesture> {
+    private var keyCode: Int? = null
+    private var gesture: G? = null
+
+    fun keyDown(keyCode: Int, repeatCount: Int, create: () -> G): G? {
+        if (repeatCount == 0) {
+            clear()
+            this.keyCode = keyCode
+            gesture = create()
+        }
+        return gesture.takeIf { this.keyCode == keyCode }
+    }
+
+    fun keyUp(keyCode: Int) {
+        if (this.keyCode == keyCode) clear()
+    }
+
+    fun clear() {
+        gesture?.cancel()
+        gesture = null
+        keyCode = null
+    }
+}

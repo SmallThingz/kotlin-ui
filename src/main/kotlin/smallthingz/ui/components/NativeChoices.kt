@@ -279,6 +279,7 @@ class NativeChip(
     private var currentPalette = palette
     private var palettePaint = ControlStyle(context, palette)
     private var normalIcon: Drawable? = null
+    private var installedChoiceIcon: Drawable? = null
     private var checkedIcon: Drawable? = null
     private var trailingIcon: Drawable? = null
     private var measuredTopIconWidth: Int? = null
@@ -341,7 +342,7 @@ class NativeChip(
         if (ready) {
             isSelected = paintSelected
             typography?.apply(paintSelected)
-            applyIcon()
+            if (activeIcon() !== installedChoiceIcon) applyIcon()
         }
     }
 
@@ -647,6 +648,7 @@ class NativeChip(
 
     private fun applyIcon() {
         val icon = activeIcon()
+        installedChoiceIcon = icon
         val iconWidth = if (stretchTopIconToWidth && choiceStyle.iconAbove)
             measuredTopIconWidth ?: dp(choiceStyle.iconSizeDp) else dp(choiceStyle.iconSizeDp)
         icon?.setBounds(0, 0, iconWidth, dp(choiceStyle.iconSizeDp))
@@ -866,6 +868,23 @@ open class NativeSegmentedChoice(
         requestLayout()
     }
 
+    /** Updates checked state and retargets the pill using the existing cell bounds. */
+    internal fun bindSelection(id: String?) {
+        if (closed) return
+        val target = id?.takeIf { candidate ->
+            options.any { it.id == candidate && semanticsOf(it) != NativeChoiceSemantics.BUTTON }
+        }
+        val previous = selectedId
+        if (previous == target) return
+        selectedId = target
+        for (option in options) {
+            if (option.id == previous || option.id == target) {
+                chips[option.id]?.bindChecked(option.id == target, isEnabled && option.enabled)
+            }
+        }
+        updateSelectionIndicator()
+    }
+
     open fun applyPalette(palette: ControlPalette) {
         if (configuration.changed(context)) requestLayout()
         choicePalette = palette
@@ -894,9 +913,7 @@ open class NativeSegmentedChoice(
             return
         }
         if (selectedId == id) return
-        selectedId = id
-        options.forEach { option -> chips[option.id]?.bindChecked(option.id == id, isEnabled && option.enabled) }
-        updateSelectionIndicator()
+        bindSelection(id)
         onSelectionChange?.invoke(id)
     }
 

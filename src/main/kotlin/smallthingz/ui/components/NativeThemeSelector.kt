@@ -76,7 +76,10 @@ class NativeThemeSelector internal constructor(
              density: Float = resources.displayMetrics.density) {
         if (closed) return
         require(density.isFinite() && density > 0f)
-        this.density = density
+        if (this.density != density) {
+            this.density = density
+            requestLayout()
+        }
         this.selected = selected
         this.palette = palette
         this.titleColor = titleColor
@@ -89,7 +92,6 @@ class NativeThemeSelector internal constructor(
         }
         presentation.bindTitle(context.getString(R.string.native_theme_title), palette, titleColor)
         capsule.bind(options, selected.name, palette, density)
-        requestLayout()
     }
 
     /** Rebind the retained title and choices when the host's font or display configuration changes. */

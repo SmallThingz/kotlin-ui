@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reverb_settings_storage_settings_title">存储</string>
+    <string name="reverb_settings_default_folder">默认</string>
+    <string name="reverb_settings_choose_folder">选择</string>
+    <string name="reverb_settings_move_recordings">移动现有录音</string>
+    <string name="reverb_settings_settings_resume_notification_blocked">录音恢复提醒已被屏蔽。请检查通知设置。</string>
+    <string name="reverb_settings_settings_notification_access">检查通知设置</string>
+    <string name="reverb_settings_settings_restart_access_missing">设备重启后自动启动需要在其他应用上层显示的权限。</string>
+    <string name="reverb_settings_settings_restart_access">检查自动启动权限</string>
+</resources>

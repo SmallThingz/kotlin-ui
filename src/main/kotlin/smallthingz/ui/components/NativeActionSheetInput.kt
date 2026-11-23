@@ -8,15 +8,12 @@ import smallthingz.ui.scroll.NativeVerticalNestedHost
 import smallthingz.ui.scroll.NativeVerticalScrollSource
 
 import android.view.View
-import android.view.ViewConfiguration
 import smallthingz.ui.geometry.Offset
 import smallthingz.ui.geometry.Size
 import smallthingz.ui.input.pointer.PointerType
 import smallthingz.ui.unit.Velocity
-import smallthingz.ui.input.phase.NativeDragAxis
 import smallthingz.ui.input.phase.NativeDragPointerChange
 import smallthingz.ui.input.phase.NativeDragPointerEvent
-import smallthingz.ui.input.phase.NativeDragPointerRouter
 import smallthingz.ui.input.phase.NativeDragSink
 import smallthingz.ui.input.phase.NativePointerPass
 import smallthingz.ui.input.phase.NativeViewPhasePointerNode
@@ -35,6 +32,7 @@ import kotlin.math.max
 internal class NativeActionSheetNestedScroll(
     private val state: NativeActionSheetState,
     private val settleToDismiss: (Float) -> Unit,
+    override val onPointerDragCancelled: () -> Unit,
 ) : NativeVerticalNestedHost {
     override fun preScroll(availableY: Float, source: NativeVerticalScrollSource): Float =
         if (availableY < 0 && source == NativeVerticalScrollSource.USER_INPUT)
@@ -56,6 +54,7 @@ internal class NativeActionSheetDragChannel(
     private val state: NativeActionSheetState,
     scope: CoroutineScope,
     private val settleToDismiss: (Float) -> Unit,
+    private val returnAfterCancelledDrag: () -> Unit,
 ) : NativeDragSink, AutoCloseable {
     private val job = SupervisorJob(scope.coroutineContext[Job])
     private val nodeScope = CoroutineScope(scope.coroutineContext + job)
@@ -79,10 +78,10 @@ internal class NativeActionSheetDragChannel(
                             event = events.receive()
                         }
                     }
-                    settleToDismiss((event as? Event.Stop)?.velocity ?: 0f)
+                    val release = event as? Event.Stop
+                    if (release != null) settleToDismiss(release.velocity) else returnAfterCancelledDrag()
                 } catch (_: CancellationException) {
-                    // Source DraggableNode.onDragCancelled also calls onDragStopped(0).
-                    if (isActive) settleToDismiss(0f)
+                    // A superseding mutation keeps its own target. No release was accepted here.
                 }
             }
         }
@@ -150,25 +149,4 @@ internal class NativeRetainedViewHitLayout(
     override val childrenInHitOrder get() = children()
     override fun screenToLocal(screen: Offset) = geometry.coordinates(view).local(screen)
     override fun withinLayerBounds(local: Offset) = clip(local)
-}
-
-internal class NativeActionSheetDragNode(
-    override val view: View,
-    private val state: NativeActionSheetState,
-    channel: NativeActionSheetDragChannel,
-) : NativeViewPhasePointerNode {
-    private val configuration = ViewConfiguration.get(view.context)
-    private val router = NativeDragPointerRouter(
-        NativeDragAxis.VERTICAL,
-        { configuration.scaledTouchSlop.toFloat() },
-        { configuration.scaledMaximumFlingVelocity.toFloat() },
-        { state.animationRunning },
-        channel,
-    )
-    fun interested(change: NativeDragPointerChange) = state.visible && router.interested(change)
-    override fun dispatch(event: NativeDragPointerEvent, pass: NativePointerPass) {
-        router.enabled = state.visible
-        router.dispatch(event, pass)
-    }
-    override fun cancel() = router.reset()
 }

@@ -1,5 +1,6 @@
 package smallthingz.ui.scroll
 
+import smallthingz.ui.geometry.Offset
 import smallthingz.ui.input.phase.NativeDragAxis
 import smallthingz.ui.input.phase.NativeDragPointerChange
 import smallthingz.ui.input.phase.NativeDragPointerEvent
@@ -26,6 +27,7 @@ class NativeVerticalPhaseBinding(
 ) : View.OnAttachStateChangeListener, AutoCloseable {
     private var channel: NativeVerticalDragChannel? = null
     private var router: NativeDragPointerRouter? = null
+    var canStartDrag: (Offset) -> Boolean = { true }
 
     fun interested(change: NativeDragPointerChange): Boolean = router?.interested(change) == true
 
@@ -77,7 +79,7 @@ class NativeVerticalPhaseBinding(
 
     override fun onViewAttachedToWindow(view: View) {
         check(channel == null)
-        val attachedChannel = NativeVerticalDragChannel(viewport.owner, viewport.inputScope)
+        val attachedChannel = NativeVerticalDragChannel(viewport.owner, viewport.inputScope, viewport.onPointerDragCancelled)
         channel = attachedChannel
         router = NativeDragPointerRouter(
             NativeDragAxis.VERTICAL,
@@ -86,6 +88,7 @@ class NativeVerticalPhaseBinding(
             { viewport.owner.shouldScrollImmediately },
             attachedChannel,
             parentInterested,
+            { canStartDrag(it) },
         ).also { it.enabled = viewport.interactionEnabled }
     }
 

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="allow">許可</string>
+    <string name="recording_settings_title">音声</string>
+    <string name="storage_settings_title">保存先</string>
+    <string name="onboarding_restart_resume_title">端末の再起動後に録音を再開</string>
+    <string name="onboarding_restart_resume_body">設定で「端末の再起動後に自動開始」を使うには、他のアプリの上に表示することを許可してください。</string>
+    <string name="settings_restart_access">自動開始の権限を確認</string>
+</resources>

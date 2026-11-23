@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="permission_required_message">É necessário acesso ao microfone.</string>
+</resources>

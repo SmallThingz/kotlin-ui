@@ -39,6 +39,7 @@ interface NativeVerticalNestedHost {
     fun postScroll(consumedY: Float, availableY: Float, source: NativeVerticalScrollSource): Float
     suspend fun preFling(availableY: Float): Float
     suspend fun postFling(consumedY: Float, availableY: Float): Float
+    val onPointerDragCancelled: (() -> Unit)? get() = null
 }
 
 /**
@@ -58,9 +59,10 @@ class NativeVerticalViewport(
     density: Density,
     frames: MonotonicFrameClock,
     private val parentScope: CoroutineScope,
-    nested: NativeVerticalNestedHost,
+    private val nested: NativeVerticalNestedHost,
     glowColor: Int = 0xff666666.toInt(),
 ) : ViewGroup(context), NativeBringIntoViewParent {
+    internal val onPointerDragCancelled get() = nested.onPointerDragCancelled
     private val crossAxisInflation = with(density) { 30.dp.roundToPx() }
     private val overscroll = NativeVerticalOverscroll(context, density, glowColor) { invalidate() }
     private var positionBinding: AutoCloseable? = null

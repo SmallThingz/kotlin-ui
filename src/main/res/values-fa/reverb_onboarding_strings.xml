@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="allow">اجازه دادن</string>
+    <string name="recording_settings_title">صدا</string>
+    <string name="storage_settings_title">ذخیره‌سازی</string>
+    <string name="onboarding_restart_resume_title">ازسرگیری ضبط پس از راه‌اندازی مجدد دستگاه</string>
+    <string name="onboarding_restart_resume_body">برای استفاده از شروع خودکار پس از راه‌اندازی مجدد در تنظیمات، نمایش روی برنامه‌های دیگر را مجاز کنید.</string>
+    <string name="settings_restart_access">بررسی مجوز نمایش روی برنامه‌های دیگر</string>
+</resources>

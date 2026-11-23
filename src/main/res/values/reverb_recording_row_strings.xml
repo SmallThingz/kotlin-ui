@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="open_options">Open options</string>
+    <string name="recording_select">Select recording</string>
+    <string name="recording_deselect">Deselect recording</string>
+    <string name="recording_open_player">Open player</string>
+    <string name="recording_close_player">Close player</string>
+</resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="clear_buffer">Limpar</string>
+    <string name="record_all_memory">Exportar tudo</string>
+    <string name="saving">Salvando…</string>
+</resources>

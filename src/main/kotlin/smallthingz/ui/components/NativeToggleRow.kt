@@ -47,7 +47,7 @@ open class NativeToggleRow(
         }
     }
 
-    override fun accessibilityChildren(): List<View> = text
+    override fun accessibilityChildren(): List<View> = text.filter { it.visibility == VISIBLE }
     override val hasRowAction get() = onChanged != null
     override fun activateRow() { onChanged?.invoke(rowChecked != true) }
 
@@ -72,8 +72,9 @@ open class NativeToggleRow(
         textWidth = (inner - switch.measuredWidth - gap).coerceAtLeast(0)
         val textSpec = MeasureSpec.makeMeasureSpec(textWidth, MeasureSpec.EXACTLY)
         title.measure(textSpec, unspecified)
-        description?.measure(textSpec, unspecified)
-        textHeight = title.measuredHeight + if (description != null) dp(2) + description.measuredHeight else 0
+        val visibleDescription = description?.takeIf { it.visibility != GONE }
+        visibleDescription?.measure(textSpec, unspecified)
+        textHeight = title.measuredHeight + (visibleDescription?.let { dp(2) + it.measuredHeight } ?: 0)
         val height = max(dp(64), 2 * dp(8) + max(textHeight, switch.measuredHeight))
         setMeasuredDimension(resolveSize(width, widthSpec), resolveSize(height, heightSpec))
         measureRowRole(measuredWidth, measuredHeight)
@@ -88,7 +89,7 @@ open class NativeToggleRow(
         fun center(childHeight: Int) = inset + ((height - 2 * inset - childHeight) / 2f).roundToInt()
         val textY = center(textHeight)
         place(title, dp(14), textY)
-        description?.let { place(it, dp(14), textY + title.measuredHeight + dp(2)) }
+        description?.takeIf { it.visibility != GONE }?.let { place(it, dp(14), textY + title.measuredHeight + dp(2)) }
         place(switch, dp(14) + textWidth + gap, center(switch.measuredHeight))
         layoutRowRole()
     }

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="allow">سماح</string>
+    <string name="recording_settings_title">الصوت</string>
+    <string name="storage_settings_title">التخزين</string>
+    <string name="onboarding_restart_resume_title">استئناف التسجيل بعد إعادة تشغيل الجهاز</string>
+    <string name="onboarding_restart_resume_body">اسمح بالظهور فوق التطبيقات الأخرى لاستخدام البدء التلقائي بعد إعادة التشغيل في الإعدادات.</string>
+    <string name="settings_restart_access">مراجعة إذن الظهور فوق التطبيقات الأخرى</string>
+</resources>

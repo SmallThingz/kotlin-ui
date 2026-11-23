@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reverb_settings_storage_settings_title">التخزين</string>
+    <string name="reverb_settings_default_folder">افتراضي</string>
+    <string name="reverb_settings_choose_folder">اختيار</string>
+    <string name="reverb_settings_move_recordings">نقل التسجيلات الموجودة</string>
+    <string name="reverb_settings_settings_resume_notification_blocked">تذكيرات استئناف التسجيل محظورة. راجع إعدادات الإشعارات.</string>
+    <string name="reverb_settings_settings_notification_access">مراجعة إعدادات الإشعارات</string>
+    <string name="reverb_settings_settings_restart_access_missing">يتطلب البدء التلقائي بعد إعادة التشغيل إذن الظهور فوق التطبيقات الأخرى.</string>
+    <string name="reverb_settings_settings_restart_access">مراجعة إذن الظهور فوق التطبيقات الأخرى</string>
+</resources>

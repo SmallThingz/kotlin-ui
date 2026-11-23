@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="clear_buffer">مسح</string>
+    <string name="record_all_memory">تصدير الكل</string>
+    <string name="saving">جارٍ الحفظ…</string>
+</resources>

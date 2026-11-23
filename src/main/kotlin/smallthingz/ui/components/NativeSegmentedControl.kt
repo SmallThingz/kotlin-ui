@@ -67,6 +67,8 @@ class NativeSegmentedControl private constructor(
     ) : this(context, palette, presentation, density, inputAllowed, style)
 
     private var closed = false
+    private var boundOptions: List<NativeChoice>? = null
+    private var boundPalette: ControlPalette? = null
     private val presentation = presentation ?: DefaultSegmentedPresentation(context, palette, style.surfaceRadiusDp)
     private val row = SegmentHost(context)
     private val choices = NativeSegmentedChoice(context, palette, style.choiceStyle,
@@ -92,11 +94,21 @@ class NativeSegmentedControl private constructor(
              density: Float = resources.displayMetrics.density) {
         if (closed) return
         require(density.isFinite() && density > 0f)
-        this.density = density
-        presentation.bindSurface(palette)
-        choices.applyPalette(palette)
-        choices.bind(options, selectedId)
-        requestLayout()
+        if (this.density != density) {
+            this.density = density
+            requestLayout()
+        }
+        if (boundPalette != palette) {
+            boundPalette = palette
+            presentation.bindSurface(palette)
+            choices.applyPalette(palette)
+        }
+        if (boundOptions != options) {
+            boundOptions = options.toList()
+            choices.bind(options, selectedId)
+        } else {
+            choices.bindSelection(selectedId)
+        }
     }
 
     override fun onMeasure(w: Int, h: Int) {

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reverb_settings_storage_settings_title">स्टोरेज</string>
+    <string name="reverb_settings_default_folder">डिफ़ॉल्ट</string>
+    <string name="reverb_settings_choose_folder">चुनें</string>
+    <string name="reverb_settings_move_recordings">मौजूदा रिकॉर्डिंग्स ले जाएँ</string>
+    <string name="reverb_settings_settings_resume_notification_blocked">रिकॉर्डिंग फिर शुरू करने के रिमाइंडर ब्लॉक हैं। सूचना सेटिंग जाँचें।</string>
+    <string name="reverb_settings_settings_notification_access">सूचना सेटिंग जाँचें</string>
+    <string name="reverb_settings_settings_restart_access_missing">डिवाइस फिर शुरू होने के बाद ऑटो-स्टार्ट के लिए अन्य ऐप्स के ऊपर दिखने की अनुमति चाहिए।</string>
+    <string name="reverb_settings_settings_restart_access">अन्य ऐप्स के ऊपर दिखने की अनुमति जाँचें</string>
+</resources>
