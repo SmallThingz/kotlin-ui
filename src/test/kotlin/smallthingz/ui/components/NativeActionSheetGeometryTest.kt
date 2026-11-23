@@ -30,6 +30,25 @@ class NativeActionSheetGeometryTest {
         assertEquals(1f/(290f/280f),inner.overflowChildScaleY,0f)
         assertNotEquals(1f/outer.overflowScaleY,inner.overflowChildScaleY)
     }
+    @Test fun topSheetMirrorsExpandedAndHiddenPlacementWithinTheAvailableWindow() {
+        val edge = NativeDialogEdge.TOP
+        assertEquals(0, edge.sheetTop(700, 300, 400))
+        assertEquals(-120, edge.sheetTop(700, 300, 520))
+        assertEquals(-300, edge.sheetTop(700, 300, 700))
+        assertEquals(400, NativeDialogEdge.BOTTOM.sheetTop(700, 300, 400))
+    }
+
+    @Test fun topSheetMirrorsThePredictivePivotAndPhysicalDismissDirection() {
+        val edge = NativeDialogEdge.TOP
+        val transform = nativeSheetPredictiveTransform(400f, 300f, 500f, 500f, 1f, 1f, edge)
+        assertEquals(-500f, transform.pivotY, 0f)
+        assertEquals(.88f, transform.scaleX, 0f)
+        assertEquals(.92f, transform.scaleY, 0f)
+        assertEquals(60f, edge.sheetMotionY(-60f), 0f)
+        assertEquals(-60f, edge.sheetMotionY(60f), 0f)
+        assertEquals(60f, NativeDialogEdge.BOTTOM.sheetMotionY(60f), 0f)
+    }
+
     @Test fun tooltipUsesIntegerCenterThenAboveOrBelowWithoutInventedScreenPadding() {
         assertEquals(NativeTooltipPlacement(80,66),nativeTooltipAbove(100,100,133,148,73,30,400,4))
         assertEquals(NativeTooltipPlacement(80,24),nativeTooltipAbove(100,2,133,20,73,30,400,4))
