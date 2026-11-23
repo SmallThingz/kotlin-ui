@@ -71,11 +71,13 @@ class NativePermissionDialog(
     private val onCancel: () -> Unit,
     private val appearance: NativeUiAppearance = NativeUiAppearance.Default,
     private val recipe: NativePermissionDialogRecipe = appearance.modals.permissionDialog,
+    showDragHandle: Boolean = false,
 ) {
     private val hostWindow = activity.window
     private val host = hostWindow.decorView
     private val density = Density(activity)
     private val fonts = createFontFamilyResolver(activity)
+    private val handleRuntime = if (showDragHandle) NativeModalWindowRuntime(activity) else null
     private var busy = false
     private var allowEnabled = true
     private var ended = false
@@ -101,7 +103,7 @@ class NativePermissionDialog(
             if (ended) return
             ended = true
             escapeDown = false
-            allow.use { deny.use { super.dismiss() } }
+            handleRuntime.use { allow.use { deny.use { super.dismiss() } } }
         }
 
         override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -197,6 +199,9 @@ class NativePermissionDialog(
             addView(actionHost(activity, deny, first = false), row(recipe.actionGapDp))
         }
         val footer = ScrollView(activity).apply { addView(actions) }
+        val handle = handleRuntime?.let {
+            createNativeDialogDragHandle(activity, colors, appearance, it, dialog::cancel)
+        }
         // Measure the actions first; only the content relinquishes height when the window shrinks.
         val panel = object : ViewGroup(activity) {
             private var topInset = 0
@@ -208,20 +213,31 @@ class NativePermissionDialog(
                 val limit = if (MeasureSpec.getMode(h) == MeasureSpec.UNSPECIFIED)
                     visible.height().coerceAtLeast(1) else MeasureSpec.getSize(h)
                 topInset = minOf(inset, limit / 8)
-                val innerHeight = limit - topInset * 2
+                handle?.measure(
+                    MeasureSpec.makeMeasureSpec(innerWidth, MeasureSpec.AT_MOST),
+                    MeasureSpec.makeMeasureSpec(limit / 4, MeasureSpec.AT_MOST),
+                )
+                val handleHeight = handle?.measuredHeight ?: 0
+                val innerHeight = limit - topInset * 2 - handleHeight
                 val minimumBody = minOf(dp(recipe.contentInsetDp), innerHeight / 3)
                 val footerLimit = innerHeight - minimumBody
                 footer.measure(exact(innerWidth), MeasureSpec.makeMeasureSpec(footerLimit, MeasureSpec.AT_MOST))
                 val remaining = (innerHeight - footer.measuredHeight).coerceAtLeast(0)
                 scroll.measure(exact(innerWidth), MeasureSpec.makeMeasureSpec(remaining, MeasureSpec.AT_MOST))
-                setMeasuredDimension(width, minOf(limit, scroll.measuredHeight + footer.measuredHeight + topInset * 2))
+                setMeasuredDimension(width, minOf(limit, scroll.measuredHeight + footer.measuredHeight + topInset * 2 + handleHeight))
             }
             override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
                 val inset = minOf(dp(recipe.contentInsetDp), width / 8)
-                scroll.layout(inset, topInset, width - inset, topInset + scroll.measuredHeight)
+                val bodyTop = topInset + (handle?.measuredHeight ?: 0)
+                handle?.let {
+                    val left = (width - it.measuredWidth) / 2
+                    it.layout(left, topInset, left + it.measuredWidth, bodyTop)
+                }
+                scroll.layout(inset, bodyTop, width - inset, bodyTop + scroll.measuredHeight)
                 footer.layout(inset, scroll.bottom, width - inset, scroll.bottom + footer.measuredHeight)
             }
         }.apply {
+            handle?.let { addView(it) }
             addView(scroll)
             addView(footer)
             if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
@@ -232,8 +248,15 @@ class NativePermissionDialog(
             addView(panel, ViewGroup.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         }
         surface.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(view: View) = host.addOnLayoutChangeListener(resize)
-            override fun onViewDetachedFromWindow(view: View) = host.removeOnLayoutChangeListener(resize)
+            override fun onViewAttachedToWindow(view: View) {
+                host.addOnLayoutChangeListener(resize)
+                handleRuntime?.setStarted(true)
+            }
+
+            override fun onViewDetachedFromWindow(view: View) {
+                host.removeOnLayoutChangeListener(resize)
+                handleRuntime?.setStarted(false)
+            }
         })
         dialog.setTitle(summary)
         dialog.setContentView(surface)
