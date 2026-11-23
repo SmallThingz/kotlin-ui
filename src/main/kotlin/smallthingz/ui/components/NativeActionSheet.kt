@@ -82,7 +82,7 @@ class NativeActionSheet(
         initialStyle: NativeActionSheetStyle,
         title: String,
         onDismiss: () -> Unit,
-        closeIcon: NativeActionSheetIcon,
+        closeIcon: NativeActionSheetIcon?,
         contentBackground: android.graphics.drawable.Drawable?,
         statusBarProtection: NativeStatusBarProtection?,
     ) : this(anchor, initialStyle, title, onDismiss, closeIcon, contentBackground, statusBarProtection, NativeDialogEdge.BOTTOM)
@@ -107,7 +107,17 @@ class NativeActionSheet(
         onDismiss: () -> Unit,
         contentBackground: android.graphics.drawable.Drawable? = null,
         statusBarProtection: NativeStatusBarProtection? = null,
-        entryEdge: NativeDialogEdge = NativeDialogEdge.BOTTOM,
+    ) : this(anchor, initialStyle, title, onDismiss, null, contentBackground, statusBarProtection)
+
+    /** A close-free sheet entering from a specific edge. */
+    constructor(
+        anchor: View,
+        initialStyle: NativeActionSheetStyle,
+        title: String,
+        onDismiss: () -> Unit,
+        contentBackground: android.graphics.drawable.Drawable? = null,
+        statusBarProtection: NativeStatusBarProtection? = null,
+        entryEdge: NativeDialogEdge,
     ) : this(anchor, initialStyle, title, onDismiss, null, contentBackground, statusBarProtection, entryEdge)
 
     var style=initialStyle;private set
