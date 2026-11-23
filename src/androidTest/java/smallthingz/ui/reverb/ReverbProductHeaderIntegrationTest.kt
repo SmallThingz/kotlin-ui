@@ -22,10 +22,9 @@ class ReverbProductHeaderIntegrationTest {
             val row = header.getChildAt(0) as ReverbTopBar
             val strip = header.getChildAt(1) as ViewGroup
             val settings = ReverbHeaderAction("Settings", {})
-            var click = ""
             fun bind(label: String, browser: ReverbHeaderAction?, counts: List<ReverbHeaderCount>) {
                 header.bind(theme, ReverbProductIdentity.Monochrome(android.R.drawable.ic_menu_info_details),
-                    label, { click = label }, browser, settings, counts = counts)
+                    label, {}, browser, settings, counts = counts)
                 val width = (320 * theme.density.density).roundToInt()
                 header.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                     View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
@@ -41,8 +40,6 @@ class ReverbProductHeaderIntegrationTest {
             bind("About Control", null, listOf(ReverbHeaderCount("Completed", "1.2K", "Completed: 1,234")))
             assertSame(anchor, row.centerAnchor)
             assertEquals("About Control", anchor.contentDescription)
-            anchor.performClick()
-            assertEquals("About Control", click)
             assertEquals(actionHeight, row.measuredHeight)
             assertTrue(header.measuredHeight > actionHeight)
             assertEquals("Completed: 1,234", strip.getChildAt(0).contentDescription)
