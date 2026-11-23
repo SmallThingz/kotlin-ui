@@ -9,10 +9,11 @@ Branch: `draft/anchored-dropdown-20261123`. This draft is not on main and is not
 - The selected slot keeps the trigger's physical bounds, including the rounded outer corners and square shared joins.
 - Opening expands a connected outline above and below the slot and dims the background.
 - Natural option order is preferred. Overflow rotates the finite list: `3, 1, 2` is exactly three rows, never `3, 1, 2, 3`.
-- The slot is the selector. A vertical gesture snaps to at most one adjacent row; the selection callback fires when that step settles. Keyboard and accessibility forward/back actions make the same one-row step.
-- Tapping the current slot closes. Tapping another visible row slides that option into the slot and collapses in one animation, then commits the selection.
+- The slot is the selector. A vertical gesture can cross multiple rows and snaps to a whole row on release. The selection callback follows each row entering the slot. Keyboard and accessibility forward/back actions advance one row.
+- Tapping the current slot closes. Tapping another visible row commits that choice and slides it into the slot while collapsing. A new tap during collapse reverses it instead of being swallowed.
 - Back, Escape and an outside tap close at the currently accepted slot. Scrolled choices are retained; dismissal does not revert to the opening value.
 - Reaching an end shrinks the exposed empty side. Scrolling cannot create options or wrap again.
+- Top and bottom corner radii blend continuously between the group's joined shape and the expanded outline as an endpoint reaches the slot.
 - ValueAnimator follows the platform animator duration scale, including disabled animations. Audio/recording is not involved in the demo.
 - The owner closes the popup on screen stop/disposal. An anchor that detaches, moves or changes size retires the old popup. Selection callbacks may replace the host safely.
 
@@ -21,6 +22,8 @@ Branch: `draft/anchored-dropdown-20261123`. This draft is not on main and is not
 Create one host per visible screen using its `NativeUiAppearance`, resolved `NativeColorScheme`, `Density` and font resolver. Each returned field retains typed option identity and caller-provided/localized labels. Update the field binding after `onSelected`; dispose fields and the host with their screen. Keep source mutations outside rendering callbacks.
 
 The expansion recipe is `NativeUiAppearance.anchoredDropdown`. Existing components keep their existing behavior unless this host is used.
+
+Option rows retain library typography and input semantics. Immutable palette/icon assets are shared. Only rows entering the current reveal are measured and laid out; rows outside the reveal skip drawing. These remove avoidable opening work, but device timing remains separate evidence from source allocation counts.
 
 ## Example
 

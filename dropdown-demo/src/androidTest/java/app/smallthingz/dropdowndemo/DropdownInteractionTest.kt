@@ -4,6 +4,8 @@ import android.content.Intent
 import android.app.UiAutomation
 import android.graphics.Rect
 import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -23,7 +25,9 @@ class DropdownInteractionTest {
     private fun await(message: String, condition: () -> Boolean) {
         val until = SystemClock.uptimeMillis() + 5000
         while (!condition()) {
-            if (SystemClock.uptimeMillis() >= until) fail(message)
+            if (SystemClock.uptimeMillis() >= until) fail("$message\n" + nodes().joinToString("\n") {
+                "${it.className} text=${it.text} desc=${it.contentDescription} selected=${it.isSelected} clickable=${it.isClickable} visible=${it.isVisibleToUser} children=${it.childCount} scroll=${it.isScrollable} bounds=${Rect().also(it::getBoundsInScreen)}"
+            })
             SystemClock.sleep(40)
         }
     }
@@ -34,7 +38,7 @@ class DropdownInteractionTest {
         val bounds = Rect().also(target::getBoundsInScreen)
         assertTrue(target.performAction(AccessibilityNodeInfo.ACTION_CLICK))
         await("Popup did not open") { wheel() != null }
-        SystemClock.sleep(400)
+        await("Popup options did not become accessible") { nodes().any { it.isSelected && it.isClickable } }
         return bounds
     }
     private fun wheel() = nodes().firstOrNull { it.className?.toString() == "android.widget.NumberPicker" }
@@ -69,6 +73,7 @@ class DropdownInteractionTest {
 
     @Test fun topWrapHasThreeUniqueOptionsAndStopsAtItsFiniteEnd() = withActivity {
         open("Top edge")
+        await("Three choices did not expand") { nodes().count { it.isClickable && it.className?.toString() == "android.widget.Button" } == 3 }
         val labels = nodes().filter { it.isClickable && it.className?.toString() == "android.widget.Button" }.mapNotNull { it.contentDescription?.toString() }
         assertEquals(listOf("Three", "One", "Two"), labels)
         assertTrue(selected("Three"))
@@ -80,5 +85,52 @@ class DropdownInteractionTest {
         assertTrue(nodes().single { it.contentDescription?.toString() == "Two" && it.isClickable }.performAction(AccessibilityNodeInfo.ACTION_CLICK))
         await("Current slot did not close") { wheel() == null }
         assertTrue(nodes().any { it.text?.toString() == "Two" })
+    }
+
+    @Test fun tappingAnchorDuringCollapseReopensTheSameWheelWithTheTappedChoice() = withActivity {
+        val slot = open("Sample format")
+        val window = checkNotNull(wheel()).windowId
+        val option = Rect()
+        await("Second option did not expand") {
+            nodes().firstOrNull { it.contentDescription?.toString() == "24-bit PCM" && it.isClickable }
+                ?.also { it.getBoundsInScreen(option) } != null
+        }
+        val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        fun tap(bounds: Rect) {
+            val down = SystemClock.uptimeMillis()
+            for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+                val event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, bounds.exactCenterX(), bounds.exactCenterY(), 0)
+                event.source = InputDevice.SOURCE_TOUCHSCREEN
+                try { assertTrue(automation.injectInputEvent(event, false)) } finally { event.recycle() }
+            }
+        }
+        tap(option)
+        tap(slot)
+        await("Second tap did not reopen the selected choice at the anchor") {
+            wheel()?.windowId == window && selected("24-bit PCM") && selectedBounds("24-bit PCM") == slot
+        }
+        SystemClock.sleep(350)
+        assertEquals(window, checkNotNull(wheel()).windowId)
+        tap(slot)
+        await("Reopened wheel did not close") { wheel() == null }
+        assertTrue(nodes().any { it.text?.toString() == "24-bit PCM" })
+    }
+
+    @Test fun oneDragCrossesMultipleRowsAndSnapsToTheOriginalSlot() = withActivity {
+        val slot = open("Sample format")
+        val down = SystemClock.uptimeMillis()
+        fun pointer(action: Int, fraction: Float) {
+            val event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action,
+                slot.exactCenterX(), slot.exactCenterY() - slot.height() * 2.2f * fraction, 0)
+            try { instrumentation.sendPointerSync(event) } finally { event.recycle() }
+        }
+        pointer(MotionEvent.ACTION_DOWN, 0f)
+        for (i in 1..10) { SystemClock.sleep(25); pointer(MotionEvent.ACTION_MOVE, i / 10f) }
+        pointer(MotionEvent.ACTION_UP, 1f)
+        await("A single drag did not select the third row") { selected("32-bit float") && selectedBounds("32-bit float") == slot }
+        assertNotNull(wheel())
+        assertTrue(nodes().single { it.contentDescription?.toString() == "32-bit float" && it.isClickable }.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+        await("Dragged choice did not collapse") { wheel() == null }
+        assertTrue(nodes().any { it.text?.toString() == "32-bit float" })
     }
 }
