@@ -142,12 +142,20 @@ class NativeAnchoredDropdown(
         var anchorY = 0
         var slotsAbove = 0
         var slotsBelow = 0
+        var modalX = 0
+        var modalY = 0
+        var modalWidth = 0
+        var modalHeight = 0
         val rowHeight = anchor.height
         val rowWidth = anchor.width
         val geometryGuard = ViewTreeObserver.OnPreDrawListener {
             anchor.getLocationOnScreen(observed)
             if (!anchor.isShown || !anchor.isAttachedToWindow || observed[0] != origin[0] || observed[1] != origin[1]
                 || anchor.width != rowWidth || anchor.height != rowHeight) dispose()
+            if (!disposed) {
+                root.getLocationOnScreen(observed)
+                if (observed[0] != modalX || observed[1] != modalY || root.width != modalWidth || root.height != modalHeight) dispose()
+            }
             true
         }
         val anchorDetach = object : View.OnAttachStateChangeListener {
@@ -170,7 +178,10 @@ class NativeAnchoredDropdown(
             scrim.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             root.accessibilityPaneTitle = content.label
             overlay.show()
+            if (disposed) return
             root.getLocationOnScreen(observed)
+            modalX = observed[0]; modalY = observed[1]
+            modalWidth = root.width; modalHeight = root.height
             val x = origin[0] - observed[0]
             anchorY = origin[1] - observed[1]
             val margin = (style.screenMarginDp * density.density).roundToInt()
@@ -192,6 +203,7 @@ class NativeAnchoredDropdown(
                 wheel.addView(row, FrameLayout.LayoutParams(-1, rowHeight))
             }
             overlay.relayout()
+            if (disposed) return
             anchor.viewTreeObserver.addOnPreDrawListener(geometryGuard)
             anchor.addOnAttachStateChangeListener(anchorDetach)
             animate(position, 1f, style.expandMillis) {}
@@ -214,7 +226,9 @@ class NativeAnchoredDropdown(
         }
 
         fun collapse(index: Int) {
-            if (closing || disposed) return
+            if (disposed) return
+            wheel.pointer = -1; wheel.dragging = false; wheel.earlyTap = false
+            if (closing) { if (reveal == 0f) dispose(); return }
             if (plan == null) { dispose(); return }
             closing = true
             val target = index.coerceIn(0, rows.lastIndex)
