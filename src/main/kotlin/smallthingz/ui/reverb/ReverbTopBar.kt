@@ -72,6 +72,11 @@ class ReverbTopBar(
     private var centerContent: View? = null
     internal val centerAnchor: View? get() = centerAction
 
+    internal fun requestEndActionFocus(): Boolean {
+        val action = end.accessibilityAction
+        return action.isAttachedToWindow && action.isShown && action.isEnabled && action.requestFocus()
+    }
+
     init {
         clipChildren = false
         clipToPadding = false
