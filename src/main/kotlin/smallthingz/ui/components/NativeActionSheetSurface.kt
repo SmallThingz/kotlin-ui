@@ -211,14 +211,16 @@ internal class NativeSheetContent(
     private var style:NativeActionSheetStyle,
     title:String,
     inputRoot:()->View?,
-    private val closeIcon: NativeActionSheetIcon,
+    private val closeIcon: NativeActionSheetIcon?,
     private val contentBackground: android.graphics.drawable.Drawable?,
     dismiss:()->Unit,
 ):ViewGroup(context) {
     private var currentDismiss=dismiss
     val titleView=style.title(context,title)
-    val close=NativeStandardIconButtonView(context,style.textDensity.density,style.palette.onSurface,
-        closeIcon.view,closeIcon.bindAccessibility,inputRoot)
+    val close = closeIcon?.let { icon ->
+        NativeStandardIconButtonView(context,style.textDensity.density,style.palette.onSurface,
+            icon.view,icon.bindAccessibility,inputRoot)
+    }
     private val header=Header(context,titleView,close)
     private var body:View?=null
     private var actions:View?=null
@@ -263,8 +265,9 @@ internal class NativeSheetContent(
         }
     }
     private fun bindClose(value:NativeActionSheetStyle,dismiss:()->Unit) {
-        closeIcon.setColor(value.palette.onSurfaceVariant)
-        close.bindAction(value.textDensity.density,context.getString(smallthingz.ui.R.string.close_sheet),
+        val button = close ?: return
+        closeIcon?.setColor(value.palette.onSurfaceVariant)
+        button.bindAction(value.textDensity.density,context.getString(smallthingz.ui.R.string.close_sheet),
             true,value.palette.onSurface,dismiss)
     }
     override fun onMeasure(widthMeasureSpec:Int,heightMeasureSpec:Int) {
@@ -292,21 +295,26 @@ internal class NativeSheetContent(
         body?.let {it.layout(pad,topBody,pad+it.measuredWidth,topBody+it.measuredHeight)}
         actions?.let {it.layout(pad,topActions,pad+it.measuredWidth,topActions+it.measuredHeight)}
     }
-    private class Header(context:Context,val title:View,val close:View):ViewGroup(context) {
-        init {importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO;clipChildren=false;addView(title);addView(close)}
+    private class Header(context:Context,val title:View,val close:View?):ViewGroup(context) {
+        init {
+            importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO
+            clipChildren=false
+            addView(title)
+            close?.let { addView(it) }
+        }
         override fun onMeasure(widthMeasureSpec:Int,heightMeasureSpec:Int) {
             val width=MeasureSpec.getSize(widthMeasureSpec)
-            close.measure(sheetSurfaceAtMost(width),heightMeasureSpec)
-            title.measure(sheetSurfaceExact(max(0,width-close.measuredWidth)),heightMeasureSpec)
-            setMeasuredDimension(width,resolveSize(max(title.measuredHeight,close.measuredHeight),heightMeasureSpec))
+            close?.measure(sheetSurfaceAtMost(width),heightMeasureSpec)
+            title.measure(sheetSurfaceExact(max(0,width-(close?.measuredWidth ?: 0))),heightMeasureSpec)
+            setMeasuredDimension(width,resolveSize(max(title.measuredHeight,close?.measuredHeight ?: 0),heightMeasureSpec))
         }
         override fun onLayout(changed:Boolean,l:Int,t:Int,r:Int,b:Int) {
             val rtl=layoutDirection==LAYOUT_DIRECTION_RTL
-            val titleX=if(rtl)close.measuredWidth else 0
+            val titleX=if(rtl)close?.measuredWidth ?: 0 else 0
             val closeX=if(rtl)0 else title.measuredWidth
             fun place(view:View,x:Int) {val y=((height-view.measuredHeight)*.5f).roundToInt()
                 view.layout(x,y,x+view.measuredWidth,y+view.measuredHeight)}
-            place(title,titleX);place(close,closeX)
+            place(title,titleX);close?.let { place(it,closeX) }
         }
     }
 }
