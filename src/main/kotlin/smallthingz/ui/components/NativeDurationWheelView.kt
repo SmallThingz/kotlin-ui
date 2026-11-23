@@ -244,25 +244,38 @@ class NativeDurationWheelView(
     fun setMaximumDurationSeconds(seconds: Double) {
         val safe = seconds.takeIf { it.isFinite() }?.coerceAtLeast(0.0) ?: 0.0
         if (maximumDurationSecondsExact == safe) return
-        val current = currentDisplayParts()
         maximumDurationSecondsExact = safe
-        maximumWholeSeconds = rangeDurationWheelWholeLimitSeconds(safe)
-        maximumParts = splitRangeDurationWheelSeconds(maximumWholeSeconds)
-        rebuildTimeWheels(current.hours, current.minutes, current.seconds)
-        updateContentDescription()
-        invalidate()
+        val wholeLimit = rangeDurationWheelWholeLimitSeconds(safe)
+        val limitChanged = maximumWholeSeconds != wholeLimit
+        if (limitChanged) {
+            maximumWholeSeconds = wholeLimit
+            maximumParts = splitRangeDurationWheelSeconds(wholeLimit)
+        }
+        val gesturing = isGestureActive()
+        val selectedSeconds = currentTotalSeconds()
+        val displaySeconds = if (gesturing) selectedSeconds else {
+            rangeDurationWheelDisplaySeconds(currentDurationSecondsExact, safe)
+        }
+        // Fractions can change overflow rounding without changing the selectable integer values.
+        if (!limitChanged && displaySeconds == selectedSeconds) return
+        if (!gesturing) lastCommittedSeconds = displaySeconds
+        rebuildForDisplaySeconds(displaySeconds)
     }
 
     fun setDurationSeconds(seconds: Double) {
         val safe = seconds.takeIf { it.isFinite() }?.coerceAtLeast(0.0) ?: 0.0
         if (isGestureActive()) return
         if (currentDurationSecondsExact == safe) return
-        stopAnimation()
         currentDurationSecondsExact = safe
         val displaySeconds = rangeDurationWheelDisplaySeconds(safe, maximumDurationSecondsExact)
+        if (lastCommittedSeconds == displaySeconds) return
+        lastCommittedSeconds = displaySeconds
+        rebuildForDisplaySeconds(displaySeconds)
+    }
+
+    private fun rebuildForDisplaySeconds(displaySeconds: Int) {
         val parts = splitRangeDurationWheelSeconds(displaySeconds)
         rebuildTimeWheels(parts.hours, parts.minutes, parts.seconds)
-        lastCommittedSeconds = displaySeconds
         updateContentDescription()
         invalidate()
     }
