@@ -89,8 +89,9 @@ class ReverbTopBar(
              insets: NativeTopBarInsets = NativeTopBarInsets(0, 0, 0)) {
         slots.bindToolbar(theme.density.density, theme.palette, insets.top)
         slots.setActionInsets(insets.left, insets.right)
-        this.start.bind(theme, start)
-        this.end.bind(theme, end)
+        val product = center is ReverbTopBarCenterContent.Product
+        this.start.bind(theme, start, product)
+        this.end.bind(theme, end, product)
         mark.refreshResourcePalette()
         if (center == null) {
             if (centerView !== mark) {
@@ -123,6 +124,8 @@ class ReverbTopBar(
         }
         centerAction?.apply {
             setDescription(label)
+            filterTouchesWhenObscured = product
+            tooltipText = label.takeIf { product }
             bindToolbarContent(theme.density.density, theme.palette, callback)
         }
     }
@@ -134,7 +137,9 @@ internal class ReverbHeaderActionView(context: Context, theme: ReverbTheme, inpu
     private var icon: ReverbIcon? = null
     private var density = theme.density.density
 
-    fun bind(theme: ReverbTheme, content: ReverbTopBarActionContent?) {
+    fun bind(theme: ReverbTheme, content: ReverbTopBarActionContent?, product: Boolean = false) {
+        accessibilityAction.filterTouchesWhenObscured = product
+        accessibilityAction.tooltipText = content?.label?.takeIf { product }
         visibility = if (content != null) VISIBLE else GONE
         if (content == null) {
             cancelInput()

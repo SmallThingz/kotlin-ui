@@ -43,8 +43,8 @@ class ReverbSettingsTopBar(context: Context, initialTheme: ReverbTheme, inputRoo
         bar.setRemainingWindowInsets(insets)
         theme.bindParagraph(titleView, style.centeredTitleRole)
         titleView.setText(title)
-        navigation.bind(theme, undo?.withIcon(ReverbIcon.Undo) ?: back.withIcon(ReverbIcon.Back))
-        this.apply.bind(theme, apply.withIcon(ReverbIcon.Check))
+        navigation.bind(theme, undo?.withIcon(ReverbIcon.Undo) ?: back.withIcon(ReverbIcon.Back), product = true)
+        this.apply.bind(theme, apply.withIcon(ReverbIcon.Check), product = true)
         hint.bind(style, style.contentColor(palette), cue)
     }
 
