@@ -84,12 +84,42 @@ class NativeActionSheetHoverIntegrationTest {
 
     @Test fun headerCloseAndPressedBackdropRetainTheirDismissalPaths() {
         withSheet { fixture ->
-            main { tap(fixture.root, centerInRoot(fixture.root, fixture.surface.appContent.close.visual)) }
+            main { tap(fixture.root, centerInRoot(fixture.root, checkNotNull(fixture.surface.appContent.close).visual)) }
             assertTrue(fixture.dismissed.await(3, TimeUnit.SECONDS))
         }
         withSheet { fixture ->
             main { tap(fixture.root, backdropCenter(fixture)) }
             assertTrue(fixture.dismissed.await(3, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test fun optedInTitleCloseDeliversTheBoundOwnerAfterHiding() = withSheet { fixture ->
+        val settled = CountDownLatch(1)
+        main {
+            fixture.sheet.setAnimateCloseButton(true)
+            fixture.sheet.bind("Rename") {
+                assertTrue(fixture.surface.top >= fixture.root.sourceSemanticsHeight)
+                settled.countDown()
+            }
+            tap(fixture.root, centerInRoot(fixture.root, checkNotNull(fixture.surface.appContent.close).visual))
+            assertFalse(fixture.button.performClick())
+            fixture.button.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null)
+            assertEquals(1L, fixture.buttonActivated.count)
+        }
+        assertTrue(settled.await(3, TimeUnit.SECONDS))
+        assertEquals(1L, fixture.dismissed.count)
+    }
+
+    @Test fun busyOwnerInterruptsAnExplicitActionWithoutDeliveringIt() = withSheet { fixture ->
+        var completed = 0
+        var interrupted = 0
+        main {
+            fixture.sheet.setAnimateCloseButton(true)
+            fixture.sheet.setDismissalAdmission { false }
+            fixture.sheet.requestAnimatedDismiss({ completed++ }, { interrupted++ })
+            assertEquals(0, completed)
+            assertEquals(1, interrupted)
+            assertEquals(1L, fixture.dismissed.count)
         }
     }
 
@@ -104,13 +134,15 @@ class NativeActionSheetHoverIntegrationTest {
     }
 
     private data class Fixture(val sheet: NativeActionSheet, val root: SheetRoot, val surface: NativeSheetSurface,
-        val scrim: SheetScrim, val editor: Editor, val dismissed: CountDownLatch)
+        val scrim: SheetScrim, val editor: Editor, val dismissed: CountDownLatch,
+        val button: NativeMaterialButtonView, val buttonActivated: CountDownLatch)
 
     private fun withSheet(test: (Fixture) -> Unit) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         var sheet: NativeActionSheet? = null
+        var footer: NativeMaterialButtonView? = null
         try {
             lateinit var fixture: Fixture
             main {
@@ -128,16 +160,21 @@ class NativeActionSheetHoverIntegrationTest {
                     showSoftInputOnFocus = false
                     setText("Recording name")
                 }
-                dialog.setContent(editor, View(dialog.context), emptyList(), scrollable = true)
+                val buttonActivated = CountDownLatch(1)
+                val button = NativeMaterialButtonView(dialog.context, appearance.buttons.filled,
+                    Density(activity), createFontFamilyResolver(activity), onClick = buttonActivated::countDown)
+                footer = button
+                dialog.setContent(editor, button, emptyList(), scrollable = true)
                 val surface = dialog.contentView as NativeSheetSurface
                 val root = surface.parent as SheetRoot
-                fixture = Fixture(dialog, root, surface, root.getChildAt(0) as SheetScrim, editor, dismissed)
+                fixture = Fixture(dialog, root, surface, root.getChildAt(0) as SheetScrim, editor, dismissed,
+                    button, buttonActivated)
                 dialog.show()
             }
             awaitSettledLayout(fixture)
             test(fixture)
         } finally {
-            main { try { sheet?.dismiss() } finally { activity.finish() } }
+            main { try { sheet?.dismiss() } finally { try { footer?.close() } finally { activity.finish() } } }
         }
     }
 
