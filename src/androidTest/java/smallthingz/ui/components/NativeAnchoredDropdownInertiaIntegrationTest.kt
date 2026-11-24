@@ -8,6 +8,7 @@ import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -17,6 +18,8 @@ import org.junit.runner.RunWith
 import smallthingz.ui.common.DropdownSelectionPolicy
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
+import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 /** Attached production wheel, native velocity/physics and real frame callbacks. Events are
@@ -27,14 +30,14 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
     private fun main(action: () -> Unit) = instrumentation.runOnMainSync(action)
 
     private class Fixture(val activity: Activity, val root: FrameLayout, val anchor: View,
-        val owner: NativeAnchoredDropdown) {
+        val owner: NativeAnchoredDropdown, val optionCount: Int) {
         lateinit var wheel: ViewGroup
         val selections = ArrayList<Int>()
         var onSelection: (() -> Unit)? = null
     }
 
     private fun scenario(policy: DropdownSelectionPolicy = DropdownSelectionPolicy.PROGRESSIVE,
-        collapseMillis: Long = 0, action: (Fixture) -> Unit) {
+        collapseMillis: Long = 0, optionCount: Int = 40, action: (Fixture) -> Unit) {
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         var fixture: Fixture? = null
@@ -50,12 +53,13 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
                 val owner = NativeAnchoredDropdown(activity, root, appearance,
                     appearance.resolveColorScheme(activity, false), Density(scale), createFontFamilyResolver(activity),
                     appearance.anchoredDropdown.copy(expandMillis = 0, settleMillis = 0, collapseMillis = collapseMillis))
-                fixture = Fixture(activity, root, anchor, owner)
+                fixture = Fixture(activity, root, anchor, owner, optionCount)
             }
             val f = checkNotNull(fixture)
             await("Fixture window not ready") { f.anchor.isAttachedToWindow && f.anchor.height > 0 && activity.hasWindowFocus() }
             main {
-                assertTrue(f.owner.open(f.anchor, NativeDropdownContent("Kinetic options", 20, (0..39).toList()) { "Choice $it" },
+                assertTrue(f.owner.open(f.anchor, NativeDropdownContent("Kinetic options", optionCount / 2,
+                    (0 until optionCount).toList()) { "Choice $it" },
                     policy, {}, { f.selections += it; f.onSelection?.invoke() }))
                 f.wheel = (f.root.getChildAt(1) as ViewGroup).getChildAt(1) as ViewGroup
             }
@@ -68,8 +72,11 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
     @Test fun explicitFlingAndStopTouchDoNotCommitButNextTapCommitsPaintedRow() =
         scenario(DropdownSelectionPolicy.EXPLICIT) { f ->
             var released = 0f
-            main { swipe(f); released = position(f); assertTrue(flinging(f)); assertTrue(f.selections.isEmpty()) }
-            await("Explicit wheel did not coast") { position(f) > released + .2f }
+            main {
+                swipe(f); released = position(f); assertTrue(flinging(f)); assertTrue(f.selections.isEmpty())
+                assertMountedViewport(f)
+            }
+            await("Explicit wheel did not coast") { assertMountedViewport(f); position(f) > released + .2f }
             main {
                 assertTrue(f.selections.isEmpty())
                 val now = SystemClock.uptimeMillis()
@@ -80,12 +87,69 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
                 assertFalse(field(session(f), "closing") as Boolean)
                 assertEquals((field(session(f), "settled") as Int).toFloat(), position(f), 0f)
                 // Tap the painted row now occupying the fixed selected slot.
-                val row = f.wheel.getChildAt(position(f).roundToInt()) as NativeDropdown<*>
+                assertMountedViewport(f)
+                val row = paintedSlotRow(f)
                 val expected = checkNotNull(row.optionAccessibilityLabel).toString().removePrefix("Choice ").toInt()
                 touch(f, MotionEvent.ACTION_DOWN, now + 20, now + 20, slotY(f))
                 touch(f, MotionEvent.ACTION_UP, now + 20, now + 30, slotY(f))
                 assertEquals(listOf(expected), f.selections)
                 assertFalse(flinging(f))
+            }
+        }
+
+    @Test fun evictedRowActionCannotCommitAfterItsLogicalSlotIsRemounted() =
+        scenario(DropdownSelectionPolicy.EXPLICIT, optionCount = 200) { f ->
+            main {
+                val initiallySelected = paintedSlotRow(f)
+                val initialLabel = checkNotNull(initiallySelected.optionAccessibilityLabel).toString()
+                assertTrue(initiallySelected.isSelected)
+                // A duplicate choice intentionally does not publish. Browse to a different
+                // uncommitted choice so the final live action must deliver one new selection.
+                assertTrue(f.wheel.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, null))
+                val originalPosition = position(f)
+                val retired = paintedSlotRow(f)
+                val candidateLabel = checkNotNull(retired.optionAccessibilityLabel).toString()
+                assertNotEquals("Positive control must choose a different option", initialLabel, candidateLabel)
+                assertTrue("Browsing retains the original selection", initiallySelected.isSelected)
+                assertFalse("Browsing does not select the candidate", retired.isSelected)
+                assertTrue("Explicit browsing does not publish", f.selections.isEmpty())
+                val expected = candidateLabel.removePrefix("Choice ").toInt()
+                // Keep the actual production action, as well as the View, across eviction.
+                @Suppress("UNCHECKED_CAST")
+                val retainedAction = field(retired, "open") as (View, NativeDropdownContent<*>) -> Unit
+                val retainedContent = field(retired, "content") as NativeDropdownContent<*>
+                fun jumpTo(target: Float) {
+                    val now = SystemClock.uptimeMillis()
+                    val y = slotY(f)
+                    val end = y - (target - position(f)) * f.anchor.height
+                    touch(f, MotionEvent.ACTION_DOWN, now - 32, now - 32, y)
+                    touch(f, MotionEvent.ACTION_MOVE, now - 32, now - 16, end)
+                    touch(f, MotionEvent.ACTION_CANCEL, now - 32, now, end)
+                    assertEquals(target, position(f), 0f)
+                    assertFalse(flinging(f))
+                    assertMountedViewport(f)
+                }
+                fun assertRetiredActionRejected() {
+                    assertFalse(retired.performClick())
+                    retainedAction(retired, retainedContent)
+                    assertTrue(f.selections.isEmpty())
+                    assertFalse(field(session(f), "closing") as Boolean)
+                    assertFalse(field(session(f), "disposed") as Boolean)
+                }
+                jumpTo((f.optionCount - 1).toFloat())
+                assertFalse("Old slot row was actually evicted", retired.isAttachedToWindow)
+                assertRetiredActionRejected()
+                jumpTo(originalPosition)
+                val replacement = paintedSlotRow(f)
+                assertNotSame("Returning creates a new owner for the same logical slot", retired, replacement)
+                assertFalse("Uncommitted candidate stays unselected after remount", replacement.isSelected)
+                val selected = (0 until f.wheel.childCount).map(f.wheel::getChildAt)
+                    .filterIsInstance<NativeDropdown<*>>().single { it.isSelected }
+                assertEquals("Original selection survives eviction", initialLabel,
+                    selected.optionAccessibilityLabel?.toString())
+                assertRetiredActionRejected()
+                assertTrue(replacement.performClick())
+                assertEquals(listOf(expected), f.selections)
             }
         }
 
@@ -200,6 +264,44 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
         val event = MotionEvent.obtain(down, time, action, 1, arrayOf(properties), arrayOf(coordinates),
             0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
         try { assertTrue(f.wheel.dispatchTouchEvent(event)) } finally { event.recycle() }
+    }
+
+    private fun paintedSlotRow(f: Fixture): NativeDropdown<*> =
+        (0 until f.wheel.childCount).map(f.wheel::getChildAt).filterIsInstance<NativeDropdown<*>>().single {
+            it.height == f.anchor.height && abs(it.translationY - (field(session(f), "anchorY") as Int)) < .5f
+        }
+
+    /** Observe real child geometry during motion; do not repeat firstMounted/lastMounted. */
+    private fun assertMountedViewport(f: Fixture) {
+        val owner = session(f)
+        val anchor = field(owner, "anchorY") as Int
+        val top = field(owner, "safeTop") as Int
+        val bottom = field(owner, "safeBottom") as Int
+        val height = f.anchor.height
+        assertEquals(f.optionCount - 1, field(owner, "lastPosition"))
+        val above = ceil((anchor - top).toDouble() / height).toInt()
+        val below = ceil((bottom - anchor - height).toDouble() / height).toInt()
+        assertTrue("Mounted rows remain bounded during motion",
+            f.wheel.childCount in 1..minOf(f.optionCount, above + below + 4))
+        val position = position(f)
+        val indices = (0 until f.wheel.childCount).map { slot ->
+            val logical = position + (f.wheel.getChildAt(slot).translationY - anchor) / height
+            val index = logical.roundToInt()
+            assertEquals(index.toFloat(), logical, .01f)
+            assertTrue(index in 0 until f.optionCount)
+            index
+        }
+        assertEquals(indices.size, indices.toSet().size)
+        assertEquals(indices.sorted(), indices)
+        for (index in 0 until f.optionCount) {
+            val y = anchor + (index - position) * height
+            if (y < bottom && y + height > top) {
+                assertTrue("Visible logical row $index survives motion", index in indices)
+                val row = f.wheel.getChildAt(indices.indexOf(index))
+                assertEquals(height, row.height)
+                assertEquals(f.wheel.width, row.width)
+            }
+        }
     }
 
     private fun field(owner: Any, name: String): Any? = owner.javaClass.getDeclaredField(name)

@@ -22,6 +22,8 @@ import smallthingz.ui.components.NativeDropdown
 import smallthingz.ui.components.NativeMaterialButtonView
 import smallthingz.ui.components.NativeUiAppearance
 import smallthingz.ui.text.view.ParagraphView
+import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 /** Real-window coverage; root owns execution, including normal navigation and immersive modes. */
 @RunWith(AndroidJUnit4::class)
@@ -94,8 +96,8 @@ class DropdownViewportTest {
                     } else {
                         assertEquals(expectedTop + .5f, origin[1] + rectangle.top, .6f)
                         assertEquals(expectedBottom - .5f, origin[1] + rectangle.bottom, .6f)
-                        assertEquals(40, wheel.childCount)
                     }
+                    assertMountedViewport(wheel, if (short) 3 else 40)
                     for (i in 0 until wheel.childCount) {
                         val row = wheel.getChildAt(i)
                         val top = row.translationY
@@ -122,6 +124,7 @@ class DropdownViewportTest {
                 }
                 instrumentation.runOnMainSync {
                     val wheel = checkNotNull(pane(activity)).getChildAt(1)
+                    assertMountedViewport(wheel as ViewGroup, 40)
                     assertEquals(false to true, overflow(wheel))
                     assertFalse(wheel.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD, null))
                     repeat(40) { wheel.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, null) }
@@ -131,6 +134,7 @@ class DropdownViewportTest {
                 }
                 instrumentation.runOnMainSync {
                     val wheel = checkNotNull(pane(activity)).getChildAt(1)
+                    assertMountedViewport(wheel as ViewGroup, 40)
                     assertEquals(true to false, overflow(wheel))
                     assertFalse(wheel.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, null))
                 }
@@ -158,6 +162,42 @@ class DropdownViewportTest {
         session.javaClass.getDeclaredField("position").apply { isAccessible = true }.getFloat(session)
     }
 
+    /** Check actual mounted children against pixel coverage, independently of the mount planner. */
+    private fun assertMountedViewport(wheel: ViewGroup, expectedCount: Int) {
+        val owner = session(wheel)
+        fun integer(name: String) = owner.javaClass.getDeclaredField(name).apply { isAccessible = true }.getInt(owner)
+        assertEquals("Logical choices survive sparse mounting", expectedCount, integer("lastPosition") + 1)
+        val height = integer("rowHeight")
+        val anchor = integer("anchorY")
+        val top = integer("safeTop")
+        val bottom = integer("safeBottom")
+        val above = ceil((anchor - top).toDouble() / height).toInt()
+        val below = ceil((bottom - anchor - height).toDouble() / height).toInt()
+        // Selected slot, one overscan on each side, and a possible fractional edge row.
+        assertTrue("Mounted rows stay within viewport plus overscan",
+            wheel.childCount in 1..minOf(expectedCount, above + below + 4))
+        val position = position(wheel)
+        val indices = (0 until wheel.childCount).map { slot ->
+            val row = wheel.getChildAt(slot)
+            val logical = position + (row.translationY - anchor) / height
+            val index = logical.roundToInt()
+            assertEquals("Row translation retains its logical slot", index.toFloat(), logical, .01f)
+            assertTrue(index in 0 until expectedCount)
+            index
+        }
+        assertEquals("Mounted logical rows are unique", indices.size, indices.toSet().size)
+        assertEquals("Mounted children retain logical traversal order", indices.sorted(), indices)
+        for (index in 0 until expectedCount) {
+            val y = anchor + (index - position) * height
+            if (y < bottom && y + height > top) {
+                assertTrue("Visible logical row $index is mounted", index in indices)
+                val row = wheel.getChildAt(indices.indexOf(index))
+                assertEquals(height, row.height)
+                assertEquals(wheel.width, row.width)
+            }
+        }
+    }
+
     /** Read the same live clipping predicates that gate the production fade/chevron draw calls. */
     private fun overflow(wheel: View): Pair<Boolean, Boolean> {
         val session = session(wheel)
@@ -166,7 +206,8 @@ class DropdownViewportTest {
         val above = viewport.javaClass.getDeclaredMethod("overflowsAbove", Float::class.javaPrimitiveType)
             .apply { isAccessible = true }.invoke(viewport, position) as Boolean
         val below = viewport.javaClass.getDeclaredMethod("overflowsBelow", Float::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-            .apply { isAccessible = true }.invoke(viewport, position, (wheel as ViewGroup).childCount - 1) as Boolean
+            .apply { isAccessible = true }.invoke(viewport, position,
+                session.javaClass.getDeclaredField("lastPosition").apply { isAccessible = true }.getInt(session)) as Boolean
         return above to below
     }
 

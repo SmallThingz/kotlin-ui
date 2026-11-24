@@ -13,6 +13,7 @@ import android.graphics.RectF
 import android.graphics.Region
 import android.graphics.Shader
 import android.os.Build
+import android.util.SparseArray
 import android.view.FocusFinder
 import android.view.Gravity
 import android.view.KeyEvent
@@ -180,7 +181,10 @@ class NativeAnchoredDropdown(
         val overlay = NativeModalOverlay(overlayHost, root, ::cancelSelection)
         val scrim = View(context).apply { setBackgroundColor(colors.scrim); alpha = 0f; setOnClickListener { cancelSelection() } }
         val wheel = Wheel()
-        val rows = ArrayList<NativeDropdown<T>>()
+        val rows = SparseArray<NativeDropdown<T>>()
+        private val optionLabels = ArrayList<String>(content.options.size)
+        val lastPosition = content.options.lastIndex
+        var selectedPosition = -1
         val radii = nearestGroup()?.descendantCornerRadii(anchor) ?: FloatArray(4) { style.cornerRadiusDp * density.density }
         var plan: NativeAnchoredDropdownPlan? = null
         var position = 0f
@@ -234,6 +238,13 @@ class NativeAnchoredDropdown(
         }
 
         fun show() {
+            // A public caller's formatter may depend on mutable state or throw. Capture its
+            // labels during open so scrolling cannot run caller code or change the open list.
+            for (option in content.options) {
+                if (disposed) return
+                optionLabels.add(content.optionLabel(option))
+            }
+            if (disposed) return
             root.layoutDirection = anchor.layoutDirection
             root.filterTouchesWhenObscured = anchor.filterTouchesWhenObscured
             root.isFocusableInTouchMode = true
@@ -261,21 +272,9 @@ class NativeAnchoredDropdown(
             // An unavailable stored value has no wheel row. Browse from the first real option.
             val layout = NativeAnchoredDropdownPlan(content.options.size, initial.coerceAtLeast(0), up, down)
             plan = layout; settled = layout.selectedPosition; position = settled.toFloat()
+            if (initial >= 0) selectedPosition = settled
             wheel.layoutParams = FrameLayout.LayoutParams(rowWidth, root.height).apply {
                 gravity = Gravity.TOP or Gravity.LEFT; leftMargin = x
-            }
-            repeat(layout.count) { i ->
-                val option = content.options[layout.optionAt(i)]
-                val row = face(content.copy(selected = option), optionRow = true,
-                    wrapValue = selectionPolicy == DropdownSelectionPolicy.EXPLICIT) { source, _ ->
-                    if (selectionPolicy == DropdownSelectionPolicy.PROGRESSIVE ||
-                        source.importantForAccessibility == View.IMPORTANT_FOR_ACCESSIBILITY_YES) collapse(i)
-                }
-                row.optionAccessibilityLabel = content.optionLabel(option)
-                row.isSelected = initial >= 0 && i == settled
-                repeat(row.childCount) { child -> row.getChildAt(child).importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS }
-                rows += row
-                wheel.addView(row, FrameLayout.LayoutParams(-1, rowHeight))
             }
             overlay.relayout()
             if (disposed) return
@@ -301,10 +300,29 @@ class NativeAnchoredDropdown(
             safeBottom = nativeDropdownLocalEdge(bottom, modalY, root.height)
         }
 
+        fun createRow(index: Int): NativeDropdown<T> {
+            val optionIndex = checkNotNull(plan).optionAt(index)
+            val option = content.options[optionIndex]
+            val label = optionLabels[optionIndex]
+            return face(content.copy(selected = option, optionLabel = { label }), optionRow = true,
+                wrapValue = selectionPolicy == DropdownSelectionPolicy.EXPLICIT) { source, _ ->
+                if (!disposed && rows[index] === source && (selectionPolicy == DropdownSelectionPolicy.PROGRESSIVE ||
+                        source.importantForAccessibility == View.IMPORTANT_FOR_ACCESSIBILITY_YES)) collapse(index)
+            }.apply {
+                optionAccessibilityLabel = label
+                isSelected = index == selectedPosition
+                repeat(childCount) { getChildAt(it).importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS }
+            }
+        }
+
         fun publish(index: Int, activated: Boolean = false) {
             if (selectionPolicy == DropdownSelectionPolicy.EXPLICIT && !activated) return
             val option = plan?.optionAt(index) ?: return
-            rows.forEachIndexed { i, row -> row.isSelected = i == index }
+            if (selectedPosition != index) {
+                rows[selectedPosition]?.isSelected = false
+                selectedPosition = index
+                rows[index]?.isSelected = true
+            }
             if (option == lastPublished) return
             lastPublished = option
             try {
@@ -316,13 +334,13 @@ class NativeAnchoredDropdown(
         }
 
         fun settle(index: Int) {
-            if (closing || disposed || plan == null || rows.isEmpty()) return
+            if (closing || disposed || plan == null) return
             wheel.stopFling()
-            val target = index.coerceIn(0, rows.lastIndex)
+            val target = index.coerceIn(0, lastPosition)
             settled = target
             animate(target.toFloat(), 1f, style.settleMillis) {
                 publish(target)
-                if (!disposed) rows[target].announceForAccessibility(content.optionLabel(content.options[checkNotNull(plan).optionAt(target)]))
+                if (!disposed) rows[target]?.announceForAccessibility(optionLabels[checkNotNull(plan).optionAt(target)])
             }
         }
 
@@ -338,7 +356,7 @@ class NativeAnchoredDropdown(
             if (closing) { if (reveal == 0f) dispose(); return }
             if (plan == null) { dispose(); return }
             closing = true
-            val target = index.coerceIn(0, rows.lastIndex)
+            val target = index.coerceIn(0, lastPosition)
             settled = target
             publish(target, activated)
             if (disposed) return
@@ -391,7 +409,7 @@ class NativeAnchoredDropdown(
                 if (anchor.viewTreeObserver.isAlive) anchor.viewTreeObserver.removeOnPreDrawListener(geometryGuard)
             }
             failure = closePreservingPrimaryFailure(failure) { anchor.removeOnAttachStateChangeListener(anchorDetach) }
-            for (row in rows) failure = closePreservingPrimaryFailure(failure, row::close)
+            for (i in 0 until rows.size()) failure = closePreservingPrimaryFailure(failure, rows.valueAt(i)::close)
             rows.clear()
             failure = closePreservingPrimaryFailure(failure, overlay::close)
             failure = closePreservingPrimaryFailure(failure, onTerminal)
@@ -428,7 +446,9 @@ class NativeAnchoredDropdown(
             private var motionGeneration = 0
             private val flingFrame = Runnable { advanceFling() }
             private val revealTop get() = viewport?.revealTop(position, reveal) ?: anchorY.toFloat()
-            private val revealBottom get() = viewport?.revealBottom(position, rows.lastIndex, reveal) ?: (anchorY + rowHeight).toFloat()
+            private val revealBottom get() = viewport?.revealBottom(position, lastPosition, reveal) ?: (anchorY + rowHeight).toFloat()
+            private var firstMounted = -1
+            private var lastMounted = -1
             init { setWillNotDraw(false); clipChildren = false; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES }
 
             fun stopFling() {
@@ -459,7 +479,7 @@ class NativeAnchoredDropdown(
                 if (disposed || closing) return
                 stopFling()
                 if (!velocity.isFinite() || abs(velocity) < minimumFlingVelocity ||
-                    velocity <= 0f && position <= 0f || velocity >= 0f && position >= rows.lastIndex) {
+                    velocity <= 0f && position <= 0f || velocity >= 0f && position >= lastPosition) {
                     settle(settled)
                     return
                 }
@@ -467,7 +487,7 @@ class NativeAnchoredDropdown(
                 // accumulation or overshoot: the finite list and its existing end cues stay authoritative.
                 // stopFling() forces finished before reuse, so the public constructor's flywheel cannot accumulate.
                 val motion = scroller ?: OverScroller(context).also { scroller = it }
-                val maximum = (rows.lastIndex.toLong() * rowHeight).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                val maximum = (lastPosition.toLong() * rowHeight).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
                 motion.fling(0, (position * rowHeight).roundToInt().coerceIn(0, maximum),
                     0, velocity.coerceIn(-maximumFlingVelocity.toFloat(), maximumFlingVelocity.toFloat()).roundToInt(),
                     0, 0, 0, maximum)
@@ -481,7 +501,7 @@ class NativeAnchoredDropdown(
                 val generation = motionGeneration
                 if (motion.computeScrollOffset()) {
                     val previous = settled
-                    position = (motion.currY.toFloat() / rowHeight).coerceIn(0f, rows.lastIndex.toFloat())
+                    position = (motion.currY.toFloat() / rowHeight).coerceIn(0f, lastPosition.toFloat())
                     settled = position.roundToInt()
                     updatePositions()
                     if (settled != previous) publish(settled)
@@ -517,10 +537,13 @@ class NativeAnchoredDropdown(
                 super.onCancelPendingInputEvents()
             }
             fun updatePositions() {
-                if (plan == null) return
+                val layout = plan ?: return
+                updateMountedRows(layout.firstMounted(position), layout.lastMounted(position))
                 val top = revealTop
                 val bottom = revealBottom
-                rows.forEachIndexed { i, row ->
+                for (slot in 0 until rows.size()) {
+                    val i = rows.keyAt(slot)
+                    val row = rows.valueAt(slot)
                     val y = anchorY + (i - position) * rowHeight
                     if (width == rowWidth && y < bottom && y + rowHeight > top) prepareRow(row)
                     row.translationY = y
@@ -531,15 +554,35 @@ class NativeAnchoredDropdown(
                 }
                 invalidate()
             }
+            private fun updateMountedRows(first: Int, last: Int) {
+                if (first == firstMounted && last == lastMounted) return
+                for (slot in rows.size() - 1 downTo 0) {
+                    if (rows.keyAt(slot) in first..last) continue
+                    val row = rows.valueAt(slot)
+                    rows.removeAt(slot)
+                    row.close()
+                    removeViewInLayout(row)
+                }
+                for (i in first..last) {
+                    if (rows[i] != null) continue
+                    val row = createRow(i)
+                    rows.put(i, row)
+                    // The wheel owns exact row geometry. Avoid requesting another traversal
+                    // from onLayout or from a drag frame, and retain logical traversal order.
+                    addViewInLayout(row, rows.indexOfKey(i), LayoutParams(-1, rowHeight), true)
+                }
+                firstMounted = first
+                lastMounted = last
+            }
             override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
                 super.onInitializeAccessibilityNodeInfo(info)
                 info.className = "android.widget.NumberPicker"
-                info.isScrollable = !closing && !disposed && rows.size > 1
-                if (!closing && !disposed && settled < rows.lastIndex) info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)
+                info.isScrollable = !closing && !disposed && lastPosition > 0
+                if (!closing && !disposed && settled < lastPosition) info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)
                 if (!closing && !disposed && settled > 0) info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD)
             }
             override fun performAccessibilityAction(action: Int, args: android.os.Bundle?): Boolean = when (action) {
-                AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> if (!closing && !disposed && settled < rows.lastIndex) { settle(settled + 1); true } else false
+                AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> if (!closing && !disposed && settled < lastPosition) { settle(settled + 1); true } else false
                 AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> if (!closing && !disposed && settled > 0) { settle(settled - 1); true } else false
                 else -> super.performAccessibilityAction(action, args)
             }
@@ -563,7 +606,7 @@ class NativeAnchoredDropdown(
                 rectangle.set(.5f, revealTop + .5f, width - .5f, revealBottom - .5f)
                 for (corner in 0..3) {
                     val geometry = checkNotNull(viewport)
-                    val rowsFromSlot = if (corner < 2) minOf(position, geometry.rowsAbove) else minOf(rows.lastIndex - position, geometry.rowsBelow)
+                    val rowsFromSlot = if (corner < 2) minOf(position, geometry.rowsAbove) else minOf(lastPosition - position, geometry.rowsBelow)
                     val fraction = rowsFromSlot.coerceIn(0f, 1f)
                     val blend = fraction * fraction * (3f - 2f * fraction) * reveal
                     val radius = radii[corner] + (style.cornerRadiusDp * density.density - radii[corner]) * blend
@@ -596,7 +639,7 @@ class NativeAnchoredDropdown(
                 val geometry = viewport ?: return
                 if (reveal <= 0f) return
                 if (geometry.overflowsAbove(position)) drawCue(canvas, revealTop, upward = true)
-                if (geometry.overflowsBelow(position, rows.lastIndex)) drawCue(canvas, revealBottom, upward = false)
+                if (geometry.overflowsBelow(position, lastPosition)) drawCue(canvas, revealBottom, upward = false)
             }
 
             private fun drawCue(canvas: Canvas, edge: Float, upward: Boolean) {
@@ -628,7 +671,7 @@ class NativeAnchoredDropdown(
             }
             override fun onInterceptTouchEvent(event: MotionEvent): Boolean = true
             private fun rowAt(y: Float): Int =
-                (position + (y - anchorY) / rowHeight - .5f).roundToInt().coerceIn(0, rows.lastIndex)
+                (position + (y - anchorY) / rowHeight - .5f).roundToInt().coerceIn(0, lastPosition)
 
             private fun trackExplicitTap(event: MotionEvent, index: Int) {
                 if (!explicitTap) return
@@ -680,7 +723,7 @@ class NativeAnchoredDropdown(
                             animate(position, 1f, style.expandMillis, move = false) {}
                         }
                         if (dragging) {
-                            position = (gesturePosition + delta / rowHeight).coerceIn(0f, rows.lastIndex.toFloat())
+                            position = (gesturePosition + delta / rowHeight).coerceIn(0f, lastPosition.toFloat())
                             settled = position.roundToInt()
                             updatePositions()
                             publish(settled)
@@ -710,7 +753,7 @@ class NativeAnchoredDropdown(
                                 animate(position, 1f, style.expandMillis, move = false) {}
                             }
                             closing = false
-                            position = (gesturePosition + delta / rowHeight).coerceIn(0f, rows.lastIndex.toFloat())
+                            position = (gesturePosition + delta / rowHeight).coerceIn(0f, lastPosition.toFloat())
                             settled = position.roundToInt()
                             dragging = false
                             val generation = motionGeneration
@@ -734,7 +777,7 @@ class NativeAnchoredDropdown(
                                 animate(settled.toFloat(), 1f, style.expandMillis) {}
                             } else if (selectionPolicy == DropdownSelectionPolicy.PROGRESSIVE ||
                                 explicitTap && rowAt(y) == downRow) {
-                                val row = rows[downRow]
+                                val row = rows[downRow] ?: return true
                                 val rowY = y - row.translationY
                                 if (rowY >= 0f && rowY < rowHeight) {
                                     row.showTapIndication(x, rowY)

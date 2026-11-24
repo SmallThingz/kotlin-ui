@@ -31,6 +31,24 @@ class NativeAnchoredDropdownPlanTest {
     }
 
     @Test
+    fun mountedRowsCoverFractionalDragsWithinTheViewportBudget() {
+        val plan = NativeAnchoredDropdownPlan(10_000, 7_500, 2, 3)
+        for (position in listOf(0f, .25f, 13.5f, 7_500f, 9_998.75f, 9_999f)) {
+            val first = plan.firstMounted(position)
+            val last = plan.lastMounted(position)
+            assertTrue(first >= 0 && last < plan.count)
+            assertTrue(last - first + 1 <= 2 + 1 + 3 + 2 + 1)
+            for (row in 0 until plan.count) {
+                // A row overlaps [position - 2, position + 1 + 3) by any positive amount.
+                if (row + 1 > position - 2 && row < position + 4) assertTrue(row in first..last)
+            }
+        }
+        val oneSlot = NativeAnchoredDropdownPlan(4, 2, 0, 0)
+        assertEquals(1, oneSlot.firstMounted(2f))
+        assertEquals(3, oneSlot.lastMounted(2f))
+    }
+
+    @Test
     fun everyOptionAppearsExactlyOnceAndSelectionKeepsItsAnchor() {
         for (count in 1..20) for (selected in 0 until count) {
             for (spaceAbove in 0..12) for (spaceBelow in 0..12) {

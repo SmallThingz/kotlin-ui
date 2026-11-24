@@ -4,8 +4,8 @@ package smallthingz.ui.components
 internal class NativeAnchoredDropdownPlan(
     val count: Int,
     val selected: Int,
-    spaceAbove: Int,
-    spaceBelow: Int,
+    private val spaceAbove: Int,
+    private val spaceBelow: Int,
 ) {
     val above: Int
     val below: Int
@@ -37,4 +37,11 @@ internal class NativeAnchoredDropdownPlan(
         val unwrappedRows = count - firstOptionIndex
         return if (position < unwrappedRows) firstOptionIndex + position else position - unwrappedRows
     }
+
+    // Keep one neighboring option beyond the fully expanded viewport in each direction.
+    // Fractional movement can expose part of a row at both edges.
+    fun firstMounted(position: Float): Int = (position.toInt() - spaceAbove - 1).coerceAtLeast(0)
+
+    fun lastMounted(position: Float): Int =
+        (kotlin.math.ceil(position).toLong() + spaceBelow + 1).coerceAtMost(count - 1L).toInt()
 }

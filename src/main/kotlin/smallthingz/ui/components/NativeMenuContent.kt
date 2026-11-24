@@ -195,6 +195,7 @@ internal class NativeMenuRowView<I>(
     }, sink)
     private var selected = false
     private var leading = false
+    private var actionCheck: NativeMenuCheckState? = null
     private var action: (() -> Unit)? = null
     private var closed = false
 
@@ -221,8 +222,9 @@ internal class NativeMenuRowView<I>(
 
     fun bind(label: String, selected: Boolean, palette: NativeMenuColors, action: () -> Unit) {
         this.action = action
-        val selectionChanged = this.selected != selected
+        val selectionChanged = this.selected != selected || actionCheck != null
         this.selected = selected
+        actionCheck = null
         leading = false
         isEnabled = true
         input.bind(NativeClickBinding(this, true, { performClick() }))
@@ -237,14 +239,16 @@ internal class NativeMenuRowView<I>(
 
     fun bindAction(value: NativeMenuAction<I>, palette: NativeMenuColors) {
         action = value.onClick
-        val selectionChanged = selected
-        selected = false
-        leading = true
+        val checkState = (icons as? NativeCheckableMenuIcons<I>)?.checkState(value.icon)
+        val selectionChanged = actionCheck != checkState || selected != (checkState?.checked == true)
+        actionCheck = checkState
+        selected = checkState?.checked == true
+        leading = checkState == null
         isEnabled = value.enabled
         text.setText(value.label)
         text.animateTextColor(value.textColor)
-        icons.bind(check, value.icon, value.iconColor)
-        check.visibility = VISIBLE
+        icons.bind(check, if (selected) icons.check else value.icon, value.iconColor)
+        check.visibility = if (actionCheck != null && !selected) INVISIBLE else VISIBLE
         indication.updateColor(palette.ink)
         input.bind(NativeClickBinding(this, value.enabled, { performClick() }))
         requestLayout()
@@ -253,14 +257,14 @@ internal class NativeMenuRowView<I>(
 
     fun maxIntrinsicWidth(): Int =
         (text.maxIntrinsicTextWidth() + 2 * (if (leading) dp(12f) else horizontal) +
-            if (leading || selected) dp(24f) + dp(12f) else 0)
+            if (leading || selected || actionCheck != null) dp(24f) + dp(12f) else 0)
             .coerceIn(dp(112f), dp(280f))
 
     override fun onMeasure(w: Int, h: Int) {
         val width = MeasureSpec.getSize(w)
         val inset = if (leading) dp(12f) else horizontal
         val inner = (width - 2 * inset).coerceAtLeast(0)
-        val hasIcon = leading || selected
+        val hasIcon = leading || selected || actionCheck != null
         val iconWidth = if (hasIcon) min(dp(24f), inner) else 0
         val gap = if (hasIcon) min(dp(12f), (inner - iconWidth).coerceAtLeast(0)) else 0
         if (hasIcon) check.measure(exact(iconWidth), exact(dp(24f)))
@@ -277,7 +281,7 @@ internal class NativeMenuRowView<I>(
         val textX = if (rtl) width - textStart - text.measuredWidth else textStart
         val textY = ((height-text.measuredHeight)/2f).roundToInt()
         text.layout(textX,textY,textX+text.measuredWidth,textY+text.measuredHeight)
-        if (leading || selected) {
+        if (leading || selected || actionCheck != null) {
             val logicalStart = if (leading) inset else width-inset-check.measuredWidth
             val x = if (rtl) width-logicalStart-check.measuredWidth else logicalStart
             val y = ((height-check.measuredHeight)/2f).roundToInt()
@@ -328,11 +332,20 @@ internal class NativeMenuRowView<I>(
     override fun onDetachedFromWindow() { input.detached(); super.onDetachedFromWindow() }
     override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
         super.onInitializeAccessibilityNodeInfo(info)
-        info.className = View::class.java.name
-        info.isSelected = selected
+        val state = actionCheck
+        info.className = when {
+            state == null -> View::class.java.name
+            state.exclusive -> android.widget.RadioButton::class.java.name
+            else -> android.widget.CheckBox::class.java.name
+        }
+        info.isSelected = state == null && selected
+        if (state != null) {
+            info.isCheckable = true
+            info.isChecked = state.checked
+        }
     }
     private fun publishSelectionChange() {
-        sendAccessibilityEvent(if (selected) AccessibilityEvent.TYPE_VIEW_SELECTED
+        sendAccessibilityEvent(if (actionCheck == null && selected) AccessibilityEvent.TYPE_VIEW_SELECTED
             else AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED)
     }
     override fun close() { closed=true; action=null; input.bind(null); input.cancel() }

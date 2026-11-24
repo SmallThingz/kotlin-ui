@@ -16,6 +16,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.input.phase.NativeClickPhaseHost
+import smallthingz.ui.input.phase.NativePointerLayerShape
 import smallthingz.ui.reverb.*
 import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.util.closePreservingPrimaryFailure
@@ -47,11 +48,19 @@ class ReverbIncidentPointerOriginIntegrationTest {
             body.scaleX = 1f; body.translationX = 0f; body.translationY = 0f
             val check = f.checkbox
             val checkOffset = f.layoutOffset(check)
-            f.phase(check, MotionEvent.ACTION_DOWN, 14f, 12f)
-            f.phase(check, MotionEvent.ACTION_MOVE, 16f, 13f, deep = true)
-            f.phase(check, MotionEvent.ACTION_UP, 16f, 13f)
-            assertEquals(NativeMenuOrigin(checkOffset.first + 14f, checkOffset.second + 12f), f.shown.last().origin)
-            assertEquals(3, f.shown.size)
+            // Raw corner pixels can be outside this density-scaled rounded target.
+            val downX = check.width / 2f
+            val downY = check.height / 2f
+            val moveX = downX + check.width / 16f
+            val moveY = downY + check.height / 16f
+            val shape = check as NativePointerLayerShape
+            assertTrue("Measured checkbox DOWN is inside its shape", shape.containsPointerLayer(downX, downY))
+            assertTrue("Distinct checkbox MOVE stays inside its shape", shape.containsPointerLayer(moveX, moveY))
+            assertTrue("Checkbox controller admits DOWN", f.phase(check, MotionEvent.ACTION_DOWN, downX, downY))
+            f.phase(check, MotionEvent.ACTION_MOVE, moveX, moveY, deep = true)
+            f.phase(check, MotionEvent.ACTION_UP, moveX, moveY)
+            assertEquals("Checkbox emitted a new request", 3, f.shown.size)
+            assertEquals(NativeMenuOrigin(checkOffset.first + downX, checkOffset.second + downY), f.shown.last().origin)
             val key = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER)
             assertTrue(body.onKeyDown(key.keyCode, key))
         }
@@ -157,10 +166,10 @@ class ReverbIncidentPointerOriginIntegrationTest {
             }
             return x to y
         }
-        fun phase(view: View, action: Int, x: Float, y: Float, deep: Boolean = false) {
+        fun phase(view: View, action: Int, x: Float, y: Float, deep: Boolean = false): Boolean {
             val now = SystemClock.uptimeMillis()
             val event = MotionEvent.obtain(now, now, action, x, y, 0)
-            try {
+            return try {
                 (view as NativeClickPhaseHost).nativeClickEndpoint.touch(event, false, {}, true,
                     if (deep) MotionEvent.CLASSIFICATION_DEEP_PRESS else 0)
             } finally { event.recycle() }
