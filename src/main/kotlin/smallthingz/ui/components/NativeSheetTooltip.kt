@@ -54,7 +54,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
@@ -96,6 +95,13 @@ internal class NativeSheetTooltipMotion {
         target=value
         scale.target(if(value)1f else .8f,spring(.9f,1400f),playTime)
         fade.target(if(value)1f else 0f,spring(1f,3800f),playTime)
+    }
+    fun showWindow(render:(Float,Float)->Unit,show:()->Unit) {
+        render(sizeScale,alpha)
+        show()
+    }
+    suspend fun animate(awaitFrame:suspend ()->Unit) {
+        while(scale.running||fade.running)awaitFrame()
     }
     fun frame(time:Long,durationScale:Float) {
         if(!scale.running&&!fade.running)return
@@ -200,21 +206,21 @@ internal class NativeSheetTooltip(
         if(motion.shouldExist&&popup==null&&anchor.isAttachedToWindow) {
             val next=NativePlainTooltipWindow(anchor,style,description,::dismiss)
             popup=next
-            try {next.show()} catch(error:Throwable) {
+            try {motion.showWindow(next::frame,next::show)} catch(error:Throwable) {
                 if(popup===next)popup=null
                 throw error
             }
         }
         if(animation==null&&popup!=null) {
             val next=scope.launch(start=CoroutineStart.LAZY) {
-                while(isActive&&popup!=null)runtime.frames.withFrameNanos {time->
+                motion.animate { runtime.frames.withFrameNanos {time->
                     motion.frame(time,readCachedAnimatorDurationScale(anchor.context))
                     popup?.frame(motion.sizeScale,motion.alpha)
                     if(!motion.shouldExist) {
                         val ownedPopup=popup;popup=null
                         ownedPopup?.close()
                     }
-                }
+                } }
             }
             animation=next
             next.invokeOnCompletion {if(animation===next)animation=null}
@@ -292,7 +298,11 @@ private class NativePlainTooltipWindow(
     private var positioned=false
     private var previousPosition:NativeTooltipPlacement?=null
     private var observer:ViewTreeObserver?=null
-    private val globalLayout=ViewTreeObserver.OnGlobalLayoutListener {position(force=true)}
+    private var animatedAlpha=0f
+    private val anchorPreDraw=ViewTreeObserver.OnPreDrawListener {
+        position()
+        true
+    }
     private val cursor=PlainTextAccessibilityWindowScope(this)
     private val textGeometry=NativePlainTextViewGeometry(this,NativeTextSemanticsClipPolicy {view->
         if(view===bubble.clip)NativeTextSemanticsClip.Rectangle(
@@ -336,12 +346,12 @@ private class NativePlainTooltipWindow(
         if(closed)return
         val next=anchor.viewTreeObserver
         observer=next
-        next.addOnGlobalLayoutListener(globalLayout)
+        next.addOnPreDrawListener(anchorPreDraw)
     }
     override fun onDetachedFromWindow() {
         val ownedObserver=observer;observer=null
         var failure=closePreservingPrimaryFailure(null) {
-            ownedObserver?.takeIf {it.isAlive}?.removeOnGlobalLayoutListener(globalLayout)
+            ownedObserver?.takeIf {it.isAlive}?.removeOnPreDrawListener(anchorPreDraw)
         }
         failure=closePreservingPrimaryFailure(failure) {super.onDetachedFromWindow()}
         failure?.let {throw it}
@@ -353,25 +363,27 @@ private class NativePlainTooltipWindow(
     }
     override fun onLayout(changed:Boolean,l:Int,t:Int,r:Int,b:Int) {
         bubble.layout(0,0,bubble.measuredWidth,bubble.measuredHeight)
-        params.width=bubble.measuredWidth;params.height=bubble.measuredHeight
-        position(force=true);invalidateOutline()
+        position();invalidateOutline()
     }
     fun frame(scale:Float,alpha:Float) {
-        position()
+        animatedAlpha=alpha
         bubble.scaleX=scale;bubble.scaleY=scale
         bubble.alpha=if(positioned&&anchor.isAttachedToWindow)alpha else 0f
     }
-    private fun position(force:Boolean=false) {
-        if(!added||closed||!anchor.isAttachedToWindow||!isLaidOut)return
+    private fun position() {
+        if(!added||closed||!anchor.isAttachedToWindow||bubble.width==0||bubble.height==0)return
         anchor.getWindowVisibleDisplayFrame(visibleFrame)
         anchor.getLocationInWindow(location)
         val next=nativeTooltipAbove(location[0],location[1],location[0]+anchor.width,
             location[1]+anchor.height,bubble.width,bubble.height,visibleFrame.width(),
             (4f*style.textDensity.density).roundToInt(),previousPosition)
-        if(!force&&next==previousPosition)return
+        if(next==previousPosition&&params.width==bubble.width&&params.height==bubble.height)return
         previousPosition=next;params.x=next.x;params.y=next.y
+        params.width=bubble.width;params.height=bubble.height
         if(Build.VERSION.SDK_INT>=29)systemGestureExclusionRects=listOf(Rect(0,0,visibleFrame.width(),visibleFrame.height()))
-        manager.updateViewLayout(this,params);positioned=true
+        manager.updateViewLayout(this,params)
+        positioned=true
+        bubble.alpha=animatedAlpha
     }
     override fun onTouchEvent(event:MotionEvent):Boolean {
         if(event.actionMasked==MotionEvent.ACTION_OUTSIDE ||
@@ -389,7 +401,7 @@ private class NativePlainTooltipWindow(
             if(ownedWindow)manager.removeViewImmediate(this)
         }
         failure=closePreservingPrimaryFailure(failure) {
-            ownedObserver?.takeIf {it.isAlive}?.removeOnGlobalLayoutListener(globalLayout)
+            ownedObserver?.takeIf {it.isAlive}?.removeOnPreDrawListener(anchorPreDraw)
         }
         failure=closePreservingPrimaryFailure(failure) {ownedTextLease?.close()}
         failure?.let {throw it}
