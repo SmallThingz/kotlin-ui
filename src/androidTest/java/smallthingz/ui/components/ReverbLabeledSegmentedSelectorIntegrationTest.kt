@@ -3,7 +3,9 @@ package smallthingz.ui.components
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.Rect
+import android.os.Build
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
@@ -12,6 +14,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.core.graphics.ColorUtils
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -52,6 +55,27 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
         SegmentOption(Mode.AUTOMATIC, "Automatic", enabled = false, disabledReason = "Requires setup"),
     )
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
+
+    @Test fun settingsPaletteDarkeningPreservesOpaqueAlphaAndExistingRgb() = main {
+        val context = instrumentation.targetContext
+        for (dark in listOf(false, true)) {
+            val base = NativeColorScheme.resolve(dark, Build.VERSION.SDK_INT) { id ->
+                context.resources.getColor(id, context.theme)
+            }
+            val palette = ReverbDesign.appearance.resolveColorScheme(context, dark)
+            for ((role, original, actual) in listOf(
+                Triple("background", base.background, palette.background),
+                Triple("surface", base.surface, palette.surface),
+            )) {
+                assertEquals("$role input is opaque, dark=$dark", 255, original ushr 24)
+                // blendARGB truncates 255*(1-.04f)+255*.04f from 254.99998 to 254. The
+                // selector's painted-surface sampler correctly rejects that translucent fill.
+                assertEquals("$role darkening must preserve opacity, dark=$dark", 255, actual ushr 24)
+                assertEquals("$role darkening must preserve the published RGB recipe, dark=$dark",
+                    ColorUtils.blendARGB(original, Color.BLACK, .04f) and 0x00ffffff, actual and 0x00ffffff)
+            }
+        }
+    }
 
     @Test fun retainedChoicesBindSilentlyAndReportOnlyCurrentDisabledReasons() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
