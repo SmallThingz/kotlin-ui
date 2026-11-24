@@ -2,6 +2,7 @@ package smallthingz.ui.reverb
 
 import android.view.Gravity
 import android.view.ViewGroup
+import android.view.WindowManager
 import kotlin.math.roundToInt
 
 /**
@@ -12,6 +13,13 @@ import kotlin.math.roundToInt
 class ReverbRequestWindowPlacement private constructor(val width: Int, val y: Int) {
     val height: Int get() = ViewGroup.LayoutParams.WRAP_CONTENT
     val gravity: Int get() = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+
+    /** Shared geometry; the host supplies its window security and pixel-format policy. */
+    fun windowParameters(type: Int, flags: Int, format: Int): WindowManager.LayoutParams =
+        WindowManager.LayoutParams(width, height, type, flags, format).also {
+            it.gravity = gravity
+            it.y = y
+        }
 
     companion object {
         /** Top request panels share the permission recipe's width cap and exterior window inset. */
