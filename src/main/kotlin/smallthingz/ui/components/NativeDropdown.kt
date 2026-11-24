@@ -98,9 +98,12 @@ class NativeDropdown<T>(
     }
 
     fun bind(next: NativeDropdownContent<T>, expanded: Boolean, palette: NativeDropdownColors) {
+        bind(next, expanded, palette, present = next.options.size > 1)
+    }
+
+    internal fun bind(next: NativeDropdownContent<T>, expanded: Boolean, palette: NativeDropdownColors, present: Boolean) {
         if (closed) return
         content = next
-        val present = next.options.size > 1
         if (visibility != VISIBLE || !present) {
             colorMotion?.close()
             colorMotion = null
