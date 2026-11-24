@@ -75,6 +75,15 @@ class InlineWaveformPointerOwner {
     /** A detached pointer-input node creates a fresh coroutine on reattachment. */
     fun detached() { cancel(); handlerBinding = null }
 
+    fun release() {
+        try {
+            cancel()
+        } finally {
+            binding = null
+            handlerBinding = null
+        }
+    }
+
     fun cancel() {
         val owned = pointer != null
         pointer = null

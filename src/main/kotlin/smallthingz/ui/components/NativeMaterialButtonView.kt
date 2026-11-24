@@ -167,8 +167,11 @@ open class NativeMaterialButtonView private constructor(
     private val input = NativeMaterialButtonInput(this, content, style.radiusDp, minimumTouchTargetDp, filled, inputPolicy) { elevation = it }
     override val nativeClickEndpoint get() = input.pointerEndpoint
     override val mergedRowAccessibility = MergedRowAccessibility(this, NativeMergedRowRole.BUTTON,
-        { NativeMergedRowAccessibilityState(isEnabled, null, null, accessibilityChildren) },
+        { NativeMergedRowAccessibilityState(isEnabled, null, null, accessibilityChildren,
+            contentDescription = mergedActionDescription()) },
         { if (canActivate()) { action(); true } else false })
+
+    protected open fun mergedActionDescription(): CharSequence? = null
     private val shape = object : ViewOutlineProvider() {
         override fun getOutline(view: View, outline: Outline) {
             outline.setRoundRect(0, 0, view.width, view.height, radius(view.width, view.height))

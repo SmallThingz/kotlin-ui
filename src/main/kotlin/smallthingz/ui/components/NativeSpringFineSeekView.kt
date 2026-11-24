@@ -41,6 +41,7 @@ import smallthingz.ui.input.phase.NativeDragPointerEvent
 import smallthingz.ui.input.phase.NativePointerPass
 import smallthingz.ui.input.phase.NativeViewPhasePointerNode
 import smallthingz.ui.input.phase.ViewClickPhaseEndpoint
+import smallthingz.ui.util.closePreservingPrimaryFailure
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -188,13 +189,19 @@ class NativeSpringFineSeekView<B : NativeSpringFineSeekBinding>(
 
     /** Recycler/presentation owner retires callbacks before binding a different recording. */
     fun release() {
-        model.release()
+        var failure = closePreservingPrimaryFailure(null, model::release)
+        val previousFrames = frameJob
+        val previousGeometry = geometryLease
+        val previousDescription = descriptionLease
         fieldGradient = null
         binding = null
-        puck.controller.bind(null)
-        frameJob?.cancel(); frameJob = null
-        geometryLease?.close(); geometryLease = null
-        descriptionLease?.close(); descriptionLease = null
+        frameJob = null
+        geometryLease = null
+        descriptionLease = null
+        failure = closePreservingPrimaryFailure(failure) { puck.controller.bind(null) }
+        failure = closePreservingPrimaryFailure(failure) { previousFrames?.cancel() }
+        failure = closePreservingPrimaryFailure(failure) { previousGeometry?.close() }
+        closePreservingPrimaryFailure(failure) { previousDescription?.close() }?.let { throw it }
     }
 
     override fun onAttachedToWindow() {
@@ -207,11 +214,15 @@ class NativeSpringFineSeekView<B : NativeSpringFineSeekBinding>(
 
     override fun onDetachedFromWindow() {
         inputActive = false
-        model.cancel()
+        val previousFrames = frameJob
+        val previousScope = attachedScope
         fieldGradient = null
-        frameJob?.cancel(); frameJob = null
-        attachedScope?.cancel(); attachedScope = null
-        super.onDetachedFromWindow()
+        frameJob = null
+        attachedScope = null
+        var failure = closePreservingPrimaryFailure(null, model::cancel)
+        failure = closePreservingPrimaryFailure(failure) { previousFrames?.cancel() }
+        failure = closePreservingPrimaryFailure(failure) { previousScope?.cancel() }
+        closePreservingPrimaryFailure(failure) { super.onDetachedFromWindow() }?.let { throw it }
     }
 
     private fun requestFrames() {

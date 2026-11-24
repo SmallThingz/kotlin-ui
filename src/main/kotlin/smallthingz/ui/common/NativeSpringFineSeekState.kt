@@ -7,6 +7,7 @@ import smallthingz.ui.components.NativeSpringFineSeekStyle
 import smallthingz.ui.geometry.Offset
 import smallthingz.ui.input.phase.NativeDragPointerEvent
 import smallthingz.ui.input.phase.NativePointerPass
+import smallthingz.ui.util.closePreservingPrimaryFailure
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -308,13 +309,18 @@ class NativeSpringFineSeekState(
     }
 
     override fun release() {
-        cancel()
+        val failure = closePreservingPrimaryFailure(null, ::cancel)
         handlerBinding = null
         binding = null
         frameBinding = null
+        run = null
+        pointerOwner = null
+        dragSession = null
+        waitingForAllUp = false
+        awaitingRangeTapOwner = false
         returning = false
         horizontalPull = 0f; rawVerticalPull = 0f
-        invalidate()
+        closePreservingPrimaryFailure(failure, invalidate)?.let { throw it }
     }
 }
 
