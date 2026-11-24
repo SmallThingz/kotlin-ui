@@ -7,6 +7,7 @@ import android.text.InputFilter
 import android.text.InputType
 import android.text.TextWatcher
 import android.text.method.PasswordTransformationMethod
+import android.view.Gravity
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -14,6 +15,9 @@ import android.widget.LinearLayout
 import androidx.annotation.MainThread
 import smallthingz.ui.components.NativeLabeledTextField
 import smallthingz.ui.components.NativeMaterialButtonView
+import smallthingz.ui.reverb.ReverbEnvironment
+import smallthingz.ui.reverb.ReverbIcon
+import smallthingz.ui.reverb.ReverbStandardIconButtonView
 
 enum class CredentialKeyboard { TEXT, URI, PASSWORD }
 
@@ -36,6 +40,7 @@ class CredentialFieldSpec<ID : Enum<ID>>(
 class CredentialFieldState<ID : Enum<ID>>(
     val id: ID,
     val value: String,
+    /** Text admission only; trailing actions have their own enabled state. */
     val enabled: Boolean = true,
     val revealed: Boolean = false,
     val error: String? = null,
@@ -66,6 +71,10 @@ class CredentialFieldGroup<ID : Enum<ID>>(
     private var theme = theme
     private var binding = false
     private var closed = false
+    private var editCallback: ((ID, String) -> Unit)? = onEdit
+    private var actionCallback: ((CredentialActionTarget<ID>) -> Unit)? = onAction
+    private var actionStates = emptyMap<CredentialActionTarget<ID>, CredentialActionState<ID>>()
+    private var iconEnvironment = ReverbEnvironment(theme.density, theme.fontResolver, theme.colors)
 
     init {
         val ids = fields.map { it.id }.toSet()
@@ -107,7 +116,7 @@ class CredentialFieldGroup<ID : Enum<ID>>(
                     override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                     override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
                     override fun afterTextChanged(s: Editable?) {
-                        if (!closed && !binding && spec.editable && isEnabled) onEdit(spec.id, s?.toString().orEmpty())
+                        if (!closed && !binding && spec.editable && isEnabled) editCallback?.invoke(spec.id, s?.toString().orEmpty())
                     }
                 })
             }
@@ -115,18 +124,37 @@ class CredentialFieldGroup<ID : Enum<ID>>(
     }
     private val joined = recipe.createGroup(context, theme.colors, *editors.values.toTypedArray())
     private val buttons = actions.sortedWith(compareBy({ it.field.ordinal }, { it.action.ordinal })).associateWith { target ->
-        NativeMaterialButtonView(context, theme.appearance.buttons.neutralText, theme.density, theme.fontResolver) {
-            if (!closed) onAction(target)
-        }.apply {
+        val button: View = when (target.action) {
+            CredentialFieldAction.REVEAL -> NativeMaterialButtonView(
+                context, theme.appearance.buttons.neutralText, theme.density, theme.fontResolver,
+            ) { dispatchAction(target) }
+            CredentialFieldAction.COPY, CredentialFieldAction.REROLL -> ReverbStandardIconButtonView(
+                context, iconEnvironment, { joined.view },
+            ).apply {
+                visual.filterTouchesWhenObscured = true
+                visual.mergedRowAccessibility.enableStandaloneAccessibility({ !closed }) {
+                    visual.glyph.contentDescription
+                }
+            }
+        }
+        button.apply {
             visibility = View.GONE
             filterTouchesWhenObscured = true
         }
     }
-    val view: View = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL
-        addView(joined.view, LinearLayout.LayoutParams(-1, -2))
-        for (button in buttons.values) addView(button, LinearLayout.LayoutParams(-1, -2))
+    private val trailingRows = buttons.entries.groupBy { it.key.field }.mapValues { (_, entries) ->
+        LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isBaselineAligned = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            for ((_, button) in entries) {
+                // Constrain a long Show/Hide label before shrinking the standard icon footprints.
+                addView(button, LinearLayout.LayoutParams(-2, -2, if (button is NativeMaterialButtonView) 1f else 0f))
+            }
+        }
     }
+    val view: View = joined.view
 
     init {
         val ordered = this.fields.filter { it.editable }.map { editors.getValue(it.id) }
@@ -154,20 +182,21 @@ class CredentialFieldGroup<ID : Enum<ID>>(
             binding = false
         }
 
-        for ((action, button) in buttons) {
-            val state = byAction[action]
-            button.visibility = if (state == null) View.GONE else View.VISIBLE
-            if (state != null) button.bind(state.label, state.enabled, theme.colors.buttonPalette)
+        actionStates = byAction
+        for ((action, button) in buttons) bindAction(action, button, byAction[action])
+        for ((id, row) in trailingRows) {
+            editors.getValue(id).setTrailingContent(row.takeIf { byAction.keys.any { it.field == id } })
         }
     }
 
     fun bindTheme(theme: ControlTheme) {
         if (closed || this.theme === theme) return
         this.theme = theme
+        iconEnvironment = ReverbEnvironment(theme.density, theme.fontResolver, theme.colors)
         joined.bindPalette(theme.colors)
-        for (button in buttons.values) {
-            button.bindTypography(theme.density, theme.fontResolver)
-            button.bind(button.label.getText(), button.isEnabled, theme.colors.buttonPalette)
+        for ((action, button) in buttons) {
+            if (button is NativeMaterialButtonView) button.bindTypography(theme.density, theme.fontResolver)
+            bindAction(action, button, actionStates[action])
         }
     }
 
@@ -180,12 +209,42 @@ class CredentialFieldGroup<ID : Enum<ID>>(
     override fun close() {
         if (closed) return
         closed = true
+        editCallback = null
+        actionCallback = null
+        actionStates = emptyMap()
         dismissKeyboard()
         for (spec in fields) {
             bindField(editors.getValue(spec.id), spec, CredentialFieldState(spec.id, "", enabled = false))
         }
-        for (button in buttons.values) button.close()
+        for ((action, button) in buttons) {
+            bindAction(action, button, null)
+            if (button is NativeMaterialButtonView) button.close()
+            if (button is ReverbStandardIconButtonView) button.cancelInput()
+        }
         view.visibility = View.GONE
+    }
+
+    private fun dispatchAction(target: CredentialActionTarget<ID>) {
+        val button = buttons.getValue(target)
+        if (!closed && actionStates[target]?.enabled == true && button.isAttachedToWindow && button.isShown) {
+            actionCallback?.invoke(target)
+        }
+    }
+
+    private fun bindAction(target: CredentialActionTarget<ID>, button: View, state: CredentialActionState<ID>?) {
+        val enabled = !closed && state?.enabled == true
+        button.visibility = if (state == null) View.GONE else View.VISIBLE
+        when (button) {
+            is NativeMaterialButtonView -> button.bind(state?.label.orEmpty(), enabled, theme.colors.buttonPalette)
+            is ReverbStandardIconButtonView -> {
+                if (!enabled) button.cancelInput()
+                button.bind(
+                    iconEnvironment,
+                    if (target.action == CredentialFieldAction.COPY) ReverbIcon.Copy else ReverbIcon.Reset,
+                    state?.label.orEmpty(), enabled, theme.colors.muted, theme.colors.ink,
+                ) { dispatchAction(target) }
+            }
+        }
     }
 
     private fun bindField(
@@ -208,7 +267,8 @@ class CredentialFieldGroup<ID : Enum<ID>>(
             }
         }
 
-        field.isEnabled = state.enabled
+        // Disabling text must not recursively disable independently admitted trailing actions.
+        field.setEditorEnabled(state.enabled)
         field.setPlaceholder(state.placeholder)
         field.setSupportingText(state.supportingText)
         field.setError(state.error)
