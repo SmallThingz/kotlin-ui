@@ -150,7 +150,12 @@ open class ReverbPermissionOnboardingScreen(
         visibility = View.GONE
         accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
     }
-    private val done = NativeMaterialButtonView(context, theme.appearance.buttons.footerContinue,
+    // This footer wraps its action instead of assigning the pager footer's exact button size.
+    // Retain the owner's complete footer recipe while measuring its surface intrinsically.
+    private val continueRecipe = theme.appearance.buttons.footerContinue.let {
+        it.copy(surface = it.surface.copy(assignedSize = false))
+    }
+    private val done = NativeMaterialButtonView(context, continueRecipe,
         theme.density, theme.fontResolver, onClick = {
             if (canContinue && reverbInformationInputAllowed(this) && canContinue) onContinue()
         }).apply { filterTouchesWhenObscured = true }
