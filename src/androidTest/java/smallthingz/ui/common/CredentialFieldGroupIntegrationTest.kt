@@ -8,6 +8,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
 import android.os.Build
+import android.os.Bundle
 import android.os.Parcelable
 import android.os.SystemClock
 import android.text.Editable
@@ -52,6 +53,68 @@ import kotlin.math.roundToInt
 @RunWith(AndroidJUnit4::class)
 class CredentialFieldGroupIntegrationTest {
     private enum class Field { CONNECTOR, CLIENT }
+
+    @Test fun readOnlyAccessibilityRejectsSetTextWhileEditableSiblingStillAcceptsIt() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.context, NativeMenuAccessibilityTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+        var group: CredentialFieldGroup<Field>? = null
+        val edits = mutableListOf<Pair<Field, String>>()
+        try {
+            instrumentation.runOnMainSync {
+                group = CredentialFieldGroup(activity, ReverbDesign.theme(activity, false).controls,
+                    listOf(CredentialFieldSpec(Field.CONNECTOR, "Connector"),
+                        CredentialFieldSpec(Field.CLIENT, "Client", editable = false))) { id, value -> edits += id to value }
+                val installed = requireNotNull(group)
+                installed.bind(listOf(CredentialFieldState(Field.CONNECTOR, "editable fixture"),
+                    CredentialFieldState(Field.CLIENT, "read-only fixture")))
+                descendants(installed.view).filterIsInstance<NativeLabeledTextField>().forEach {
+                    it.editor.showSoftInputOnFocus = false
+                }
+                activity.setContentView(installed.view)
+            }
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {
+                val installed = requireNotNull(group)
+                val editors = descendants(installed.view).filterIsInstance<NativeLabeledTextField>().map { it.editor }.toList()
+                val editable = editors.first()
+                val readOnly = editors.last()
+                assertTrue(editable.requestFocus())
+                editable.setSelection(1, 4)
+                val retained = readOnly.text
+                val replacement = Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "changed fixture")
+                }
+                repeat(2) {
+                    assertFalse(readOnly.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SET_TEXT, replacement))
+                    assertSame(retained, readOnly.text)
+                    assertEquals("read-only fixture", readOnly.text.toString())
+                    assertFalse(readOnly.hasFocus())
+                    assertTrue(editable.hasFocus())
+                    assertEquals(1, editable.selectionStart)
+                    assertEquals(4, editable.selectionEnd)
+                    assertTrue(edits.isEmpty())
+                    installed.bindTheme(ReverbDesign.theme(activity, true).controls)
+                }
+                val editableNode = requireNotNull(editable.createAccessibilityNodeInfo())
+                try {
+                    assertTrue(editableNode.isEditable)
+                    assertTrue(editableNode.actionList.contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_TEXT))
+                } finally { editableNode.recycle() }
+                assertTrue(editable.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SET_TEXT, replacement))
+                assertEquals("changed fixture", editable.text.toString())
+                assertEquals(listOf(Field.CONNECTOR to "changed fixture"), edits)
+                installed.close()
+                assertFalse(readOnly.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SET_TEXT, replacement))
+                assertTrue(readOnly.text.isNullOrEmpty())
+                assertEquals(1, edits.size)
+            }
+        } finally {
+            instrumentation.runOnMainSync { try { group?.close() } finally { activity.finish() } }
+        }
+    }
 
     @Test fun equivalentBindsRetainFocusAndDoNotEchoEdits() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -118,9 +181,19 @@ class CredentialFieldGroupIntegrationTest {
                 try {
                     assertFalse(clientNode.isEditable)
                     assertTrue(clientNode.isPassword)
+                    assertFalse(clientNode.actionList.contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_TEXT))
                 } finally {
                     clientNode.recycle()
                 }
+                val clientText = client.text
+                assertFalse(client.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SET_TEXT,
+                    Bundle().apply {
+                        putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "unexpected edit")
+                    }))
+                assertSame(clientText, client.text)
+                assertEquals(hiddenClient.value, client.text.toString())
+                assertFalse(client.hasFocus())
+                assertTrue(editor.hasFocus())
                 copyButton.visual.performClick()
                 assertEquals(listOf(copy), actions)
                 assertTrue(edits.isEmpty())
@@ -519,8 +592,7 @@ class CredentialFieldGroupIntegrationTest {
                         val target = button.parent as NativeButtonTouchTarget
                         assertEquals(px(48), target.height)
                         assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO, target.importantForAccessibility)
-                        val actions = ArrayList<View>().also { target.addChildrenForAccessibility(it) }
-                        assertEquals(listOf(button), actions)
+                        assertRevealAccessibilityChild(target, button)
                         assertEquals("Show", button.createAccessibilityNodeInfo()?.contentDescription?.toString())
                         val icons = descendants(row).filterIsInstance<ReverbStandardIconButtonView>().toList()
                         for ((icon, expected) in icons.zip(listOf(copy, reroll))) {
@@ -838,6 +910,30 @@ class CredentialFieldGroupIntegrationTest {
         is NativeButtonTouchTarget -> view.button
         is ReverbStandardIconButtonView -> view.visual
         else -> view
+    }
+
+    private fun assertRevealAccessibilityChild(target: NativeButtonTouchTarget, button: NativeMaterialButtonView) {
+        assertTrue(button.filterTouchesWhenObscured)
+        if (Build.VERSION.SDK_INT >= 34) {
+            // Android infers sensitive accessibility data from obscured-touch protection. A direct
+            // in-process query is not an accessibility-tool request, so the platform filters this
+            // child before the standalone delegate is reached. Verify that protection first.
+            assertTrue(button.isAccessibilityDataSensitive)
+            assertEquals(emptyList<View>(), ArrayList<View>().also { target.addChildrenForAccessibility(it) })
+            // Query only this synthetic action's structure, never the credential editor or window.
+            // No global service/fetch flags, obscured-touch flags, geometry or input policy change.
+            button.setAccessibilityDataSensitive(View.ACCESSIBILITY_DATA_SENSITIVE_NO)
+        }
+        try {
+            val actions = ArrayList<View>().also { target.addChildrenForAccessibility(it) }
+            assertEquals(listOf(button), actions)
+        } finally {
+            if (Build.VERSION.SDK_INT >= 34) {
+                button.setAccessibilityDataSensitive(View.ACCESSIBILITY_DATA_SENSITIVE_AUTO)
+                assertTrue(button.isAccessibilityDataSensitive)
+            }
+        }
+        assertTrue(button.filterTouchesWhenObscured)
     }
 
     private fun boundsIn(root: ViewGroup, child: View) = Rect(0, 0, child.width, child.height).also {

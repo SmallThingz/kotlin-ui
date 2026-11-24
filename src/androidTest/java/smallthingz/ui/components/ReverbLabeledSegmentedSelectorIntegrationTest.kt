@@ -26,6 +26,8 @@ import smallthingz.ui.reverb.ReverbHeaderAction
 import smallthingz.ui.reverb.ReverbSettingsTopBar
 import smallthingz.ui.reverb.ReverbStandardIconButtonView
 import smallthingz.ui.reverb.ReverbTextSurface
+import smallthingz.ui.reverb.ReverbTextSurfaceScope
+import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.reverb.createReverbSupportingParagraph
 import smallthingz.ui.reverb.settings.ReverbLabeledSegmentedSelector
 import smallthingz.ui.reverb.settings.ReverbSelectorHelp
@@ -451,7 +453,7 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
                 time = fixture.selector.chip("Time")
                 size = fixture.selector.chip("Size")
                 geometry = fixture.selector.selectorGeometry()
-                assertTrue(ReverbTextSurface.sample(fixture.selector.title()) != 0L)
+                assertTrue(surfaceDiagnostic(fixture), ReverbTextSurface.sample(fixture.selector.title()) != 0L)
             }
             // Positive control: the attached section must observe a real ViewRoot traversal.
             measureBinding(fixture, "explicit layout request", expectLayout = true) {
@@ -666,6 +668,35 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
             assertFalse("$name finishes layout", fixture.selector.isLayoutRequested)
             assertTrue("$name must bind silently", fixture.requests.isEmpty())
         }
+    }
+
+    /** Only this synthetic fixture's paint metadata; never text, identifiers or external windows. */
+    private fun surfaceDiagnostic(fixture: TraversalFixture): String {
+        val title = fixture.selector.title()
+        val ancestry = ArrayList<String>()
+        val owned = fixture.screen.descendants().toSet() + fixture.selector.descendants().toSet()
+        var current: View? = title
+        repeat(12) {
+            val node = current ?: return@repeat
+            if (node !in owned) {
+                ancestry += "outsideFixture"
+                current = null
+                return@repeat
+            }
+            val background = node.background
+            ancestry += "${node.javaClass.simpleName}[scope=${node is ReverbTextSurfaceScope}," +
+                "attached=${node.isAttachedToWindow},shown=${node.isShown},layout=${node.isLayoutRequested}," +
+                "size=${node.width}x${node.height},alpha=${node.alpha}," +
+                "background=${background?.javaClass?.simpleName},backgroundAlpha=${background?.alpha}," +
+                "surface=${(background as? NoiseDrawable)?.paintedTextSurface}]"
+            // Do not inspect the Activity decor or any platform ancestor outside the owned screen.
+            current = if (node === fixture.screen) null else node.parent as? View
+        }
+        if (current != null) ancestry += "ancestryTruncated"
+        return "Settings title needs a sampled painted surface: ${ancestry.joinToString(" -> ")};" +
+            " sample=${ReverbTextSurface.sample(title)}," +
+            "screenSurface=${(fixture.screen.background as? NoiseDrawable)?.paintedTextSurface}," +
+            "paletteSurface=${fixture.state.environment.palette.surface}"
     }
 
     private fun awaitDraw(view: View) {

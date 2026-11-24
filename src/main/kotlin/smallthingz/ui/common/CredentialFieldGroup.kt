@@ -2,6 +2,7 @@ package smallthingz.ui.common
 
 import android.content.Context
 import android.os.Build
+import android.os.Bundle
 import android.text.Editable
 import android.text.InputFilter
 import android.text.InputType
@@ -9,6 +10,7 @@ import android.text.TextWatcher
 import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
 import android.view.View
+import android.view.accessibility.AccessibilityNodeInfo
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.LinearLayout
@@ -100,6 +102,20 @@ class CredentialFieldGroup<ID : Enum<ID>>(
                     isFocusable = false
                     isClickable = false
                     isLongClickable = false
+                    // EditText retains BufferType.EDITABLE even without a key listener. Android
+                    // advertises and executes ACTION_SET_TEXT from that buffer type alone; keep
+                    // authoritative binding available without exposing an accessibility edit path.
+                    accessibilityDelegate = object : View.AccessibilityDelegate() {
+                        override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
+                            super.onInitializeAccessibilityNodeInfo(host, info)
+                            info.isEditable = false
+                            info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_TEXT)
+                        }
+
+                        override fun performAccessibilityAction(host: View, action: Int, arguments: Bundle?): Boolean =
+                            action != AccessibilityNodeInfo.ACTION_SET_TEXT &&
+                                super.performAccessibilityAction(host, action, arguments)
+                    }
                 }
                 isSaveEnabled = false
                 setFreezesText(false)
