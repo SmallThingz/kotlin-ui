@@ -1,13 +1,17 @@
 package smallthingz.ui.reverb
 
 import android.content.Context
+import android.graphics.Color
 import android.os.Build
 import android.text.TextUtils
 import android.view.View
+import android.view.Window
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import androidx.core.graphics.Insets
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import smallthingz.ui.components.NativeButtonTouchTarget
 import smallthingz.ui.components.NativeMaterialButtonView
 import smallthingz.ui.components.NativeText
@@ -56,9 +60,11 @@ class ReverbControlScreenFrame(
     }
     private val primaryTarget = NativeButtonTouchTarget(primaryAction)
     private val backdrop = appearance.backdrops.attachPage(this, theme.palette) { ReverbTextSurface.invalidate(this) }
+    private val statusBarProtection = ReverbDesign.statusBarProtection(context)
 
     init {
         orientation = VERTICAL
+        foreground = statusBarProtection
         if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
         addView(productHeader, row())
         addView(settingsHeader, row())
@@ -89,6 +95,17 @@ class ReverbControlScreenFrame(
             setPadding(insets.left, insets.top, insets.right, insets.bottom)
         }
     }
+
+    /** Reverb keeps status icons fixed over its protection; navigation follows the selected theme. */
+    @Suppress("DEPRECATION")
+    fun bindWindow(window: Window, dark: Boolean) {
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+        statusBarProtection.applyWindowAppearance(window)
+        WindowCompat.getInsetsController(window, this).isAppearanceLightNavigationBars = !dark
+    }
+
+    fun updateSystemBarInsets(insets: WindowInsetsCompat) = statusBarProtection.updateInsets(insets)
 
     fun showPrimaryAction(show: Boolean) {
         val visible = if (show) VISIBLE else GONE
