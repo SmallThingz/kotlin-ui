@@ -115,11 +115,26 @@ class NativePopupMenu<I> private constructor(
     }
     private val visibleFrame = Rect()
     private val location = IntArray(2)
+    private var origin: NativeMenuOrigin? = null
+    private var originMapper: NativeMenuOriginMapper? = null
+
+    /** Null restores the ordinary full-anchor placement used by keyboard/accessibility menus. */
+    fun setOrigin(value: NativeMenuOrigin?) {
+        val next = value?.takeIf { it.x.isFinite() && it.y.isFinite() }
+        if (origin == next) return
+        origin = next
+        if (next != null && originMapper == null) originMapper = NativeMenuOriginMapper()
+        updatePosition(force = true)
+    }
     private val animationLayer = NativeAnchoredMenuPanel(menu, density, recipe, drivesMotion = false)
     private var frameJob: Job? = null
     private var back: Any? = null
     private var added = false
     private var closed = false
+    private var actionInputRetired = false
+    private var inputGeneration = 0L
+    private var admittedFlags = 0
+    private var admittedAccessibility = IMPORTANT_FOR_ACCESSIBILITY_AUTO
     private var positioned = false
     private var menuMeasured = false
     private var previousAnchor: NativeMenuBounds? = null
@@ -169,16 +184,79 @@ class NativePopupMenu<I> private constructor(
 
     fun expanded(expanded: Boolean) {
         if (closed) return
+        if (expanded && actionInputRetired) {
+            // Explicit readmission is a new input lifetime, even while the old exit is painted.
+            inputGeneration++
+            actionInputRetired = false
+            params.flags = admittedFlags
+            importantForAccessibility = admittedAccessibility
+            val generation = inputGeneration
+            if (added) manager.updateViewLayout(this, params)
+            if (closed || inputGeneration != generation) return
+            if (isAttachedToWindow) registerBack()
+        }
         animationLayer.retargetMotion(expanded)
         // An interrupted entry retains this same window until the exit settles. Explicit
         // owner teardown still uses close() and removes the window immediately.
         if (!animationLayer.motionShouldExist) onTerminal()
     }
 
+    /**
+     * Accept once, requesting window focus release before the caller runs its action. Android
+     * delivers the focus callback asynchronously; callers still observe actual focus readiness.
+     * The exit keeps only
+     * paint; rows remain alive until dispatch unwinds. True survives a synchronous terminal close.
+     * No work is deferred until after the caller, which may close or explicitly reopen this menu.
+     */
+    fun acceptAction(): Boolean {
+        if (closed || actionInputRetired) return false
+        actionInputRetired = true
+        val generation = ++inputGeneration
+        admittedFlags = params.flags
+        admittedAccessibility = importantForAccessibility
+        // This tracking is separate from row.input; a stale BACK/ESC UP must not dismiss a
+        // same-window lifetime explicitly reopened by the accepted action.
+        keyDispatcherState?.reset(this)
+        fun stillRetiring() = !closed && actionInputRetired && inputGeneration == generation
+        try {
+            cancelPointerInput()
+            // Key/accessibility activation need not have a retained pointer path to cancel.
+            for (row in menu.column.rows) if (stillRetiring()) row.input.cancel()
+            if (stillRetiring()) {
+                importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                if (Build.VERSION.SDK_INT >= 33) MenuBackApi33.unregister(this, back)
+                back = null
+                params.flags = admittedFlags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                if (added) manager.updateViewLayout(this, params)
+            }
+            if (stillRetiring()) expanded(false)
+        } catch (failure: Throwable) {
+            // Do not leave an accepted window owning focus after a failed retirement. A new
+            // lifetime admitted by a reentrant callback belongs to its new owner instead.
+            if (stillRetiring()) {
+                try { onTerminal() } catch (cleanup: Throwable) { if (cleanup !== failure) failure.addSuppressed(cleanup) }
+                if (stillRetiring()) {
+                    try { close() } catch (cleanup: Throwable) { if (cleanup !== failure) failure.addSuppressed(cleanup) }
+                }
+            }
+            throw failure
+        }
+        return true
+    }
+
+    private fun registerBack() {
+        if (Build.VERSION.SDK_INT < 33 || closed || actionInputRetired || back != null) return
+        val generation = inputGeneration
+        back = MenuBackApi33.register(this) {
+            if (!closed && !actionInputRetired && inputGeneration == generation) onDismissRequest()
+        }
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         anchorObserver = anchor.viewTreeObserver.also { it.addOnGlobalLayoutListener(anchorLayout) }
-        if (Build.VERSION.SDK_INT >= 33) back = MenuBackApi33.register(this,onDismissRequest)
+        registerBack()
         frameJob = scope.launch {
             while (isActive && !closed) {
                 frames.withFrameNanos { time ->
@@ -227,13 +305,22 @@ class NativePopupMenu<I> private constructor(
         if (!added || closed || !anchor.isAttachedToWindow || !menuMeasured) return
         val menuWidth = menu.measuredWidth
         val menuHeight = menu.measuredHeight
-        anchor.getLocationInWindow(location)
+        val pointOrigin = origin
+        if (pointOrigin == null) anchor.getLocationInWindow(location)
+        else {
+            val mapper = checkNotNull(originMapper)
+            mapper.map(anchor, pointOrigin)
+            location[0] = mapper.x
+            location[1] = mapper.y
+        }
+        val anchorWidth = if (pointOrigin == null) anchor.width else 0
+        val anchorHeight = if (pointOrigin == null) anchor.height else 0
         val previous = previousAnchor
         val sameAnchor = previous != null && previous.left == location[0] && previous.top == location[1] &&
-            previous.width == anchor.width && previous.height == anchor.height
+            previous.width == anchorWidth && previous.height == anchorHeight
         if (!force && sameAnchor && menuWidth == previousMenuWidth && menuHeight == previousMenuHeight) return
         val bounds = if (sameAnchor) requireNotNull(previous) else
-            NativeMenuBounds(location[0],location[1],location[0]+anchor.width,location[1]+anchor.height)
+            NativeMenuBounds(location[0],location[1],location[0]+anchorWidth,location[1]+anchorHeight)
         anchor.getWindowVisibleDisplayFrame(visibleFrame)
         val windowWidth = visibleFrame.width()
         val windowHeight = visibleFrame.height()
@@ -259,6 +346,7 @@ class NativePopupMenu<I> private constructor(
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (closed || actionInputRetired) return true
         if (event.keyCode == KeyEvent.KEYCODE_BACK || event.keyCode == KeyEvent.KEYCODE_ESCAPE) {
             val state = keyDispatcherState ?: return super.dispatchKeyEvent(event)
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
@@ -273,6 +361,7 @@ class NativePopupMenu<I> private constructor(
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (closed || actionInputRetired) return true
         if ((event.action == MotionEvent.ACTION_DOWN &&
                 (event.x < 0 || event.x >= width || event.y < 0 || event.y >= height)) ||
             event.action == MotionEvent.ACTION_OUTSIDE) {
@@ -281,6 +370,9 @@ class NativePopupMenu<I> private constructor(
         }
         return super.dispatchTouchEvent(event)
     }
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
+        if (closed || actionInputRetired) true else super.dispatchGenericMotionEvent(event)
 
     // Source Popup ignores ViewRootImpl's locale override and retains its parent's direction.
     override fun setLayoutDirection(layoutDirection: Int) = Unit

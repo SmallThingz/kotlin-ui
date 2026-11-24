@@ -3,6 +3,7 @@
 package smallthingz.ui.reverb
 
 import smallthingz.ui.input.phase.NativePointerLayerShape
+import smallthingz.ui.components.NativeMenuOrigin
 import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.NativeGroupEdges
 import smallthingz.ui.components.NativeRecordingRowStyle
@@ -67,6 +68,7 @@ internal data class IncidentCardMenuRequest(
     val canDelete: Boolean,
     val copy: () -> Unit,
     val delete: () -> Unit,
+    val origin: NativeMenuOrigin? = null,
 )
 
 /**
@@ -232,16 +234,18 @@ class ReverbIncidentCardView internal constructor(
         return isAttachedToWindow && authority.activate(current.row, ::openMenu)
     }
 
-    private fun openMenu(): Boolean {
+    private fun openMenu(): Boolean = openMenu(null)
+
+    private fun openMenu(origin: NativeMenuOrigin?): Boolean {
         val current = binding ?: return false
         if (!isAttachedToWindow) return false
         if (authority.menuTarget(current.row, requiresMutation = false) == null) return false
         menuCreated = true
-        menuHost.show(menuRequest(current.menuIdentity))
+        menuHost.show(menuRequest(current.menuIdentity, origin))
         return true
     }
 
-    private fun menuRequest(identity: IncidentCardMenuIdentity): IncidentCardMenuRequest {
+    private fun menuRequest(identity: IncidentCardMenuIdentity, origin: NativeMenuOrigin? = null): IncidentCardMenuRequest {
         val current = checkNotNull(binding)
         check(current.menuIdentity === identity)
         val lifetime = menuLifetime
@@ -250,7 +254,7 @@ class ReverbIncidentCardView internal constructor(
         }?.let { authority.menuTarget(it.row, requiresMutation) }
         return IncidentCardMenuRequest(identity, this, authority.menuTarget(current.row, requiresMutation = true) != null,
             copy = { target(requiresMutation = false)?.let(current.actions.copy) },
-            delete = { target(requiresMutation = true)?.let(current.actions.delete) })
+            delete = { target(requiresMutation = true)?.let(current.actions.delete) }, origin = origin)
     }
 
     private fun releaseMenu() {
@@ -272,9 +276,15 @@ class ReverbIncidentCardView internal constructor(
         val enabled = current.selected == null || current.canMutate
         val longClick: (() -> Unit)? = if (current.selected == null) ({ openMenu() }) else null
         bodyInput.bind(NativeClickBinding(current.row.key, enabled,
-            onClick = { body.performClick() }, onLongClick = longClick))
+            onClick = { body.performClick() }, onLongClick = longClick,
+            onPointerLongClick = if (longClick == null) null else { x, y ->
+                openMenu(NativeMenuOrigin.fromDescendant(this, body, x, y))
+            }))
         checkInput.bind(NativeClickBinding(current.row.key, enabled,
-            onClick = { body.checkTarget.performClick() }, onLongClick = longClick))
+            onClick = { body.checkTarget.performClick() }, onLongClick = longClick,
+            onPointerLongClick = if (longClick == null) null else { x, y ->
+                openMenu(NativeMenuOrigin.fromDescendant(this, body.checkTarget, x, y))
+            }))
         bodyInput.focusChanged(body.isFocused)
         checkInput.focusChanged(body.checkTarget.isFocused)
     }

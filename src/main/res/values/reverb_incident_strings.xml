@@ -3,4 +3,5 @@
     <string name="reverb_incident_time_duration">%1$s · %2$s</string>
     <string name="reverb_incident_checked">Checked</string>
     <string name="reverb_incident_unchecked">Unchecked</string>
+    <string name="reverb_incident_select_error">Select all occurrences of this error</string>
 </resources>

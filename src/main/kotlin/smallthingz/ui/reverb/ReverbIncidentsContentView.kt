@@ -97,7 +97,7 @@ class ReverbIncidentsContentView(
             return currentOccurrence(row)?.target
         }
     }
-    private val adapter = IncidentsAdapter(context, appearance.card, texts, menus, actions, rowAuthority, inputRoot)
+    private val adapter = IncidentsAdapter(context, appearance.card, texts, menus, actions, rowAuthority, inputRoot, ::selectErrorOccurrences)
     private var accessibilityMembershipChanged: () -> Unit = {}
     private var panelProgress = 1f
     private var safeInsets = Insets.NONE
@@ -195,7 +195,7 @@ class ReverbIncidentsContentView(
             selection.clear()
             val current = state.rows.associateBy { it.key }
             previous.forEach { (key, incident) ->
-                val row = current[key] ?: current.values.singleOrNull {
+                val row = current[key]?.takeIf { it.target.matches(incident) } ?: current.values.singleOrNull {
                     it.target.matches(incident)
                 }
                 if (row != null) selection[row.key] = row.target
@@ -254,6 +254,28 @@ class ReverbIncidentsContentView(
         else if (selection.size == history.rows.size) selection.clear()
         else history.rows.forEach { selection[it.key] = it.target }
         updateSelection()
+    }
+
+    /** Snapshot-only, additive selection. A day's heading never limits error membership. */
+    private fun selectErrorOccurrences(epochDay: Long, groupKey: String): Boolean {
+        if (!history.canMutate) return false
+        // An animating-out heading cannot act for a group that survives only on another day.
+        if (history.days.none { day -> day.epochDay == epochDay && day.groups.any {
+                it.key == groupKey && it.occurrences.isNotEmpty()
+            } }) return false
+        var found = false
+        for (day in history.days) for (group in day.groups) {
+            if (group.key != groupKey) continue
+            for (requested in group.occurrences) {
+                val current = currentOccurrence(requested) ?: continue
+                selection[current.key] = current.target
+                found = true
+            }
+        }
+        if (!found) return false
+        selecting = true
+        updateSelection()
+        return true
     }
 
     private fun currentOccurrence(requested: ReverbIncidentOccurrence): ReverbIncidentOccurrence? =
@@ -679,6 +701,7 @@ private class IncidentsAdapter(
     private val actions: ReverbIncidentActions,
     private val authority: IncidentCardAuthority,
     private val inputRoot: View,
+    private val selectError: (Long, String) -> Boolean,
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     private data class Item(
         val key: Any,
@@ -709,15 +732,21 @@ private class IncidentsAdapter(
                 add(Item("incident-history-status", ids["incident-history-status"] ?: nextId++))
             }
             state.days.forEach { day ->
+                val firstGroup = day.groups.indexOfFirst { it.occurrences.isNotEmpty() }
+                val lastGroup = day.groups.indexOfLast { it.occurrences.isNotEmpty() }
+                if (firstGroup < 0) return@forEach
                 val dayKey = DayKey(day.epochDay)
                 add(Item(dayKey, ids[dayKey] ?: nextId++, heading = day.label))
-                for (group in day.groups) {
+                day.groups.forEachIndexed { groupIndex, group ->
+                    if (group.occurrences.isEmpty()) return@forEachIndexed
+                    // A day is one joined surface, including every message and occurrence.
                     val heading = HeadingKey(day.epochDay, group.key)
                     add(Item(heading, ids[heading] ?: nextId++, heading = group.message,
-                        edges = NativeGroupEdges(first = true, last = false)))
+                        edges = NativeGroupEdges(first = groupIndex == firstGroup, last = false)))
                     group.occurrences.forEachIndexed { index, row ->
                         add(Item(row.key, ids[row.key] ?: nextId++, row = row,
-                            edges = NativeGroupEdges(first = false, last = index == group.occurrences.lastIndex)))
+                            edges = NativeGroupEdges(first = false,
+                                last = groupIndex == lastGroup && index == group.occurrences.lastIndex)))
                     }
                 }
             }
@@ -731,7 +760,7 @@ private class IncidentsAdapter(
                 val before = old[oldItemPosition]
                 val after = next[newItemPosition]
                 if (before != after) return false
-                val key = after.row?.key ?: return true
+                val key = after.row?.key ?: return after.key !is HeadingKey || oldCanMutate == state.canMutate
                 val previousFlag = if (oldSelecting) key in oldSelected else null
                 return oldCanMutate == state.canMutate && previousFlag == selection?.contains(key)
             }
@@ -798,7 +827,7 @@ private class IncidentsAdapter(
             2 -> paragraph(context, appearance, appearance.bodyMedium, appearance.palette.muted).apply {
                 ViewCompat.setAccessibilityHeading(this, true)
             }
-            3 -> IncidentGroupHeading(context, appearance)
+            3 -> ReverbIncidentGroupHeading(context, appearance, inputRoot, selectError)
             else -> ReverbIncidentCardView(context, appearance, menus, texts, authority).apply {
                 parentInterestedInDown = { true }
                 pointerInputRoot = inputRoot
@@ -811,7 +840,10 @@ private class IncidentsAdapter(
         val item = items[position]
         when (val view = holder.itemView) {
             is IncidentStaleView -> view.bind(appearance)
-            is IncidentGroupHeading -> view.bind(appearance, checkNotNull(item.heading), checkNotNull(item.edges))
+            is ReverbIncidentGroupHeading -> {
+                val key = item.key as HeadingKey
+                view.bind(appearance, key.day, key.key, checkNotNull(item.heading), checkNotNull(item.edges), canMutate)
+            }
             is ParagraphView -> {
                 val density = appearance.density.density
                 view.setPaddingRelative((12f * density).roundToInt(), (10f * density).roundToInt(),
@@ -838,39 +870,17 @@ private class IncidentsAdapter(
 
     override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
         (holder.itemView as? ReverbIncidentCardView)?.unbind()
+        (holder.itemView as? ReverbIncidentGroupHeading)?.unbind()
         super.onViewRecycled(holder)
     }
     fun disposeVisible(list: RecyclerView) {
-        for (index in 0 until list.childCount) (list.getChildAt(index) as? ReverbIncidentCardView)?.unbind()
+        for (index in 0 until list.childCount) {
+            val view = list.getChildAt(index)
+            (view as? ReverbIncidentCardView)?.unbind()
+            (view as? ReverbIncidentGroupHeading)?.unbind()
+        }
     }
 }
 
 private fun paragraph(context: Context, appearance: IncidentCardAppearance, style: TextStyle, color: Int) =
     ParagraphView(context, style, appearance.density, appearance.fontResolver, color)
-
-private class IncidentGroupHeading(context: Context, initial: IncidentCardAppearance) : FrameLayout(context) {
-    private val surface = initial.style.surface.create(context, ReverbTextSurface::invalidate)
-    private val title = paragraph(context, initial, initial.bodyMedium, initial.palette.ink)
-
-    init {
-        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-        ViewCompat.setAccessibilityHeading(title, true)
-        surface.addRow(title, NativeGroupLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-        addView(surface, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-    }
-
-    fun bind(appearance: IncidentCardAppearance, message: String, edges: NativeGroupEdges) {
-        val border = appearance.style.surface.borderColor(appearance.palette)
-        surface.setJoinedEdges(edges)
-        surface.setJoinedSeparatorColor(border)
-        surface.setPaletteImmediately(appearance.style.surface.fillColor(appearance.palette), border)
-        val horizontal = (12f * appearance.density.density).roundToInt()
-        val top = (8f * appearance.density.density).roundToInt()
-        val bottom = (5f * appearance.density.density).roundToInt()
-        title.setPaddingRelative(horizontal, top, horizontal, bottom)
-        title.setTypography(appearance.bodyMedium.copy(fontWeight = smallthingz.ui.text.font.FontWeight.SemiBold),
-            appearance.density, appearance.fontResolver)
-        title.setTextColor(appearance.palette.ink)
-        title.setText(message)
-    }
-}

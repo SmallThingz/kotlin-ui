@@ -17,6 +17,7 @@ import android.view.FocusFinder
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
@@ -26,6 +27,7 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
+import android.widget.OverScroller
 import smallthingz.ui.common.DropdownSelectionPolicy
 import smallthingz.ui.common.canOpen
 import smallthingz.ui.text.NativeTypographyRole
@@ -56,7 +58,7 @@ data class NativeAnchoredDropdownStyle(
 
 /**
  * A window owner for [NativeDropdown] fields. Each option occurs once in the rotated list.
- * A drag crosses any number of rows and snaps to a slot; a tap selects while collapsing.
+ * A drag can coast after release, then snaps to a slot; a tap selects while collapsing.
  * The caller owns values and must [close] this host with its screen lifetime.
  */
 class NativeAnchoredDropdown(
@@ -315,6 +317,7 @@ class NativeAnchoredDropdown(
 
         fun settle(index: Int) {
             if (closing || disposed || plan == null || rows.isEmpty()) return
+            wheel.stopFling()
             val target = index.coerceIn(0, rows.lastIndex)
             settled = target
             animate(target.toFloat(), 1f, style.settleMillis) {
@@ -330,7 +333,8 @@ class NativeAnchoredDropdown(
 
         fun collapse(index: Int, activated: Boolean = true, afterTapIndication: Boolean = false) {
             if (disposed) return
-            wheel.pointer = -1; wheel.dragging = false; wheel.earlyTap = false
+            wheel.cancelMotion()
+            wheel.earlyTap = false
             if (closing) { if (reveal == 0f) dispose(); return }
             if (plan == null) { dispose(); return }
             closing = true
@@ -346,10 +350,16 @@ class NativeAnchoredDropdown(
             } else startCollapse.run()
         }
 
-        fun animate(target: Float, opened: Float, duration: Long, move: Boolean = true, complete: () -> Unit) {
+        fun stopAnimation() {
             collapseAfterDraw = false
             wheel.removeCallbacks(startCollapse)
-            animator?.removeAllListeners(); animator?.cancel()
+            val previous = animator
+            animator = null
+            previous?.removeAllListeners(); previous?.cancel()
+        }
+
+        fun animate(target: Float, opened: Float, duration: Long, move: Boolean = true, complete: () -> Unit) {
+            stopAnimation()
             val startPosition = position; val startReveal = reveal
             animator = ValueAnimator.ofFloat(0f, 1f).apply {
                 val travel = maxOf(abs(opened - startReveal), if (move) abs(target - startPosition).coerceAtMost(1f) else 0f)
@@ -374,7 +384,8 @@ class NativeAnchoredDropdown(
             val motion = animator
             animator = null
             wheel.removeCallbacks(startCollapse)
-            var failure = closePreservingPrimaryFailure(null) { motion?.removeAllListeners() }
+            var failure = closePreservingPrimaryFailure(null, wheel::retireMotion)
+            failure = closePreservingPrimaryFailure(failure) { motion?.removeAllListeners() }
             failure = closePreservingPrimaryFailure(failure) { motion?.cancel() }
             failure = closePreservingPrimaryFailure(failure) {
                 if (anchor.viewTreeObserver.isAlive) anchor.viewTreeObserver.removeOnPreDrawListener(geometryGuard)
@@ -406,10 +417,105 @@ class NativeAnchoredDropdown(
             var earlyTap = false
             var pointer = -1
             var gesturePosition = 0f
-            val slop = ViewConfiguration.get(context).scaledTouchSlop
+            private val configuration = ViewConfiguration.get(context)
+            val slop = configuration.scaledTouchSlop
+            private val minimumFlingVelocity = configuration.scaledMinimumFlingVelocity
+            private val maximumFlingVelocity = configuration.scaledMaximumFlingVelocity
+            private var velocityTracker: VelocityTracker? = null
+            private var scroller: OverScroller? = null
+            private var flinging = false
+            private var stopTap = false
+            private var motionGeneration = 0
+            private val flingFrame = Runnable { advanceFling() }
             private val revealTop get() = viewport?.revealTop(position, reveal) ?: anchorY.toFloat()
             private val revealBottom get() = viewport?.revealBottom(position, rows.lastIndex, reveal) ?: (anchorY + rowHeight).toFloat()
             init { setWillNotDraw(false); clipChildren = false; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES }
+
+            fun stopFling() {
+                flinging = false
+                motionGeneration++
+                removeCallbacks(flingFrame)
+                // Keep the displayed position; abortAnimation would jump the scroller to its end.
+                scroller?.forceFinished(true)
+            }
+
+            fun cancelMotion() {
+                stopFling()
+                pointer = -1
+                dragging = false
+                explicitTap = false
+                stopTap = false
+                velocityTracker?.clear()
+            }
+
+            fun retireMotion() {
+                cancelMotion()
+                velocityTracker?.recycle()
+                velocityTracker = null
+                scroller = null
+            }
+
+            private fun flingOrSettle(velocity: Float) {
+                if (disposed || closing) return
+                stopFling()
+                if (!velocity.isFinite() || abs(velocity) < minimumFlingVelocity ||
+                    velocity <= 0f && position <= 0f || velocity >= 0f && position >= rows.lastIndex) {
+                    settle(settled)
+                    return
+                }
+                // Pixel units retain native density-aware friction and bounded velocity. No flywheel
+                // accumulation or overshoot: the finite list and its existing end cues stay authoritative.
+                // stopFling() forces finished before reuse, so the public constructor's flywheel cannot accumulate.
+                val motion = scroller ?: OverScroller(context).also { scroller = it }
+                val maximum = (rows.lastIndex.toLong() * rowHeight).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                motion.fling(0, (position * rowHeight).roundToInt().coerceIn(0, maximum),
+                    0, velocity.coerceIn(-maximumFlingVelocity.toFloat(), maximumFlingVelocity.toFloat()).roundToInt(),
+                    0, 0, 0, maximum)
+                flinging = true
+                postOnAnimation(flingFrame)
+            }
+
+            private fun advanceFling() {
+                if (!flinging || disposed || closing) return
+                val motion = scroller ?: return
+                val generation = motionGeneration
+                if (motion.computeScrollOffset()) {
+                    val previous = settled
+                    position = (motion.currY.toFloat() / rowHeight).coerceIn(0f, rows.lastIndex.toFloat())
+                    settled = position.roundToInt()
+                    updatePositions()
+                    if (settled != previous) publish(settled)
+                }
+                // Selection callbacks may close, settle, or establish a new touch/fling owner.
+                if (!flinging || disposed || closing || generation != motionGeneration) return
+                if (motion.isFinished) {
+                    stopFling()
+                    settle(settled)
+                } else postOnAnimation(flingFrame)
+            }
+
+            override fun onDetachedFromWindow() {
+                retireMotion()
+                stopAnimation()
+                super.onDetachedFromWindow()
+            }
+
+            override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+                super.onWindowFocusChanged(hasWindowFocus)
+                if (!hasWindowFocus) {
+                    cancelMotion()
+                    stopAnimation()
+                    if (closing) dispose()
+                } else if (!disposed && !closing && plan != null && pointer < 0 &&
+                    (position != settled.toFloat() || reveal != 1f)) {
+                    settle(settled)
+                }
+            }
+
+            override fun onCancelPendingInputEvents() {
+                endGesture()
+                super.onCancelPendingInputEvents()
+            }
             fun updatePositions() {
                 if (plan == null) return
                 val top = revealTop
@@ -545,16 +651,26 @@ class NativeAnchoredDropdown(
                 }
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
-                        val edges = extents()
-                        if (event.y < edges.first || event.y > edges.second) { cancelSelection(); return true }
+                        val wasFlinging = flinging
+                        cancelMotion()
+                        stopTap = wasFlinging
+                        // A closing gesture can reopen on drag/tap. Until then its terminal
+                        // animation must keep running, including after cancellation/pointer loss.
+                        if (!closing) stopAnimation()
+                        if (event.y < revealTop || event.y > revealBottom) { cancelSelection(); return true }
+                        if (!closing && reveal < 1f) animate(position, 1f, style.expandMillis, move = false) {}
                         gesturePosition = position
                         downRow = rowAt(event.y)
                         pointer = event.getPointerId(0); downX = event.x; downY = event.y; dragging = false
                         explicitTap = selectionPolicy == DropdownSelectionPolicy.EXPLICIT && event.x >= 0f && event.x < width
+                        val tracker = velocityTracker ?: VelocityTracker.obtain().also { velocityTracker = it }
+                        tracker.addMovement(event)
                     }
                     MotionEvent.ACTION_MOVE -> {
+                        if (pointer < 0) return true
                         val i = event.findPointerIndex(pointer)
                         if (i < 0) { endGesture(); return true }
+                        velocityTracker?.addMovement(event)
                         trackExplicitTap(event, i)
                         val delta = downY - event.getY(i)
                         if (!dragging && abs(delta) > slop) {
@@ -577,18 +693,36 @@ class NativeAnchoredDropdown(
                         trackExplicitTap(event, i)
                         val delta = downY - event.getY(i)
                         val moved = dragging || abs(delta) > slop
+                        val tracker = velocityTracker
+                        tracker?.addMovement(event)
+                        if (moved) tracker?.computeCurrentVelocity(1000, maximumFlingVelocity.toFloat())
+                        val velocity = if (moved) -(tracker?.getYVelocity(pointer) ?: 0f) else 0f
+                        val stoppedFling = stopTap
+                        stopTap = false
+                        pointer = -1
+                        tracker?.clear()
                         if (moved) {
-                            if (!dragging) gesturePosition = position
+                            if (!dragging) {
+                                gesturePosition = position
+                                closing = false
+                                // UP may be the first event beyond slop. Retire a preserved collapse
+                                // exactly as MOVE promotion does before giving position to a fling.
+                                animate(position, 1f, style.expandMillis, move = false) {}
+                            }
                             closing = false
                             position = (gesturePosition + delta / rowHeight).coerceIn(0f, rows.lastIndex.toFloat())
                             settled = position.roundToInt()
+                            dragging = false
+                            val generation = motionGeneration
                             updatePositions()
                             publish(settled)
-                            dragging = false
-                            if (!disposed) settle(settled)
+                            if (!disposed && !closing && pointer < 0 && generation == motionGeneration) flingOrSettle(velocity)
                         }
-                        pointer = -1
                         if (!moved) {
+                            if (stoppedFling) {
+                                settle(settled)
+                                return true
+                            }
                             val x = event.getX(i)
                             val y = event.getY(i)
                             if (!insideReveal(x, y)) {
@@ -609,9 +743,15 @@ class NativeAnchoredDropdown(
                             }
                         }
                     }
-                    MotionEvent.ACTION_POINTER_DOWN -> explicitTap = false
+                    MotionEvent.ACTION_POINTER_DOWN -> {
+                        explicitTap = false
+                        if (pointer >= 0) velocityTracker?.addMovement(event)
+                    }
                     MotionEvent.ACTION_CANCEL -> endGesture()
-                    MotionEvent.ACTION_POINTER_UP -> if (event.getPointerId(event.actionIndex) == pointer) endGesture()
+                    MotionEvent.ACTION_POINTER_UP -> {
+                        if (event.getPointerId(event.actionIndex) == pointer) endGesture()
+                        else if (pointer >= 0) velocityTracker?.addMovement(event)
+                    }
                 }
                 return true
             }
@@ -625,8 +765,7 @@ class NativeAnchoredDropdown(
             }
 
             private fun endGesture() {
-                pointer = -1
-                dragging = false
+                cancelMotion()
                 if (closing && reveal == 0f) dispose() else settle(settled)
             }
         }

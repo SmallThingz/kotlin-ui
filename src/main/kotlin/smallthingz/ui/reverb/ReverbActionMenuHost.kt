@@ -1,6 +1,7 @@
 package smallthingz.ui.reverb
 
 import smallthingz.ui.components.NativePopupMenu
+import smallthingz.ui.components.NativeMenuOrigin
 import smallthingz.ui.components.NativeMenuAction
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.scroll.NativeVerticalScrollState
@@ -39,6 +40,7 @@ class ReverbActionMenuHost(
         val window: NativePopupMenu<ReverbIcon>,
     ) : AutoCloseable {
         var onDismissRequest: () -> Unit = {}
+        var actionGeneration = 0L
         override fun close() = window.close()
     }
     private val entries = IdentityHashMap<Any, Entry>()
@@ -50,12 +52,17 @@ class ReverbActionMenuHost(
     }
 
     fun show(identity: Any, anchor: View, actions: List<ReverbMenuAction>,
-             onDismissRequest: () -> Unit = {}) {
+             onDismissRequest: () -> Unit = {}) =
+        show(identity, anchor, actions, origin = null, onDismissRequest = onDismissRequest)
+
+    fun show(identity: Any, anchor: View, actions: List<ReverbMenuAction>,
+             origin: NativeMenuOrigin?, onDismissRequest: () -> Unit = {}) {
         if (closed) return
         val entry = entries.getOrPut(identity) { Entry() }
         val prior = entry.session
         if (prior != null && prior.anchor === anchor) {
             prior.onDismissRequest = onDismissRequest
+            prior.window.setOrigin(origin)
             bind(identity, entry, prior, actions)
             prior.window.expanded(true)
             return
@@ -78,6 +85,7 @@ class ReverbActionMenuHost(
         entry.session = session
         try {
             bind(identity, entry, session, actions)
+            window.setOrigin(origin)
             window.show()
         } catch (failure: Throwable) {
             if (entry.session === session) entry.session = null
@@ -98,14 +106,16 @@ class ReverbActionMenuHost(
 
     private fun bind(identity: Any, entry: Entry, session: Session,
                      actions: List<ReverbMenuAction>) {
+        val generation = ++session.actionGeneration
         session.window.bindActions(actions.map { action ->
             val textColor = if (action.isDestructive) palette.error else palette.onSurface
             val iconColor = if (!action.isDestructive && kind == ReverbActionMenuKind.INCIDENTS)
                 palette.onSurfaceVariant else textColor
             NativeMenuAction(action.label, action.icon, textColor, iconColor, action.enabled, onClick = {
-                if (!closed && entries[identity] === entry && entry.session === session) {
-                    // Both source Incidents and Library assign expanded=false BEFORE the action.
-                    session.window.expanded(false)
+                if (action.enabled && !closed && entries[identity] === entry && entry.session === session &&
+                    session.actionGeneration == generation && session.window.acceptAction()) {
+                    // Acceptance owns this action even if a zero-duration exit already retired
+                    // the session. No later cleanup can mask failure or close a reopened menu.
                     action.onClick()
                 }
             })
