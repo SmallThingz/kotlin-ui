@@ -41,17 +41,27 @@ class NativeLargeFontPermissionActivity : Activity() {
     }
 }
 
-/** Attached real-device coverage. This suite must not run in an emulator or a simulated View host. */
+/**
+ * Attached real-device coverage. This suite must not run in an emulator or a simulated View host.
+ * Set permission_dialog_exclude_ime=true for an IME-excluded isolated-display fixture. That mode
+ * verifies window focus and local input ownership, not system IME composition or keyboard behavior.
+ */
 @RunWith(AndroidJUnit4::class)
 class NativePermissionDialogIntegrationTest {
+    private val excludeIme = when (InstrumentationRegistry.getArguments().getString("permission_dialog_exclude_ime")) {
+        null, "false" -> false
+        "true" -> true
+        else -> error("permission_dialog_exclude_ime must be true or false")
+    }
+
     @Test fun silentTeardownPreservesCallerAndMatchedEscapeCancelsOnlyOnce() = attached { activity ->
         var cancelled = 0
         val first = prompt(activity, cancel = { cancelled++ })
-        first.show()
+        showFixture(first)
         first.dismiss()
         assertEquals(0, cancelled)
         val next = prompt(activity, cancel = { cancelled++ })
-        next.show()
+        showFixture(next)
         next to {
             val window = platform(next)
             val decor = requireNotNull(window.window).decorView
@@ -94,7 +104,7 @@ class NativePermissionDialogIntegrationTest {
             }
         }
         val prompt = prompt(activity, body = editor, cancel = { cancels++ })
-        prompt.show()
+        showFixture(prompt)
         prompt to {
             assertTrue(editor.requestFocus())
             val dialog = platform(prompt)
@@ -124,7 +134,7 @@ class NativePermissionDialogIntegrationTest {
             recipe = inherited.copy(dimAmount = .6f))
         activity.window.clearFlags(secure)
         try {
-            prompt.show()
+            showFixture(prompt)
             val attrs = requireNotNull(platform(prompt).window).attributes
             assertEquals(0, attrs.flags and secure)
             assertEquals(.6f, attrs.dimAmount, .001f)
@@ -142,7 +152,7 @@ class NativePermissionDialogIntegrationTest {
             type = WindowManager.LayoutParams.TYPE_APPLICATION_PANEL
             token = Binder()
         }
-        assertThrows(WindowManager.BadTokenException::class.java) { prompt.show() }
+        assertThrows(WindowManager.BadTokenException::class.java) { showFixture(prompt) }
         // Dialog.isShowing can see a visible DecorView even when WindowManager rejected its token.
         val decor = window.decorView
         assertFalse(decor.isAttachedToWindow)
@@ -155,7 +165,7 @@ class NativePermissionDialogIntegrationTest {
             assertFalse(button.performClick())
             assertFalse(button.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
         }
-        assertThrows(IllegalStateException::class.java) { prompt.show() }
+        assertThrows(IllegalStateException::class.java) { showFixture(prompt) }
         dialog.cancel()
         prompt.dismiss()
         assertEquals(0, allows)
@@ -167,7 +177,7 @@ class NativePermissionDialogIntegrationTest {
         var allows = 0
         var denies = 0
         val prompt = prompt(activity, allow = { allows++ }, deny = { denies++ })
-        prompt.show()
+        showFixture(prompt)
         prompt to {
             val buttons = nodes(platform(prompt).window!!.decorView).filterIsInstance<NativeMaterialButtonView>()
             val allow = buttons.single { it.label.getText() == "Allow" }
@@ -203,7 +213,7 @@ class NativePermissionDialogIntegrationTest {
                     buttons = nodes(decor).filterIsInstance<NativeMaterialButtonView>()
                     assertEquals(2, buttons.size)
                 }
-                changeWindowFocus(decor, false) { cover.show() }
+                changeWindowFocus(decor, false) { showFixture(cover) }
                 instrumentation.runOnMainSync {
                     assertTrue(requireNotNull(cover.window).decorView.hasWindowFocus())
                     assertTrue(dialog.isShowing && decor.isAttachedToWindow && decor.isShown)
@@ -254,7 +264,7 @@ class NativePermissionDialogIntegrationTest {
                         assertTrue(allow.requestFocusFromTouch())
                         if (startFocused) assertTrue(dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, key)))
                     }
-                    changeWindowFocus(decor, false) { cover.show() }
+                    changeWindowFocus(decor, false) { showFixture(cover) }
                     instrumentation.runOnMainSync {
                         // Local View focus is retained: ordinary onFocusChanged(false) cannot
                         // accidentally supply the cancellation this regression requires.
@@ -292,7 +302,7 @@ class NativePermissionDialogIntegrationTest {
             instrumentation.runOnMainSync {
                 assertTrue(dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ESCAPE)))
             }
-            changeWindowFocus(decor, false) { cover.show() }
+            changeWindowFocus(decor, false) { showFixture(cover) }
             changeWindowFocus(decor, true) { cover.dismiss() }
             instrumentation.runOnMainSync {
                 // Retain tracking explicitly so framework dispatcher cleanup cannot mask stale
@@ -318,7 +328,7 @@ class NativePermissionDialogIntegrationTest {
             defaults.modals.permissionDialog.copy(dimAmount = .35f)))
         val prompt = prompt(activity, body = editor, summary = "Allow access? ".repeat(25), appearance = appearance)
         activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        prompt.show()
+        showFixture(prompt)
         prompt to {
             val dialog = platform(prompt)
             assertTrue(dialog.window!!.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
@@ -380,7 +390,7 @@ class NativePermissionDialogIntegrationTest {
                     val prompt = NativePermissionDialog(activity, NativeColorScheme.fallback(dark), null,
                         "Folder access", "Allow access to the selected folder?", "Deny", "Allow",
                         onDeny = {}, onAllow = {}, onCancel = {})
-                    prompt.show()
+                    showFixture(prompt)
                     prompt to {
                         val surface = platform(prompt).findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
                         manifest += writePermissionRaster(surface, rasterDir, "english-$theme.png")
@@ -393,7 +403,7 @@ class NativePermissionDialogIntegrationTest {
             val deny = "Zugriff auf die ausgewählten Inhalte verweigern"
             val prompt = NativePermissionDialog(activity, NativeColorScheme.fallback(false), null, "Lesegerät",
                 "Zugriff auf die ausgewählten Inhalte zulassen?", deny, allow, onDeny = {}, onAllow = {}, onCancel = {})
-            prompt.show()
+            showFixture(prompt)
             prompt to {
                 val configuration = activity.resources.configuration
                 assertEquals(1.8f, configuration.fontScale, .001f)
@@ -464,7 +474,7 @@ class NativePermissionDialogIntegrationTest {
     @Test fun platformBackIgnoresBusyAndCancelsIdlePresentationOnlyOnce() = attached { activity ->
         var cancels = 0
         val prompt = prompt(activity, cancel = { cancels++ })
-        prompt.show()
+        showFixture(prompt)
         prompt to {
             val dialog = platform(prompt)
             prompt.setBusy(true)
@@ -490,7 +500,7 @@ class NativePermissionDialogIntegrationTest {
             setOnTouchListener { _, event -> scopeEvents += event.actionMasked; true }
         }
         val prompt = prompt(activity, body = scope, allow = { allows++ }, cancel = { cancels++ })
-        prompt.show()
+        showFixture(prompt)
         prompt to {
             val dialog = platform(prompt)
             val allow = nodes(dialog.window!!.decorView).filterIsInstance<NativeMaterialButtonView>()
@@ -543,6 +553,40 @@ class NativePermissionDialogIntegrationTest {
     private fun platform(prompt: NativePermissionDialog): Dialog =
         NativePermissionDialog::class.java.getDeclaredField("dialog").apply { isAccessible = true }.get(prompt) as Dialog
 
+    private fun showFixture(prompt: NativePermissionDialog) {
+        val dialog = platform(prompt)
+        prepareFixtureWindow(dialog)
+        prompt.show()
+        assertFixtureWindow(dialog)
+    }
+
+    private fun showFixture(dialog: Dialog) {
+        prepareFixtureWindow(dialog)
+        dialog.show()
+        assertFixtureWindow(dialog)
+    }
+
+    private fun prepareFixtureWindow(dialog: Dialog) {
+        if (!excludeIme) return
+        val window = requireNotNull(dialog.window)
+        check(window.peekDecorView()?.isAttachedToWindow != true) {
+            "IME exclusion must be set before the fixture window is attached"
+        }
+        window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
+        window.setSoftInputMode((window.attributes.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_STATE.inv()) or
+            WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
+        assertFixtureWindow(dialog)
+    }
+
+    private fun assertFixtureWindow(dialog: Dialog) {
+        if (!excludeIme) return
+        val attrs = requireNotNull(dialog.window).attributes
+        assertTrue(attrs.flags and WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM != 0)
+        assertEquals(0, attrs.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+        assertEquals(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN,
+            attrs.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_STATE)
+    }
+
     private fun nodes(view: View): List<View> = buildList {
         add(view)
         if (view is ViewGroup) for (i in 0 until view.childCount) addAll(nodes(view.getChildAt(i)))
@@ -569,12 +613,9 @@ class NativePermissionDialogIntegrationTest {
             instrumentation.runOnMainSync {
                 val owned = mount(activity)
                 prompt = owned
-                platform(owned).window?.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
-                owned.show()
+                showFixture(owned)
                 decor = requireNotNull(platform(owned).window).decorView
                 cover = Dialog(activity).apply {
-                    window?.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
-                    window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
                     setContentView(View(activity), ViewGroup.LayoutParams(100, 100))
                 }
             }
