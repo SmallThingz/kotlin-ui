@@ -13,6 +13,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.LinearLayout
 import androidx.annotation.MainThread
+import smallthingz.ui.components.NativeButtonTouchTarget
 import smallthingz.ui.components.NativeLabeledTextField
 import smallthingz.ui.components.NativeMaterialButtonView
 import smallthingz.ui.components.acceptsNativeInput
@@ -146,6 +147,12 @@ class CredentialFieldGroup<ID : Enum<ID>>(
             filterTouchesWhenObscured = true
         }
     }
+    private val actionHosts = buttons.mapValues { (_, button) ->
+        if (button is NativeMaterialButtonView) NativeButtonTouchTarget(button).apply {
+            visibility = button.visibility
+            filterTouchesWhenObscured = true
+        } else button
+    }
     private val trailingRows = buttons.entries.groupBy { it.key.field }.mapValues { (_, entries) ->
         object : LinearLayout(context) {
             override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
@@ -162,9 +169,12 @@ class CredentialFieldGroup<ID : Enum<ID>>(
             gravity = Gravity.CENTER_VERTICAL
             isBaselineAligned = false
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            for ((_, button) in entries) {
+            for ((target, button) in entries) {
                 // Constrain a long Show/Hide label before shrinking the standard icon footprints.
-                addView(button, LinearLayout.LayoutParams(-2, -2, if (button is NativeMaterialButtonView) 1f else 0f))
+                // Its canonical target owns the 48dp strip around the intrinsic 40dp button,
+                // before the field's fallback touch delegate can route that strip to the editor.
+                addView(actionHosts.getValue(target),
+                    LinearLayout.LayoutParams(-2, -2, if (button is NativeMaterialButtonView) 1f else 0f))
             }
         }
     }
@@ -256,6 +266,7 @@ class CredentialFieldGroup<ID : Enum<ID>>(
     private fun bindAction(target: CredentialActionTarget<ID>, button: View, state: CredentialActionState<ID>?) {
         val enabled = !closed && state?.enabled == true
         button.visibility = if (state == null) View.GONE else View.VISIBLE
+        actionHosts.getValue(target).visibility = button.visibility
         when (button) {
             is NativeMaterialButtonView -> button.bind(state?.label.orEmpty(), enabled, theme.colors.buttonPalette)
             is ReverbStandardIconButtonView -> {
