@@ -84,7 +84,12 @@ class NativeActionSheetHoverIntegrationTest {
 
     @Test fun headerCloseAndPressedBackdropRetainTheirDismissalPaths() {
         withSheet { fixture ->
-            main { tap(fixture.root, centerInRoot(fixture.root, fixture.surface.appContent.close.visual)) }
+            main {
+                val close = requireNotNull(fixture.surface.appContent.close) {
+                    "The titled action sheet must expose its close action"
+                }
+                tap(fixture.root, centerInRoot(fixture.root, close.visual))
+            }
             assertTrue(fixture.dismissed.await(3, TimeUnit.SECONDS))
         }
         withSheet { fixture ->

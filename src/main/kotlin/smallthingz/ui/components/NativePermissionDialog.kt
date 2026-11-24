@@ -7,6 +7,7 @@ import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
+import android.os.Bundle
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -15,6 +16,7 @@ import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.WindowManager
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -80,6 +82,7 @@ class NativePermissionDialog(
     private var allowEnabled = true
     private var ended = false
     private var shown = false
+    private var inputFocused = false
     private var escapeDown = false
     private var blockedGesture = false
     private val error = text(activity, "", NativeTypographyRole.BODY_MEDIUM, colors.error)
@@ -92,7 +95,7 @@ class NativePermissionDialog(
     }
     private val dialog: Dialog = object : Dialog(activity, recipe.windowTheme) {
         override fun cancel() {
-            if (ended || busy) return
+            if (busy || !ownsInputFocus()) return
             dismiss()
             onCancel()
         }
@@ -100,11 +103,25 @@ class NativePermissionDialog(
         override fun dismiss() {
             if (ended) return
             ended = true
+            inputFocused = false
             escapeDown = false
             allow.use { deny.use { super.dismiss() } }
         }
 
+        override fun onWindowFocusChanged(hasFocus: Boolean) {
+            inputFocused = false
+            // A View can keep local focus while another window owns input. Neither its pending
+            // activation nor Escape/Back tracking may survive that window ownership transition.
+            cancelPendingInput()
+            super.onWindowFocusChanged(hasFocus)
+            inputFocused = hasFocus && !ended
+        }
+
         override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+            if (!ownsInputFocus()) {
+                cancelPendingInput()
+                return true
+            }
             val escape = event.keyCode == KeyEvent.KEYCODE_ESCAPE
             if (escape && event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) escapeDown = false
             return try {
@@ -119,7 +136,7 @@ class NativePermissionDialog(
         override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
             if (keyCode != KeyEvent.KEYCODE_ESCAPE) return super.onKeyDown(keyCode, event)
             if (event.repeatCount == 0) {
-                escapeDown = !busy && !ended && event.hasNoModifiers()
+                escapeDown = !busy && ownsInputFocus() && event.hasNoModifiers()
                 if (escapeDown) event.startTracking()
             }
             return true
@@ -127,13 +144,17 @@ class NativePermissionDialog(
 
         override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
             if (keyCode != KeyEvent.KEYCODE_ESCAPE) return super.onKeyUp(keyCode, event)
-            val accepted = escapeDown && event.isTracking && !event.isCanceled && event.hasNoModifiers() && !busy && !ended
+            val accepted = escapeDown && event.isTracking && !event.isCanceled && event.hasNoModifiers() && !busy && ownsInputFocus()
             escapeDown = false
             if (accepted) cancel()
             return true
         }
 
         override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+            if (!ownsInputFocus()) {
+                cancelPendingInput()
+                return true
+            }
             if (event.actionMasked == MotionEvent.ACTION_DOWN) blockedGesture = false
             val obscured = event.flags and MotionEvent.FLAG_WINDOW_IS_OBSCURED != 0 ||
                 (Build.VERSION.SDK_INT >= 29 && event.flags and MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED != 0)
@@ -158,6 +179,21 @@ class NativePermissionDialog(
     private val window = requireNotNull(dialog.window)
     private val resize = View.OnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob ->
         if (r - l != or - ol || b - t != ob - ot) sizeWindow()
+    }
+
+    private fun ownsInputFocus(): Boolean = !ended && shown && inputFocused && dialog.isShowing &&
+        window.decorView.let { it.isAttachedToWindow && it.isShown && it.hasWindowFocus() }
+
+    private fun cancelPendingInput() {
+        escapeDown = false
+        // Only a new focused DOWN can admit another pointer gesture.
+        blockedGesture = true
+        allow.cancelInput()
+        deny.cancelInput()
+        window.peekDecorView()?.let { decor ->
+            decor.cancelPendingInputEvents()
+            decor.keyDispatcherState?.reset()
+        }
     }
 
     init {
@@ -261,9 +297,16 @@ class NativePermissionDialog(
     }
 
     private fun action(activity: Activity, source: NativeButtonRecipe, click: () -> Unit): NativeMaterialButtonView =
-        NativeMaterialButtonView(activity, source.copy(surface = source.surface.copy(
+        object : NativeMaterialButtonView(activity, source.copy(surface = source.surface.copy(
             assignedSize = true, minimumHeightDp = recipe.actionMinimumHeightDp, radiusDp = 0f)),
-            density, fonts, onClick = { if (!ended && dialog.isShowing) click() })
+            density, fonts, onClick = { if (ownsInputFocus()) click() }) {
+            override fun performClick(): Boolean = ownsInputFocus() && super.performClick()
+
+            override fun performAccessibilityAction(action: Int, arguments: Bundle?): Boolean {
+                if (action == AccessibilityNodeInfo.ACTION_CLICK && !ownsInputFocus()) return false
+                return super.performAccessibilityAction(action, arguments)
+            }
+        }
 
     private fun actionHost(activity: Activity, button: NativeMaterialButtonView, first: Boolean): View =
         object : NativeSurface(activity, NativeSurfaceStyle(Color.TRANSPARENT,

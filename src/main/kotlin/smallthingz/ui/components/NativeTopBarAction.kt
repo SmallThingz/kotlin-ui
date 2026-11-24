@@ -10,6 +10,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.graphics.ColorUtils
+import androidx.core.view.ViewCompat
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.geometry.roundedGroupContains
 import smallthingz.ui.geometry.roundedGroupGeometry
@@ -162,7 +163,8 @@ private class NativeTopBarActionLeaf(
     override val mergedRowAccessibility = MergedRowAccessibility(
         this, NativeMergedRowRole.BUTTON,
         sourceState = { NativeMergedRowAccessibilityState(isEnabled, null, null,
-            accessibilityChildren, rolePresent = rolePresent) },
+            accessibilityChildren, rolePresent = rolePresent,
+            stateDescription = ViewCompat.getStateDescription(this)) },
         invokeSourceClick = { if (isEnabled && click != null) { click?.invoke(); true } else false },
     )
     private val indication = RowIndication.install(this, initialTint, { readCachedAnimatorDurationScale(context) })

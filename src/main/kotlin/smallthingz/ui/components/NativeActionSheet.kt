@@ -18,6 +18,7 @@ import android.graphics.Paint
 import android.os.Build
 import android.view.ContextThemeWrapper
 import android.view.MotionEvent
+import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
@@ -90,6 +91,10 @@ class NativeActionSheet(
     var style=initialStyle;private set
     private var onOwnerDismiss=onDismiss
     private var disposed=false
+    private var sensitiveInput=false
+    private var blockedSensitiveGesture=true
+    private var sensitiveEscapeDown=false
+    private var sensitiveDismissalRequested=false
     private val runtime=NativeModalWindowRuntime(context)
     private val anchorLifecycle=anchor.findViewTreeLifecycleOwner()?.lifecycle
     private var dismissalAllowed:()->Boolean={true}
@@ -140,10 +145,12 @@ class NativeActionSheet(
         }
         override fun handleOnBackPressed() {
             if(!dismissalAllowed()) {refreshDismissalAdmission();return}
+            if(sensitiveInput)sensitiveDismissalRequested=true
             val dismissAtRequest=onOwnerDismiss
             runtime.scope.launch {state.hide()}.invokeOnCompletion {
                 // Ordinary sheets retain the released completion callback on cancellation.
                 if(!hasDismissalAdmission||(!disposed&&!state.visible&&dismissalAllowed()))dismissAtRequest()
+                else if(sensitiveInput)sensitiveDismissalRequested=false
             }
         }
     }
@@ -244,6 +251,62 @@ class NativeActionSheet(
     }
     val contentView:View get()=surface
     val hasCurrentWindowFocus get()=root.isAttachedToWindow&&root.hasWindowFocus()
+    val canAcceptSensitiveAction get()=!disposed&&hasCurrentWindowFocus&&
+        !sensitiveDismissalRequested&&state.visible&&state.targetValue==NativeSheetValue.EXPANDED
+
+    /** Opt-in for authorization/disclosure actions; ordinary sheet input is unchanged. */
+    fun protectSensitiveInput() {
+        sensitiveInput=true
+        cancelSensitiveInput()
+    }
+
+    private fun cancelSensitiveInput() {
+        blockedSensitiveGesture=true
+        sensitiveEscapeDown=false
+        root.cancelPointerInput()
+        window?.peekDecorView()?.let {
+            it.cancelPendingInputEvents()
+            it.keyDispatcherState?.reset()
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus:Boolean) {
+        if(sensitiveInput)cancelSensitiveInput()
+        super.onWindowFocusChanged(hasFocus)
+        if(sensitiveInput) {
+            refreshDismissalAdmission()
+            if(!hasFocus)sensitiveDismissalRequested=false
+        }
+    }
+
+    override fun dispatchTouchEvent(event:MotionEvent):Boolean {
+        if(sensitiveInput) {
+            if(disposed||!hasCurrentWindowFocus) {cancelSensitiveInput();return true}
+            if(event.actionMasked==MotionEvent.ACTION_DOWN)blockedSensitiveGesture=false
+            val obscured=event.flags and MotionEvent.FLAG_WINDOW_IS_OBSCURED!=0 ||
+                (Build.VERSION.SDK_INT>=29&&event.flags and MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED!=0)
+            if(obscured)cancelSensitiveInput()
+            if(blockedSensitiveGesture)return true
+        }
+        return super.dispatchTouchEvent(event)
+    }
+
+    override fun dispatchKeyEvent(event:KeyEvent):Boolean {
+        if(sensitiveInput) {
+            if(disposed||!hasCurrentWindowFocus) {cancelSensitiveInput();return true}
+            if(event.keyCode==KeyEvent.KEYCODE_ESCAPE) {
+                if(event.action==KeyEvent.ACTION_DOWN&&event.repeatCount==0)
+                    sensitiveEscapeDown=event.hasNoModifiers()
+                if(event.action==KeyEvent.ACTION_UP) {
+                    val accepted=sensitiveEscapeDown&&!event.isCanceled&&event.hasNoModifiers()
+                    sensitiveEscapeDown=false
+                    if(accepted&&dismissalAllowed())onOwnerDismiss()
+                }
+                return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
 
     private fun snapPredictive(raw:Float) {
         runtime.scope.launch {predictive.snapTo(if(dismissalAllowed())PREDICTIVE_EASING.transform(raw)else 0f);applyMotion()}
@@ -256,15 +319,21 @@ class NativeActionSheet(
     }
     fun requestAnimatedDismiss() {
         if(!dismissalAllowed()) {refreshDismissalAdmission();return}
+        if(sensitiveInput)sensitiveDismissalRequested=true
         val dismissAtRequest=onOwnerDismiss
         runtime.scope.launch {state.hide()}.invokeOnCompletion {
             if(!state.visible&&dismissalAllowed())dismissAtRequest()
+            else if(sensitiveInput)sensitiveDismissalRequested=false
         }
     }
     private fun settleToDismiss(velocity:Float) {
+        if(sensitiveInput&&dismissalAllowed()&&
+            state.computeTarget(state.requireOffset(),state.currentValue,velocity)==NativeSheetValue.HIDDEN)
+            sensitiveDismissalRequested=true
         val dismissAtRequest=onOwnerDismiss
         runtime.scope.launch {state.settle(velocity)}.invokeOnCompletion {
             if(!state.visible&&dismissalAllowed())dismissAtRequest()
+            else if(sensitiveInput)sensitiveDismissalRequested=false
         }
     }
     private fun returnAfterCancelledDrag() {
@@ -336,7 +405,10 @@ class NativeActionSheet(
         }
         release {
             window?.decorView?.let { decor ->
-                if(decor.isAttachedToWindow&&decor.hasWindowFocus()) {
+                val flags=window?.attributes?.flags?:0
+                if(decor.isAttachedToWindow&&decor.hasWindowFocus()&&
+                    flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE==0&&
+                    flags and WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM==0) {
                     decor.windowToken?.let { token ->
                         (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
                             ?.hideSoftInputFromWindow(token,0)

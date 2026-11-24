@@ -15,36 +15,57 @@ import kotlin.math.roundToInt
 
 enum class ReverbSettingsToggleRole { AUTO_START, OUTPUT_COMPRESSION, SAVE_NOTIFICATION, SILENCE_DETECTION }
 
-class ReverbSettingsToggle(
+class ReverbSettingsToggle private constructor(
     context: Context,
     theme: ReverbTheme,
     initial: ToggleState,
-    role: ReverbSettingsToggleRole,
-    inputRoot: () -> View?,
+    inputRoot: (() -> View?)?,
+    muteDisabledLabel: Boolean,
+    private val icon: ReverbIcon?,
     onChanged: (Boolean) -> Unit,
 ) : AutoCloseable {
-    private val icon = when (role) {
+    /** A standard Settings switch with caller-supplied copy, state, and change handling. */
+    constructor(
+        context: Context,
+        theme: ReverbTheme,
+        initial: ToggleState,
+        inputRoot: (() -> View?)? = null,
+        onChanged: (Boolean) -> Unit,
+    ) : this(context, theme, initial, inputRoot, true, null, onChanged)
+
+    constructor(
+        context: Context,
+        theme: ReverbTheme,
+        initial: ToggleState,
+        role: ReverbSettingsToggleRole,
+        inputRoot: () -> View?,
+        onChanged: (Boolean) -> Unit,
+    ) : this(context, theme, initial, inputRoot, when (role) {
+        ReverbSettingsToggleRole.AUTO_START, ReverbSettingsToggleRole.OUTPUT_COMPRESSION -> true
+        ReverbSettingsToggleRole.SAVE_NOTIFICATION, ReverbSettingsToggleRole.SILENCE_DETECTION -> false
+    }, when (role) {
         ReverbSettingsToggleRole.AUTO_START -> ReverbIcon.Reset
         ReverbSettingsToggleRole.OUTPUT_COMPRESSION -> ReverbIcon.AudioFile
         ReverbSettingsToggleRole.SAVE_NOTIFICATION -> ReverbIcon.Save
         ReverbSettingsToggleRole.SILENCE_DETECTION -> ReverbIcon.Capture
-    }
-    private val glyph = ReverbGlyphView(context, icon,
-        if (initial.enabled) theme.controls.colors.ink else theme.controls.colors.muted).apply {
-        useTextSurfaceContrast = true
+    }, onChanged)
+
+    private val glyph = icon?.let {
+        ReverbGlyphView(context, it,
+            if (initial.enabled) theme.controls.colors.ink else theme.controls.colors.muted).apply {
+            useTextSurfaceContrast = true
+        }
     }
     private val row = ToggleRow(context, initial, theme.controls, inputRoot,
-        muteDisabledLabel = when (role) {
-            ReverbSettingsToggleRole.AUTO_START, ReverbSettingsToggleRole.OUTPUT_COMPRESSION -> true
-            ReverbSettingsToggleRole.SAVE_NOTIFICATION, ReverbSettingsToggleRole.SILENCE_DETECTION -> false
-        }, paintedSurface = ReverbTextSurface::sample, onChanged = onChanged).apply { setLeadingIcon(glyph) }
+        muteDisabledLabel = muteDisabledLabel, paintedSurface = ReverbTextSurface::sample,
+        onChanged = onChanged).apply { glyph?.let(::setLeadingIcon) }
     val view: View get() = row.view
     private var closed = false
 
     fun bind(next: ToggleState, theme: ReverbTheme) {
         if (closed) return
         row.bind(next, theme.controls)
-        glyph.bind(icon, if (next.enabled) theme.controls.colors.ink else theme.controls.colors.muted)
+        if (icon != null) glyph?.bind(icon, if (next.enabled) theme.controls.colors.ink else theme.controls.colors.muted)
     }
     override fun close() { closed = true; row.close() }
 }

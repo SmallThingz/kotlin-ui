@@ -99,6 +99,10 @@ class NativeSegmentedControl private constructor(
         choices.onSelectionRequest = { id -> acceptsNativeInput && onSelectionRequest?.invoke(id) == true }
     }
 
+    internal fun setOptionsEnabled(enabled: Boolean) {
+        if (!closed) choices.isEnabled = enabled
+    }
+
     fun bind(options: List<NativeChoice>, selectedId: String, palette: ControlPalette,
              density: Float = resources.displayMetrics.density) {
         if (closed) return

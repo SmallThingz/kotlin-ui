@@ -51,5 +51,11 @@ class ReverbThemeSelector(
     fun bind(selected: NativeThemeMode, theme: ReverbTheme) =
         row.bind(selected, theme.palette.settingsControls, theme.density, theme.fontResolver)
 
+    /** Bind the owner selection and the enabled state of both the host and its choices. */
+    fun bind(selected: NativeThemeMode, enabled: Boolean, theme: ReverbTheme) {
+        bind(selected, theme)
+        row.bindEnabled(enabled)
+    }
+
     override fun close() = row.close()
 }
