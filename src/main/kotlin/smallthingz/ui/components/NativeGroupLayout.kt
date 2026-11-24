@@ -23,6 +23,8 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import androidx.annotation.ColorInt
 import smallthingz.ui.animation.view.ViewColorTransition
+import smallthingz.ui.graphics.ViewGrain
+import smallthingz.ui.graphics.bindGrainLayer
 import kotlin.math.ceil
 import kotlin.math.min
 
@@ -45,6 +47,8 @@ class NativeGroupLayout(
     private val fillPaint = Paint(GROUP_PAINT_FLAGS)
     private val borderPaint = Paint(GROUP_PAINT_FLAGS).apply { style = Paint.Style.STROKE }
     private val bounds = RectF()
+    private val grainClip = Path()
+    private var grain: ViewGrain? = null
     private val borderBounds = RectF()
     private var geometry = roundedGroupGeometry(0f, 0f, resources.displayMetrics.density, cornerRadiusDp)
     private val content = ClippedGroupContent(context)
@@ -182,6 +186,10 @@ class NativeGroupLayout(
         applyPalette(field,border)
     }
 
+    internal fun setSurfacePreset(preset: NativeDarkSurfacePreset?) {
+        grain = bindGrainLayer(grain, preset?.foregroundGrain ?: 0f)
+    }
+
     private fun applyPalette(field:Int,border:Int) {
         val fillChanged = fillPaint.color != field
         if (fillPaint.color != field || borderPaint.color != border) {
@@ -236,6 +244,16 @@ class NativeGroupLayout(
     override fun onDraw(canvas: Canvas) {
         if (joinedEdges == null) canvas.drawRoundRect(bounds, geometry.radius, geometry.radius, fillPaint)
         else checkNotNull(joinedShape).drawFill(canvas, fillPaint)
+        grain?.let { layer ->
+            if (joinedEdges == null) layer.draw(canvas, bounds.left, bounds.top, bounds.right, bounds.bottom, geometry.radius)
+            else {
+                val save = canvas.save()
+                copyVisualPath(grainClip)
+                canvas.clipPath(grainClip)
+                layer.draw(canvas, bounds.left, bounds.top, bounds.right, bounds.bottom)
+                canvas.restoreToCount(save)
+            }
+        }
         if (progressFraction > 0f) {
             val save = canvas.save()
             val extent = width * progressFraction

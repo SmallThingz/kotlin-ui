@@ -114,6 +114,17 @@ class NativeMaterialSwitchView(
         invalidate()
     }
 
+    private var surfacePreset: NativeDarkSurfacePreset? = null
+
+    internal fun bindSurfacePreset(preset: NativeDarkSurfacePreset?) {
+        if (surfacePreset == preset) return
+        surfacePreset = preset
+        setTrackNoiseIntensity(preset?.foregroundGrain ?: 0f)
+        customOutlineWidthDp = preset?.borderWidthDp
+        customOutlineColor = preset?.borderColor ?: 0
+        invalidate()
+    }
+
     /** Apply texture to the track while keeping its thumb and outline solid. */
     fun setTrackNoiseIntensity(intensity: Float) { trackGrain = bindGrainLayer(trackGrain, intensity) }
 

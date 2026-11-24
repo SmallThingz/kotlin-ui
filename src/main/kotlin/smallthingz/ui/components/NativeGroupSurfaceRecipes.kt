@@ -58,8 +58,10 @@ data class NativeGroupSurfaceRecipe(
 
     fun borderColor(colors: NativeColorScheme): Int = if (outlined) colors.border else 0
 
-    fun bind(surface: NativeGroupLayout, colors: NativeColorScheme) =
+    fun bind(surface: NativeGroupLayout, colors: NativeColorScheme) {
+        surface.setSurfacePreset(colors.surfacePreset)
         surface.setPalette(fillColor(colors), borderColor(colors))
+    }
 }
 
 /** Waveform viewport and boundary-control geometry within a range editor. */

@@ -12,7 +12,9 @@ data class NativeBackdropStyle(
     val windowGrainSeed: Int? = NoiseDrawable.SEED_BACKGROUND,
     val panelScrimAlpha: Float = .32f,
 ) {
-    fun pageBackground(palette: NativeColorScheme) = NoiseDrawable(palette.surface, pageGrainSeed)
+    fun pageBackground(palette: NativeColorScheme) = NoiseDrawable(palette.surface, pageGrainSeed).apply {
+        setNoiseIntensity(palette.surfacePreset?.backgroundGrain ?: 1f)
+    }
 
     fun panelScrimColor(palette: NativeColorScheme): Int = srgbColorWithAlpha(palette.scrim, panelScrimAlpha)
 

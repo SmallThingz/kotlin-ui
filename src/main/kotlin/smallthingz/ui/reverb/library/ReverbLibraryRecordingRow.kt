@@ -163,6 +163,7 @@ class ReverbLibraryRecordingRow(
     }
 
     fun bind(value: LibraryRecordingRow, callbacks: LibraryRecordingRowActions) {
+        surface.setSurfacePreset(environment.palette.surfacePreset)
         val targetPaint = surfaceStyle.target(environment.palette, selected = value.selected)
         if (row?.recordingId != value.recordingId) {
             bodyInput.bind(null)

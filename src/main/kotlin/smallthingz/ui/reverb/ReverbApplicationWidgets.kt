@@ -160,7 +160,9 @@ class ReverbApplicationWidgets(private val context: Context, theme: ReverbTheme)
     fun toggle(label: TextView, changed: (Boolean) -> Unit) = toggle(label, null, changed)
 
     fun toggle(label: TextView, detail: TextView?, changed: (Boolean) -> Unit) = NativeToggleRow(context,
-        label, detail, NativeMaterialSwitchView(context, colors.switchPalette), onChanged = changed).apply {
+        label, detail, NativeMaterialSwitchView(context, colors.switchPalette).apply {
+            bindSurfacePreset(colors.surfacePreset)
+        }, onChanged = changed).apply {
         filterTouchesWhenObscured = true
     }
     fun bindToggle(row: NativeToggleRow, checked: Boolean, enabled: Boolean = true) = row.bindToggle(

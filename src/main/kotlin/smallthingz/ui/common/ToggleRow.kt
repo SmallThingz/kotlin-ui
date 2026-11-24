@@ -60,6 +60,7 @@ class ToggleRow internal constructor(
         summary.setText(next.description.orEmpty())
         summary.setTypography(theme.appearance.typography[summaryRole], theme.density, theme.fontResolver)
         summary.animateTextColor(theme.colors.muted)
+        switch.bindSurfacePreset(theme.colors.surfacePreset)
         row.bindToggle(next.checked, next.enabled, theme.density.density, theme.colors.ink, theme.colors.switchPalette)
     }
 

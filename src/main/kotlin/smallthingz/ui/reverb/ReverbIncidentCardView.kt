@@ -217,6 +217,7 @@ class ReverbIncidentCardView internal constructor(
     private fun applyAppearance(immediately: Boolean = false) {
         val current = binding ?: return
         val colors = appearance.palette
+        surface.setSurfacePreset(colors.surfacePreset)
         val unacknowledged = !current.row.acknowledged
         val style = appearance.style
         val selected = current.selected == true

@@ -84,6 +84,7 @@ data class NativeColorScheme(
     val tertiaryFixedDim: Int,
     val onTertiaryFixed: Int,
     val onTertiaryFixedVariant: Int,
+    internal val surfacePreset: NativeDarkSurfacePreset? = null,
 ) {
     val buttonPalette = NativeButtonPalette(accent = primary, onAccent = onPrimary, content = onSurface,
         muted = onSurfaceVariant, quietSurface = surfaceContainerLow, tonalSurface = secondaryContainer,
@@ -100,12 +101,12 @@ data class NativeColorScheme(
     val raised: Int get() = surfaceContainerHigh
     val ink: Int get() = onSurface
     val muted: Int get() = onSurfaceVariant
-    val border: Int get() = srgbColorWithAlpha(onSurface, 0.14f)
+    val border: Int get() = surfacePreset?.borderColor ?: srgbColorWithAlpha(onSurface, 0.14f)
 
     val settingsSelection: Int get() = primary
     val settingsOnSelection: Int get() = onPrimary
 
-    val settingsControls = ControlPalette(field, field, ink, muted, primary, settingsOnSelection, settingsSelection, border)
+    val settingsControls = ControlPalette(field, field, ink, muted, primary, settingsOnSelection, settingsSelection, border, surfacePreset)
     val pageControls = ControlPalette(surface, surfaceContainerHigh, onSurface, onSurfaceVariant,
         primary, onPrimary, primaryContainer, outlineVariant)
     val switchPalette = NativeMaterialSwitchPalette(surface, onSurface, primary, onPrimary, outline, surfaceContainerHighest)

@@ -75,11 +75,12 @@ class DropdownGroup(
         val options = content.options.toList()
         val labels = options.associateWith(content.optionLabel)
         val config = theme
+        val preset = config.colors.surfacePreset
         val dropdown = NativeAnchoredDropdown(anchor.context, host, config.appearance, config.colors,
             config.density, config.fontResolver,
             palette = field.outlineColor?.let { palette.copy(divider = it) } ?: palette).also {
-            it.noiseIntensity = field.noiseIntensity
-            it.outlineWidthDp = field.outlineWidthDp
+            it.noiseIntensity = field.noiseIntensity ?: preset?.foregroundGrain ?: 0f
+            it.outlineWidthDp = field.outlineWidthDp ?: preset?.borderWidthDp
         }
         val session = Session(field, dropdown, content.label, options, labels, content.selected)
         current = session
@@ -154,7 +155,7 @@ class DropdownField<T> internal constructor(
     private var expanded = false
     private var closed = false
     private var descriptionLocales: LocaleList? = null
-    internal var noiseIntensity = 0f
+    internal var noiseIntensity: Float? = null
         private set
     internal var outlineWidthDp: Float? = null
         private set
@@ -187,6 +188,7 @@ class DropdownField<T> internal constructor(
         content = next
         if (onSelected != null) this.onSelected = onSelected
         val config = group.theme
+        native.setNoiseIntensity(noiseIntensity ?: config.colors.surfacePreset?.foregroundGrain ?: 0f)
         native.bindTypography(config.appearance.typography[titleRole], config.appearance.typography[valueRole],
             config.density, config.fontResolver)
         val locales = view.resources.configuration.locales

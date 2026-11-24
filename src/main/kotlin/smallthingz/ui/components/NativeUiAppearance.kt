@@ -201,7 +201,10 @@ private class GroupedSegmentedPresentation(
     override fun setContent(content: View) = surface.addRow(content,
         NativeGroupLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
 
-    override fun bindSurface(palette: ControlPalette) = surface.setPalette(palette.surface, palette.outline)
+    override fun bindSurface(palette: ControlPalette) {
+        surface.setSurfacePreset(palette.surfacePreset)
+        surface.setPalette(palette.surface, palette.outline)
+    }
     override val paintedSurfaceColor: Int get() = surface.paintedFillColor
 }
 

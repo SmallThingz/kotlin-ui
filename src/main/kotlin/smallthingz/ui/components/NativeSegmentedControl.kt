@@ -134,9 +134,15 @@ class NativeSegmentedControl private constructor(
             requestLayout()
         }
         if (boundPalette != palette) {
+            val previousPreset = boundPalette?.surfacePreset
             boundPalette = palette
             presentation.bindSurface(palette)
             choices.applyPalette(palette)
+            if (palette.surfacePreset != null || previousPreset != null) {
+                val preset = palette.surfacePreset
+                setNoiseIntensity(preset?.foregroundGrain ?: 0f)
+                setOutlineWidth(preset?.borderWidthDp ?: 1f)
+            }
         }
         if (boundOptions != options) {
             boundOptions = options.toList()
