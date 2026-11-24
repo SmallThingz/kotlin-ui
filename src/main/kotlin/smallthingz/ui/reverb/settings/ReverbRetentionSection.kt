@@ -39,7 +39,8 @@ open class ReverbRetentionSection(
         visibility = GONE
     }
     private val body = fields.createFields(context, oneShotValue, loopingValue, error, environment.textDensity.density)
-    private val surface = ReverbTextSurface.ownGroupInk(fields.createSurface(context, body))
+    // Caller-supplied values may sample paint above this surface; retain ancestor traversal.
+    private val surface = fields.createSurface(context, body, ReverbTextSurface::invalidate)
     private val header = modes.layoutWithTitle(title)
     private val oneShotNumbers = oneShotValue as? ReverbRetentionValueView
     private val loopingNumbers = loopingValue as? ReverbRetentionValueView
