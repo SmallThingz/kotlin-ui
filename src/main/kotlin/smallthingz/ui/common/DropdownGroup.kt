@@ -7,6 +7,7 @@ import android.widget.FrameLayout
 import smallthingz.ui.R
 import smallthingz.ui.animation.view.transitionForegroundInk
 import smallthingz.ui.components.NativeAnchoredDropdown
+import smallthingz.ui.components.DropdownOptionHeights
 import smallthingz.ui.components.NativeDropdown
 import smallthingz.ui.components.NativeDropdownColors
 import smallthingz.ui.components.createDropdownIcon
@@ -19,7 +20,11 @@ class DropdownGroup(
     initialTheme: ControlTheme,
     private val overlayHost: () -> FrameLayout?,
     private val inputAllowed: () -> Boolean,
+    internal val selectionPolicy: DropdownSelectionPolicy,
 ) : AutoCloseable {
+    constructor(initialTheme: ControlTheme, overlayHost: () -> FrameLayout?, inputAllowed: () -> Boolean) :
+        this(initialTheme, overlayHost, inputAllowed, DropdownSelectionPolicy.PROGRESSIVE)
+
     private class Session(
         val field: DropdownField<*>,
         val dropdown: NativeAnchoredDropdown,
@@ -39,6 +44,9 @@ class DropdownGroup(
         private set
     private var current: Session? = null
     private var closed = false
+
+    /** True while this group owns a mounted or transitioning popup. */
+    val isExpanded: Boolean get() = current != null
 
     fun <T> field(context: Context, content: DropdownContent<T>, inputRoot: (() -> View?)? = null,
         onSelected: (T) -> Unit): DropdownField<T> {
@@ -60,7 +68,7 @@ class DropdownGroup(
         val host = overlayHost() ?: return
         val anchor = field.view
         if (!host.isAttachedToWindow || host.windowToken != anchor.windowToken) return
-        if (content.options.size <= 1 || content.selected !in content.options) return
+        if (!content.canOpen(selectionPolicy)) return
         dismiss()
         if (closed || current != null || !inputAllowed()) return
 
@@ -73,9 +81,9 @@ class DropdownGroup(
         current = session
         try {
             val mounted = dropdown.open(anchor, content.copy(options = options,
-                optionLabel = { labels[options.indexOf(it)] }), { terminal(session) }) select@{ value ->
+                optionLabel = { labels[options.indexOf(it)] }), selectionPolicy, { terminal(session) }) select@{ value ->
                 if (current !== session) return@select
-                if (!inputAllowed()) {
+                if (!inputAllowed() || !anchor.isEnabled || !anchor.isShown) {
                     dismiss()
                     return@select
                 }
@@ -156,7 +164,13 @@ class DropdownField<T> internal constructor(
     )
     val view: View get() = native
 
-    init { bind(initial) }
+    init {
+        if (group.selectionPolicy == DropdownSelectionPolicy.EXPLICIT) {
+            val theme = group.theme
+            native.wrapValues(DropdownOptionHeights(context, theme.appearance.typography[valueRole], theme.density, theme.fontResolver))
+        }
+        bind(initial)
+    }
 
     fun bind(next: DropdownContent<T>, onSelected: ((T) -> Unit)? = null) {
         if (closed) return
@@ -182,7 +196,10 @@ class DropdownField<T> internal constructor(
     }
 
     private fun render() {
-        if (!closed) native.bind(content, expanded, group.palette)
+        if (closed) return
+        if (group.selectionPolicy == DropdownSelectionPolicy.EXPLICIT) {
+            native.bind(content, expanded, group.palette, present = content.canOpen(group.selectionPolicy))
+        } else native.bind(content, expanded, group.palette)
     }
 
     override fun close() {

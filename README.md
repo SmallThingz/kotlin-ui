@@ -23,9 +23,59 @@ reassembling it in an app creates a second appearance implementation.
   `ReverbEnvironment`, `ReverbTopBar`, Settings, Library, Incidents, Home and dialogs.
   Another library application namespace can delegate to these components. It should
   not copy their drawing or layout implementation into the consuming application.
+- `smallthingz.ui.email` supplies Email's composer fields, recipient rows and
+  dropdown selection behavior. The Email app owns account, folder, recipient
+  and draft state.
 - Primitive recipes and the examples below are tools for authors of library
   components and application namespaces. Consuming apps should use their namespace's
   semantic API instead of overriding recipes, padding, paint or animation rules.
+
+### Email
+
+`EmailDropdownGroup` retains one anchored choice at a time in the window's
+unscrolled `FrameLayout`. Pass `ControlTheme.resolve(context, dark)`, the overlay
+host and an input-admission callback. Bind each field with `DropdownContent`,
+using stable values and localized labels. Dragging, arrow keys and accessibility
+scroll actions browse choices. Activating a row or pressing Enter on the
+centered choice delivers the value. Back, Escape and outside dismissal leave the
+owner's value intact. An unavailable stored value can be displayed and replaced
+with an available choice, including a single remaining option.
+
+Email values wrap to four lines. The field reserves room for its tallest option
+at the actual field width, keeping the open wheel aligned to its trigger.
+Longer values end in an ellipsis and retain the complete accessibility label.
+
+Rebind the authoritative value after accepting a change. Dismiss the group
+when the screen stops. Close the field when its row retires and close the group
+with the owning window. Supply a new `ControlTheme` on a configuration or theme
+change. Common's default `DropdownGroup` continues to report each centered value
+for progressive controls such as Reverb audio choices.
+
+`EmailComposerFields` joins caller-supplied recipient rows with an editable
+Subject. Its `subjectEditor` retains Android text input, selection and IME
+behavior. `EmailRecipientRow` styles address text and the selected row while
+the caller supplies children and actions. The `dropdown-demo` Email section
+uses these components with local example data.
+
+#### Verify the Email demo
+
+Build the separate visual-test application and its instrumented tests:
+
+```sh
+./gradlew -PemailVisualTest=true :dropdown-demo:assembleDebug :dropdown-demo:assembleDebugAndroidTest
+```
+
+On an API 36 test device, the guarded controller selects only
+`app.smallthingz.dropdowndemo.EmailDemoPrivateCaptureTest#exerciseCommonAndEmail`
+on `app.smallthingz.dropdowndemo.emailvisual.test/androidx.test.runner.AndroidJUnitRunner`.
+The test targets `app.smallthingz.dropdowndemo.emailvisual`. It requires
+`visualCapture=true`, `visualFixtureScope=synthetic-email-library-demo`,
+`visualDisplayIsolation=private-own-focus`, the verified 40-character Git commit
+as `visualSourceRevision`, and a fresh random 16-digit lowercase hexadecimal
+`visualRouteNonce`. Set `visualDisplayWidthPx` to 720 or 448,
+`visualDisplayHeightPx=1008` and `visualDisplayDensityDpi=320`. The fixture
+allocates and releases its private display. The controller verifies the primary
+display's focus before and after each run and checks the fixture's release receipt.
 
 Recreate window configuration for a language, density or font change, and rebind
 localized domain content without changing option identity. Intrinsic component

@@ -7,6 +7,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Region
 import android.view.FocusFinder
@@ -20,6 +21,8 @@ import android.view.ViewTreeObserver
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
+import smallthingz.ui.common.DropdownSelectionPolicy
+import smallthingz.ui.common.canOpen
 import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.text.font.FontFamily
 import smallthingz.ui.text.view.ParagraphView
@@ -68,14 +71,16 @@ class NativeAnchoredDropdown(
     fun <T> createField(content: NativeDropdownContent<T>, onSelected: (T) -> Unit): NativeDropdown<T> =
         face(content) { anchor, value -> open(anchor, value, onSelected) }
 
-    private fun <T> face(content: NativeDropdownContent<T>, activate: (View, NativeDropdownContent<T>) -> Unit): NativeDropdown<T> {
+    private fun <T> face(content: NativeDropdownContent<T>, optionRow: Boolean = false, wrapValue: Boolean = false,
+        activate: (View, NativeDropdownContent<T>) -> Unit): NativeDropdown<T> {
         return NativeDropdown(context,
             ParagraphView(context, titleStyle, density, resolver, palette.muted),
             ParagraphView(context, selectedStyle, density, resolver, palette.ink),
             createDropdownIcon(context, palette.muted), palette, { null }, { _, _ -> }, activate,
         ).apply {
+            if (wrapValue) wrapValues()
             bindDescription(content.label)
-            bind(content, false, palette)
+            bind(content, false, palette, present = optionRow || content.options.size > 1)
         }
     }
 
@@ -85,15 +90,19 @@ class NativeAnchoredDropdown(
 
     /** Returns true when this session is still mounted. Each created session reports terminal once. */
     fun <T> open(anchor: View, content: NativeDropdownContent<T>, onTerminal: () -> Unit,
-        onSelected: (T) -> Unit): Boolean {
+        onSelected: (T) -> Unit): Boolean =
+        open(anchor, content, DropdownSelectionPolicy.PROGRESSIVE, onTerminal, onSelected)
+
+    fun <T> open(anchor: View, content: NativeDropdownContent<T>, selectionPolicy: DropdownSelectionPolicy,
+        onTerminal: () -> Unit, onSelected: (T) -> Unit): Boolean {
         close()
         // A terminal callback can synchronously establish a newer session.
         if (sessionIdentity != null || !anchor.isAttachedToWindow || !anchor.isShown || anchor.width <= 0 || anchor.height <= 0) return false
         val options = content.options.toList()
         val selected = options.indexOf(content.selected)
-        if (options.size < 2 || selected < 0) return false
+        if (!content.canOpen(selectionPolicy)) return false
         require(options.distinct().size == options.size) { "Choice identities must be unique" }
-        val session = Session(anchor, content.copy(options = options), selected, onSelected, onTerminal)
+        val session = Session(anchor, content.copy(options = options), selected, selectionPolicy, onSelected, onTerminal)
         sessionIdentity = session
         dismissCurrent = session::dispose
         try {
@@ -112,29 +121,56 @@ class NativeAnchoredDropdown(
     }
 
     private inner class Session<T>(
-        val anchor: View, val content: NativeDropdownContent<T>, val initial: Int, val select: (T) -> Unit,
+        val anchor: View, val content: NativeDropdownContent<T>, val initial: Int,
+        val selectionPolicy: DropdownSelectionPolicy, val select: (T) -> Unit,
         val onTerminal: () -> Unit,
     ) {
         val origin = IntArray(2).also(anchor::getLocationOnScreen)
         val observed = IntArray(2)
         val root = object : FrameLayout(context) {
+            private var confirmationKey = KeyEvent.KEYCODE_UNKNOWN
+
+            override fun onFocusChanged(gainFocus: Boolean, direction: Int, previous: Rect?) {
+                super.onFocusChanged(gainFocus, direction, previous)
+                if (!gainFocus) confirmationKey = KeyEvent.KEYCODE_UNKNOWN
+            }
+
+            override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+                super.onWindowFocusChanged(hasWindowFocus)
+                if (!hasWindowFocus) confirmationKey = KeyEvent.KEYCODE_UNKNOWN
+            }
+
             override fun focusSearch(focused: View?, direction: Int): View? =
                 FocusFinder.getInstance().findNextFocus(this, focused, direction) ?: this
             override fun dispatchKeyEvent(event: KeyEvent): Boolean {
                 if (event.keyCode == KeyEvent.KEYCODE_BACK || event.keyCode == KeyEvent.KEYCODE_ESCAPE) {
-                    if (event.action == KeyEvent.ACTION_UP) collapse(settled)
+                    if (event.action == KeyEvent.ACTION_UP) cancelSelection()
                     return true
                 }
                 if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN || event.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0)
+                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                        confirmationKey = KeyEvent.KEYCODE_UNKNOWN
+                        if (selectionPolicy == DropdownSelectionPolicy.EXPLICIT) requestFocus()
                         settle(settled + if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1)
+                    }
+                    return true
+                }
+                if (selectionPolicy == DropdownSelectionPolicy.EXPLICIT && isFocused &&
+                    (event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER ||
+                        event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_SPACE)) {
+                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) confirmationKey = event.keyCode
+                    if (event.action == KeyEvent.ACTION_UP) {
+                        val activate = confirmationKey == event.keyCode && !event.isCanceled
+                        confirmationKey = KeyEvent.KEYCODE_UNKNOWN
+                        if (activate) collapse(settled)
+                    }
                     return true
                 }
                 return super.dispatchKeyEvent(event)
             }
         }
-        val overlay = NativeModalOverlay(overlayHost, root) { collapse(settled) }
-        val scrim = View(context).apply { setBackgroundColor(colors.scrim); alpha = 0f; setOnClickListener { collapse(settled) } }
+        val overlay = NativeModalOverlay(overlayHost, root, ::cancelSelection)
+        val scrim = View(context).apply { setBackgroundColor(colors.scrim); alpha = 0f; setOnClickListener { cancelSelection() } }
         val wheel = Wheel()
         val rows = ArrayList<NativeDropdown<T>>()
         val radii = nearestGroup()?.descendantCornerRadii(anchor) ?: FloatArray(4) { style.cornerRadiusDp * density.density }
@@ -184,6 +220,7 @@ class NativeAnchoredDropdown(
 
         fun show() {
             root.layoutDirection = anchor.layoutDirection
+            root.filterTouchesWhenObscured = anchor.filterTouchesWhenObscured
             root.isFocusableInTouchMode = true
             root.addView(scrim, FrameLayout.LayoutParams(-1, -1))
             root.addView(wheel)
@@ -201,16 +238,21 @@ class NativeAnchoredDropdown(
             val up = ((anchorY - margin) / rowHeight).coerceAtLeast(0)
             val down = ((root.height - margin - anchorY - rowHeight) / rowHeight).coerceAtLeast(0)
             slotsAbove = up; slotsBelow = down
-            val layout = NativeAnchoredDropdownPlan(content.options.size, initial, up, down)
+            // An unavailable stored value has no wheel row. Browse from the first real option.
+            val layout = NativeAnchoredDropdownPlan(content.options.size, initial.coerceAtLeast(0), up, down)
             plan = layout; settled = layout.selectedPosition; position = settled.toFloat()
             wheel.layoutParams = FrameLayout.LayoutParams(rowWidth, root.height).apply {
                 gravity = Gravity.TOP or Gravity.LEFT; leftMargin = x
             }
             repeat(layout.count) { i ->
                 val option = content.options[layout.optionAt(i)]
-                val row = face(content.copy(selected = option)) { _, _ -> collapse(i) }
+                val row = face(content.copy(selected = option), optionRow = true,
+                    wrapValue = selectionPolicy == DropdownSelectionPolicy.EXPLICIT) { source, _ ->
+                    if (selectionPolicy == DropdownSelectionPolicy.PROGRESSIVE ||
+                        source.importantForAccessibility == View.IMPORTANT_FOR_ACCESSIBILITY_YES) collapse(i)
+                }
                 row.optionAccessibilityLabel = content.optionLabel(option)
-                row.isSelected = i == settled
+                row.isSelected = initial >= 0 && i == settled
                 repeat(row.childCount) { child -> row.getChildAt(child).importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS }
                 rows += row
                 wheel.addView(row, FrameLayout.LayoutParams(-1, rowHeight))
@@ -222,7 +264,8 @@ class NativeAnchoredDropdown(
             animate(position, 1f, style.expandMillis) {}
         }
 
-        fun publish(index: Int) {
+        fun publish(index: Int, activated: Boolean = false) {
+            if (selectionPolicy == DropdownSelectionPolicy.EXPLICIT && !activated) return
             val option = plan?.optionAt(index) ?: return
             rows.forEachIndexed { i, row -> row.isSelected = i == index }
             if (option == lastPublished) return
@@ -245,7 +288,12 @@ class NativeAnchoredDropdown(
             }
         }
 
-        fun collapse(index: Int, afterTapIndication: Boolean = false) {
+        fun cancelSelection() {
+            val target = if (selectionPolicy == DropdownSelectionPolicy.EXPLICIT) plan?.selectedPosition ?: settled else settled
+            collapse(target, activated = false)
+        }
+
+        fun collapse(index: Int, activated: Boolean = true, afterTapIndication: Boolean = false) {
             if (disposed) return
             wheel.pointer = -1; wheel.dragging = false; wheel.earlyTap = false
             if (closing) { if (reveal == 0f) dispose(); return }
@@ -253,7 +301,7 @@ class NativeAnchoredDropdown(
             closing = true
             val target = index.coerceIn(0, rows.lastIndex)
             settled = target
-            publish(target)
+            publish(target, activated)
             if (disposed) return
             if (afterTapIndication && ValueAnimator.areAnimatorsEnabled()) {
                 animator?.removeAllListeners()
@@ -311,9 +359,11 @@ class NativeAnchoredDropdown(
             private val hitShape by lazy { Region() }
             private val hitClip by lazy { Region() }
             val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+            var downX = 0f
             var downY = 0f
             var dragging = false
             var downRow = 0
+            var explicitTap = false
             var earlyTap = false
             var pointer = -1
             var gesturePosition = 0f
@@ -404,8 +454,20 @@ class NativeAnchoredDropdown(
                 return super.drawChild(canvas, child, drawingTime)
             }
             override fun onInterceptTouchEvent(event: MotionEvent): Boolean = true
+            private fun rowAt(y: Float): Int =
+                (position + (y - anchorY) / rowHeight - .5f).roundToInt().coerceIn(0, rows.lastIndex)
+
+            private fun trackExplicitTap(event: MotionEvent, index: Int) {
+                if (!explicitTap) return
+                fun withinSlop(x: Float, y: Float) = abs(x - downX) <= slop && abs(y - downY) <= slop
+                explicitTap = withinSlop(event.getX(index), event.getY(index)) &&
+                    (0 until event.historySize).all { sample ->
+                        withinSlop(event.getHistoricalX(index, sample), event.getHistoricalY(index, sample))
+                    }
+            }
+
             override fun onTouchEvent(event: MotionEvent): Boolean {
-                if (disposed) return true
+                if (disposed || closing && selectionPolicy == DropdownSelectionPolicy.EXPLICIT) return true
                 if (plan == null || earlyTap) {
                     when (event.actionMasked) {
                         MotionEvent.ACTION_DOWN -> earlyTap = true
@@ -417,14 +479,16 @@ class NativeAnchoredDropdown(
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         val edges = extents()
-                        if (event.y < edges.first || event.y > edges.second) { collapse(settled); return true }
+                        if (event.y < edges.first || event.y > edges.second) { cancelSelection(); return true }
                         gesturePosition = position
-                        downRow = (position + (event.y - anchorY) / rowHeight - .5f).roundToInt().coerceIn(0, rows.lastIndex)
-                        pointer = event.getPointerId(0); downY = event.y; dragging = false
+                        downRow = rowAt(event.y)
+                        pointer = event.getPointerId(0); downX = event.x; downY = event.y; dragging = false
+                        explicitTap = selectionPolicy == DropdownSelectionPolicy.EXPLICIT && event.x >= 0f && event.x < width
                     }
                     MotionEvent.ACTION_MOVE -> {
                         val i = event.findPointerIndex(pointer)
                         if (i < 0) { endGesture(); return true }
+                        trackExplicitTap(event, i)
                         val delta = downY - event.getY(i)
                         if (!dragging && abs(delta) > slop) {
                             gesturePosition = position
@@ -443,6 +507,7 @@ class NativeAnchoredDropdown(
                         if (pointer < 0) return true
                         val i = event.findPointerIndex(pointer)
                         if (i < 0) { endGesture(); return true }
+                        trackExplicitTap(event, i)
                         val delta = downY - event.getY(i)
                         val moved = dragging || abs(delta) > slop
                         if (moved) {
@@ -466,7 +531,8 @@ class NativeAnchoredDropdown(
                             if (closing) {
                                 closing = false
                                 animate(settled.toFloat(), 1f, style.expandMillis) {}
-                            } else {
+                            } else if (selectionPolicy == DropdownSelectionPolicy.PROGRESSIVE ||
+                                explicitTap && rowAt(y) == downRow) {
                                 val row = rows[downRow]
                                 val rowY = y - row.translationY
                                 if (rowY >= 0f && rowY < rowHeight) {
@@ -476,6 +542,7 @@ class NativeAnchoredDropdown(
                             }
                         }
                     }
+                    MotionEvent.ACTION_POINTER_DOWN -> explicitTap = false
                     MotionEvent.ACTION_CANCEL -> endGesture()
                     MotionEvent.ACTION_POINTER_UP -> if (event.getPointerId(event.actionIndex) == pointer) endGesture()
                 }
