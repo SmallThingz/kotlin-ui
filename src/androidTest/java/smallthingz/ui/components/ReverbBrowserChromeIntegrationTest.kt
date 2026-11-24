@@ -17,6 +17,7 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import android.widget.ScrollView
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
@@ -307,6 +308,74 @@ class ReverbBrowserChromeIntegrationTest {
                 assertEquals(listOf("site", "current"), events)
             }
         } finally { main { chrome?.close(); activity.finish() } }
+    }
+
+    @Test fun toolbarNodesExposeCurrentCountAndSiteStateWithoutRevivingRetiredActions() {
+        val activity = activity()
+        var installed: ReverbBrowserChrome? = null
+        val events = mutableListOf<String>()
+        try {
+            lateinit var view: ReverbBrowserChrome
+            val site = ReverbBrowserChromeAction("site", "Site information", ReverbBrowserChromeIcon.Shared(ReverbIcon.Browser))
+            main {
+                view = ReverbBrowserChrome(activity, ReverbDesign.theme(activity, false), "Address", site,
+                    site.copy(id = "tabs", label = "Tabs"), site.copy(id = "menu", label = "Menu"))
+                installed = view
+                view.chromeInputAllowed = { true }
+                view.onChromeAction = events::add
+                activity.setContentView(view)
+            }
+            awaitReady(view)
+            main {
+                val siteTarget = view.siteAction.accessibilityAction
+                val tabsTarget = view.tabsAction.accessibilityAction
+                fun assertNode(target: View, label: String, state: String?, enabled: Boolean = true) {
+                    val node = checkNotNull(target.createAccessibilityNodeInfo())
+                    try {
+                        assertTrue(node.isVisibleToUser)
+                        assertEquals("android.widget.Button", node.className.toString())
+                        assertEquals(label, node.contentDescription?.toString())
+                        assertEquals(state, AccessibilityNodeInfoCompat.wrap(node).stateDescription?.toString())
+                        assertEquals(enabled, node.isEnabled)
+                        assertEquals(enabled, node.isFocusable)
+                        assertEquals(enabled, node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK })
+                    } finally { node.recycle() }
+                }
+
+                view.bindTabCount("1 tab")
+                view.bindSiteAction(site, "Secure connection")
+                assertNode(tabsTarget, "Tabs", "1 tab")
+                assertNode(siteTarget, "Site information", "Secure connection")
+                assertNode(view.menuAction.accessibilityAction, "Menu", null)
+
+                view.bindTabCount("2 tabs")
+                view.bindSiteAction(site.copy(enabled = false), "Connection not secure")
+                assertSame(siteTarget, view.siteAction.accessibilityAction)
+                assertSame(tabsTarget, view.tabsAction.accessibilityAction)
+                assertNode(tabsTarget, "Tabs", "2 tabs")
+                assertNode(siteTarget, "Site information", "Connection not secure", enabled = false)
+                assertFalse(siteTarget.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                siteTarget.performClick()
+                assertTrue("Binding and disabled actions must be silent", events.isEmpty())
+
+                view.bindTabCount("3 tabs")
+                view.bindSiteAction(site, "Secure connection")
+                assertNode(tabsTarget, "Tabs", "3 tabs")
+                assertNode(siteTarget, "Site information", "Secure connection")
+                assertTrue(siteTarget.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                assertTrue(tabsTarget.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                assertEquals(listOf("site", "tabs"), events)
+
+                view.close()
+                assertNode(tabsTarget, "Tabs", "3 tabs", enabled = false)
+                assertNode(siteTarget, "Site information", "Secure connection", enabled = false)
+                for (target in listOf(siteTarget, tabsTarget)) {
+                    assertFalse(target.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                    target.performClick()
+                }
+                assertEquals(listOf("site", "tabs"), events)
+            }
+        } finally { main { installed?.close(); activity.finish() } }
     }
 
     @Test fun toolbarAdmissionCannotDeliverAnActionReboundOrRestoredDuringAdmission() {
