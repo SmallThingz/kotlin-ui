@@ -56,23 +56,43 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
     )
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
 
-    @Test fun settingsPaletteDarkeningPreservesOpaqueAlphaAndExistingRgb() = main {
+    @Test fun sharedDarkeningPreservesSourceAlphaAndExistingRgb() = main {
         val context = instrumentation.targetContext
-        for (dark in listOf(false, true)) {
-            val base = NativeColorScheme.resolve(dark, Build.VERSION.SDK_INT) { id ->
+        // Exercise the fallback source and the device's dynamic source, each in light and dark.
+        for (sdk in listOf(28, Build.VERSION.SDK_INT).distinct()) for (dark in listOf(false, true)) {
+            val readColor = { id: Int ->
                 context.resources.getColor(id, context.theme)
             }
-            val palette = ReverbDesign.appearance.resolveColorScheme(context, dark)
+            val base = NativeColorScheme.resolve(dark, sdk, readColor)
+            val palette = ReverbDesign.appearance.colorScheme.resolve(dark, sdk, readColor)
             for ((role, original, actual) in listOf(
                 Triple("background", base.background, palette.background),
                 Triple("surface", base.surface, palette.surface),
             )) {
-                assertEquals("$role input is opaque, dark=$dark", 255, original ushr 24)
+                assertEquals("$role input is opaque, dark=$dark sdk=$sdk", 255, original ushr 24)
                 // blendARGB truncates 255*(1-.04f)+255*.04f from 254.99998 to 254. The
                 // selector's painted-surface sampler correctly rejects that translucent fill.
-                assertEquals("$role darkening must preserve opacity, dark=$dark", 255, actual ushr 24)
-                assertEquals("$role darkening must preserve the published RGB recipe, dark=$dark",
+                assertEquals("$role darkening must preserve opacity, dark=$dark sdk=$sdk", 255, actual ushr 24)
+                assertEquals("$role darkening must preserve the published RGB recipe, dark=$dark sdk=$sdk",
                     ColorUtils.blendARGB(original, Color.BLACK, .04f) and 0x00ffffff, actual and 0x00ffffff)
+            }
+            // Other consumers of this producer must retain intentional transparency too; forcing
+            // every fill opaque would fix the selector while changing caller-owned alpha semantics.
+            for (alpha in listOf(0, 1, 127, 254, 255)) {
+                val surface = ColorUtils.setAlphaComponent(base.surfaceContainerLow, alpha)
+                val link = ColorUtils.setAlphaComponent(base.surfaceContainerHighest, alpha)
+                val variant = base.copy(surfaceContainerLow = surface, surfaceContainerHighest = link)
+                for ((original, amount, actual) in listOf(
+                    Triple(surface, .08f, ReverbDesign.modalSurface(variant)),
+                    Triple(link, .15f, ReverbDesign.modalLinkSurface(variant)),
+                )) {
+                    assertEquals("Darkening must retain source alpha", alpha, actual ushr 24)
+                    assertEquals("Darkening must retain the RGB recipe",
+                        ColorUtils.blendARGB(original, Color.BLACK, amount) and 0x00ffffff, actual and 0x00ffffff)
+                    val sampled = NoiseDrawable(actual, seed = null).paintedTextSurface
+                    if (alpha == 255) assertTrue("Opaque paint must be sampleable", sampled != 0L)
+                    else assertEquals("Translucent paint must remain unknown", 0L, sampled)
+                }
             }
         }
     }
