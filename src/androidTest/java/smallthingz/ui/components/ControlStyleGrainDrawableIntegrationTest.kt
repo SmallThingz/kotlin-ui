@@ -60,10 +60,20 @@ class ControlStyleGrainDrawableIntegrationTest {
                 grain.alpha = 255
                 assertArrayEquals(full, pixels(grain))
 
-                grain.colorFilter = PorterDuffColorFilter(Color.RED, PorterDuff.Mode.SRC_IN)
+                val filter = PorterDuffColorFilter(Color.RED, PorterDuff.Mode.SRC_IN)
+                grain.colorFilter = filter
                 val filtered = pixels(grain)
-                assertTrue(filtered.any { Color.alpha(it) > 0 })
-                assertTrue(filtered.filter { Color.alpha(it) > 0 }.all { (it and 0x00ffffff) == 0x00ff0000 })
+                val expectedFiltered = platformFilteredPixels(full, filter)
+                assertTrue("Platform reference must visibly tint grain", expectedFiltered.any {
+                    Color.alpha(it) > 0 && Color.red(it) > Color.green(it) && Color.red(it) > Color.blue(it)
+                })
+                assertFalse("The filter must change the unfiltered grain", full.contentEquals(filtered))
+                val mismatch = filtered.indices.firstOrNull { filtered[it] != expectedFiltered[it] }
+                assertTrue(if (mismatch == null) "Filtered pixels match the platform reference" else
+                    "Filtered mismatch at ${mismatch % 96},${mismatch / 96}: " +
+                        "actual=${Integer.toHexString(filtered[mismatch])}, " +
+                        "reference=${Integer.toHexString(expectedFiltered[mismatch])}, " +
+                        "unfiltered=${Integer.toHexString(full[mismatch])}", mismatch == null)
                 grain.clearColorFilter()
                 assertArrayEquals("Clearing filter restores the original shared grain", full, pixels(grain))
 
@@ -75,6 +85,23 @@ class ControlStyleGrainDrawableIntegrationTest {
             // Drawable callbacks are weak; retain this callback through the readiness wait.
             if (observer.callback === readinessCallback) observer.callback = null
         } }
+    }
+
+    /** Apply the same platform filter to captured unfiltered pixels, independently of the wrapper. */
+    private fun platformFilteredPixels(sourcePixels: IntArray, filter: android.graphics.ColorFilter): IntArray {
+        val source = Bitmap.createBitmap(sourcePixels, 96, 96, Bitmap.Config.ARGB_8888)
+        val result = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888)
+        try {
+            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or
+                android.graphics.Paint.DITHER_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
+                colorFilter = filter
+            }
+            Canvas(result).drawBitmap(source, 0f, 0f, paint)
+            return IntArray(96 * 96).also { result.getPixels(it, 0, 96, 0, 0, 96, 96) }
+        } finally {
+            source.recycle()
+            result.recycle()
+        }
     }
 
     private fun pixels(drawable: Drawable): IntArray {

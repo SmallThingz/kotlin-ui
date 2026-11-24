@@ -1,3 +1,4 @@
+// Generated from native-ui/src/main/brand/reverb.svg; run scripts/generate_brand_assets.py. Do not edit.
 package smallthingz.ui.reverb
 
 import android.content.Context
@@ -9,10 +10,7 @@ import smallthingz.ui.components.NativeLayeredMarkStroke
 import smallthingz.ui.components.NativeLayeredMarkView
 import smallthingz.ui.components.nativeLayeredMarkBounds
 
-/**
- * The released in-app mark from Reverb's ReverbBrandMarkView (283a14e2).
- * Its paths follow Reverb's app/src/main/icon.svg and its colors follow the launcher resources.
- */
+/** Canonical Reverb artwork in the retained native renderer; palette ownership stays in this library. */
 class ReverbBrandMarkView(context: Context, description: CharSequence? = null) :
     NativeLayeredMarkView(context, description, reverbBrandArt, ::readReverbBrandPalette)
 
@@ -22,7 +20,7 @@ private val reverbBrandArt = NativeLayeredMarkArt(
     sizeDp = BRAND_SIZE_DP,
     viewport = 512f,
     strokeWidth = 26f,
-    originX = 44.5f,
+    originX = 28.5f,
     paths = listOf(
         Path().apply {
             moveTo(127.686f, 358f)

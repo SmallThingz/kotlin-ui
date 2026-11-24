@@ -115,41 +115,42 @@ class NativeForegroundGrainIntegrationTest {
         val dark = preset.colorScheme().resolve(true, 30) { error("Unused") }
         val env = smallthingz.ui.reverb.ReverbEnvironment(smallthingz.ui.unit.Density(context),
             smallthingz.ui.text.font.createFontFamilyResolver(context), dark)
-        val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob())
-        val row = smallthingz.ui.reverb.library.ReverbLibraryRecordingRow(context, env, scope, android.view.View(context))
-        val model = smallthingz.ui.reverb.library.LibraryRecordingRow("row", "Title", "Detail", null,
-            false, false, true, null, expanded = true)
-        var activations = 0
-        val actions = smallthingz.ui.reverb.library.LibraryRecordingRowActions({ activations++ }, null, null)
+        val runtime = NativeModalWindowRuntime(context)
         try {
-            row.bind(model, actions)
-            val expansion = android.view.View(context)
-            row.setExpansionView(expansion)
-            val expansionParent = expansion.parent
-            val surface = row.getChildAt(0) as NativeGroupLayout
-            val disc = descendants(row).filterIsInstance<NativeLeadingDisc>().single()
-            for (palette in listOf(NativeColorScheme.fallback(false), dark)) {
-                row.setEnvironment(env.withPalette(palette))
-                val expected = NoiseDrawable(surface.paintedFillColor).apply {
-                    setNoiseIntensity(palette.surfacePreset?.foregroundGrain ?: 0f)
+            val row = smallthingz.ui.reverb.library.ReverbLibraryRecordingRow(context, env, runtime.scope, android.view.View(context))
+            val model = smallthingz.ui.reverb.library.LibraryRecordingRow("row", "Title", "Detail", null,
+                false, false, true, null, expanded = true)
+            var activations = 0
+            val actions = smallthingz.ui.reverb.library.LibraryRecordingRowActions({ activations++ }, null, null)
+            try {
+                row.bind(model, actions)
+                val expansion = android.view.View(context)
+                row.setExpansionView(expansion)
+                val expansionParent = expansion.parent
+                val surface = row.getChildAt(0) as NativeGroupLayout
+                val disc = descendants(row).filterIsInstance<NativeLeadingDisc>().single()
+                for (palette in listOf(NativeColorScheme.fallback(false), dark)) {
+                    row.setEnvironment(env.withPalette(palette))
+                    val expected = NoiseDrawable(surface.paintedFillColor).apply {
+                        setNoiseIntensity(palette.surfacePreset?.foregroundGrain ?: 0f)
+                    }
+                    assertEquals(expected.paintedTextSurface, surface.paintedTextSurface)
+                    val grain = field(disc, "grain") as smallthingz.ui.graphics.ViewGrain
+                    val expectedDisc = NoiseDrawable(Color.BLACK).apply {
+                        setNoiseIntensity(palette.surfacePreset?.foregroundGrain ?: 0f)
+                    }
+                    assertEquals(expectedDisc.paintedTextSurface, grain.surfaceRange(Color.BLACK))
+                    assertSame(disc, descendants(row).filterIsInstance<NativeLeadingDisc>().single())
+                    assertSame(model, field(row, "row"))
+                    assertSame(actions, field(row, "actions"))
+                    assertSame(expansionParent, expansion.parent)
+                    assertEquals("row", row.recordingId)
                 }
-                assertEquals(expected.paintedTextSurface, surface.paintedTextSurface)
-                val grain = field(disc, "grain") as smallthingz.ui.graphics.ViewGrain
-                val expectedDisc = NoiseDrawable(Color.BLACK).apply {
-                    setNoiseIntensity(palette.surfacePreset?.foregroundGrain ?: 0f)
-                }
-                assertEquals(expectedDisc.paintedTextSurface, grain.surfaceRange(Color.BLACK))
-                assertSame(disc, descendants(row).filterIsInstance<NativeLeadingDisc>().single())
-                assertSame(model, field(row, "row"))
-                assertSame(actions, field(row, "actions"))
-                assertSame(expansionParent, expansion.parent)
-                assertEquals("row", row.recordingId)
+                assertEquals(0, activations)
+            } finally {
+                row.unbind()
             }
-            assertEquals(0, activations)
-        } finally {
-            row.unbind()
-            scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
-        }
+        } finally { runtime.close() }
     }
 
     private fun field(owner: Any, name: String): Any? = owner.javaClass.getDeclaredField(name).let {
