@@ -57,7 +57,7 @@ class ReverbSettingsBackgroundWarningView(
     )
     private val restartLayout = NativeGroupLayout.LayoutParams(-1, -2)
     private val groupRecipe = environment.appearance.groupSurfaces.settingsWarning
-    private val group = groupRecipe.create(context, ReverbTextSurface::invalidate)
+    private val group = ReverbTextSurface.ownGroupInk(groupRecipe.create(context))
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         group.addRow(battery, NativeGroupLayout.LayoutParams(-1, -2))
