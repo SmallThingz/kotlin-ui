@@ -126,7 +126,7 @@ class ReverbAppChoicePicker(
     private fun anchorVisible() = anchor.isAttachedToWindow && anchor.isShown && anchor.windowVisibility == View.VISIBLE &&
         anchor.width > 0 && anchor.height > 0
 
-    private fun ownsWindowInput() = !ended && !answering && window.isShowing && panel.isAttachedToWindow &&
+    private fun ownsWindowInput(): Boolean = !ended && !answering && window.isShowing && panel.isAttachedToWindow &&
         panel.isShown && panel.hasWindowFocus() && anchorVisible() && anchor.isEnabled && anchor.acceptsNativeInput()
 
     fun show() {
