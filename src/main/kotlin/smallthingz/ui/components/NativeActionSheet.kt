@@ -10,6 +10,7 @@ import smallthingz.ui.scroll.NativeVerticalViewport
 
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.common.NativeModalDragNode
+import smallthingz.ui.common.NativeSurfaceInputAdmission
 
 import android.content.Context
 import android.graphics.Canvas
@@ -63,7 +64,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * One caller-owned sheet route. Direct title/action Close invokes the current owner immediately;
+ * One caller-owned sheet route. Title Close invokes the current owner immediately by default;
  * scrim/drag/Back use M3's respective hide-then-callback paths. No implicit busy/permission policy.
  *
  * Construct, create caller bodies against [contentContext], call [setContent], then show().
@@ -126,6 +127,8 @@ class NativeActionSheet(
     var style=initialStyle;private set
     private var onOwnerDismiss=onDismiss
     private var animatedDismissRequested=false
+    private var animateCloseButton=false
+    private var hiddenOwnerDelivered=false
     private var disposed=false
     private var sensitiveInput=false
     private var blockedSensitiveGesture=true
@@ -144,11 +147,11 @@ class NativeActionSheet(
     private var showEffect:Job?=null
     private val pointer=SheetPointerOwner(style.textDensity.density)
     private val handle=NativeSheetDragHandle(context,style,{pointer.inputRoot},runtime,::handleClick,::requestAnimatedDismiss)
-    private val appContent=NativeSheetContent(context,style,title,{pointer.inputRoot},closeIcon) {onOwnerDismiss()}
+    private val appContent=NativeSheetContent(context,style,title,{pointer.inputRoot},closeIcon,::closeFromTitle)
     private val surface=NativeSheetSurface(context,style,handle,appContent,contentBackground,entryEdge)
     private val scrim=SheetScrim(context,style.palette.scrim,style.recipe.scrimAlpha,::requestAnimatedDismiss)
     private val root:SheetRoot=SheetRoot(context,pointer,state,surface,scrim,style.textDensity.density,
-        style.recipe.maxWidthDp,::measured,::applyMotion,entryEdge)
+        style.recipe.maxWidthDp,::measured,::applyMotion,entryEdge) { acceptsContentActions }
     private val dragChannel=NativeActionSheetDragChannel(state,runtime.scope,::settleToDismiss,::returnAfterCancelledDrag,entryEdge)
     private val dragNode=NativeModalDragNode(surface, { state.visible && dismissalAllowed() },
         { state.animationRunning }, dragChannel)
@@ -181,6 +184,7 @@ class NativeActionSheet(
             runtime.scope.launch {predictive.animateTo(0f) {applyMotion()}}
         }
         override fun handleOnBackPressed() {
+            if(animateCloseButton) {requestAnimatedDismiss();return}
             if(!dismissalAllowed()) {refreshDismissalAdmission();return}
             if(sensitiveInput)sensitiveDismissalRequested=true
             val dismissAtRequest=onOwnerDismiss
@@ -253,7 +257,7 @@ class NativeActionSheet(
     }
     /** Callback and title updates never recreate bodies, accepted actions, draft fields or gestures. */
     fun bind(title:String,onDismiss:()->Unit) {
-        onOwnerDismiss=onDismiss;appContent.bind(title) {onOwnerDismiss()}
+        onOwnerDismiss=onDismiss;appContent.bind(title,::closeFromTitle)
         root.layoutDirection=anchor.layoutDirection;updateWindowParameters()
     }
     /** Palette changes update this same Window; density/configuration recreation remains host-owned. */
@@ -337,7 +341,7 @@ class NativeActionSheet(
                 if(event.action==KeyEvent.ACTION_UP) {
                     val accepted=sensitiveEscapeDown&&!event.isCanceled&&event.hasNoModifiers()
                     sensitiveEscapeDown=false
-                    if(accepted&&dismissalAllowed())onOwnerDismiss()
+                    if(accepted&&dismissalAllowed())closeFromTitle()
                 }
                 return true
             }
@@ -354,17 +358,62 @@ class NativeActionSheet(
             NativeSheetValue.HIDDEN->runtime.scope.launch {state.show()}
         }
     }
+    /** Email can opt into animated title Close without changing ordinary caller behavior. */
+    fun setAnimateCloseButton(animate: Boolean) {
+        animateCloseButton = animate
+    }
+
+    /** Rechecked by retained content actions, including keyboard and accessibility activation. */
+    val acceptsContentActions: Boolean
+        get() = !disposed && (!animateCloseButton || !hiddenOwnerDelivered && !animatedDismissRequested &&
+            !(state.animationRunning && state.targetValue == NativeSheetValue.HIDDEN))
+
+    private fun closeFromTitle() {
+        if (!animateCloseButton) {
+            onOwnerDismiss()
+            return
+        }
+        if (acceptsContentActions) requestAnimatedDismiss()
+    }
+
+    private fun deliverOwner(owner: () -> Unit): Boolean {
+        if (animateCloseButton) {
+            if (disposed || hiddenOwnerDelivered || state.visible || !dismissalAllowed()) return false
+            hiddenOwnerDelivered = true
+        }
+        owner()
+        return true
+    }
+
     fun requestAnimatedDismiss() {
-        if(disposed||animatedDismissRequested)return
-        if(!dismissalAllowed()) {refreshDismissalAdmission();return}
-        animatedDismissRequested=true
-        if(sensitiveInput)sensitiveDismissalRequested=true
-        val dismissAtRequest=onOwnerDismiss
-        runtime.scope.launch {state.hide()}.invokeOnCompletion { failure ->
-            if(failure==null&&!disposed&&!state.visible&&dismissalAllowed())dismissAtRequest()
-            else {
-                animatedDismissRequested=false
-                if(sensitiveInput)sensitiveDismissalRequested=false
+        hideThen(onOwnerDismiss, null)
+    }
+
+    /** Interrupted explicit actions release their pending input instead of escaping into a later exit. */
+    fun requestAnimatedDismiss(onHidden: () -> Unit, onInterrupted: () -> Unit) {
+        hideThen(onHidden, onInterrupted)
+    }
+
+    private fun hideThen(onHidden: () -> Unit, onInterrupted: (() -> Unit)?) {
+        if (disposed || animatedDismissRequested) {
+            onInterrupted?.invoke()
+            return
+        }
+        if (!dismissalAllowed()) {
+            refreshDismissalAdmission()
+            onInterrupted?.invoke()
+            return
+        }
+        // Preserve the upstream synchronous admission and sensitive-owner lifetime.
+        animatedDismissRequested = true
+        if (sensitiveInput) sensitiveDismissalRequested = true
+        runtime.scope.launch { state.hide() }.invokeOnCompletion { failure ->
+            if (failure == null && !disposed && !state.visible && dismissalAllowed()) {
+                if (!deliverOwner(onHidden)) onInterrupted?.invoke()
+            } else {
+                animatedDismissRequested = false
+                if (sensitiveInput) sensitiveDismissalRequested = false
+                onInterrupted?.invoke()
             }
         }
     }
@@ -374,7 +423,7 @@ class NativeActionSheet(
             sensitiveDismissalRequested=true
         val dismissAtRequest=onOwnerDismiss
         runtime.scope.launch {state.settle(velocity)}.invokeOnCompletion {
-            if(!state.visible&&dismissalAllowed())dismissAtRequest()
+            if(!state.visible&&dismissalAllowed())deliverOwner(dismissAtRequest)
             else if(sensitiveInput)sensitiveDismissalRequested=false
         }
     }
@@ -513,8 +562,10 @@ internal class SheetRoot(
     private val measured:()->Unit,
     private val motion:()->Unit,
     private val entryEdge: NativeDialogEdge = NativeDialogEdge.BOTTOM,
+    private val contentActionsAllowed: () -> Boolean = { true },
 ):PhasePointerRoot(context,pointer.geometry::rootToScreen,pointer.geometry::coordinates,
-    pointer.layout,pointer.geometry::begin,mouseButtons=true) {
+    pointer.layout,pointer.geometry::begin,mouseButtons=true), NativeSurfaceInputAdmission {
+    override fun admitsSurfaceInput(descendant: View): Boolean = contentActionsAllowed()
     private var imeBottom=0
     /** Source traversal semantics is inside imePadding, although its real Window remains full-size. */
     val sourceSemanticsHeight get()=max(0,height-imeBottom)

@@ -20,6 +20,7 @@ import android.widget.ImageView
 import androidx.annotation.ColorInt
 import androidx.core.graphics.ColorUtils
 import smallthingz.ui.animation.view.ViewColorTransition
+import smallthingz.ui.common.nativeSurfaceInputAllowed
 import smallthingz.ui.geometry.roundedGroupContains
 import smallthingz.ui.input.phase.NativeClickPhaseHost
 import smallthingz.ui.input.phase.NativePointerLayerShape
@@ -387,7 +388,8 @@ open class NativeMaterialButtonView private constructor(
         input.detached()
         super.onDetachedFromWindow()
     }
-    private fun canActivate(): Boolean = !closed && isEnabled && isAttachedToWindow && isShown
+    private fun canActivate(): Boolean = !closed && isEnabled && isAttachedToWindow && isShown &&
+        nativeSurfaceInputAllowed(this)
     override fun performClick(): Boolean = canActivate() && super.performClick()
     override fun close() {
         if (closed) return

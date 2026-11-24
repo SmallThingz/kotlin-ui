@@ -1,10 +1,12 @@
 package smallthingz.ui.components
 
 import android.content.Context
+import android.animation.ValueAnimator
 import android.content.Intent
 import android.graphics.Rect
 import android.os.SystemClock
 import android.view.InputDevice
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -19,6 +21,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.geometry.Offset
@@ -165,6 +168,59 @@ class NativeActionSheetHoverIntegrationTest {
         }
     }
 
+    @Test fun optedInTitleCloseDeliversTheBoundOwnerAfterHiding() = withSheet { fixture ->
+        val settled = CountDownLatch(1)
+        main {
+            fixture.sheet.setAnimateCloseButton(true)
+            fixture.sheet.bind("Rename") {
+                assertTrue(fixture.surface.top >= fixture.root.sourceSemanticsHeight)
+                settled.countDown()
+            }
+            tap(fixture.root, centerInRoot(fixture.root, checkNotNull(fixture.surface.appContent.close).visual))
+            assertFalse(fixture.button.performClick())
+            fixture.button.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null)
+            assertEquals(1L, fixture.buttonActivated.count)
+        }
+        assertTrue(settled.await(3, TimeUnit.SECONDS))
+        assertEquals(1L, fixture.dismissed.count)
+    }
+
+    @Test fun busyOwnerInterruptsAnExplicitActionWithoutDeliveringIt() = withSheet { fixture ->
+        var completed = 0
+        var interrupted = 0
+        main {
+            fixture.sheet.setAnimateCloseButton(true)
+            fixture.sheet.setDismissalAdmission { false }
+            fixture.sheet.requestAnimatedDismiss({ completed++ }, { interrupted++ })
+            assertEquals(0, completed)
+            assertEquals(1, interrupted)
+            assertEquals(1L, fixture.dismissed.count)
+        }
+    }
+
+    @Test fun sensitiveEscapeDuringTitleCloseDeliversOnlyOneHiddenOwner() = withSheet { fixture ->
+        assumeTrue(ValueAnimator.areAnimatorsEnabled())
+        val hidden = CountDownLatch(1)
+        var deliveries = 0
+        main {
+            fixture.sheet.protectSensitiveInput()
+            fixture.sheet.setAnimateCloseButton(true)
+            fixture.sheet.bind("Sensitive confirmation") {
+                assertTrue(fixture.surface.top >= fixture.root.sourceSemanticsHeight)
+                deliveries++
+                hidden.countDown()
+            }
+            tap(fixture.root, centerInRoot(fixture.root, checkNotNull(fixture.surface.appContent.close).visual))
+            assertTrue(fixture.sheet.hasCurrentWindowFocus)
+            for (action in listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
+                assertTrue(fixture.sheet.dispatchKeyEvent(KeyEvent(action, KeyEvent.KEYCODE_ESCAPE)))
+            }
+            assertEquals(0, deliveries)
+        }
+        assertTrue(hidden.await(3, TimeUnit.SECONDS))
+        main { assertEquals(1, deliveries) }
+    }
+
     private class Editor(context: Context) : EditText(context) {
         val hoverEvents = arrayListOf<Int>()
 
@@ -176,7 +232,8 @@ class NativeActionSheetHoverIntegrationTest {
     }
 
     private data class Fixture(val sheet: NativeActionSheet, val root: SheetRoot, val surface: NativeSheetSurface,
-        val scrim: SheetScrim, val editor: Editor, val dismissed: CountDownLatch, val entryEdge: NativeDialogEdge)
+        val scrim: SheetScrim, val editor: Editor, val dismissed: CountDownLatch, val entryEdge: NativeDialogEdge,
+        val button: NativeMaterialButtonView, val buttonActivated: CountDownLatch)
 
     private fun withSheet(
         showHeaderClose: Boolean = true,
@@ -187,6 +244,7 @@ class NativeActionSheetHoverIntegrationTest {
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         var sheet: NativeActionSheet? = null
+        var footer: NativeMaterialButtonView? = null
         try {
             lateinit var fixture: Fixture
             main {
@@ -210,16 +268,21 @@ class NativeActionSheetHoverIntegrationTest {
                     showSoftInputOnFocus = false
                     setText("Recording name")
                 }
-                dialog.setContent(editor, View(dialog.context), emptyList(), scrollable = true)
+                val buttonActivated = CountDownLatch(1)
+                val button = NativeMaterialButtonView(dialog.context, appearance.buttons.filled,
+                    Density(activity), createFontFamilyResolver(activity), onClick = buttonActivated::countDown)
+                footer = button
+                dialog.setContent(editor, button, emptyList(), scrollable = true)
                 val surface = dialog.contentView as NativeSheetSurface
                 val root = surface.parent as SheetRoot
-                fixture = Fixture(dialog, root, surface, root.getChildAt(0) as SheetScrim, editor, dismissed, entryEdge)
+                fixture = Fixture(dialog, root, surface, root.getChildAt(0) as SheetScrim, editor, dismissed, entryEdge,
+                    button, buttonActivated)
                 dialog.show()
             }
             awaitSettledLayout(fixture)
             test(fixture)
         } finally {
-            main { try { sheet?.dismiss() } finally { activity.finish() } }
+            main { try { sheet?.dismiss() } finally { try { footer?.close() } finally { activity.finish() } } }
         }
     }
 
