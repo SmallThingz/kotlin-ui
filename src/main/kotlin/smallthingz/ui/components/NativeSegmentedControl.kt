@@ -99,6 +99,14 @@ class NativeSegmentedControl private constructor(
         choices.onSelectionRequest = { id -> acceptsNativeInput && onSelectionRequest?.invoke(id) == true }
     }
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        // Cached RV holders may keep identical bounds/specs after attachment clears the
+        // descendants' laid-out flags. Remeasure through the existing force-layout chain
+        // so the next traversal restores child layout and strict pointer-hit admission.
+        if (!closed) requestLayout()
+    }
+
     internal fun setOptionsEnabled(enabled: Boolean) {
         if (!closed) choices.isEnabled = enabled
     }
