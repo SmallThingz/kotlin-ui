@@ -14,6 +14,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.EditText
@@ -21,6 +22,8 @@ import android.widget.ScrollView
 import java.io.File
 import java.security.MessageDigest
 import java.util.Locale
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -183,6 +186,128 @@ class NativePermissionDialogIntegrationTest {
             deny.performClick()
             deny.performClick()
             assertEquals(1, denies)
+        }
+    }
+
+    @Test fun unfocusedPermissionWindowRejectsRetainedActionsAndFocusedActionRespondsOnce() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        for (selected in listOf("Allow", "Deny")) {
+            val responses = mutableListOf<String>()
+            withFocusWindows({ activity ->
+                prompt(activity, allow = { responses += "Allow" }, deny = { responses += "Deny" },
+                    cancel = { responses += "Cancel" })
+            }) { prompt, cover, decor ->
+                val dialog = platform(prompt)
+                lateinit var buttons: List<NativeMaterialButtonView>
+                instrumentation.runOnMainSync {
+                    buttons = nodes(decor).filterIsInstance<NativeMaterialButtonView>()
+                    assertEquals(2, buttons.size)
+                }
+                changeWindowFocus(decor, false) { cover.show() }
+                instrumentation.runOnMainSync {
+                    assertTrue(requireNotNull(cover.window).decorView.hasWindowFocus())
+                    assertTrue(dialog.isShowing && decor.isAttachedToWindow && decor.isShown)
+                    for (button in buttons) {
+                        assertTrue(button.isEnabled)
+                        assertFalse(button.performClick())
+                        assertFalse(button.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                        // A retained semantic delegate bypasses the View entry point. The
+                        // permission callback still owns its independent focus admission.
+                        button.mergedRowAccessibility.performAccessibilityAction(button,
+                            AccessibilityNodeInfo.ACTION_CLICK, null)
+                        assertTrue(responses.isEmpty())
+                    }
+                    dialog.cancel()
+                    dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ESCAPE))
+                    dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ESCAPE))
+                    assertTrue(dialog.isShowing)
+                    assertTrue(responses.isEmpty())
+                }
+                changeWindowFocus(decor, true) { cover.dismiss() }
+                instrumentation.runOnMainSync {
+                    val button = buttons.single { it.label.getText() == selected }
+                    assertTrue(button.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                    assertFalse(button.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                    assertFalse(button.performClick())
+                    assertEquals(listOf(selected), responses)
+                }
+            }
+        }
+    }
+
+    @Test fun activationKeyCannotSurvivePermissionWindowFocusLossOrRestoration() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        var allows = 0
+        withFocusWindows({ activity -> prompt(activity, allow = { allows++ }) }) { prompt, cover, decor ->
+            val dialog = platform(prompt)
+            lateinit var allow: NativeMaterialButtonView
+            instrumentation.runOnMainSync {
+                allow = nodes(decor).filterIsInstance<NativeMaterialButtonView>()
+                    .single { it.label.getText() == "Allow" }
+                assertTrue(allow.requestFocusFromTouch())
+            }
+            var expected = 0
+            for (key in listOf(KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_SPACE)) {
+                for (startFocused in listOf(true, false)) {
+                    instrumentation.runOnMainSync {
+                        assertTrue(allow.requestFocusFromTouch())
+                        if (startFocused) assertTrue(dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, key)))
+                    }
+                    changeWindowFocus(decor, false) { cover.show() }
+                    instrumentation.runOnMainSync {
+                        // Local View focus is retained: ordinary onFocusChanged(false) cannot
+                        // accidentally supply the cancellation this regression requires.
+                        assertTrue(allow.isFocused)
+                        if (!startFocused) {
+                            // A retained child endpoint can receive stale input directly. Even
+                            // that pending input must be retired before the window is readmitted.
+                            allow.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, key))
+                        }
+                        assertEquals(expected, allows)
+                    }
+                    changeWindowFocus(decor, true) { cover.dismiss() }
+                    instrumentation.runOnMainSync {
+                        assertTrue(allow.isFocused)
+                        dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, key))
+                        assertEquals("Stale key UP crossed window focus", expected, allows)
+                        assertTrue(dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, key)))
+                        assertTrue(dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, key)))
+                        expected++
+                        assertEquals(expected, allows)
+                        dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, key))
+                        assertEquals(expected, allows)
+                        prompt.setBusy(false)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test fun trackedEscapeCannotCrossPermissionWindowFocusAndFreshEscapeCancelsOnce() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        var cancels = 0
+        withFocusWindows({ activity -> prompt(activity, cancel = { cancels++ }) }) { prompt, cover, decor ->
+            val dialog = platform(prompt)
+            instrumentation.runOnMainSync {
+                assertTrue(dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ESCAPE)))
+            }
+            changeWindowFocus(decor, false) { cover.show() }
+            changeWindowFocus(decor, true) { cover.dismiss() }
+            instrumentation.runOnMainSync {
+                // Retain tracking explicitly so framework dispatcher cleanup cannot mask stale
+                // Escape state in the permission owner itself.
+                val up = KeyEvent.changeFlags(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ESCAPE), KeyEvent.FLAG_TRACKING)
+                assertTrue(dialog.onKeyUp(KeyEvent.KEYCODE_ESCAPE, up))
+                assertTrue(dialog.isShowing)
+                assertEquals(0, cancels)
+                dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ESCAPE))
+                dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ESCAPE))
+                assertFalse(dialog.isShowing)
+                assertEquals(1, cancels)
+                dialog.cancel()
+                assertEquals(1, cancels)
+            }
         }
     }
 
@@ -431,6 +556,57 @@ class NativePermissionDialogIntegrationTest {
         finally { instrumentation.runOnMainSync { activity.finish() } }
     }
 
+    /** Both windows belong to this Activity; no global input or system window is used. */
+    private fun withFocusWindows(mount: (Activity) -> NativePermissionDialog,
+        assertions: (NativePermissionDialog, Dialog, View) -> Unit) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
+            NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        var prompt: NativePermissionDialog? = null
+        var cover: Dialog? = null
+        lateinit var decor: View
+        try {
+            instrumentation.runOnMainSync {
+                val owned = mount(activity)
+                prompt = owned
+                platform(owned).window?.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
+                owned.show()
+                decor = requireNotNull(platform(owned).window).decorView
+                cover = Dialog(activity).apply {
+                    window?.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
+                    window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
+                    setContentView(View(activity), ViewGroup.LayoutParams(100, 100))
+                }
+            }
+            changeWindowFocus(decor, true) {}
+            assertions(requireNotNull(prompt), requireNotNull(cover), decor)
+        } finally {
+            instrumentation.runOnMainSync {
+                try { cover?.dismiss() } finally {
+                    try { prompt?.dismiss() } finally { activity.finish() }
+                }
+            }
+        }
+    }
+
+    private fun changeWindowFocus(view: View, focused: Boolean, change: () -> Unit) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val changed = CountDownLatch(1)
+        val listener = ViewTreeObserver.OnWindowFocusChangeListener { if (it == focused) changed.countDown() }
+        instrumentation.runOnMainSync { view.viewTreeObserver.addOnWindowFocusChangeListener(listener) }
+        try {
+            instrumentation.runOnMainSync {
+                change()
+                if (view.hasWindowFocus() == focused) changed.countDown()
+            }
+            assertTrue("Permission window focus did not become $focused", changed.await(5, TimeUnit.SECONDS))
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync { assertEquals(focused, view.hasWindowFocus()) }
+        } finally {
+            instrumentation.runOnMainSync { view.viewTreeObserver.removeOnWindowFocusChangeListener(listener) }
+        }
+    }
+
     private fun attached(activityClass: Class<out Activity> = NativeMenuAccessibilityTestActivity::class.java,
         mount: (Activity) -> Pair<NativePermissionDialog, () -> Unit>) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -444,7 +620,9 @@ class NativePermissionDialogIntegrationTest {
                 prompt = result.first
                 assertions = result.second
             }
-            instrumentation.waitForIdleSync()
+            lateinit var decor: View
+            instrumentation.runOnMainSync { decor = requireNotNull(platform(requireNotNull(prompt)).window).decorView }
+            changeWindowFocus(decor, true) {}
             instrumentation.runOnMainSync(assertions)
         } finally {
             instrumentation.runOnMainSync { prompt?.dismiss(); activity.finish() }
