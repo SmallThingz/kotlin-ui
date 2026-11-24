@@ -89,9 +89,11 @@ class ReverbPermissionOnboardingLayoutIntegrationTest {
         assertTrue("Font growth must not be clipped to a fixed 48dp button", target.button.height > dp(context, 48))
         assertLabelFits(screen, target.button)
         val footerBeforeScroll = bounds(screen, footer)
+        val viewportBeforeScroll = Rect(page.left, page.top, page.right, page.bottom)
         assertWithinPage(screen, page, body.getChildAt(1))
         page.scrollTo(0, body.height)
         assertTrue(page.scrollY > 0)
+        assertEquals("Scrolling content must not move the viewport", viewportBeforeScroll, bounds(screen, page))
         // A large-font row may exceed this compact viewport. Its final detail must
         // still be reachable in full; requiring the entire row at once is invalid.
         val last = permissions.getChildAt(permissions.childCount - 1) as NativePermissionRow
@@ -118,7 +120,11 @@ class ReverbPermissionOnboardingLayoutIntegrationTest {
         assertTrue("Continue label must fit its painted action", bounds(screen, button).contains(bounds(screen, button.label)))
     }
 
-    private fun bounds(root: ViewGroup, child: View): Rect = Rect(0, 0, child.width, child.height).also {
+    private fun bounds(root: ViewGroup, child: View): Rect = Rect().also {
+        // Coordinate conversion subtracts this descendant's own scroll as well
+        // as ancestor scroll. Start in its scrolled drawing coordinates so this
+        // is the visible View rectangle, while ancestor scrolling still applies.
+        child.getDrawingRect(it)
         root.offsetDescendantRectToMyCoords(child, it)
     }
 
