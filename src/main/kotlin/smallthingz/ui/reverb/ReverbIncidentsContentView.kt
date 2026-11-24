@@ -7,7 +7,6 @@ import smallthingz.ui.components.NativeCircularProgress
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.scroll.NativeSourceRecyclerView
 import smallthingz.ui.text.NativeTypographyRole
-import smallthingz.ui.components.NativeSelectionTopBarLayout
 import smallthingz.ui.components.NativeToolbarActionTone
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -424,7 +423,7 @@ private class IncidentsHeader(
         setTextLayout(maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     private val actions = LinearLayout(context)
-    private val bar = NativeSelectionTopBarLayout(context, style, navigation, title, actions, 2)
+    private val bar = ReverbSelectionTopBarLayout(context, navigation, title, actions, listOf(destructive, selection))
     private val chrome = NativeToolbarBackground(this, style, style.backgroundColor(theme.palette))
     private var glyphDensity: Float? = null
 

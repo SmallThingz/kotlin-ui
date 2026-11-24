@@ -5,7 +5,6 @@ import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.widget.LinearLayout
 import smallthingz.ui.components.NativeGroupLayout
-import smallthingz.ui.components.NativeSelectionTopBarLayout
 import smallthingz.ui.components.NativeToolbarActionTone
 import smallthingz.ui.components.NativeToolbarBackground
 import smallthingz.ui.text.style.TextOverflow
@@ -19,7 +18,7 @@ open class ReverbSelectionToolbar private constructor(
     endActions: List<View>,
     private val title: ParagraphView,
     private val group: NativeGroupLayout,
-) : NativeSelectionTopBarLayout(context, ReverbDesign.appearance.toolbars, start, title, group, endActions.size) {
+) : ReverbSelectionTopBarLayout(context, start, title, group, endActions) {
     constructor(context: Context, theme: ReverbTheme, start: View, endActions: List<View>) : this(
         context, theme, start, endActions, theme.paragraph(context, "", ReverbDesign.appearance.toolbars.selectionTitleRole),
         NativeGroupLayout(context, ReverbDesign.appearance.toolbars.action.radiusDp,
