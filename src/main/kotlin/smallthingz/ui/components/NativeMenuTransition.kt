@@ -51,17 +51,13 @@ internal class NativeMenuTransition(style: NativeAnchoredMenuMotionStyle = Nativ
     val scale get() = scaleChild.value
     val alpha get() = alphaChild.value
     val isRunning get() = scaleChild.animation != null || alphaChild.animation != null
-    // Matches AndroidMenu's currentState || targetState popup lifetime, including early reversal.
-    val shouldExist get() = currentExpanded || targetExpanded
+    // Retain an interrupted entry until its exit settles, including repeated reversals.
+    val shouldExist get() = currentExpanded || targetExpanded || isRunning
 
     fun retarget(expanded: Boolean) {
         if (targetExpanded == expanded) return
-        // AndroidMenu removes the content before Transition can process an early close.
-        // Reopening a closing content, however, updates currentState to its previous target.
-        if (!expanded && !currentExpanded) {
-            targetExpanded = false
-            return
-        }
+        // Retarget both channels from their last presented values and velocities. Closing
+        // during entry must not retire the window before these exit channels settle.
         currentExpanded = targetExpanded
         targetExpanded = expanded
         scaleChild.retarget(if (expanded) 1f else collapsedScale, playTime)

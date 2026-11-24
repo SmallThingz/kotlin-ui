@@ -177,6 +177,92 @@ class NativeAnchoredMenuPanelIntegrationTest {
         }
     }
 
+    @Test fun interruptedEntryRetainsAttachedPanelReversesAndRetiresOnce() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
+            NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        lateinit var anchor: View
+        var window: PopupWindow? = null
+        try {
+            instrumentation.runOnMainSync {
+                anchor = View(activity)
+                activity.setContentView(FrameLayout(activity).apply {
+                    addView(anchor, FrameLayout.LayoutParams(68, 42))
+                })
+            }
+            awaitLayout(anchor)
+            for (exitScale in listOf(1f, 0f)) {
+                lateinit var panel: NativeAnchoredMenuPanel
+                var retired = 0
+                var stale = 0
+                instrumentation.runOnMainSync {
+                    panel = NativeAnchoredMenuRecipe.Default.createPanel(View(activity), Density(1f),
+                        NativeColorScheme.fallback(false))
+                    window = PopupWindow(panel, 180, 108, true).also {
+                        panel.applyWindowStyle(it)
+                        it.showAsDropDown(anchor)
+                    }
+                }
+                awaitLayout(panel)
+                // Synthetic timestamps in one main-thread turn prevent real Choreographer frames
+                // interleaving with the retained-pose/callback assertions. This is not timing QA.
+                instrumentation.runOnMainSync {
+                    val popup = requireNotNull(window)
+                    panel.expanded(true)
+                    panel.animateFrame(0L, 1f)
+                    panel.animateFrame(40_000_000L, 1f)
+                    val alpha = panel.alpha
+                    val scale = panel.scaleX
+                    assertTrue(alpha > 0f && alpha < 1f)
+                    panel.expanded(false) { stale++ }
+                    assertTrue(popup.isShowing)
+                    assertEquals(0, stale)
+                    assertEquals(alpha, panel.alpha, 0f)
+                    assertEquals(scale, panel.scaleX, 0f)
+                    panel.animateFrame(56_000_000L, 1f)
+                    assertTrue(panel.motionShouldExist)
+                    panel.expanded(true) // Revokes the old terminal callback without replacing the window.
+                    panel.animateFrame(72_000_000L, 1f)
+                    assertEquals(0, stale)
+                    panel.expanded(false) { retired++; popup.dismiss() }
+                    assertEquals(0, retired)
+                    if (exitScale == 0f) panel.animateFrame(72_000_000L, 0f)
+                    else {
+                        panel.animateFrame(88_000_000L, 1f)
+                        assertEquals(0, retired)
+                        assertTrue(popup.isShowing)
+                        var time = 104_000_000L
+                        repeat(320) {
+                            if (retired == 0) { panel.animateFrame(time, 1f); time += 16_000_000L }
+                        }
+                    }
+                    assertEquals(1, retired)
+                    assertEquals(0, stale)
+                    assertFalse(popup.isShowing)
+                    panel.animateFrame(10_000_000_000L, 0f)
+                    assertEquals(1, retired)
+                    assertFalse(panel.motionShouldExist)
+                }
+                // Teardown is immediate and discards a pending animated-close callback.
+                instrumentation.runOnMainSync { requireNotNull(window).showAsDropDown(anchor) }
+                awaitLayout(panel)
+                instrumentation.runOnMainSync {
+                    panel.expanded(true)
+                    panel.animateFrame(0L, 1f)
+                    panel.animateFrame(40_000_000L, 1f)
+                    panel.expanded(false) { stale++ }
+                    requireNotNull(window).dismiss()
+                    panel.animateFrame(56_000_000L, 0f)
+                    assertEquals(0, stale)
+                    assertEquals(1, retired)
+                    assertFalse(panel.motionShouldExist)
+                }
+            }
+        } finally {
+            instrumentation.runOnMainSync { window?.dismiss(); activity.finish() }
+        }
+    }
+
     private fun surfaceBody(panel: NativeAnchoredMenuPanel): View =
         ((panel.getChildAt(0) as ViewGroup).getChildAt(0) as ViewGroup).getChildAt(0)
 

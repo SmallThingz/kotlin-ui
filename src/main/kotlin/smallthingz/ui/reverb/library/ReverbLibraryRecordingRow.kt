@@ -1,5 +1,6 @@
 package smallthingz.ui.reverb.library
 
+import smallthingz.ui.reverb.ReverbFadeMotion
 import smallthingz.ui.reverb.ReverbEnvironment
 import smallthingz.ui.reverb.ReverbIcon
 import smallthingz.ui.reverb.ReverbIconDrawable
@@ -98,7 +99,7 @@ class ReverbLibraryRecordingRow(
         currentMotion = { expansionMotion },
         needsFrames = { scheduleFrame() })
     private val frames: ViewFrameLoop = ViewFrameLoop(this, animationScope,
-        { row != null && (selectionMotion?.running == true || expansionMotion.running || outerSizeMotion?.running == true) },
+        { row != null && (selectionMotion?.running == true || expansionMotion.running || outerSizeMotion?.running == true || column.headerMotionRunning) },
     ) { time, scale ->
         val previousExpansionSize = expansionMotion.measuredSize
         val previousOuterSize = outerSizeMotion?.value
@@ -106,6 +107,7 @@ class ReverbLibraryRecordingRow(
         selectionMotion?.frame(time, scale)
         expansionMotion.frame(time, scale)
         outerSizeMotion?.frame(time, scale)
+        column.frameHeader(time, scale)
         if (selectionWasRunning) selectionMotion?.value?.let(::setFrame)
         expansionViewport.publishAlpha()
         if (previousExpansionSize != expansionMotion.measuredSize) {
@@ -164,6 +166,7 @@ class ReverbLibraryRecordingRow(
             leadingInput.bind(null)
             body.replaceTextIdentities()
             cancelFrames()
+            column.finishHeaderMotion()
             selectionMotion = LibrarySelectionMotion(targetPaint)
             expansionMotion = LibraryExpansionMotion(value.expanded)
             outerSizeMotion = null
@@ -201,7 +204,14 @@ class ReverbLibraryRecordingRow(
         body.setTrailingContent(trailingContent)
     }
     /** Replaces the complete summary, including icon, timestamp and size, without moving the card. */
-    fun setHeaderView(view: View?) = column.setHeaderView(view)
+    fun setHeaderView(view: View?) {
+        if (view != null) {
+            bodyInput.bind(null)
+            leadingInput.bind(null)
+        }
+        column.setHeaderView(view, frames.durationScale)
+        scheduleFrame()
+    }
 
     val paragraphLeaves: List<ParagraphView> get() = body.paragraphLeaves
     val summarySurface: NativeGroupLayout get() = surface
@@ -257,19 +267,20 @@ class ReverbLibraryRecordingRow(
         outerSizeMotion = null
         expansionViewport.setContent(null)
         column.setExpansionView(null)
-        column.setHeaderView(null)
+        column.setHeaderView(null, 0f)
+        column.finishHeaderMotion()
         body.clear()
         visibility = INVISIBLE
     }
 
     private fun activate() {
         val current = row ?: return
-        if (current.interactionsEnabled) actions?.activate?.invoke(current.recordingId)
+        if (current.interactionsEnabled && !column.headerActive) actions?.activate?.invoke(current.recordingId)
     }
 
     private fun longClick(leading: Boolean): Boolean {
         val current = row ?: return false
-        if (!current.interactionsEnabled || actions?.activate == null) return false
+        if (!current.interactionsEnabled || column.headerActive || actions?.activate == null) return false
         val callback = if (leading) actions?.leadingLongClick ?: actions?.longClick else actions?.longClick
         callback ?: return false
         callback(current.recordingId)
@@ -279,7 +290,7 @@ class ReverbLibraryRecordingRow(
     private fun bindInputs() {
         val current = row
         val callbacks = actions
-        val enabled = current != null && current.interactionsEnabled && callbacks?.activate != null
+        val enabled = current != null && current.interactionsEnabled && !column.headerActive && callbacks?.activate != null
         fun bind(target: RecordingRowInputTarget, controller: ViewClickController, leading: Boolean) {
             val long = if (leading) callbacks?.leadingLongClick ?: callbacks?.longClick else callbacks?.longClick
             target.isClickable = enabled
@@ -324,6 +335,7 @@ class ReverbLibraryRecordingRow(
     }
     override fun onDetachedFromWindow() {
         cancelFrames()
+        column.finishHeaderMotion()
         bodyInput.bind(null)
         leadingInput.bind(null)
         super.onDetachedFromWindow()
@@ -334,13 +346,67 @@ class ReverbLibraryRecordingRow(
 private class RecordingCardColumn(context: Context, private val summary: View) : ViewGroup(context) {
     private var header: View? = null
     private val body: View get() = header ?: summary
-    fun setHeaderView(view: View?) {
+    val headerActive: Boolean get() = header != null
+    private var entering: ReverbFadeMotion? = null
+    private class Outgoing(val view: View, val fade: ReverbFadeMotion,
+        val importance: Int, val focusability: Int?)
+    private var outgoing: Outgoing? = null
+    val headerMotionRunning: Boolean get() = entering?.running == true || outgoing?.fade?.running == true
+
+    /** The caller retires an editor's callbacks/IME first. Removed children are drawing-only;
+     * they are absent from child enumeration, measurement and the native pointer/a11y path. */
+    fun setHeaderView(view: View?, scale: Float) {
         if (header === view) return
-        header?.let(::removeView)
+        val next = view ?: summary
+        val revivedAlpha = outgoing?.takeIf { it.view === next }?.view?.alpha
+        retireOutgoing()
+        val previous = body
+        entering = null
+        previous.clearFocus()
+        if (isAttachedToWindow && scale > 0f) {
+            val fade = ReverbFadeMotion(previous.alpha).also { it.target(false, scale) }
+            outgoing = Outgoing(previous, fade, previous.importantForAccessibility,
+                (previous as? ViewGroup)?.descendantFocusability)
+            previous.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            (previous as? ViewGroup)?.descendantFocusability = FOCUS_BLOCK_DESCENDANTS
+            startViewTransition(previous)
+        }
+        removeView(previous)
         header = view
-        summary.visibility = if (view == null) VISIBLE else GONE
-        view?.let { (it.parent as? ViewGroup)?.removeView(it); addView(it, 0) }
+        (next.parent as? ViewGroup)?.removeView(next)
+        next.visibility = VISIBLE
+        next.alpha = if (isAttachedToWindow && scale > 0f) revivedAlpha ?: 0f else 1f
+        addView(next, 0)
+        entering = ReverbFadeMotion(next.alpha).also { it.target(true, scale) }
+        if (scale == 0f || !isAttachedToWindow) finishHeaderMotion()
         requestLayout()
+    }
+    fun frameHeader(time: Long, scale: Float) {
+        entering?.let {
+            it.frame(time, scale)
+            body.alpha = it.alpha
+            if (!it.running) entering = null
+        }
+        outgoing?.let {
+            it.fade.frame(time, scale)
+            it.view.alpha = it.fade.alpha
+            if (!it.fade.running) retireOutgoing()
+        }
+    }
+    private fun retireOutgoing() {
+        val old = outgoing ?: return
+        outgoing = null // Revoke publisher identity before detach/focus cleanup can reenter.
+        old.fade.settle(false)
+        old.view.alpha = 1f
+        old.view.importantForAccessibility = old.importance
+        old.focusability?.let { (old.view as ViewGroup).descendantFocusability = it }
+        // Detach can invoke clients; do not publish anything onto the old View afterward.
+        endViewTransition(old.view)
+    }
+    fun finishHeaderMotion() {
+        entering = null
+        retireOutgoing()
+        body.alpha = 1f
     }
     private var expansion: View? = null
     val measuredExpansionHeight: Int

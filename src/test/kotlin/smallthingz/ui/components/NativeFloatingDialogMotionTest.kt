@@ -87,6 +87,125 @@ class NativeFloatingDialogMotionTest {
         assertFalse(motion.frame(80_000_000, 1f)) // No duplicate terminal delivery.
     }
 
+    @Test fun smoothCancellationReturnsThroughIntermediatePoseWithoutBackOrIdleFrames() {
+        val motion = NativeFloatingPredictiveMotion(animateCancellation = true)
+        val visibility = NativeFloatingVisibilityMotion().apply { setHeight(503); frame(0, 0f) }
+        motion.started()
+        motion.progressed(.6f)
+        motion.cancelled()
+        assertTrue(motion.active)
+        assertEquals(.6f, motion.progress, 0f)
+        assertTrue(visibility.needsFrame(motion.hasContinuation, false))
+        assertFalse(motion.frame(0, 1f))
+        assertEquals(.6f, motion.progress, 0f)
+        assertFalse(motion.frame(80_000_000, 1f))
+        assertTrue(motion.progress > 0f && motion.progress < .6f)
+        motion.cancelled() // Must not restart the clock.
+        assertFalse(motion.frame(160_000_000, 1f))
+        assertEquals(0f, motion.progress, 0f)
+        assertFalse(motion.active)
+        assertFalse(motion.commitCompleted)
+        assertFalse(motion.hasContinuation)
+        assertFalse(visibility.needsFrame(motion.hasContinuation, false))
+        assertFalse(motion.frame(10_000_000_000, 1f))
+    }
+
+    @Test fun smoothCancellationRestartKeepsPoseAndRebasesBothDirections() {
+        val motion = NativeFloatingPredictiveMotion(animateCancellation = true)
+        motion.started()
+        motion.progressed(.6f)
+        motion.cancelled()
+        motion.frame(0, 1f)
+        motion.frame(80_000_000, 1f)
+        val held = motion.progress
+        motion.started(.4f)
+        assertEquals(held, motion.progress, 0f)
+        assertFalse(motion.hasContinuation)
+        motion.progressed(.4f)
+        assertEquals(held, motion.progress, 0f)
+        motion.progressed(.7f)
+        assertEquals(held + (1f - held) * .5f, motion.progress, .0001f)
+        motion.progressed(.2f)
+        assertEquals(held * .5f, motion.progress, .0001f)
+        assertFalse(motion.frame(1_000_000_000, 1f)) // Retired return cannot publish.
+        assertEquals(held * .5f, motion.progress, .0001f)
+        motion.progressed(1f)
+        assertTrue(motion.committed())
+        assertFalse(motion.hasContinuation)
+    }
+
+    @Test fun smoothRestartAtRawEndpointStaysFinite() {
+        val motion = NativeFloatingPredictiveMotion(animateCancellation = true)
+        motion.started()
+        motion.progressed(.6f)
+        motion.cancelled()
+        motion.started(1f)
+        motion.progressed(1f)
+        assertEquals(.6f, motion.progress, 0f)
+        motion.progressed(.5f)
+        assertEquals(.3f, motion.progress, .0001f)
+        motion.cancelled()
+        assertFalse(motion.frame(0, 0f))
+        assertEquals(0f, motion.progress, 0f)
+        assertFalse(motion.hasContinuation)
+    }
+
+    @Test fun smoothCancellationZeroScaleSettlesAndDisableRetiresReturn() {
+        val motion = NativeFloatingPredictiveMotion(animateCancellation = true)
+        for (progress in listOf(0f, .6f, 1f)) {
+            motion.started()
+            motion.progressed(progress)
+            motion.cancelled()
+            assertFalse(motion.frame(0, 0f))
+            assertEquals(0f, motion.progress, 0f)
+            assertFalse(motion.active)
+            assertFalse(motion.hasContinuation)
+            assertFalse(motion.commitCompleted)
+        }
+        motion.started()
+        motion.progressed(.6f)
+        motion.cancelled()
+        motion.frame(0, 1f)
+        motion.disable()
+        assertFalse(motion.hasContinuation)
+        assertFalse(motion.active)
+        assertEquals(0f, motion.progress, 0f)
+        assertFalse(motion.frame(10_000_000_000, 1f))
+    }
+
+    @Test fun smoothCancelRevokesCommitAndOrdinaryBackReversesReturnOnce() {
+        val motion = NativeFloatingPredictiveMotion(animateCancellation = true)
+        motion.started()
+        motion.progressed(.6f)
+        assertFalse(motion.committed())
+        motion.frame(0, 1f)
+        motion.cancelled()
+        assertFalse(motion.frame(40_000_000, 1f))
+        assertFalse(motion.frame(120_000_000, 1f))
+        val held = motion.progress
+        assertTrue(held > 0f && held < .6f)
+        assertFalse(motion.ordinaryBack())
+        assertEquals(held, motion.progress, 0f)
+        assertFalse(motion.frame(120_000_000, 1f))
+        assertTrue(motion.frame(340_000_000, 1f))
+        assertTrue(motion.commitCompleted)
+        motion.finishCommitCallback()
+        assertFalse(motion.frame(500_000_000, 1f))
+        assertFalse(motion.hasContinuation)
+    }
+
+    @Test fun smoothRepeatedOrdinaryBackStillReplacesCommitWithEmptyStream() {
+        val motion = NativeFloatingPredictiveMotion(animateCancellation = true)
+        assertFalse(motion.ordinaryBack())
+        motion.frame(0, 1f)
+        motion.frame(110_000_000, 1f)
+        assertTrue(motion.progress > 0f)
+        assertFalse(motion.ordinaryBack())
+        assertEquals(0f, motion.progress, 0f)
+        assertFalse(motion.frame(500_000_000, 1f))
+        assertTrue(motion.frame(720_000_000, 1f))
+    }
+
     @Test fun dispatcherCancellationRetiresGestureImmediatelyWithoutReturnTween() {
         val motion = NativeFloatingPredictiveMotion()
         motion.started()

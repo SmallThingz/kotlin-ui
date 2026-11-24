@@ -70,10 +70,14 @@ class ReverbSheetButton(
 ) : ViewGroup(context), AutoCloseable {
     constructor(context:Context,host:NativeActionSheetContentContext,environment:ReverbTheme,filled:Boolean,text:String,onClick:()->Unit,
                 leadingIcon:ReverbIcon?=null,errorColors:Boolean=false):
-        this(context,ReverbSheetButtonHost.forSheet(host,environment),filled,text,onClick,leadingIcon,errorColors)
+        this(context,ReverbSheetButtonHost.forSheet(host,environment),filled,text,onClick,leadingIcon,errorColors) {
+            actionAllowed = host.canAcceptAction
+        }
     private var environment=host.theme
     private var labelText = text
     private var action = onClick
+    private var actionAllowed: () -> Boolean = { true }
+    private val invokeAction = { if (actionAllowed()) action() }
     private val buttons = ReverbDesign.appearance.buttons
     private val recipe = when {
         filled && errorColors -> buttons.destructive
@@ -83,7 +87,7 @@ class ReverbSheetButton(
     }
     private val surface = NativeMaterialButtonView(context, recipe,
         environment.density, environment.fontResolver,
-        NativeButtonInputPolicy(inputRoot = { host.inputRoot }), onClick)
+        NativeButtonInputPolicy(inputRoot = { host.inputRoot }), invokeAction)
     private val accessibility: AutoCloseable
     private val textAccessibility: AutoCloseable
     private val clip: AutoCloseable
@@ -115,7 +119,7 @@ class ReverbSheetButton(
     fun bind(text: String, enabled: Boolean, onClick: () -> Unit) {
         labelText = text
         action = onClick
-        surface.bind(text, enabled, environment.palette.buttonPalette, onClick = onClick)
+        surface.bind(text, enabled, environment.palette.buttonPalette, onClick = invokeAction)
     }
     private fun bindIcon() {
         surface.setLeadingIcon(leadingIcon?.let { ReverbIconDrawable(it, environment.density.density, environment.palette.onPrimary) })

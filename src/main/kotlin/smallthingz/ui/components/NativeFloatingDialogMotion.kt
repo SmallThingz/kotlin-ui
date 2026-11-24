@@ -127,12 +127,15 @@ internal class NativeFloatingVisibilityMotion {
 
 /**
  * Source-derived predictive Back progress contract. Native dispatcher owns stream admission;
- * this object retains source snap/progress/job-cancel/remaining*220ms commit behavior.
+ * Cancellation may opt into a finite return; other callers retain immediate stream retirement.
+ * Commit keeps the source remaining*220ms behavior.
  */
-class NativeFloatingPredictiveMotion {
+class NativeFloatingPredictiveMotion(private val animateCancellation: Boolean = false) {
     private var continuation: TargetBasedAnimation<Float, AnimationVector1D>? = null
     private var firstFrameNanos = Long.MIN_VALUE
     private var committedContinuation = false
+    private var rawAnchor: Float? = null
+    private var heldProgress = 0f
     var progress = 0f
         private set
     var active = false
@@ -141,10 +144,13 @@ class NativeFloatingPredictiveMotion {
         private set
     val hasContinuation get() = continuation != null
 
-    fun started() {
+    fun started(rawProgress: Float = 0f) {
+        val returning = animateCancellation && continuation != null && !committedContinuation
+        heldProgress = if (returning) progress else 0f
+        rawAnchor = if (returning) rawProgress.coerceIn(0f, 1f) else null
         continuation = null
         firstFrameNanos = Long.MIN_VALUE
-        progress = 0f
+        progress = heldProgress
         active = true
         commitCompleted = false
     }
@@ -152,22 +158,34 @@ class NativeFloatingPredictiveMotion {
     fun progressed(value: Float) {
         continuation = null
         firstFrameNanos = Long.MIN_VALUE
-        progress = value.coerceIn(0f, 1f)
+        val raw = value.coerceIn(0f, 1f)
+        val anchor = rawAnchor
+        progress = when {
+            anchor == null -> raw
+            raw == anchor -> heldProgress
+            raw == 1f -> 1f
+            raw < anchor -> heldProgress * raw / anchor
+            else -> heldProgress + (1f - heldProgress) * (raw - anchor) / (1f - anchor)
+        }
         active = true
     }
 
     fun cancelled() {
-        // Pinned activity-compose1.13 cancels activeJob as well as its channel. The released
-        // consumer rethrows inactive cancellation and finally clears gestureActive immediately.
-        continuation = null
-        firstFrameNanos = Long.MIN_VALUE
-        active = false
         commitCompleted = false
+        if (animateCancellation && active && progress > 0f) {
+            // Duplicate cancellation must not restart the return clock.
+            if (continuation == null || committedContinuation) continueTo(0f, 160, false)
+        } else {
+            continuation = null
+            firstFrameNanos = Long.MIN_VALUE
+            active = false
+        }
     }
 
-    /** Each ordinary Back owns a new empty stream, even while a prior commit is animating. */
+    /** Ordinary Back reverses a return; repeated commits still start a new empty stream. */
     fun ordinaryBack(): Boolean {
-        cancelled()
+        if (animateCancellation && continuation != null && !committedContinuation) return committed()
+        disable()
         started()
         return committed()
     }

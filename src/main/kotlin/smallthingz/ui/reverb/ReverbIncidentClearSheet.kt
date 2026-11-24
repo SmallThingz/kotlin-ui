@@ -20,7 +20,7 @@ internal class ReverbIncidentClearSheet(
     private val body = theme.paragraph(context, texts.clearConfirmation, NativeTypographyRole.BODY_LARGE)
     private val confirm = ReverbSheetButton(context, host, theme, true, title, onConfirm, errorColors = true)
     private val actions = ReverbSheetActions(context, host, theme, listOf(
-        ReverbSheetButton(context, host, theme, false, texts.cancel, onDismiss),
+        ReverbSheetButton(context, host, theme, false, texts.cancel, dialog::requestAnimatedDismiss),
         confirm,
     ))
     private val text = body.bindPlainTextAccessibility(host.accessibility.cursor, host.accessibility.geometry,

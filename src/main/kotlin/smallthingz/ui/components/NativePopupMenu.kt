@@ -170,8 +170,8 @@ class NativePopupMenu<I> private constructor(
     fun expanded(expanded: Boolean) {
         if (closed) return
         animationLayer.retargetMotion(expanded)
-        // AndroidMenu's condition is outside DropdownMenuContent/updateTransition. A close before
-        // first entry settles removes the popup immediately, rather than inventing an exit tween.
+        // An interrupted entry retains this same window until the exit settles. Explicit
+        // owner teardown still uses close() and removes the window immediately.
         if (!animationLayer.motionShouldExist) onTerminal()
     }
 

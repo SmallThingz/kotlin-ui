@@ -87,7 +87,7 @@ class NativeFloatingDialog(
 
     private var currentOnDismiss = onDismiss
     private val visibilityMotion = NativeFloatingVisibilityMotion()
-    private val predictiveMotion = NativeFloatingPredictiveMotion()
+    private val predictiveMotion = NativeFloatingPredictiveMotion(animateCancellation = true)
     private val runtime = NativeModalWindowRuntime(context)
     private var predictiveSession = false
     private val choreographer = Choreographer.getInstance()
@@ -141,8 +141,7 @@ class NativeFloatingDialog(
         override fun handleOnBackStarted(backEvent: BackEventCompat) {
             if (!isEnabled || disposed) return
             predictiveSession = true
-            predictiveMotion.cancelled()
-            predictiveMotion.started()
+            predictiveMotion.started(backEvent.progress)
             applyMotion()
         }
         override fun handleOnBackProgressed(backEvent: BackEventCompat) {
@@ -155,6 +154,7 @@ class NativeFloatingDialog(
             predictiveSession = false
             predictiveMotion.cancelled()
             applyMotion()
+            requestFrame()
         }
         override fun handleOnBackPressed() {
             if (!isEnabled || disposed) return
@@ -321,6 +321,8 @@ class NativeFloatingDialog(
     override fun dismiss() {
         if (disposed) return
         disposed = true
+        predictiveSession = false
+        predictiveMotion.disable()
         choreographer.removeFrameCallback(frameCallback)
         callbackPosted = false
         var failure: Throwable? = null

@@ -22,7 +22,7 @@ class ReverbPermissionDeniedSheet(
     private val context=dialog.context
     private val host=dialog.contentContext
     private val message=createReverbSupportingParagraph(context, messageText, NativeTypographyRole.BODY_MEDIUM, environment)
-    private val close=ReverbSheetButton(context,host,environment,false,closeText,onDismiss)
+    private val close=ReverbSheetButton(context,host,environment,false,closeText,dialog::requestAnimatedDismiss)
     private val allow=ReverbSheetButton(context,host,environment,true,allowText,onOpenApplicationSettings)
     private val actions=ReverbSheetActions(context,host,environment,listOf(close,allow))
     private val messageLease=message.bindPlainTextAccessibility(host.accessibility.cursor,host.accessibility.geometry,
@@ -37,7 +37,7 @@ class ReverbPermissionDeniedSheet(
              onDismiss: () -> Unit, onOpenApplicationSettings: () -> Unit) {
         dialog.bind(title, onDismiss)
         message.setText(messageText)
-        close.bind(closeText,true,onDismiss)
+        close.bind(closeText,true,dialog::requestAnimatedDismiss)
         // Released confirm launches Settings without dismissing this sheet.
         allow.bind(allowText,true,onOpenApplicationSettings)
     }

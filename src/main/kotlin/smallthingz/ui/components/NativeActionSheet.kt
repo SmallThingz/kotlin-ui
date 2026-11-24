@@ -125,6 +125,7 @@ class NativeActionSheet(
 
     var style=initialStyle;private set
     private var onOwnerDismiss=onDismiss
+    private var animatedDismissRequested=false
     private var disposed=false
     private var sensitiveInput=false
     private var blockedSensitiveGesture=true
@@ -156,7 +157,8 @@ class NativeActionSheet(
     private val scrollEvents=NativeWindowScrollAccessibilityEvents(root,runtime.scope,
         onScrollGeometryChanged={root.invalidate()},onBatchFinished={root.invalidate()},onClosed={})
     val contentContext=NativeActionSheetContentContext(
-        root,style,runtime,nested,pointer,dragNode::interested,accessibility,scrollEvents,
+        root,style,runtime,nested,pointer,dragNode::interested,accessibility,scrollEvents,::requestAnimatedDismiss,
+        { !disposed && !animatedDismissRequested },
     )
     private val insets=NativeWindowInsetsBinding(root) {
         statusBarProtection?.updateInsets(it)
@@ -353,12 +355,17 @@ class NativeActionSheet(
         }
     }
     fun requestAnimatedDismiss() {
+        if(disposed||animatedDismissRequested)return
         if(!dismissalAllowed()) {refreshDismissalAdmission();return}
+        animatedDismissRequested=true
         if(sensitiveInput)sensitiveDismissalRequested=true
         val dismissAtRequest=onOwnerDismiss
-        runtime.scope.launch {state.hide()}.invokeOnCompletion {
-            if(!state.visible&&dismissalAllowed())dismissAtRequest()
-            else if(sensitiveInput)sensitiveDismissalRequested=false
+        runtime.scope.launch {state.hide()}.invokeOnCompletion { failure ->
+            if(failure==null&&!disposed&&!state.visible&&dismissalAllowed())dismissAtRequest()
+            else {
+                animatedDismissRequested=false
+                if(sensitiveInput)sensitiveDismissalRequested=false
+            }
         }
     }
     private fun settleToDismiss(velocity:Float) {
@@ -482,6 +489,9 @@ class NativeActionSheetContentContext internal constructor(
     val interestedParent:(NativeDragPointerChange)->Boolean,
     val accessibility:NativeActionSheetAccessibility,
     val scrollEvents:NativeWindowScrollAccessibilityEvents,
+    /** Presentation-only Close/Cancel; accepted operations and lifecycle teardown remain caller-owned. */
+    val requestAnimatedDismiss:()->Unit,
+    val canAcceptAction:()->Boolean,
 ) {
     var style=initialStyle;private set
     internal fun updateStyle(next:NativeActionSheetStyle) {style=next}
