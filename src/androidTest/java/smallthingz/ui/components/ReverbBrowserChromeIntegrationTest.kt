@@ -11,6 +11,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ScrollView
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -25,6 +26,12 @@ import java.util.concurrent.TimeUnit
 @RunWith(AndroidJUnit4::class)
 class ReverbBrowserChromeIntegrationTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
+    // Test-only opt-in; normal instrumentation retains the platform's real IME behavior.
+    private val excludeIme = when (InstrumentationRegistry.getArguments().getString("reverb_semantic_exclude_ime")) {
+        null, "false" -> false
+        "true" -> true
+        else -> error("reverb_semantic_exclude_ime must be true or false")
+    }
     private fun main(block: () -> Unit) = instrumentation.runOnMainSync(block)
     private fun idle() = instrumentation.waitForIdleSync()
     private fun activity() = instrumentation.startActivitySync(Intent(instrumentation.context,
@@ -183,7 +190,8 @@ class ReverbBrowserChromeIntegrationTest {
                 main {
                     target.isFocusableInTouchMode = true; assertTrue(target.requestFocus())
                     target.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
-                    modal = Dialog(activity).apply { setContentView(FrameLayout(activity)); show() }
+                    modal = Dialog(activity).apply { setContentView(FrameLayout(activity)) }
+                    showFixture(requireNotNull(modal))
                 }
                 idle()
                 main { assertFalse(popup.panel.hasWindowFocus()); target.performClick(); modal?.dismiss() }
@@ -284,6 +292,33 @@ class ReverbBrowserChromeIntegrationTest {
                 assertEquals(listOf("site", "current"), events)
             }
         } finally { main { chrome?.close(); activity.finish() } }
+    }
+
+    private fun showFixture(dialog: Dialog) {
+        prepareFixtureWindow(dialog)
+        dialog.show()
+        assertFixtureWindow(dialog)
+    }
+
+    private fun prepareFixtureWindow(dialog: Dialog) {
+        if (!excludeIme) return
+        val window = requireNotNull(dialog.window)
+        check(!dialog.isShowing && window.peekDecorView()?.isAttachedToWindow != true) {
+            "IME exclusion must be set before the fixture window is attached"
+        }
+        window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
+        window.setSoftInputMode((window.attributes.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_STATE.inv()) or
+            WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
+        assertFixtureWindow(dialog)
+    }
+
+    private fun assertFixtureWindow(dialog: Dialog) {
+        if (!excludeIme) return
+        val attrs = requireNotNull(dialog.window).attributes
+        assertTrue(attrs.flags and WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM != 0)
+        assertEquals(0, attrs.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+        assertEquals(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN,
+            attrs.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_STATE)
     }
 
     private fun View.descendants(): Sequence<View> = sequence {

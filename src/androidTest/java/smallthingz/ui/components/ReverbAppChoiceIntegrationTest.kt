@@ -9,6 +9,7 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -27,6 +28,13 @@ import kotlin.math.roundToInt
 /** Attached windows exercise shared input/placement; these are not device TalkBack/IME claims. */
 @RunWith(AndroidJUnit4::class)
 class ReverbAppChoiceIntegrationTest {
+    // Test-only opt-in; normal instrumentation retains the platform's real IME behavior.
+    private val excludeIme = when (InstrumentationRegistry.getArguments().getString("reverb_semantic_exclude_ime")) {
+        null, "false" -> false
+        "true" -> true
+        else -> error("reverb_semantic_exclude_ime must be true or false")
+    }
+
     @Test fun triggerPreservesIdentityIconAndSingleDisabledExplanationAcrossThemeAndRtl() = withFixture { f ->
         main {
             val icon = ColorDrawable(Color.MAGENTA)
@@ -144,7 +152,8 @@ class ReverbAppChoiceIntegrationTest {
                 row.isFocusableInTouchMode = true
                 assertTrue(row.requestFocus())
                 row.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
-                covering = Dialog(f.activity).apply { setContentView(View(f.activity)); show() }
+                covering = Dialog(f.activity).apply { setContentView(View(f.activity)) }
+                showFixture(requireNotNull(covering))
             }
             await { !picker.panel.hasWindowFocus() && covering!!.window!!.decorView.hasWindowFocus() }
             main {
@@ -281,6 +290,33 @@ class ReverbAppChoiceIntegrationTest {
         } finally {
             main { installed?.trigger?.close(); activity.finish() }
         }
+    }
+
+    private fun showFixture(dialog: Dialog) {
+        prepareFixtureWindow(dialog)
+        dialog.show()
+        assertFixtureWindow(dialog)
+    }
+
+    private fun prepareFixtureWindow(dialog: Dialog) {
+        if (!excludeIme) return
+        val window = requireNotNull(dialog.window)
+        check(!dialog.isShowing && window.peekDecorView()?.isAttachedToWindow != true) {
+            "IME exclusion must be set before the fixture window is attached"
+        }
+        window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
+        window.setSoftInputMode((window.attributes.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_STATE.inv()) or
+            WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
+        assertFixtureWindow(dialog)
+    }
+
+    private fun assertFixtureWindow(dialog: Dialog) {
+        if (!excludeIme) return
+        val attrs = requireNotNull(dialog.window).attributes
+        assertTrue(attrs.flags and WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM != 0)
+        assertEquals(0, attrs.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+        assertEquals(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN,
+            attrs.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_STATE)
     }
 
     private fun press(view: View, key: Int) {
