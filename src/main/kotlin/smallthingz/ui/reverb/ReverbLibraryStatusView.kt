@@ -1,5 +1,6 @@
 package smallthingz.ui.reverb
 
+import smallthingz.ui.R
 import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.scroll.NativeVerticalNestedHost
 import smallthingz.ui.scroll.NativeVerticalScrollState
@@ -158,7 +159,10 @@ private class LibraryStatusColumn(
     }
     fun bind(value: ReverbEnvironment, retry: () -> Unit) {
         environment = value
-        loading?.setColor(value.palette.primary)
+        loading?.let {
+            it.setColor(value.palette.primary)
+            it.contentDescription = context.getString(R.string.reverb_loading_recordings)
+        }
         failure?.let { value.bindParagraphStyle(it, ReverbTextRole.BODY_MEDIUM, value.palette.muted) }
         retryButton?.bind(value, labels.retry(), onClick = retry)
         empty?.bind(value)
@@ -237,13 +241,14 @@ private class LibraryEmptySymbol(context: Context, private var environment: Reve
         })
     }
     init {
-        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         glyph.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         surface.addRow(glyph, NativeGroupLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(surface)
         bind(environment)
     }
     fun bind(value: ReverbEnvironment) {
+        contentDescription = context.getString(R.string.reverb_library_empty)
         if (environment.textDensity.density != value.textDensity.density) {
             glyph.icon = ReverbIconDrawable(ReverbIcon.Library, value.textDensity.density,
                 srgbColorWithAlpha(value.palette.muted, .72f))

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reverb_incident_checked">Checked</string>
+    <string name="reverb_incident_unchecked">Unchecked</string>
+</resources>

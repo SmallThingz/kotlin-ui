@@ -38,6 +38,7 @@ import smallthingz.ui.input.phase.NativeClickPhaseHost
 import smallthingz.ui.input.phase.NativeClickPhaseEndpoint
 import smallthingz.ui.input.phase.ViewClickPhaseEndpoint
 import androidx.core.view.ViewCompat
+import smallthingz.ui.R
 import kotlin.math.roundToInt
 
 /** Exact released typography roles; the host supplies its current immutable font context. */
@@ -341,7 +342,8 @@ private class IncidentBody(
         val visible = ArrayList<View>(accessibilityChildren.size)
         for (child in accessibilityChildren) if (child.visibility == VISIBLE) visible.add(child)
         NativeMergedRowAccessibilityState(selected == null || canMutate, null, clickLabel, visible,
-            selected = selected, longClickable = selected == null, rolePresent = false)
+            selected = selected, longClickable = selected == null, rolePresent = false,
+            stateDescription = ViewCompat.getStateDescription(this))
     }, onPrimaryAction, onOpenMenu)
 
     init {
@@ -380,6 +382,9 @@ private class IncidentBody(
             false -> texts.select
             null -> if (canMutate) null else texts.openOptions
         }
+        ViewCompat.setStateDescription(this, if (selected == null) {
+            context.getString(if (acknowledged) R.string.reverb_incident_checked else R.string.reverb_incident_unchecked)
+        } else null)
         checkTarget.bind(selected ?: acknowledged, canMutate, selected != null)
     }
 
@@ -390,6 +395,7 @@ private class IncidentBody(
 
     fun clear() {
         clickLabel = null
+        ViewCompat.setStateDescription(this, null)
         checkTarget.clear()
     }
 
