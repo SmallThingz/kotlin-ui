@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="loading_audio_history">Loading audio history</string>
+    <string name="recorder_connection_unavailable">Couldn’t connect to the recorder</string>
     <string name="preparing_audio_selection">Preparing audio selection</string>
     <string name="clear_buffer">Clear</string>
     <string name="buffer_one_shot">One-shot</string>

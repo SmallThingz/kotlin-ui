@@ -440,18 +440,37 @@ class DropdownInteractionTest {
         return alpha
     }
 
-    @Test fun rapidTapsReverseAnInFlightAnimationBeforeItReachesItsEndpoint() = withActivity {
+    @Test fun rapidTapsReverseAnInFlightAnimationBeforeItReachesItsEndpoint() = measureReversalWindows(
+        "narrow-reveal-progress-windows-v1", listOf(.30f to .40f, .75f to .85f, .97f to 1f))
+
+    // Sample one real state in each disjoint reveal-progress bin. These are eased visual
+    // progress bins, not exact phases or fractions of elapsed animation time.
+    @Test fun sampledRevealProgressBinsReverseWithin75ms() = measureReversalWindows(
+        "sampled-reveal-progress-bins-v2", listOf(.10f to .50f, .50f to .90f, .90f to 1f))
+
+    private fun measureReversalWindows(protocol: String, windows: List<Pair<Float, Float>>) = withActivity {
+        report("Reversal protocol=$protocol windows=$windows; sampled-state coverage only")
         val label = "Sample format"
         val slot = open(it, label, measureFirstDraw = true)
         val full = NativeUiAppearance.Default.anchoredDropdown.scrimOpacity
         await("Initial expansion did not finish") { scrimAlpha(label) == full }
-        for (phase in listOf(.30f, .75f, .97f)) {
+        // The initial performClick bypasses the trigger's touch/press path. Exercise it once
+        // before measuring warm reversals; this fixed close/open cycle is not a failed-case retry.
+        guardInput()
+        instrumentation.runOnMainSync { dispatchWindowTap(it, slot) }
+        awaitClosed("16-bit PCM")
+        guardInput()
+        instrumentation.runOnMainSync { dispatchWindowTap(it, slot) }
+        await("Primed wheel did not fully expand") { scrimAlpha(label) == full }
+        report("Window-dispatch priming complete: one untimed close/open cycle; one attempt per measured case")
+        // A skipped window fails immediately; no adaptive bounds or repeated attempts.
+        for ((phase, phaseEndExclusive) in windows) {
             for (opening in listOf(false, true)) {
                 if (opening) {
                     tap(slot)
                     awaitClosed("16-bit PCM")
                 }
-                report(measureFrameReversal(it, label, slot, full, phase, opening))
+                report(measureFrameReversal(it, label, slot, full, phase, phaseEndExclusive, opening))
                 if (opening) {
                     awaitClosed("16-bit PCM")
                     tap(slot)
@@ -463,74 +482,86 @@ class DropdownInteractionTest {
         awaitClosed("16-bit PCM")
     }
 
+    private fun verifyWindowInputOwnership(activity: Activity) {
+        val decor = activity.window.decorView
+        check(decor.isAttachedToWindow && decor.isShown && activity.hasWindowFocus() && focusLostAt.get() == null) {
+            "Demo window $demoWindowId lost input ownership during window dispatch/observation"
+        }
+    }
+
+    /** Main-thread dispatch, with UP time recorded before delivering it to the real window. */
+    private fun dispatchWindowTap(activity: Activity, slot: Rect): Long {
+        verifyWindowInputOwnership(activity)
+        val origin = IntArray(2).also(activity.window.decorView::getLocationOnScreen)
+        val x = slot.exactCenterX() - origin[0]
+        val y = slot.exactCenterY() - origin[1]
+        val down = SystemClock.uptimeMillis()
+        fun dispatch(action: Int, time: Long) {
+            val event = MotionEvent.obtain(down, time, action, x, y, 0).apply { source = InputDevice.SOURCE_TOUCHSCREEN }
+            try { check(activity.dispatchTouchEvent(event)) { "Owned demo window rejected touch action $action" } }
+            finally { event.recycle() }
+        }
+        dispatch(MotionEvent.ACTION_DOWN, down)
+        verifyWindowInputOwnership(activity)
+        val up = SystemClock.uptimeMillis()
+        dispatch(MotionEvent.ACTION_UP, up)
+        return up
+    }
+
+    private data class ReversalFrame(val observedMs: Long, val frameNanos: Long, val alpha: Float, val phase: Float)
+
     /** Measures the real control's frame response, independently of system input transport. */
     private fun measureFrameReversal(activity: Activity, label: String, slot: Rect, full: Float,
-                                     phase: Float, opening: Boolean): String {
+                                     phase: Float, phaseEndExclusive: Float, opening: Boolean): String {
         // This verifies the external window authority before scheduling Main callbacks. Each local
         // dispatch also checks the original Activity still owns focus. No input is injected here.
         guardInput()
-        val decor = activity.window.decorView
         val complete = CountDownLatch(1)
         var choreographer: Choreographer? = null
         var pane: ViewGroup? = null
+        var observerPostedAt = 0L
         var firstUp = 0L
+        var firstDispatchReturnedAt = 0L
         var before = Float.NaN
         var reverseUp: Long? = null
         var result: Result<String>? = null
-        val trace = ArrayList<Float>()
+        val trace = ArrayList<ReversalFrame>()
         fun progress(alpha: Float) = if (opening) alpha / full else 1f - alpha / full
-        fun verifyFocus() {
-            check(decor.isAttachedToWindow && decor.isShown && activity.hasWindowFocus() && focusLostAt.get() == null) {
-                "Demo window $demoWindowId lost input ownership during the frame measurement"
-            }
-        }
-        fun dispatchTap(): Long {
-            verifyFocus()
-            val origin = IntArray(2).also(decor::getLocationOnScreen)
-            val x = slot.exactCenterX() - origin[0]
-            val y = slot.exactCenterY() - origin[1]
-            val down = SystemClock.uptimeMillis()
-            fun dispatch(action: Int, time: Long) {
-                val event = MotionEvent.obtain(down, time, action, x, y, 0).apply { source = InputDevice.SOURCE_TOUCHSCREEN }
-                try { check(activity.dispatchTouchEvent(event)) { "Owned demo window rejected touch action $action" } }
-                finally { event.recycle() }
-            }
-            dispatch(MotionEvent.ACTION_DOWN, down)
-            verifyFocus()
-            val up = SystemClock.uptimeMillis()
-            dispatch(MotionEvent.ACTION_UP, up)
-            return up
-        }
+        fun evidence() = "direct_window_dispatch opening=$opening phase=$phase phaseEndExclusive=$phaseEndExclusive " +
+            "actualPhase=${progress(before)} observerPostedMs=$observerPostedAt firstUpMs=$firstUp " +
+            "firstDispatchReturnedMs=$firstDispatchReturnedAt acceptedUpMs=$reverseUp samples=$trace"
         val observer = object : Choreographer.FrameCallback {
             override fun doFrame(frameTimeNanos: Long) {
                 try {
-                    verifyFocus()
+                    verifyWindowInputOwnership(activity)
                     val current = popupPane(label)
                     check(current != null && pane === current) {
-                        "Original pane disappeared or was replaced: opening=$opening phase=$phase alpha=$trace"
+                        "Original pane disappeared or was replaced before a successful observation: ${evidence()}"
                     }
                     val alpha = current.getChildAt(0).alpha
+                    val observed = SystemClock.uptimeMillis()
+                    val observedPhase = progress(alpha)
+                    trace += ReversalFrame(observed, frameTimeNanos, alpha, observedPhase)
                     val up = reverseUp
                     if (up == null) {
-                        check(if (opening) alpha < full else alpha > 0f) {
-                            "No in-flight frame for opening=$opening phase=$phase before the old endpoint"
+                        check(observedPhase < phaseEndExclusive) {
+                            "Phase coverage missed: required [$phase,$phaseEndExclusive), observed=$observedPhase; ${evidence()}"
                         }
-                        if (progress(alpha) >= phase && alpha > 0f && alpha < full) {
+                        check(if (opening) alpha < full else alpha > 0f) {
+                            "No in-flight frame before the old endpoint: ${evidence()}"
+                        }
+                        if (observedPhase >= phase && alpha > 0f && alpha < full) {
                             before = alpha
-                            trace += alpha
-                            reverseUp = dispatchTap()
+                            reverseUp = dispatchWindowTap(activity, slot)
                         }
                     } else {
-                        trace += alpha
-                        val observed = SystemClock.uptimeMillis()
                         val elapsed = observed - up
-                        val timing = "direct_window_dispatch opening=$opening phase=$phase actualPhase=${progress(before)} " +
-                            "firstUpMs=$firstUp acceptedUpMs=$up frameObservedMs=$observed frameNanos=$frameTimeNanos " +
-                            "interTapMs=${up - firstUp} reversalMs=$elapsed alpha=$trace"
-                        check(if (opening) alpha < full else alpha > 0f) { "Reached the old endpoint: $timing" }
-                        check(elapsed <= 75) { "No reversing frame within 75ms of delivered UP: $timing" }
+                        fun timing() = "${evidence()} frameObservedMs=$observed frameNanos=$frameTimeNanos " +
+                            "interTapMs=${up - firstUp} reversalMs=$elapsed"
+                        check(if (opening) alpha < full else alpha > 0f) { "Reached the old endpoint: ${timing()}" }
+                        check(elapsed <= 75) { "No reversing frame within 75ms of delivered UP: ${timing()}" }
                         if (if (opening) alpha < before else alpha > before) {
-                            result = Result.success(timing)
+                            result = Result.success(timing())
                             complete.countDown()
                             return
                         }
@@ -546,10 +577,16 @@ class DropdownInteractionTest {
             instrumentation.runOnMainSync {
                 val previous = popupPane(label)
                 check(opening == (previous == null)) { "Unexpected pane state at start of frame measurement" }
-                firstUp = dispatchTap()
+                // Arm observation before input starts animation or creates/layouts a new pane.
+                // This does not force frame delivery/order; a skipped phase still fails above.
+                choreographer = Choreographer.getInstance().also {
+                    observerPostedAt = SystemClock.uptimeMillis()
+                    it.postFrameCallback(observer)
+                }
+                firstUp = dispatchWindowTap(activity, slot)
+                firstDispatchReturnedAt = SystemClock.uptimeMillis()
                 pane = checkNotNull(popupPane(label)) { "Starting tap did not establish the in-flight pane" }
                 check(opening || pane === previous) { "Starting collapse replaced its pane" }
-                choreographer = Choreographer.getInstance().also { it.postFrameCallback(observer) }
             }
             check(complete.await(5, TimeUnit.SECONDS)) { "No terminal frame observation: opening=$opening phase=$phase" }
             return checkNotNull(result).getOrThrow()

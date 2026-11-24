@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reverb_loading_recordings">Loading recordings</string>
+    <string name="reverb_library_empty">No recordings</string>
+</resources>
