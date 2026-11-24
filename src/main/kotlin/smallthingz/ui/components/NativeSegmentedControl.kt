@@ -8,6 +8,8 @@ import smallthingz.ui.input.NativeAndroidInteropHost
 import smallthingz.ui.input.NativeAndroidInteropRequests
 import kotlin.math.roundToInt
 
+private const val MIN_SEGMENT_HORIZONTAL_PADDING_DP = 12f
+
 /** Optional retained surface renderer; the control owns content, geometry and input. */
 interface NativeSegmentedPresentation {
     val surface: ViewGroup
@@ -22,7 +24,7 @@ data class NativeSegmentedStyle(
     val surfaceRadiusDp: Float = 30f,
     val insetDp: Float = 4f,
     val choiceStyle: NativeChoiceStyle = NativeChoiceStyle(
-        radiusDp = 22f, minHeightDp = 34f, horizontalPaddingDp = 0f, verticalPaddingDp = 0f,
+        radiusDp = 22f, minHeightDp = 34f, horizontalPaddingDp = MIN_SEGMENT_HORIZONTAL_PADDING_DP, verticalPaddingDp = 0f,
         outlined = false, selectedOutlined = false, iconSizeDp = 16f, iconGapDp = 6f,
         normalTextRole = NativeTextRole.CONTENT, selectedTextRole = NativeTextRole.ON_ACCENT,
         normalIconRole = NativeTextRole.CONTENT, selectedIconRole = NativeTextRole.ON_ACCENT,
@@ -40,7 +42,10 @@ data class NativeSegmentedStyle(
     }
 }
 
-/** A compact capsule that reflows its retained choices when text needs more space. */
+/**
+ * A compact capsule that reflows its retained choices when text needs more space.
+ * Each choice reserves at least 12dp before and after its text/icon content, including custom styles.
+ */
 class NativeSegmentedControl private constructor(
     context: Context,
     palette: ControlPalette,
@@ -71,7 +76,11 @@ class NativeSegmentedControl private constructor(
     private var boundPalette: ControlPalette? = null
     private val presentation = presentation ?: DefaultSegmentedPresentation(context, palette, style.surfaceRadiusDp)
     private val row = SegmentHost(context)
-    private val choices = NativeSegmentedChoice(context, palette, style.choiceStyle,
+    private val choices = NativeSegmentedChoice(context, palette, style.choiceStyle.copy(
+        horizontalPaddingDp = style.choiceStyle.horizontalPaddingDp.coerceAtLeast(MIN_SEGMENT_HORIZONTAL_PADDING_DP),
+        startPaddingDp = style.choiceStyle.startPaddingDp?.coerceAtLeast(MIN_SEGMENT_HORIZONTAL_PADDING_DP),
+        endPaddingDp = style.choiceStyle.endPaddingDp?.coerceAtLeast(MIN_SEGMENT_HORIZONTAL_PADDING_DP),
+    ),
         gapDp = 0f, activateOnFocusNavigation = false, singleRow = true,
         movingSelectionBackground = true)
     var onSelectionRequest: ((String) -> Boolean)? = null
