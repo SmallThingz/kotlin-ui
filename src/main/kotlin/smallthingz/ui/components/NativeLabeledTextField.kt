@@ -604,6 +604,7 @@ open class NativeLabeledTextField(
         editor.setHintTextColor(Color.TRANSPARENT)
         placeholderView.applyPalette(palette)
         supportingView.applyPalette(palette)
+        surface.setSurfacePreset(palette.surfacePreset)
         surface.applyStyle(surfaceStyle())
         updateDecorationColors()
     }

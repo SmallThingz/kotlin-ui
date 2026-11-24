@@ -54,6 +54,7 @@ class NativeMaterialSwitchView(
 ) : ViewGroup(context), Choreographer.FrameCallback {
     private val trackPaint = Paint(PAINT_FLAGS)
     private var trackGrain: ViewGrain? = null
+    private var thumbGrain: ViewGrain? = null
     private val thumbPaint = Paint(PAINT_FLAGS)
     private val borderPaint = Paint(PAINT_FLAGS).apply { style = Paint.Style.STROKE }
     private var boundPalette = palette
@@ -111,6 +112,18 @@ class NativeMaterialSwitchView(
         boundPalette = palette
         retargetColors()
         updateThumbProgressInk()
+        invalidate()
+    }
+
+    private var surfacePreset: NativeDarkSurfacePreset? = null
+
+    internal fun bindSurfacePreset(preset: NativeDarkSurfacePreset?) {
+        if (surfacePreset == preset) return
+        surfacePreset = preset
+        setTrackNoiseIntensity(preset?.foregroundGrain ?: 0f)
+        thumbGrain = bindGrainLayer(thumbGrain, preset?.foregroundGrain ?: 0f)
+        customOutlineWidthDp = preset?.borderWidthDp
+        customOutlineColor = preset?.borderColor ?: 0
         invalidate()
     }
 
@@ -218,7 +231,7 @@ class NativeMaterialSwitchView(
         thumbPaint.color = colorMotion?.color(1) ?: colors.thumb(isEnabled, checked)
         canvas.drawRoundRect(originX, originY, originX + trackWidth, originY + trackHeight,
             radius, radius, trackPaint)
-        trackGrain?.draw(canvas, originX, originY, originX + trackWidth, originY + trackHeight, radius)
+        trackGrain?.draw(canvas, originX, originY, originX + trackWidth, originY + trackHeight, radius, trackPaint.alpha)
 
         // ThumbNode truncates its animated pixel size/offset; it does not round them or animate dp.
         val actualSize = size.value.toInt()
@@ -235,6 +248,8 @@ class NativeMaterialSwitchView(
         }
         canvas.drawRoundRect(originX + thumbX, originY + thumbY,
             originX + thumbX + actualSize, originY + thumbY + actualSize, thumbRadius, thumbRadius, thumbPaint)
+        thumbGrain?.draw(canvas, originX + thumbX, originY + thumbY,
+            originX + thumbX + actualSize, originY + thumbY + actualSize, thumbRadius, thumbPaint.alpha)
 
         // Modifier.border draws after background and children, including the thumb.
         val overrideWidth = customOutlineWidthDp

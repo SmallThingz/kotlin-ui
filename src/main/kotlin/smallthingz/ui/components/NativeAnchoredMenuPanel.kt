@@ -22,6 +22,7 @@ import smallthingz.ui.animation.core.SpringSpec
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
 import smallthingz.ui.unit.Density
+import smallthingz.ui.graphics.NoiseDrawable
 import kotlin.math.roundToInt
 
 /** Rounded menu surface and the transform outside its shadow and content clip. */
@@ -44,6 +45,7 @@ data class NativeAnchoredMenuRecipe(
     /** Creates a surface around an unattached child. The caller owns window size and placement. */
     fun createPanel(content: View, density: Density, palette: NativeColorScheme): NativeAnchoredMenuPanel =
         NativeAnchoredMenuPanel(NativeMenuSurface(content.context, density, this, surfaceColor(palette)).apply {
+            bindGrain(palette.surfacePreset?.foregroundGrain ?: 0f)
             setBody(content)
         }, density, this, drivesMotion = true)
 
@@ -102,7 +104,10 @@ class NativeAnchoredMenuPanel internal constructor(
         window.exitTransition = null
     }
 
-    fun bindPalette(palette: NativeColorScheme) = surface.bindFill(recipe.surfaceColor(palette))
+    fun bindPalette(palette: NativeColorScheme) {
+        surface.bindFill(recipe.surfaceColor(palette))
+        surface.bindGrain(palette.surfacePreset?.foregroundGrain ?: 0f)
+    }
 
     /** Physical fractions of the panel, derived by the caller from its actual placement. */
     fun setAnimationPivot(xFraction: Float, yFraction: Float) {
@@ -211,12 +216,15 @@ internal open class NativeMenuSurface(
     density: Density,
     recipe: NativeAnchoredMenuRecipe,
     initialFill: Int,
-) : ViewGroup(context) {
+) : ViewGroup(context), NativeModalPaintedSurface {
     private val radius = recipe.cornerRadiusDp * density.density
     private val pad = (recipe.verticalPaddingDp * density.density).roundToInt()
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         color = initialFill
     }
+    private var grainIntensity = 0f
+    private val grain = NoiseDrawable(initialFill).apply { setNoiseIntensity(0f) }
+    override val paintedTextSurface: Long get() = grain.paintedTextSurface
     private val fillMotion = ViewColorTransition(this, intArrayOf(initialFill), ::publishFill)
     private val clip = NativeMenuClip(context, radius)
     private lateinit var body: View
@@ -234,17 +242,37 @@ internal open class NativeMenuSurface(
         }
         if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
         addView(clip)
+        grain.callback = this
     }
 
     fun setBody(view: View) {
         check(!::body.isInitialized)
         clip.addView(view)
         body = view
+        NativeModalTextSurface.bindTree(view)
     }
 
     fun bindFill(color: Int) = fillMotion.retarget(color)
 
-    private fun publishFill() { fill.color = fillMotion.color(0); invalidate() }
+    fun bindGrain(intensity: Float) {
+        if (grainIntensity == intensity) return
+        grainIntensity = intensity
+        grain.setNoiseIntensity(intensity)
+        NativeModalTextSurface.invalidate(this)
+        invalidate()
+    }
+
+    private fun publishFill() {
+        val next = fillMotion.color(0)
+        if (fill.color == next) return
+        fill.color = next
+        grain.setBackgroundColor(fill.color)
+        NativeModalTextSurface.invalidate(this)
+        invalidate()
+    }
+
+    override fun verifyDrawable(who: android.graphics.drawable.Drawable): Boolean =
+        who === grain || super.verifyDrawable(who)
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val bodyHeight = (MeasureSpec.getSize(heightMeasureSpec) - 2 * pad).coerceAtLeast(0)
@@ -266,6 +294,11 @@ internal open class NativeMenuSurface(
 
     override fun onDraw(canvas: Canvas) {
         canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), radius, radius, fill)
+        grain.drawGrain(canvas, 0f, 0f, width.toFloat(), height.toFloat(), radius)
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        grain.setBounds(0, 0, w, h)
     }
 
     // An inert part of the surface shields its rectangular allocated area.

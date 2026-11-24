@@ -486,13 +486,14 @@ private class IncidentsHeader(
             }
         }
         bar.bindStyle(density, 0, style)
-        chrome.bind(style, style.backgroundColor(palette))
+        chrome.bind(style, style.backgroundColor(palette), palette.surfacePreset?.backgroundGrain ?: 1f)
         title.setText(if (selecting) texts.selectionCount(selected) else texts.title)
         theme.bindParagraph(title, if (selecting) style.selectionTitleRole else style.leadingTitleRole)
         title.animateTextColor(style.contentColor(palette))
         navigation.setDescription(if (selecting) texts.clearSelection else texts.back)
         navigation.bindToolbarAction(density, palette, true, NativeToolbarActionTone.MUTED, back)
         actions.visibility = if (count > 0) VISIBLE else INVISIBLE
+        actions.setSurfacePreset(palette.surfacePreset)
         actions.setPalette(style.actionFill(palette), style.actionOutline(palette, NativeToolbarActionTone.NEUTRAL))
         destructive.setDescription(if (selecting) texts.deleteSelected else texts.clearAll)
         destructive.bindToolbarAction(density, palette, ready && (if (selecting) selected > 0 else count > 0),

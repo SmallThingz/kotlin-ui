@@ -17,6 +17,7 @@ interface NativeSegmentedPresentation {
     fun bindSurface(palette: ControlPalette)
     /** Actual opaque/composited underlay, including animation. Unknown or translucent paint keeps legacy ink. */
     val paintedSurfaceColor: Int? get() = null
+    val paintedTextSurface: Long get() = paintedSurfaceColor?.let { smallthingz.ui.controls.textSurfaceRange(it) } ?: 0L
 }
 
 /** Dimensions and paint roles for a retained single-row segmented control. */
@@ -74,6 +75,8 @@ class NativeSegmentedControl private constructor(
     private var closed = false
     private var boundOptions: List<NativeChoice>? = null
     private var boundPalette: ControlPalette? = null
+    private var noiseIntensityOverride: Float? = null
+    private var outlineWidthOverride: Float? = null
     private val presentation = presentation ?: DefaultSegmentedPresentation(context, palette, style.surfaceRadiusDp)
     private val row = SegmentHost(context)
     private val choices = NativeSegmentedChoice(context, palette, style.choiceStyle.copy(
@@ -93,7 +96,7 @@ class NativeSegmentedControl private constructor(
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         row.addView(choices)
-        choices.useUniformSelectionForeground { this.presentation.paintedSurfaceColor }
+        choices.useUniformSelectionForeground({ this.presentation.paintedTextSurface }) { this.presentation.paintedSurfaceColor }
         this.presentation.setContent(row)
         addView(this.presentation.surface)
         choices.onSelectionRequest = { id -> acceptsNativeInput && onSelectionRequest?.invoke(id) == true }
@@ -115,6 +118,11 @@ class NativeSegmentedControl private constructor(
     fun setNoiseIntensity(intensity: Float) {
         require(intensity in 0f..1f)
         if (closed) return
+        noiseIntensityOverride = intensity
+        applyNoiseIntensity(intensity)
+    }
+
+    private fun applyNoiseIntensity(intensity: Float) {
         (presentation as? DefaultSegmentedPresentation)?.setNoiseIntensity(intensity)
         choices.setIndicatorNoiseIntensity(intensity)
     }
@@ -122,7 +130,9 @@ class NativeSegmentedControl private constructor(
     /** Set the built-in capsule's outline width. Zero leaves it unoutlined. */
     fun setOutlineWidth(widthDp: Float) {
         require(widthDp.isFinite() && widthDp >= 0f)
-        if (!closed) (presentation as? DefaultSegmentedPresentation)?.setOutlineWidth(widthDp)
+        if (closed) return
+        outlineWidthOverride = widthDp
+        (presentation as? DefaultSegmentedPresentation)?.setOutlineWidth(widthDp)
     }
 
     fun bind(options: List<NativeChoice>, selectedId: String, palette: ControlPalette,
@@ -137,6 +147,10 @@ class NativeSegmentedControl private constructor(
             boundPalette = palette
             presentation.bindSurface(palette)
             choices.applyPalette(palette)
+            val preset = palette.surfacePreset
+            applyNoiseIntensity(noiseIntensityOverride ?: preset?.foregroundGrain ?: 0f)
+            (presentation as? DefaultSegmentedPresentation)?.setOutlineWidth(
+                outlineWidthOverride ?: preset?.borderWidthDp ?: 1f)
         }
         if (boundOptions != options) {
             boundOptions = options.toList()
@@ -226,4 +240,5 @@ internal class DefaultSegmentedPresentation(
         surface.applyStyle(paint)
     }
     override val paintedSurfaceColor: Int get() = surface.paintedFillColor
+    override val paintedTextSurface: Long get() = surface.paintedTextSurface
 }

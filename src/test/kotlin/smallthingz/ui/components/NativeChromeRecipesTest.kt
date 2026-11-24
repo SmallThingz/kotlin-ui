@@ -60,13 +60,13 @@ class NativeChromeRecipesTest {
         assertEquals(50f, recipe.cornerRadiusPx(2f, 300, 50), 0f)
     }
 
-    @Test fun floatingLinkColorUsesFirstMatchingSurfaceValue() {
+    @Test fun floatingLinkColorKeepsSurfaceRoleWhenColorsAlias() {
         val style = NativeFloatingPanelRecipe.Default.link
         val palette = NativeColorScheme.fallback(false)
         val variantAlias = palette.copy(surfaceContainerHighest = palette.surfaceVariant)
-        assertEquals(variantAlias.onSurfaceVariant, style.content(variantAlias))
+        assertEquals(variantAlias.onSurface, style.content(variantAlias))
         val primaryAlias = variantAlias.copy(primary = palette.surfaceVariant)
-        assertEquals(primaryAlias.onPrimary, style.content(primaryAlias))
+        assertEquals(primaryAlias.onSurface, style.content(primaryAlias))
     }
 
     @Test fun permissionDialogRecipeRetainsWindowOverridesAndRejectsInvalidGeometry() {

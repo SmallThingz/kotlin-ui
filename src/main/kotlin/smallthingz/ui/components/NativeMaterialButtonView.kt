@@ -34,6 +34,8 @@ import smallthingz.ui.text.view.NativeMergedRowRole
 import smallthingz.ui.text.view.ParagraphView
 import smallthingz.ui.unit.Density
 import smallthingz.ui.util.closePreservingPrimaryFailure
+import smallthingz.ui.graphics.ViewGrain
+import smallthingz.ui.graphics.bindGrainLayer
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -88,6 +90,8 @@ open class NativeMaterialButtonView private constructor(
     private var closed = false
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
     private var colorMotion: ViewColorTransition? = null
+    private var grain: ViewGrain? = null
+    private var grainIntensity = 0f
     private var icon: Drawable? = null
     private var leading: View? = null
     private var hasLeadingImageTint = false
@@ -226,10 +230,19 @@ open class NativeMaterialButtonView private constructor(
         busy: Boolean = false,
         onClick: () -> Unit = action,
     ) {
+        setSurfacePreset(palette.surfacePreset)
         val paint = requireNotNull(recipe).paint(enabled, emphasized, busy)
         val fill = paint.container.resolve(palette, paint.containerOpacity)
         val ink = paint.content.resolve(palette, paint.contentOpacity)
         bind(text, enabled, fill, ink, onClick, paint.indication?.resolve(palette) ?: ink)
+    }
+
+    internal fun setSurfacePreset(preset: NativeDarkSurfacePreset?) {
+        val intensity = preset?.foregroundGrain ?: 0f
+        if (grainIntensity == intensity) return
+        grainIntensity = intensity
+        grain = bindGrainLayer(grain, intensity)
+        publishColors()
     }
 
     override fun setEnabled(enabled: Boolean) {
@@ -309,6 +322,8 @@ open class NativeMaterialButtonView private constructor(
             ColorUtils.calculateContrast(ink, fill) < 4.5) {
             ink = if (ColorUtils.calculateContrast(Color.BLACK, fill) >= ColorUtils.calculateContrast(Color.WHITE, fill)) Color.BLACK else Color.WHITE
         }
+        if (grainIntensity > 0f) ink = smallthingz.ui.controls.textSurfaceForeground(
+            checkNotNull(grain).surfaceRange(fill), ink)
         paint.color = fill
         displayedInk = ink
         label.setTextColor(ink)
@@ -353,6 +368,7 @@ open class NativeMaterialButtonView private constructor(
     override fun onDraw(canvas: Canvas) {
         val radius = radius(width, height)
         canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), radius, radius, paint)
+        grain?.draw(canvas, 0f, 0f, width.toFloat(), height.toFloat(), radius, paint.alpha)
         drawButtonOverlay(canvas, clipPath)
     }
     protected open fun drawButtonOverlay(canvas: Canvas, clip: Path) = Unit

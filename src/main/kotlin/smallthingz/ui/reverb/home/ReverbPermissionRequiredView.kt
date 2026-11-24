@@ -229,6 +229,7 @@ private class PermissionLibraryAction(context:Context,private val host:ReverbShe
     }
     init {
         importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO;clipChildren=false;clipToPadding=false
+        surface.setSurfacePreset(environment.palette.surfacePreset)
         surface.setPalette(recipe.surroundingColor(environment.palette.buttonPalette),Color.TRANSPARENT)
         surface.addRow(visual,NativeGroupLayout.LayoutParams(-1,-1))
         addView(surface)
@@ -238,6 +239,7 @@ private class PermissionLibraryAction(context:Context,private val host:ReverbShe
         if(environment===next)return
         val densityChanged=environment.textDensity!=next.textDensity
         environment=next
+        surface.setSurfacePreset(next.palette.surfacePreset)
         surface.setPalette(recipe.surroundingColor(next.palette.buttonPalette),Color.TRANSPARENT)
         glyph.bind(ReverbIcon.Library, recipe.contentColor(next.palette.buttonPalette, true))
         visual.bindTypography(next.textDensity, next.sharedFontResolver)

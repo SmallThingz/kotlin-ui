@@ -18,7 +18,8 @@ class NativeToolbarBackground(
     initialColor: Int,
     onPaintChanged: () -> Unit = {},
 ) : NativeBackdropBinding(view, style.grainSeed, initialColor, onPaintChanged) {
-    fun bind(style: NativeToolbarStyle, color: Int) = bind(style.grainSeed, color)
+    fun bind(style: NativeToolbarStyle, color: Int, grainIntensity: Float = 1f) =
+        bind(style.grainSeed, color, grainIntensity)
 }
 
 /** Pulse a set of toolbar actions for a new caller-owned hint token. */

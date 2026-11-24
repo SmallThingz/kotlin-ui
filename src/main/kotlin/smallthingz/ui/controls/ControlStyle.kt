@@ -19,6 +19,7 @@ import kotlin.math.roundToInt
 data class ControlPalette(
     val surface: Int, val raised: Int, val content: Int, val muted: Int,
     val accent: Int, val onAccent: Int, val selection: Int, val outline: Int,
+    internal val surfacePreset: smallthingz.ui.components.NativeDarkSurfacePreset? = null,
 )
 
 /** Paint for actual Android Views, without a second UI tree or a global theme registry. */
@@ -61,14 +62,50 @@ class ControlStyle(context: Context, val palette: ControlPalette) {
         val normal = if (filled) palette.accent else Color.TRANSPARENT
         val selected = if (filled) palette.accent else palette.selection
         val focusStroke = if (filled) palette.onAccent else palette.accent
+        fun stateShape(color: Int, stroke: Int? = null, focused: Boolean = false): android.graphics.drawable.Drawable {
+            val base = shape(color, radius, stroke).apply {
+                if (focused && stroke != null) setStroke(dp(2).coerceAtLeast(1), stroke)
+            }
+            val intensity = palette.surfacePreset?.foregroundGrain ?: 0f
+            if (intensity == 0f || color ushr 24 == 0) return base
+            val noise = smallthingz.ui.graphics.NoiseDrawable().apply {
+                val alpha = ((intensity * 255f).roundToInt() * (color ushr 24) + 127) / 255
+                setNoiseIntensity(alpha / 255f)
+            }
+            val overlay = object : android.graphics.drawable.DrawableWrapper(noise) {
+                private val clip = android.graphics.Path()
+                private val radiusPx = dp(radius).toFloat()
+
+                override fun onBoundsChange(bounds: android.graphics.Rect) {
+                    super.onBoundsChange(bounds)
+                    clip.rewind()
+                    clip.addRoundRect(bounds.left.toFloat(), bounds.top.toFloat(), bounds.right.toFloat(),
+                        bounds.bottom.toFloat(), radiusPx, radiusPx, android.graphics.Path.Direction.CW)
+                }
+
+                override fun draw(canvas: android.graphics.Canvas) {
+                    val checkpoint = canvas.save()
+                    try {
+                        canvas.clipPath(clip)
+                        // Keep Drawable alpha/filter composition in NoiseDrawable; the ordinary
+                        // opaque, unfiltered draw still needs no offscreen layer.
+                        super.draw(canvas)
+                    } finally { canvas.restoreToCount(checkpoint) }
+                }
+            }
+            val border = shape(Color.TRANSPARENT, radius, stroke).apply {
+                if (focused && stroke != null) setStroke(dp(2).coerceAtLeast(1), stroke)
+            }
+            return android.graphics.drawable.LayerDrawable(arrayOf(shape(color, radius), overlay, border))
+        }
         val states = StateListDrawable().apply {
-            addState(DISABLED_SELECTED, shape(if (filled) palette.raised else palette.selection, radius,
+            addState(DISABLED_SELECTED, stateShape(if (filled) palette.raised else palette.selection,
                 if (outlined) palette.outline else null))
-            addState(DISABLED, shape(if (filled) palette.raised else Color.TRANSPARENT, radius))
-            addState(FOCUSED_SELECTED, shape(selected, radius, focusStroke).apply { setStroke(dp(2).coerceAtLeast(1), focusStroke) })
-            addState(FOCUSED, shape(normal, radius, focusStroke).apply { setStroke(dp(2).coerceAtLeast(1), focusStroke) })
-            addState(SELECTED, shape(selected, radius, if (outlined) palette.accent else null))
-            addState(DEFAULT, shape(normal, radius, if (outlined) palette.outline else null))
+            addState(DISABLED, stateShape(if (filled) palette.raised else Color.TRANSPARENT))
+            addState(FOCUSED_SELECTED, stateShape(selected, focusStroke, focused = true))
+            addState(FOCUSED, stateShape(normal, focusStroke, focused = true))
+            addState(SELECTED, stateShape(selected, if (outlined) palette.accent else null))
+            addState(DEFAULT, stateShape(normal, if (outlined) palette.outline else null))
         }
         return RippleDrawable(rippleColors(filled), states, shape(Color.WHITE, radius))
     }
@@ -156,6 +193,7 @@ class ControlStyle(context: Context, val palette: ControlPalette) {
         val result=retained ?: StateColorSurface(view,fill,stroke,ink,ripple,dp(radius).toFloat(),
             dp(1).coerceAtLeast(1).toFloat(),secondary,accent,palette.surface,
             focusedStrokeScale=if(kind==INPUT)1f else 2f,publishInk=publish)
+        result.setSurfacePreset(palette.surfacePreset)
         result.bind(fill,stroke,ink,ripple,dp(radius).toFloat(),dp(1).coerceAtLeast(1).toFloat(),secondary,accent,palette.surface)
         return result
     }

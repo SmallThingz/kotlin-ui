@@ -60,7 +60,11 @@ data class NativeSurfaceStyle(
 }
 
 /** A retained content host with one rounded outline for clipping, shadow and ripple. */
-open class NativeSurface(context: Context, style: NativeSurfaceStyle) : FrameLayout(context) {
+open class NativeSurface(context: Context, style: NativeSurfaceStyle,
+    private val onPaintedSurfaceChanged: (View) -> Unit = {},
+) : FrameLayout(context) {
+    private var requestedStyle = style
+    private var surfacePreset: NativeDarkSurfacePreset? = null
     private val fill = GradientDrawable()
     private val border = NativeSurfaceBorderDrawable()
     private val mask = GradientDrawable().apply { setColor(Color.WHITE) }
@@ -81,11 +85,23 @@ open class NativeSurface(context: Context, style: NativeSurfaceStyle) : FrameLay
 
     /** The sampled fill currently painted, including an in-flight palette transition. */
     val paintedFillColor: Int get() = colorMotion.color(0)
+    val paintedTextSurface: Long get() = if (appliedStyle?.noise == true)
+        grain?.surfaceRange(paintedFillColor) ?: smallthingz.ui.graphics.noiseSurfaceRange(paintedFillColor, 0)
+        else smallthingz.ui.graphics.noiseSurfaceRange(paintedFillColor, 0)
+
+    internal fun setSurfacePreset(preset: NativeDarkSurfacePreset?) {
+        if (surfacePreset == preset) return
+        surfacePreset = preset
+        applyStyle(requestedStyle)
+        publishColors()
+    }
 
     private fun publishColors() {
         fill.setColor(colorMotion.color(0))
+        grain?.setNoiseIntensity((surfacePreset?.foregroundGrain ?: grainIntensity) * (paintedFillColor ushr 24) / 255f)
         ripple?.setColor(ColorStateList.valueOf(colorMotion.color(2)))
         border.setColor(colorMotion.color(1))
+        onPaintedSurfaceChanged(this)
         invalidate()
     }
 
@@ -109,6 +125,13 @@ open class NativeSurface(context: Context, style: NativeSurfaceStyle) : FrameLay
 
     /** Paint-only updates retain children, focus, callbacks and an unchanged active ripple. */
     fun applyStyle(style: NativeSurfaceStyle) {
+        requestedStyle = style
+        val preset = surfacePreset
+        applyResolvedStyle(if (preset == null) style else style.copy(
+            noise = preset.foregroundGrain > 0f))
+    }
+
+    private fun applyResolvedStyle(style: NativeSurfaceStyle) {
         val density = resources.displayMetrics.density
         val previous = appliedStyle
         if (previous == style && appliedDensity == density && appliedDirection == layoutDirection) return
@@ -126,7 +149,7 @@ open class NativeSurface(context: Context, style: NativeSurfaceStyle) : FrameLay
             val content = if (style.noise) {
                 val noise = if (grainSeed == style.noiseSeed) grain else null
                 (noise ?: NoiseDrawable(seed = style.noiseSeed)).also {
-                    it.setNoiseIntensity(grainIntensity)
+                    it.setNoiseIntensity(surfacePreset?.foregroundGrain ?: grainIntensity)
                     grain = it
                     grainSeed = style.noiseSeed
                 }
@@ -145,7 +168,9 @@ open class NativeSurface(context: Context, style: NativeSurfaceStyle) : FrameLay
         require(intensity in 0f..1f)
         if (grainIntensity == intensity) return
         grainIntensity = intensity
-        grain?.setNoiseIntensity(intensity)
+        grain?.setNoiseIntensity((surfacePreset?.foregroundGrain ?: intensity) * (paintedFillColor ushr 24) / 255f)
+        onPaintedSurfaceChanged(this)
+        invalidate()
     }
 
     private fun updateBorder() {
@@ -262,12 +287,12 @@ open class NativeSurface(context: Context, style: NativeSurfaceStyle) : FrameLay
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        appliedStyle?.let(::applyStyle)
+        if (appliedStyle != null) applyStyle(requestedStyle)
     }
 
     override fun onRtlPropertiesChanged(layoutDirection: Int) {
         super.onRtlPropertiesChanged(layoutDirection)
-        appliedStyle?.let(::applyStyle)
+        if (appliedStyle != null) applyStyle(requestedStyle)
     }
 }
 

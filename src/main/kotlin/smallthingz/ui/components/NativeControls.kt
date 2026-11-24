@@ -534,6 +534,7 @@ open class NativeTextField(
         val retained=colorSurface ?: StateColorSurface(this,fills,strokes,ink,none,radius,stroke,hint,selection,palette.surface,
             publishInk={text,placeholder,highlight->setTextColor(text);applyComponentHintColors(ColorStateList.valueOf(placeholder));highlightColor=highlight})
         colorSurface=retained
+        retained.setSurfacePreset(palette.surfacePreset)
         retained.bind(fills,strokes,ink,none,radius,stroke,hint,selection,palette.surface)
         val next=if(hasSurface)retained.background else null
         if(background !== next)background=next

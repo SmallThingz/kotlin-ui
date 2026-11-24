@@ -188,6 +188,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             }
             if (previous?.current != entry.current || previous.currentLabel != entry.currentLabel) {
                 ViewCompat.setStateDescription(row, entry.currentLabel.takeIf { entry.current })
+                surface.setSurfacePreset(theme.palette.surfacePreset)
                 surface.setPaletteImmediately(recipe.fillColor(theme.palette),
                     if (entry.current) theme.palette.primary else recipe.borderColor(theme.palette))
             }

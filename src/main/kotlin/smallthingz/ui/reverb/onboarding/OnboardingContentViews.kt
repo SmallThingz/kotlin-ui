@@ -58,6 +58,7 @@ class OnboardingBufferRow(
         ViewCompat.setStateDescription(this, context.getString(
             if (checked) smallthingz.ui.R.string.state_on else smallthingz.ui.R.string.state_off))
         val toggle = trailing as NativeMaterialSwitchView
+        toggle.bindSurfacePreset(palette.surfacePreset)
         toggle.setPalette(palette.switchPalette)
         toggle.setState(checked, visuallyEnabled)
         bindCard(title, body, visuallyEnabled && interactionEnabled, palette, checked)

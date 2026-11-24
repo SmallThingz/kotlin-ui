@@ -27,3 +27,34 @@ fun textSurfaceForeground(surface: Long, preferred: Int): Int {
     if (contrast >= 4.5) return preferred
     return if ((low + .05) / .05 >= 1.05 / (high + .05)) 0xff000000.toInt() else 0xffffffff.toInt()
 }
+
+/** Qualify a ripple's complete opacity prefix against both extrema of a textured underlay. */
+internal fun textSurfaceForegroundWithIndication(surface: Long, preferred: Int, indication: Int): Long {
+    val darkest = (surface ushr 32).toInt()
+    val lightest = surface.toInt()
+    var minimum = srgbLuminance(darkest)
+    var maximum = srgbLuminance(lightest)
+    val preferredLuminance = srgbLuminance(preferred)
+    fun candidate(): Int {
+        val nearest = preferredLuminance.coerceIn(minimum, maximum)
+        return when {
+            preferred ushr 24 == 255 && (maxOf(preferredLuminance, nearest) + .05) / (minOf(preferredLuminance, nearest) + .05) >= 4.5 -> preferred
+            1.05 / (maximum + .05) >= 4.5 -> -1
+            (minimum + .05) / .05 >= 4.5 -> -0x1000000
+            else -> 0
+        }
+    }
+    var ink = candidate().takeIf { it != 0 } ?: textSurfaceForeground(surface, preferred)
+    var accepted = 0
+    for (alpha in 1..(indication ushr 24)) {
+        val range = smallthingz.ui.graphics.noiseSurfaceRangeOver(surface,
+            (indication and 0x00ffffff) or (alpha shl 24), 0)
+        minimum = minOf(minimum, srgbLuminance((range ushr 32).toInt()))
+        maximum = maxOf(maximum, srgbLuminance(range.toInt()))
+        val next = candidate()
+        if (next == 0) break
+        ink = next
+        accepted = alpha
+    }
+    return (accepted.toLong() shl 32) or (ink.toLong() and 0xffffffffL)
+}

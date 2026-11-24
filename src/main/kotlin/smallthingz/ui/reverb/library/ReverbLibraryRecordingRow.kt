@@ -163,6 +163,7 @@ class ReverbLibraryRecordingRow(
     }
 
     fun bind(value: LibraryRecordingRow, callbacks: LibraryRecordingRowActions) {
+        surface.setSurfacePreset(environment.palette.surfacePreset)
         val targetPaint = surfaceStyle.target(environment.palette, selected = value.selected)
         if (row?.recordingId != value.recordingId) {
             bodyInput.bind(null)
@@ -191,6 +192,7 @@ class ReverbLibraryRecordingRow(
     fun setEnvironment(value: ReverbEnvironment) {
         if (environment === value) return
         environment = value
+        surface.setSurfacePreset(value.palette.surfacePreset)
         body.setEnvironment(value)
         bodyIndication.updateColor(value.palette.ink)
         leadingIndication.updateColor(value.palette.ink)
@@ -673,7 +675,9 @@ private class RecordingRowLeading(context: Context, initial: ReverbEnvironment) 
     private val style get() = environment.appearance.listDecorations.leadingDisc
     private var icon = ReverbIconDrawable(ReverbIcon.AudioFile, initial.textDensity.density, initial.palette.ink)
     private var iconColor = initial.palette.ink
-    private val disc = NativeLeadingDisc(context, initial.textDensity.density, style, icon, initial.palette.raised)
+    private val disc = NativeLeadingDisc(context, initial.textDensity.density, style, icon, initial.palette.raised).apply {
+        setSurfacePreset(initial.palette.surfacePreset)
+    }
 
     val preferredWidthPx: Int get() = dp(style.slotWidthDp)
 
@@ -692,6 +696,7 @@ private class RecordingRowLeading(context: Context, initial: ReverbEnvironment) 
         val densityChanged = environment.textDensity.density != value.textDensity.density
         environment = value
         if (densityChanged) icon = ReverbIconDrawable(ReverbIcon.AudioFile, value.textDensity.density, iconColor)
+        disc.setSurfacePreset(value.palette.surfacePreset)
         disc.bindStyle(value.textDensity.density, style, icon)
     }
 

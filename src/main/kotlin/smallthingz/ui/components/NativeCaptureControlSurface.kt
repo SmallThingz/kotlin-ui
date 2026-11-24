@@ -27,6 +27,8 @@ import smallthingz.ui.input.phase.NativeViewPhasePointerNode
 import smallthingz.ui.input.phase.NativeViewPointerHitLayout
 import smallthingz.ui.input.phase.NativeWindowPointerCoordinates
 import kotlin.math.ceil
+import smallthingz.ui.graphics.ViewGrain
+import smallthingz.ui.graphics.bindGrainLayer
 import kotlin.math.min
 import kotlin.math.roundToInt
 import smallthingz.ui.animation.view.ViewColorTransition
@@ -54,6 +56,7 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
     private val borderPaint = Paint(FLAGS)
     private val rasterPaint = Paint(FLAGS)
     private val shape = Path()
+    private var grain: ViewGrain? = null
     private val mask = Path()
     private val bounds = RectF()
     private val sourceRect = Rect()
@@ -97,6 +100,7 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
         segmentStyle: NativeBufferSegmentStyle,
     ) {
         surfaceBound = true
+        grain = bindGrainLayer(grain, palette.surfacePreset?.foregroundGrain ?: 0f)
         val motion = colors ?: ViewColorTransition(this, intArrayOf(palette.field, palette.border), {
             colors?.let { applyColors(it.color(0), it.color(1)) }
         }).also {
@@ -193,6 +197,7 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
 
     override fun onDraw(canvas: Canvas) {
         canvas.drawPath(shape, fill)
+        grain?.draw(canvas, shape, fill.alpha)
     }
 
     override fun draw(canvas: Canvas) {

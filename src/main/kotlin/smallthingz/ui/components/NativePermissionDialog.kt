@@ -292,6 +292,7 @@ class NativePermissionDialog(
         val surface = NativeSurface(activity, NativeSurfaceStyle(colors.surfaceContainerHigh,
             cornerRadiusDp = recipe.cornerRadiusDp, noise = recipe.noiseSeed != null,
             noiseSeed = recipe.noiseSeed ?: NoiseDrawable.SEED_BACKGROUND)).apply {
+            setNoiseIntensity(colors.surfacePreset?.foregroundGrain ?: 1f)
             addView(panel, ViewGroup.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         }
         surface.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {

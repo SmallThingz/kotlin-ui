@@ -7,6 +7,7 @@ import androidx.annotation.MainThread
 import smallthingz.ui.common.ControlTheme
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeColorSchemeResolver
+import smallthingz.ui.components.NativeDarkSurfacePreset
 import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.components.NativeUiAppearance
 import smallthingz.ui.text.NativeTypographyRole
@@ -17,10 +18,15 @@ import smallthingz.ui.unit.Density
 
 /** Reverb's visual defaults. Semantic Reverb components resolve these recipes internally. */
 object ReverbDesign {
+    private val darkSurfaces = NativeDarkSurfacePreset.Amoled
+    private val darkColors = darkSurfaces.colorScheme()
+
     val appearance: NativeUiAppearance = NativeUiAppearance.Default.copy(
         colorScheme = NativeColorSchemeResolver { dark, sdk, readColor ->
-            val base = NativeColorScheme.resolve(dark, sdk, readColor)
-            base.copy(background = darken(base.background, .04f), surface = darken(base.surface, .04f))
+            if (dark) darkColors.resolve(dark, sdk, readColor)
+            else NativeColorScheme.resolve(dark, sdk, readColor).let { base ->
+                base.copy(background = darken(base.background, .04f), surface = darken(base.surface, .04f))
+            }
         },
         toolbars = NativeUiAppearance.Default.toolbars.copy(compactHeightDp = 58f),
     )
@@ -31,10 +37,13 @@ object ReverbDesign {
     internal fun modalLinkSurface(palette: ReverbPalette): Int = darken(palette.surfaceContainerHighest, .15f)
 
     fun windowBackdrop(palette: ReverbPalette): NoiseDrawable =
-        NoiseDrawable(palette.background, appearance.backdrops.windowGrainSeed)
+        NoiseDrawable(palette.background, appearance.backdrops.windowGrainSeed).also {
+            bindWindowBackdrop(it, palette)
+        }
 
     fun bindWindowBackdrop(backdrop: NoiseDrawable, palette: ReverbPalette) {
         backdrop.setBackgroundColor(palette.background)
+        backdrop.setNoiseIntensity(palette.surfacePreset?.backgroundGrain ?: 1f)
     }
 
     fun statusBarProtection(context: Context) = appearance.modals.statusBar.let { style ->

@@ -119,6 +119,7 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
             setPaddingRelative(inset, 0, inset, 0)
             addView(NativeGroupLayout(context, field.radiusDp).apply {
                 setRowOrientation(HORIZONTAL)
+                setSurfacePreset(chromeTheme.palette.surfacePreset)
                 setPaletteImmediately(chromeTheme.palette.raised, android.graphics.Color.TRANSPARENT)
                 addRow(siteAction, NativeGroupLayout.LayoutParams(-2, -2))
                 addRow(addressEditor, NativeGroupLayout.LayoutParams(0, -2, 1f))
@@ -134,7 +135,9 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
     }
     private val status = chromeTheme.paragraph(context, "", NativeTypographyRole.BODY_MEDIUM).apply {
         setPadding(dp(16), dp(8), dp(16), dp(8))
-        setBackgroundColor(chromeTheme.palette.raised)
+        background = smallthingz.ui.graphics.NoiseDrawable(chromeTheme.palette.raised).apply {
+            setNoiseIntensity(chromeTheme.palette.surfacePreset?.foregroundGrain ?: 0f)
+        }
         accessibilityLiveRegion = ACCESSIBILITY_LIVE_REGION_POLITE
         visibility = GONE
     }

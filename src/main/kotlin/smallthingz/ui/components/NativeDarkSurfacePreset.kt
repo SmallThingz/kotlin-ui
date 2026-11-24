@@ -24,9 +24,14 @@ data class NativeDarkSurfacePreset(
         get() = (0xff shl 24) or ((borderLightness * 255f).roundToInt() * 0x010101)
 
     /** Apply the fills over a Material resolver while retaining its accent, content, and light colors. */
-    fun colorScheme(base: NativeColorSchemeResolver = NativeColorScheme, tintStrength: Float = .45f): NativeColorSchemeResolver =
-        base.withDarkSurfaces(style, tintStrength = tintStrength, backgroundLightness = backgroundLightness,
+    fun colorScheme(base: NativeColorSchemeResolver = NativeColorScheme, tintStrength: Float = .45f): NativeColorSchemeResolver {
+        val surfaces = base.withDarkSurfaces(style, tintStrength = tintStrength, backgroundLightness = backgroundLightness,
             foregroundLightness = foregroundLightness)
+        return NativeColorSchemeResolver { dark, sdk, readColor ->
+            val colors = surfaces.resolve(dark, sdk, readColor)
+            if (dark) colors.copy(surfacePreset = this) else colors
+        }
+    }
 
     companion object {
         val Amoled = NativeDarkSurfacePreset(NativeDarkSurfaces.AMOLED,

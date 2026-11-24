@@ -39,6 +39,7 @@ open class ReverbToolbarActionView(
         this.palette = palette
         this.tone = tone
         if (!sharedSurface) {
+            bindSurfacePreset(palette.surfacePreset)
             val fill = style.actionFill(palette)
             val border = style.actionOutline(palette, tone)
             if (surfaceMotion == null) {

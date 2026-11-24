@@ -94,6 +94,12 @@ class ParagraphView(
             field = value
             invalidate()
         }
+    /** Admit a palette label to an owner's actual-paint binding, including its initial frame. */
+    internal fun bindPaintedTextSurface(surface: java.util.function.LongSupplier) {
+        paintedTextSurface = surface
+        animateTextColor(textColor.toArgb())
+    }
+
     private var contrastSurface = 0L
     private var contrastInk = 0
     private var contrastResult = 0

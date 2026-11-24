@@ -12,9 +12,56 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.controls.textSurfaceRange
 import smallthingz.ui.graphics.NoiseDrawable
+import smallthingz.ui.reverb.ReverbDesign
 
 @RunWith(AndroidJUnit4::class)
 class NativeBackdropIntegrationTest {
+    @Test fun reverbAppearanceUsesAmoledSurfacesAndKeepsMaterialAccentsAcrossResolvers() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        for (sdk in listOf(30, 31, 34)) {
+            val base = NativeColorScheme.resolve(true, sdk, context::getColor)
+            val dark = ReverbDesign.appearance.colorScheme.resolve(true, sdk, context::getColor)
+            assertEquals(0xff000000.toInt(), dark.background)
+            assertEquals(0xff000000.toInt(), dark.surface)
+            assertEquals(0xff0a0a0a.toInt(), dark.field)
+            assertEquals(0xff0e0e0e.toInt(), dark.raised)
+            assertEquals(0xff262626.toInt(), dark.border)
+            assertEquals(NativeDarkSurfacePreset.Amoled, dark.surfacePreset)
+            assertEquals(base.primary, dark.primary)
+            assertEquals(base.onPrimary, dark.onPrimary)
+            assertEquals(base.error, dark.error)
+            val lightBase = NativeColorScheme.resolve(false, sdk, context::getColor)
+            val light = ReverbDesign.appearance.colorScheme.resolve(false, sdk, context::getColor)
+            // Reverb already darkens its light page by 4%; every other light role stays Material.
+            assertEquals(lightBase.copy(background = light.background, surface = light.surface), light)
+        }
+    }
+
+    @Test fun retainedPageTracksPresetGrainWithoutReplacingItsDrawable() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync {
+            val view = View(instrumentation.targetContext)
+            val palette = NativeColorScheme.fallback(true).copy(surfacePreset =
+                NativeDarkSurfacePreset.Amoled.copy(backgroundGrain = 0f))
+            var changes = 0
+            val style = NativeBackdropStyle.Default
+            val binding = style.attachPage(view, palette) { changes++ }
+            val drawable = view.background as NoiseDrawable
+            assertEquals(textSurfaceRange(palette.surface), drawable.paintedTextSurface)
+            val textured = palette.copy(surfacePreset = NativeDarkSurfacePreset.Amoled)
+            style.bindPage(binding, textured)
+            assertSame(drawable, view.background)
+            assertNotEquals(textSurfaceRange(palette.surface), drawable.paintedTextSurface)
+            assertEquals(style.pageBackground(textured).paintedTextSurface, drawable.paintedTextSurface)
+            assertEquals(1, changes)
+            style.bindPage(binding, textured)
+            assertEquals(1, changes)
+            style.bindPage(binding, palette)
+            assertEquals(textSurfaceRange(palette.surface), drawable.paintedTextSurface)
+            assertEquals(2, changes)
+        }
+    }
+
     @Test fun pageAndWindowGrainCanBeConfiguredIndependently() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,

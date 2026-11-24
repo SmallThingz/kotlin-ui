@@ -256,6 +256,7 @@ open class NativeSettingsRow(
             it.qualifyAccentInk = true
             colorSurface = it
         }
+        colors.setSurfacePreset(palette.surfacePreset)
         colors.bind(fills, strokes, iconColors, ripple, radius, density, titleColors, detailColors, palette.surface)
         if(background !== colors.background)background=colors.background
         appliedPalette = palette

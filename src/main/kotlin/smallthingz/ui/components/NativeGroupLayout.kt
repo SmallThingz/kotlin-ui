@@ -23,6 +23,8 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import androidx.annotation.ColorInt
 import smallthingz.ui.animation.view.ViewColorTransition
+import smallthingz.ui.graphics.ViewGrain
+import smallthingz.ui.graphics.bindGrainLayer
 import kotlin.math.ceil
 import kotlin.math.min
 
@@ -45,6 +47,10 @@ class NativeGroupLayout(
     private val fillPaint = Paint(GROUP_PAINT_FLAGS)
     private val borderPaint = Paint(GROUP_PAINT_FLAGS).apply { style = Paint.Style.STROKE }
     private val bounds = RectF()
+    private val grainClip = Path()
+    private var grain: ViewGrain? = null
+    private var grainIntensity = 0f
+    private var textSurfaceRange = smallthingz.ui.graphics.noiseSurfaceRange(fillPaint.color, 0)
     private val borderBounds = RectF()
     private var geometry = roundedGroupGeometry(0f, 0f, resources.displayMetrics.density, cornerRadiusDp)
     private val content = ClippedGroupContent(context)
@@ -167,7 +173,7 @@ class NativeGroupLayout(
     }
     /** Progress overlays are not a uniform text underlay; leave their existing ink owner intact. */
     val paintedTextSurface: Long get() = if (progressFraction == 0f)
-        smallthingz.ui.controls.textSurfaceRange(fillPaint.color) else 0L
+        textSurfaceRange else 0L
 
     fun setPalette(@ColorInt field: Int, @ColorInt border: Int) {
         val motion=paletteTransition ?: ViewColorTransition(this,intArrayOf(field,border),{
@@ -182,11 +188,26 @@ class NativeGroupLayout(
         applyPalette(field,border)
     }
 
+    internal fun setSurfacePreset(preset: NativeDarkSurfacePreset?) {
+        val intensity = preset?.foregroundGrain ?: 0f
+        if (grainIntensity == intensity) return
+        grainIntensity = intensity
+        grain = bindGrainLayer(grain, intensity)
+        updateTextSurface()
+        paintedSurfaceChanged()
+        invalidate()
+    }
+
+    private fun updateTextSurface() {
+        textSurfaceRange = grain?.surfaceRange(fillPaint.color)
+            ?: smallthingz.ui.controls.textSurfaceRange(fillPaint.color)
+    }
+
     private fun applyPalette(field:Int,border:Int) {
         val fillChanged = fillPaint.color != field
         if (fillPaint.color != field || borderPaint.color != border) {
             fillPaint.color = field
-            if (fillChanged) paintedSurfaceChanged()
+            if (fillChanged) { updateTextSurface(); paintedSurfaceChanged() }
             borderPaint.color = border
             invalidate()
         }
@@ -229,6 +250,7 @@ class NativeGroupLayout(
         if (edges == null) content.setCornerRadiusPx(geometry.radius) else {
             val shape = checkNotNull(joinedShape)
             shape.update(width.toFloat(), height.toFloat(), resources.displayMetrics.density, edges)
+            shape.copyFillPath(grainClip)
             content.setJoinedShape(shape)
         }
     }
@@ -236,6 +258,10 @@ class NativeGroupLayout(
     override fun onDraw(canvas: Canvas) {
         if (joinedEdges == null) canvas.drawRoundRect(bounds, geometry.radius, geometry.radius, fillPaint)
         else checkNotNull(joinedShape).drawFill(canvas, fillPaint)
+        grain?.let { layer ->
+            if (joinedEdges == null) layer.draw(canvas, bounds.left, bounds.top, bounds.right, bounds.bottom, geometry.radius, fillPaint.alpha)
+            else layer.draw(canvas, grainClip, fillPaint.alpha)
+        }
         if (progressFraction > 0f) {
             val save = canvas.save()
             val extent = width * progressFraction

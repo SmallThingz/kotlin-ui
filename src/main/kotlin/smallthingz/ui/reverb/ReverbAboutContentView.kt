@@ -2,6 +2,7 @@ package smallthingz.ui.reverb
 
 import smallthingz.ui.components.NativeModalWindowRuntime
 import smallthingz.ui.components.NativeFloatingPanelSurface
+import smallthingz.ui.components.NativeModalTextSurface
 import smallthingz.ui.components.NativeDecorativeIconView
 
 import smallthingz.ui.components.NativeGroupLayout
@@ -243,7 +244,10 @@ private class AboutSurface(context: Context, appearance: AboutContentAppearance,
             override suspend fun postFling(consumedY: Float, availableY: Float) = 0f
         })
     init { setPanelViewport(viewport) }
-    fun setContent(view: View) = viewport.setContent(view)
+    fun setContent(view: View) {
+        viewport.setContent(view)
+        NativeModalTextSurface.bindTree(view)
+    }
     fun setStatusInsets(value: Insets) = setContentInsets(value.left, value.top, value.right, value.bottom)
     fun setAppearance(value: AboutContentAppearance) {
         bindSurface(value.density.density, value.panel, value.panelPalette)
@@ -366,7 +370,7 @@ private class AboutBrandHeader(context: Context, private var appearance: AboutCo
 }
 
 private class AboutRepositoryCard(context: Context, appearance: AboutContentAppearance, details: ReverbAboutDetails, onClick: () -> Unit) : ViewGroup(context) {
-    private val group = NativeGroupLayout(context, appearance.panel.link.radiusDp, onPaintedSurfaceChanged = ReverbTextSurface::invalidate)
+    private val group = NativeGroupLayout(context, appearance.panel.link.radiusDp, onPaintedSurfaceChanged = NativeModalTextSurface::invalidate)
     val row = AboutRepositoryRow(context, appearance, details, onClick)
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -375,6 +379,7 @@ private class AboutRepositoryCard(context: Context, appearance: AboutContentAppe
     }
     fun setAppearance(value: AboutContentAppearance, details: ReverbAboutDetails) {
         group.setCornerRadiusDp(value.panel.link.radiusDp)
+        group.setSurfacePreset(value.palette.surfacePreset)
         group.setPalette(ReverbDesign.modalLinkSurface(value.palette), 0)
         row.setAppearance(value, details)
     }
@@ -480,7 +485,7 @@ private class AboutRepositoryRow(context: Context, private var appearance: About
 }
 
 private class AboutErrorCard(context: Context, private var appearance: AboutContentAppearance) : ViewGroup(context) {
-    private val group = NativeGroupLayout(context, appearance.panel.error.radiusDp, onPaintedSurfaceChanged = ReverbTextSurface::invalidate)
+    private val group = NativeGroupLayout(context, appearance.panel.error.radiusDp, onPaintedSurfaceChanged = NativeModalTextSurface::invalidate)
     private val text = aboutParagraph(context, appearance, appearance.bodyMedium, appearance.palette.onErrorContainer).apply {
         accessibilityLiveRegion = ACCESSIBILITY_LIVE_REGION_POLITE
     }
@@ -512,6 +517,7 @@ private class AboutErrorCard(context: Context, private var appearance: AboutCont
     fun setAppearance(value: AboutContentAppearance) {
         appearance = value
         group.setCornerRadiusDp(value.panel.error.radiusDp)
+        group.setSurfacePreset(value.palette.surfacePreset)
         group.setPalette(value.panel.error.fill(value.palette), 0)
         text.setTypography(value.bodyMedium, value.density, value.fontResolver)
         text.animateTextColor(value.palette.onErrorContainer); requestLayout()

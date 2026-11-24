@@ -5,6 +5,8 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.drawable.Drawable
 import android.view.View
+import smallthingz.ui.graphics.bindGrainLayer
+import smallthingz.ui.graphics.ViewGrain
 import kotlin.math.roundToInt
 
 /** Rounded leading slot that shows an icon or the caller's existing interactive content. */
@@ -18,6 +20,12 @@ class NativeLeadingDisc(
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         color = initialFill
     }
+    private var grain: ViewGrain? = null
+
+    internal fun setSurfacePreset(preset: NativeDarkSurfacePreset?) {
+        grain = bindGrainLayer(grain, preset?.foregroundGrain ?: 0f)
+    }
+
     var content: View? = null
         private set
 
@@ -79,6 +87,7 @@ class NativeLeadingDisc(
         super.onDraw(canvas)
         // The clipped rectangular paint retains the source's translucent edge coverage.
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), fill)
+        grain?.draw(canvas, 0f, 0f, width.toFloat(), height.toFloat(), coverage = fill.alpha)
         if (content == null) {
             glyph.layoutDirection = layoutDirection
             glyph.draw(canvas)

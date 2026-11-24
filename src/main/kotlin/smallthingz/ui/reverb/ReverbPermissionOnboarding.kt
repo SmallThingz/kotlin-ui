@@ -46,6 +46,7 @@ class ReverbPermissionOnboardingRows(
     private var closed = false
     private var bound: List<ReverbPermissionOnboardingState>? = null
     val view = cards.createGroup(context, ReverbTextSurface::invalidate).apply {
+        setSurfacePreset(theme.palette.surfacePreset)
         setPalette(theme.palette.field, theme.palette.border)
     }
 
