@@ -5,6 +5,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import smallthingz.ui.common.SegmentOption
+import smallthingz.ui.components.acceptsNativeInput
 import smallthingz.ui.reverb.ReverbEnvironment
 import smallthingz.ui.reverb.ReverbGlyphView
 import smallthingz.ui.reverb.ReverbIcon
@@ -106,7 +107,7 @@ class ReverbLabeledSegmentedSelector<T : Any>(
             val current = help
             if (!closed && current?.enabled == true && helpButton.isShown && isEnabled &&
                 isAttachedToWindow && hasWindowFocus() && inputAdmission?.invoke() == true &&
-                !closed && help === current) current.onClick()
+                helpButton.visual.acceptsNativeInput() && !closed && help === current) current.onClick()
         }
         helpButton.visibility = if (action == null || closed) GONE else VISIBLE
     }

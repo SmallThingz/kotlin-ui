@@ -15,6 +15,7 @@ import android.widget.LinearLayout
 import androidx.annotation.MainThread
 import smallthingz.ui.components.NativeLabeledTextField
 import smallthingz.ui.components.NativeMaterialButtonView
+import smallthingz.ui.components.acceptsNativeInput
 import smallthingz.ui.reverb.ReverbEnvironment
 import smallthingz.ui.reverb.ReverbIcon
 import smallthingz.ui.reverb.ReverbStandardIconButtonView
@@ -116,7 +117,10 @@ class CredentialFieldGroup<ID : Enum<ID>>(
                     override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                     override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
                     override fun afterTextChanged(s: Editable?) {
-                        if (!closed && !binding && spec.editable && isEnabled) editCallback?.invoke(spec.id, s?.toString().orEmpty())
+                        if (spec.editable && canDispatchEdit(editor) && editor.acceptsNativeInput() &&
+                            canDispatchEdit(editor) && editor.text === s) {
+                            editCallback?.invoke(spec.id, s?.toString().orEmpty())
+                        }
                     }
                 })
             }
@@ -143,7 +147,17 @@ class CredentialFieldGroup<ID : Enum<ID>>(
         }
     }
     private val trailingRows = buttons.entries.groupBy { it.key.field }.mapValues { (_, entries) ->
-        LinearLayout(context).apply {
+        object : LinearLayout(context) {
+            override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+                super.onWindowFocusChanged(hasWindowFocus)
+                if (!hasWindowFocus) for ((_, button) in entries) {
+                    when (button) {
+                        is NativeMaterialButtonView -> button.cancelInput()
+                        is ReverbStandardIconButtonView -> button.cancelInput()
+                    }
+                }
+            }
+        }.apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             isBaselineAligned = false
@@ -226,10 +240,18 @@ class CredentialFieldGroup<ID : Enum<ID>>(
 
     private fun dispatchAction(target: CredentialActionTarget<ID>) {
         val button = buttons.getValue(target)
-        if (!closed && actionStates[target]?.enabled == true && button.isAttachedToWindow && button.isShown) {
+        // Admission can synchronously hide, rebind or close the owner. Query it once, then recheck local state.
+        if (canDispatchAction(target, button) && button.acceptsNativeInput() && canDispatchAction(target, button)) {
             actionCallback?.invoke(target)
         }
     }
+
+    private fun canDispatchAction(target: CredentialActionTarget<ID>, button: View) =
+        !closed && actionStates[target]?.enabled == true && button.isAttachedToWindow &&
+            button.isShown && button.hasWindowFocus()
+
+    private fun canDispatchEdit(editor: View) =
+        !closed && !binding && editor.isEnabled && editor.isAttachedToWindow && editor.isShown
 
     private fun bindAction(target: CredentialActionTarget<ID>, button: View, state: CredentialActionState<ID>?) {
         val enabled = !closed && state?.enabled == true

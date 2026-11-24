@@ -271,6 +271,51 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
         }
     }
 
+    @Test fun helpChecksCurrentAncestorAdmissionForClickAccessibilityAndKeyboard() {
+        var admitted = false
+        var calls = 0
+        withSelector(enabled = false, help = ReverbSelectorHelp("Help") { calls++ },
+            ancestorInputAllowed = { admitted }) { fixture ->
+            main {
+                val selector = fixture.selector
+                val action = selector.helpButton().visual
+                assertTrue(selector.isAttachedToWindow && selector.hasWindowFocus())
+                assertFalse(selector.chip("Time").isEnabled)
+                assertTrue(action.isEnabled)
+                assertTrue(requireNotNull(action.createAccessibilityNodeInfo()).isEnabled)
+                action.isFocusableInTouchMode = true
+                assertTrue(action.requestFocus())
+
+                action.performClick()
+                assertEquals(0, calls)
+                action.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null)
+                assertEquals(0, calls)
+                assertTrue(action.dispatchKeyEvent(key(KeyEvent.ACTION_DOWN)))
+                assertTrue(action.dispatchKeyEvent(key(KeyEvent.ACTION_UP)))
+                assertEquals(0, calls)
+
+                // Gate changes take effect without rebinding or disabling the independent Help action.
+                admitted = true
+                assertTrue(action.performClick())
+                assertEquals(1, calls)
+                assertTrue(action.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                assertEquals(2, calls)
+                assertTrue(action.dispatchKeyEvent(key(KeyEvent.ACTION_DOWN)))
+                admitted = false
+                assertTrue(action.dispatchKeyEvent(key(KeyEvent.ACTION_UP)))
+                assertEquals(2, calls)
+
+                admitted = true
+                assertTrue(action.dispatchKeyEvent(key(KeyEvent.ACTION_DOWN)))
+                assertTrue(action.dispatchKeyEvent(key(KeyEvent.ACTION_UP)))
+                assertEquals(3, calls)
+                assertTrue(action.isEnabled)
+                assertFalse(selector.chip("Time").isEnabled)
+                assertTrue(fixture.requests.isEmpty())
+            }
+        }
+    }
+
     @Test fun detachingHelpRetiresPendingKeyBeforeReattachment() {
         var calls = 0
         withSelector(help = ReverbSelectorHelp("Help") { calls++ }) { fixture ->
@@ -352,7 +397,8 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
         val requests: MutableList<Mode>)
 
     private fun withSelector(enabled: Boolean = true, help: ReverbSelectorHelp? = null,
-        disabledReason: String? = null, inputAllowed: () -> Boolean = { true }, block: (Fixture) -> Unit) {
+        disabledReason: String? = null, inputAllowed: () -> Boolean = { true },
+        ancestorInputAllowed: () -> Boolean = { true }, block: (Fixture) -> Unit) {
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         var fixture: Fixture? = null
@@ -362,7 +408,9 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
                 val requests = mutableListOf<Mode>()
                 val selector = ReverbLabeledSegmentedSelector(activity, environment, "Retention", options,
                     Mode.TIME, enabled, help, disabledReason, inputAllowed) { requests.add(it) }
-                val root = FrameLayout(activity)
+                val root = object : FrameLayout(activity), NativeInputGate {
+                    override val acceptsNativeInput: Boolean get() = ancestorInputAllowed()
+                }
                 root.addView(selector, FrameLayout.LayoutParams(-1, -2))
                 fixture = Fixture(activity, root, selector, environment, requests)
                 activity.setContentView(root)
