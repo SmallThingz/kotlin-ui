@@ -102,6 +102,8 @@ private class CalibrationActionSurface(
 
     init { bindIcon() }
 
+    override fun mergedActionDescription(): CharSequence? = contentDescription
+
     private fun bindIcon() {
         leadingIcon?.let { setLeadingIcon(it(environment.textDensity.density, environment.palette.primary)) }
     }

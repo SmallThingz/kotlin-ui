@@ -25,6 +25,7 @@ import smallthingz.ui.common.formatPlaybackTime
 import smallthingz.ui.common.formatRangeTimeInput
 import smallthingz.ui.components.NativeSpringFineSeekBinding
 import smallthingz.ui.components.NativeSpringFineSeekView
+import smallthingz.ui.util.closePreservingPrimaryFailure
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
@@ -96,6 +97,7 @@ class ReverbLibraryPlayerView<B : NativeSpringFineSeekBinding>(
 ) : ViewGroup(context) {
     private val content = PlayerColumn(context, environment, fineSeekView, nativeInputRoot, frames, scope, labels, durationScale)
     private var state: LibraryPlayerUiState? = null
+    private var released = false
     val waveformInput: NativeViewPhasePointerNode get() = content.timeline
     val startLabel: ParagraphView get() = content.times.start
     val endLabel: ParagraphView get() = content.times.end
@@ -109,6 +111,7 @@ class ReverbLibraryPlayerView<B : NativeSpringFineSeekBinding>(
 
     fun bind(environment: ReverbEnvironment, state: LibraryPlayerUiState, actions: LibraryPlayerActions,
              fineSeek: B) {
+        if (released) return
         val previous = this.state
         this.state = state
         if (previous?.recordingRevisionKey != state.recordingRevisionKey) content.timeline.setWaveform(null)
@@ -120,11 +123,21 @@ class ReverbLibraryPlayerView<B : NativeSpringFineSeekBinding>(
     }
 
     /** Publish a snapshot only when sample content changes; never copy arrays on an animation frame. */
-    fun setWaveform(data: ProgressiveWaveformData?) = content.timeline.setWaveform(data)
-    fun setWaveformFrame(frame: ProgressiveWaveformFrame) = content.timeline.setWaveformFrame(frame)
+    fun setWaveform(data: ProgressiveWaveformData?) {
+        if (!released) content.timeline.setWaveform(data)
+    }
+    fun setWaveformFrame(frame: ProgressiveWaveformFrame) {
+        if (!released) content.timeline.setWaveformFrame(frame)
+    }
 
     /** Row disposal only; accepted operations remain owned by the existing controller/store. */
-    fun release() { content.timeline.release(); fineSeekView.release() }
+    fun release() {
+        if (released) return
+        released = true
+        state = null
+        val failure = closePreservingPrimaryFailure(null, content::release)
+        closePreservingPrimaryFailure(failure, fineSeekView::release)?.let { throw it }
+    }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         content.measure(widthMeasureSpec, heightMeasureSpec)
@@ -180,11 +193,7 @@ private class PlayerColumn(context: Context, private var environment: ReverbEnvi
             buttons!!.bind(value, next, actions)
         } else {
             heading?.let(::removeView); heading = null
-            buttons?.let {
-                removeView(it)
-                buttons = null
-                it.close()
-            }
+            releaseTrimButtons()
         }
         if (next.trimMode && next.trimError != null) {
             if (error == null) error = value.paragraph(context, next.trimError, ReverbTextRole.BODY_SMALL, value.palette.error)
@@ -201,6 +210,21 @@ private class PlayerColumn(context: Context, private var environment: ReverbEnvi
         }
         if (environmentChanged || previous?.trimMode != next.trimMode) requestLayout()
     }
+
+    fun release() {
+        state = null
+        var failure = closePreservingPrimaryFailure(null, timeline::release)
+        failure = closePreservingPrimaryFailure(failure, times::release)
+        closePreservingPrimaryFailure(failure, ::releaseTrimButtons)?.let { throw it }
+    }
+
+    private fun releaseTrimButtons() {
+        val previous = buttons ?: return
+        buttons = null
+        val failure = closePreservingPrimaryFailure(null) { removeView(previous) }
+        closePreservingPrimaryFailure(failure, previous::close)?.let { throw it }
+    }
+
     private fun dp(value: Float) = (value * environment.textDensity.density).roundToInt()
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
@@ -344,10 +368,13 @@ class PlayerTimeline(context: Context, private var environment: ReverbEnvironmen
     }
     override fun cancel() = input.cancel()
     fun release() {
-        input.cancel()
+        val failure = closePreservingPrimaryFailure(null, input::release)
         playbackClock.bind("", false, null)
         state = null
+        frame = null
+        waveform.setWaveform(null)
         invalidate()
+        failure?.let { throw it }
     }
     override fun dispatchDraw(canvas: Canvas) {
         // This is an elapsed transport clock, not a decorative animation or seek tween.
@@ -410,6 +437,10 @@ private class PlayerTimes(context: Context, private var environment: ReverbEnvir
         lastTrimMode = state.trimMode
         lastPreparing = state.preparing
         startBoundary.bind(state, actions); endBoundary.bind(state, actions)
+    }
+    fun release() {
+        startBoundary.release()
+        endBoundary.release()
     }
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
@@ -500,6 +531,11 @@ private class PlayerBoundary(private val label: ParagraphView, private val targe
     fun bind(value: LibraryPlayerUiState, callbacks: LibraryPlayerActions) {
         state = value; actions = callbacks
         label.isFocusable = value.trimMode && value.boundaryInputEnabled && inlineTrimBoundaryLimits(value.durationMillis, target) != null
+    }
+    fun release() {
+        state = null
+        actions = null
+        label.isFocusable = false
     }
 }
 

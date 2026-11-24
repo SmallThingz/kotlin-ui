@@ -16,13 +16,13 @@ import kotlin.math.roundToInt
 
 /** Storage's two exact source surfaces:48dp/14dp icon action or default TextButton/12dp raised fill. */
 class ReverbSettingsStorageActionView(
-    context:Context,
-    initial:ReverbEnvironment,
-    private val icon:ReverbIcon?,
-    private val description:String,
-    inputRoot:()->View?,
-    onClick:()->Unit,
-):ViewGroup(context),AutoCloseable {
+    context: Context,
+    initial: ReverbEnvironment,
+    private val icon: ReverbIcon?,
+    private val description: String,
+    inputRoot: () -> View?,
+    onClick: () -> Unit,
+) : ViewGroup(context), AutoCloseable {
     private var environment = initial
     private val recipe = initial.appearance.buttons.let { if (icon == null) it.raisedText else it.raisedIcon }
     private val surface = NativeGroupLayout(context, requireNotNull(recipe.surface.radiusDp),
@@ -30,10 +30,12 @@ class ReverbSettingsStorageActionView(
     private val content = NativeMaterialButtonView(context, recipe,
         initial.textDensity, initial.sharedFontResolver,
         NativeButtonInputPolicy(inputRoot), onClick)
-    private val glyph = icon?.let { ReverbGlyphView(context, it, recipe.contentColor(initial.palette.buttonPalette, true)).apply {
-        contentDescription = description
-        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
-    } }
+    private val glyph = icon?.let {
+        ReverbGlyphView(context, it, recipe.contentColor(initial.palette.buttonPalette, true)).apply {
+            contentDescription = description
+            importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
+        }
+    }
     val visual: View get() = content
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -44,6 +46,7 @@ class ReverbSettingsStorageActionView(
         addView(surface)
         bind(initial, true)
     }
+
     fun bind(next: ReverbEnvironment, enabled: Boolean) {
         environment = next
         val palette = next.palette.buttonPalette
@@ -55,17 +58,20 @@ class ReverbSettingsStorageActionView(
         content.bind(description, enabled, palette)
         requestLayout()
     }
-    override fun onMeasure(w:Int,h:Int) {
-        surface.measure(w,h)
-        val minimum=dp(content.minimumTouchTargetDp)
-        setMeasuredDimension(resolveSize(max(minimum,surface.measuredWidth),w),
-            resolveSize(max(minimum,surface.measuredHeight),h))
+
+    override fun onMeasure(w: Int, h: Int) {
+        surface.measure(w, h)
+        val minimum = dp(content.minimumTouchTargetDp)
+        setMeasuredDimension(resolveSize(max(minimum, surface.measuredWidth), w),
+            resolveSize(max(minimum, surface.measuredHeight), h))
     }
-    override fun onLayout(changed:Boolean,l:Int,t:Int,r:Int,b:Int) {
-        val x=((width-surface.measuredWidth)/2f).roundToInt()
-        val y=((height-surface.measuredHeight)/2f).roundToInt()
-        surface.layout(x,y,x+surface.measuredWidth,y+surface.measuredHeight)
+
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        val x = ((width - surface.measuredWidth) / 2f).roundToInt()
+        val y = ((height - surface.measuredHeight) / 2f).roundToInt()
+        surface.layout(x, y, x + surface.measuredWidth, y + surface.measuredHeight)
     }
+
     override fun close() = content.close()
     private fun dp(value: Int) = (value * environment.textDensity.density).roundToInt()
 }

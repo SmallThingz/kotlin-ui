@@ -145,6 +145,51 @@ class NativeActionSheetStateTest {
         assertEquals(300f,state.offset,0f)
         assertFalse(state.animationRunning)
     }
+
+    @Test fun busySheetStaysAtExpandedAnchorDuringNestedFlingRelease() = runBlocking {
+        lateinit var state: NativeActionSheetState
+        val observed = mutableListOf<Pair<Float, Boolean>>()
+        state = NativeActionSheetState({ 1f }, { observed += state.offset to state.animationRunning }, { false })
+        state.measured(600, 300)
+        withContext(SteppingFrames()) { state.show() }
+        observed.clear()
+        withContext(SteppingFrames()) {
+            val nested = NativeActionSheetNestedScroll(state, { velocity -> launch { state.settle(velocity) } }, { })
+            assertEquals(1800f, nested.postFling(0f, 1800f), 0f)
+        }
+        assertEquals(300f, state.offset, 0f)
+        assertEquals(NativeSheetValue.EXPANDED, state.currentValue)
+        assertTrue(observed.isNotEmpty())
+        assertTrue(observed.all { (offset, animating) -> offset == 300f && !animating })
+        assertFalse(state.animationRunning)
+    }
+
+    @Test fun newlyBusySheetCancelsAnInFlightExpandedTargetSettle() = runBlocking {
+        var allowed = true
+        var vetoObserved = false
+        lateinit var state: NativeActionSheetState
+        val offsetsAfterVeto = mutableListOf<Float>()
+        state = NativeActionSheetState({ 1f }, { if (vetoObserved) offsetsAfterVeto += state.offset }, { allowed })
+        state.measured(600, 300)
+        withContext(ImmediateFrame) { state.animateTo(NativeSheetValue.EXPANDED, snap()) }
+
+        withContext(SteppingFrames { frame ->
+            if (frame == 2) {
+                assertEquals(NativeSheetValue.EXPANDED, state.targetValue)
+                assertTrue(state.offset > 300f)
+                allowed = false
+                vetoObserved = true
+                state.dismissalAdmissionChanged()
+                // An already vetoed settle must not resume if the operation finishes immediately.
+                allowed = true
+            }
+        }) { state.settle(1800f) }
+
+        assertTrue(offsetsAfterVeto.isNotEmpty())
+        assertTrue(offsetsAfterVeto.all { it == 300f })
+        assertEquals(NativeSheetValue.EXPANDED, state.currentValue)
+        assertFalse(state.animationRunning)
+    }
     @Test fun blockedDismissalRejectsBothNestedAndDirectDragOffsets()=runBlocking {
         val state=NativeActionSheetState({1f},{},{false})
         state.measured(600,300)

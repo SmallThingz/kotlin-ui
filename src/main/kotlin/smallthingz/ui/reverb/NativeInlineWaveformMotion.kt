@@ -32,6 +32,7 @@ class NativeInlineWaveformMotion(
     private var lastPhaseFrame: Long? = null
     private var motionEnabled = true
     private var frameJob: Job? = null
+    private var lastPublishedFrame: ProgressiveWaveformFrame? = null
     private var closed = false
 
     fun bind(data: ProgressiveWaveformData, loading: Boolean, morphStarted: Boolean) {
@@ -97,19 +98,42 @@ class NativeInlineWaveformMotion(
         lastPhaseFrame = null
     }
 
-    private fun publishFrame() = publish(ProgressiveWaveformFrame(
-        morphProgress = morph.value,
-        visibleCoarseFraction = coarse.value,
-        visibleDetailFraction = detail.value,
-        wobblePhaseSeconds = phase.toFloat(),
-        // PlayerTimeline substitutes the current source-derived selection on every frame.
-        startFraction = 0f, endFraction = 0f, morphFromBlob = false,
-    ))
+    private fun publishFrame() {
+        val morphProgress = morph.value
+        val coarseFraction = coarse.value
+        val detailFraction = detail.value
+        val wobblePhase = phase.toFloat()
+        val previous = lastPublishedFrame
+        // Match the data class's Float equality without constructing a duplicate frame.
+        if (previous != null &&
+            previous.morphProgress.toBits() == morphProgress.toBits() &&
+            previous.visibleCoarseFraction.toBits() == coarseFraction.toBits() &&
+            previous.visibleDetailFraction.toBits() == detailFraction.toBits() &&
+            previous.wobblePhaseSeconds.toBits() == wobblePhase.toBits()
+        ) return
+
+        val frame = ProgressiveWaveformFrame(
+            morphProgress = morphProgress,
+            visibleCoarseFraction = coarseFraction,
+            visibleDetailFraction = detailFraction,
+            wobblePhaseSeconds = wobblePhase,
+            // The owner applies the current selection independently of the animation frame.
+            startFraction = 0f, endFraction = 0f, morphFromBlob = false,
+        )
+        lastPublishedFrame = frame
+        try {
+            publish(frame)
+        } catch (failure: Throwable) {
+            if (lastPublishedFrame === frame) lastPublishedFrame = previous
+            throw failure
+        }
+    }
 
     override fun close() {
         closed = true
         frameJob?.cancel()
         frameJob = null
+        lastPublishedFrame = null
     }
 
     private fun animation(duration: Int) = AnimatedValue(0f, Float.VectorConverter,

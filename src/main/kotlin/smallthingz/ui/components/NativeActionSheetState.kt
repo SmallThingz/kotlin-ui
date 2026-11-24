@@ -6,7 +6,8 @@
 package smallthingz.ui.components
 
 import smallthingz.ui.animation.core.AnimationSpec
-import smallthingz.ui.animation.core.animate
+import smallthingz.ui.animation.core.AnimationState
+import smallthingz.ui.animation.core.animateTo
 import smallthingz.ui.animation.core.spring
 import smallthingz.ui.foundation.MutatePriority
 import smallthingz.ui.foundation.MutatorMutex
@@ -169,12 +170,22 @@ internal class NativeActionSheetState(
 
     suspend fun show()=animateTo(NativeSheetValue.EXPANDED,spatialSpec)
     suspend fun hide()=animateTo(NativeSheetValue.HIDDEN,hideSpec)
-    suspend fun settle(velocity:Float)=animateTo(computeTarget(requireOffset(),currentValue,velocity),spatialSpec,velocity)
+    suspend fun settle(velocity: Float) {
+        if (!dismissalAllowed()) {
+            // Nested content can finish a fling with leftover velocity even when the sheet
+            // consumed no drag. That velocity must not move a busy sheet off its anchor.
+            dismissalAdmissionChanged()
+            return
+        }
+        animateTo(computeTarget(requireOffset(), currentValue, velocity), spatialSpec, velocity,
+            cancelOnDismissalVeto = true)
+    }
 
     suspend fun animateTo(
         target:NativeSheetValue,
         spec:AnimationSpec<Float>,
         velocity:Float=lastVelocity,
+        cancelOnDismissalVeto: Boolean = false,
     ) {
         val admitted=admittedTarget(target)
         val initialAnchors=anchors
@@ -193,12 +204,18 @@ internal class NativeActionSheetState(
                     if(!targetOffset.isNaN()) {
                         val start=if(offset.isNaN())0f else offset
                         // Retain the operation's initial velocity across anchor restarts, as source.
-                        animate(start,targetOffset,velocity,spec) { value,speed->
-                            if(latestTarget==NativeSheetValue.HIDDEN&&
-                                (!dismissalAllowed()||dismissalVetoRevision!=vetoAtStart))hideRejected=true
+                        AnimationState(initialValue = start, initialVelocity = velocity).animateTo(targetOffset, spec) {
+                            val vetoed = (cancelOnDismissalVeto || latestTarget == NativeSheetValue.HIDDEN) &&
+                                (!dismissalAllowed() || dismissalVetoRevision != vetoAtStart)
                             val expanded=input.anchors?.expanded
-                            if(hideRejected&&expanded!=null)retainExpandedAfterVeto(expanded)
-                            else dragScope.dragTo(value,speed)
+                            if (cancelOnDismissalVeto && vetoed && expanded != null) {
+                                retainExpandedAfterVeto(expanded)
+                                cancelAnimation()
+                            } else {
+                                if (latestTarget == NativeSheetValue.HIDDEN && vetoed) hideRejected = true
+                                if (hideRejected && expanded != null) retainExpandedAfterVeto(expanded)
+                                else dragScope.dragTo(value, this.velocity)
+                            }
                         }
                     }
                 }
