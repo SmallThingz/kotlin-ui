@@ -5,11 +5,29 @@ import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeTextStyle
 import smallthingz.ui.components.nativeTextStyle
 import smallthingz.ui.reverb.ReverbDesign
+import smallthingz.ui.reverb.reverbActionSheetStyle
+import smallthingz.ui.text.NativeTypography
+import smallthingz.ui.text.font.FontFamily
+import smallthingz.ui.unit.Density
 import smallthingz.ui.text.NativeTypographyRole
 
 /** Gallery uses the shared appearance; product marks and content remain Gallery-owned. */
 object GalleryDesign {
     val appearance = ReverbDesign.appearance
+
+    val actionTextStyle = appearance.typography[NativeTypographyRole.LABEL_LARGE]
+    val dialogChoiceTextStyle = appearance.typography[appearance.modals.floating.titleRole]
+    val settingsTitleTextStyle = NativeTypography(mapOf(
+        NativeTypographyRole.TITLE_MEDIUM to appearance.settingsSelectors.sectionTitle,
+    )).nativeTextStyle(NativeTypographyRole.TITLE_MEDIUM)
+    val settingsChoiceStyle = appearance.settingsSelectors.segmented.choiceStyle
+    val settingsGroup = appearance.groupSurfaces.settingsGroup
+
+    /** Keep the shared modal treatment; Settings has no separate bottom action row. */
+    fun settingsSheetStyle(density: Density, resolver: FontFamily.Resolver, colors: NativeColorScheme) =
+        reverbActionSheetStyle(ReverbDesign.windowTheme(density, resolver, colors)).let {
+            it.copy(recipe = it.recipe.copy(actionsGapDp = 0f))
+        }
 
     fun palette(context: Context, dark: Boolean): NativeColorScheme =
         appearance.resolveColorScheme(context, dark)

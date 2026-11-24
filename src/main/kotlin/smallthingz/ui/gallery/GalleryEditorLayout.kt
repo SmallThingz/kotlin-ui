@@ -10,6 +10,8 @@ import smallthingz.ui.components.NativeToolbarStyle
 import smallthingz.ui.text.NativeTypographyRole
 import kotlin.math.roundToInt
 
+enum class GalleryEditorArrangement { Stacked, SideBySide }
+
 /**
  * Retained editor slots. The host owns insets (root padding), actions, scrolling and preview
  * lifetime. Measurement never reparents a slot, changes focus or resets the photo transform.
@@ -22,6 +24,8 @@ class GalleryEditorLayout(
     preview: View,
     snackbarHost: View? = null,
     private val minimumControlsHeight: () -> Int = { 0 },
+    /** Measurement policy only; never replace children or dispatch domain actions here. */
+    private val prepareControls: (GalleryEditorArrangement) -> Unit = {},
 ) : ViewGroup(context) {
     private val previewBox = FrameLayout(context).apply {
         val edge = previewEdgePx(context.resources.displayMetrics.density)
@@ -60,14 +64,29 @@ class GalleryEditorLayout(
         // An unbounded host requests natural stacked content, not an arbitrary sidebar.
         val panelWidth = if (boundedHeight && controls.visibility != GONE)
             galleryEditorPanelWidth(innerWidth, available, density) else 0
-        controls.measure(exact(if (panelWidth > 0) panelWidth else innerWidth),
-            MeasureSpec.makeMeasureSpec(if (boundedHeight) available else 0,
-                if (!boundedHeight) MeasureSpec.UNSPECIFIED else if (panelWidth > 0) MeasureSpec.EXACTLY else MeasureSpec.AT_MOST))
-        val desiredControlsHeight = if (controls.visibility == GONE) 0 else controls.measuredHeight
-        val bodyHeight = if (boundedHeight) available else desiredControlsHeight + previewMinimumPx(density)
-        plan = galleryEditorPlan(innerWidth, bodyHeight, desiredControlsHeight,
-            if (controls.visibility == GONE) 0 else minimumControlsHeight(), density,
-            layoutDirection == LAYOUT_DIRECTION_RTL, allowSideBySide = boundedHeight && controls.visibility != GONE)
+        fun measureControls(sideBySide: Boolean): Pair<Int, Int> {
+            prepareControls(if (sideBySide) GalleryEditorArrangement.SideBySide else GalleryEditorArrangement.Stacked)
+            // The callback can change descendant sizing without changing parent MeasureSpecs.
+            controls.forceLayout()
+            controls.measure(exact(if (sideBySide) panelWidth else innerWidth),
+                MeasureSpec.makeMeasureSpec(if (boundedHeight) available else 0,
+                    if (!boundedHeight) MeasureSpec.UNSPECIFIED else if (sideBySide) MeasureSpec.EXACTLY else MeasureSpec.AT_MOST))
+            if (controls.visibility == GONE) return 0 to 0
+            val desired = controls.measuredHeight
+            return desired to minimumControlsHeight().coerceAtLeast(0)
+        }
+        var sideBySide = panelWidth > 0
+        var measuredControls = measureControls(sideBySide)
+        if (sideBySide && measuredControls.second > available) {
+            // A wrapped footer may fit at full width even when it cannot fit in the sidebar.
+            sideBySide = false
+            measuredControls = measureControls(false)
+        }
+        val bodyHeight = if (boundedHeight) available else measuredControls.first + previewMinimumPx(density)
+        plan = galleryEditorPlan(innerWidth, bodyHeight, measuredControls.first, measuredControls.second, density,
+            layoutDirection == LAYOUT_DIRECTION_RTL, allowSideBySide = sideBySide)
+        // Intrinsic footer probes also invalidate an optional controls wrapper at unchanged specs.
+        controls.forceLayout()
         controls.measure(exact(plan.controls.width), exact(plan.controls.height))
         previewBox.measure(exact(plan.preview.width), exact(plan.preview.height))
         setMeasuredDimension(resolveSize(width, widthMeasureSpec),
@@ -126,7 +145,7 @@ internal fun galleryEditorPlan(width: Int, height: Int, desiredControlsHeight: I
     minimumControlsHeight: Int, density: Float, rtl: Boolean = false, allowSideBySide: Boolean = true): GalleryEditorPlan {
     require(width >= 0 && height >= 0 && density.isFinite() && density > 0)
     val panel = if (allowSideBySide) galleryEditorPanelWidth(width, height, density) else 0
-    if (panel > 0) {
+    if (panel > 0 && minimumControlsHeight.coerceAtLeast(0) <= height) {
         return if (rtl)
             GalleryEditorPlan(true, GalleryEditorBounds(panel, 0, width, height), GalleryEditorBounds(0, 0, panel, height))
         else GalleryEditorPlan(true, GalleryEditorBounds(0, 0, width - panel, height), GalleryEditorBounds(width - panel, 0, width, height))

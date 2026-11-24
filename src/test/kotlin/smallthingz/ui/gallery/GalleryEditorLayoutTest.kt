@@ -4,6 +4,27 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class GalleryEditorLayoutTest {
+    @Test fun widthEligibleSidebarStillRequiresItsMeasuredFooterToFit() {
+        assertTrue(galleryEditorPlan(800, 180, 300, 180, 1f).sideBySide)
+        assertFalse(galleryEditorPlan(800, 180, 300, 181, 1f).sideBySide)
+    }
+
+    @Test fun rejectedSidebarUsesRemeasuredFullWidthFooter() {
+        val rejected = galleryEditorPlan(800, 180, 300, 240, 1f)
+        assertFalse(rejected.sideBySide)
+        val fullWidth = galleryEditorPlan(800, 180, 160, 100, 1f, allowSideBySide = false)
+        assertFalse(fullWidth.sideBySide)
+        assertEquals(800, fullWidth.controls.width)
+        assertEquals(124, fullWidth.controls.height)
+        assertEquals(56, fullWidth.preview.height)
+    }
+
+    @Test fun unfitFullWidthFooterDoesNotReservePhotoSpace() {
+        val plan = galleryEditorPlan(800, 120, 240, 180, 1f, allowSideBySide = false)
+        assertEquals(0, plan.preview.height)
+        assertEquals(120, plan.controls.height)
+    }
+
     @Test fun narrowLandscapeStacksInsteadOfSqueezingTwoPanes() {
         val plan = galleryEditorPlan(400, 280, 250, 120, 1f)
         assertFalse(plan.sideBySide)
