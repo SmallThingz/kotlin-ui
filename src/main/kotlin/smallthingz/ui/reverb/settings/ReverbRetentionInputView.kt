@@ -42,13 +42,16 @@ enum class ReverbRetentionMode { TIME, SIZE }
 open class ReverbRetentionInputView(
     context: Context,
     initialEnvironment: ReverbEnvironment,
-) : NativeEditableInputView(context,
+) : NativeEditableInputView(
+    context,
     initialEnvironment.appearance.editorVisuals.cursorWidthDp * initialEnvironment.textDensity.density,
-    initialEnvironment.palette.primary), ReverbTextSurfaceTarget {
+    initialEnvironment.palette.primary
+), ReverbTextSurfaceTarget {
     override fun invalidateTextSurfaceInk() = invalidate()
     private var environment = initialEnvironment
-    private val colorMotion:ViewColorTransition by lazy {ViewColorTransition(this,
-        intArrayOf(initialEnvironment.palette.ink,initialEnvironment.palette.primary),::applyColors)}
+    private val colorMotion: ViewColorTransition by lazy {
+        ViewColorTransition(this, intArrayOf(initialEnvironment.palette.ink, initialEnvironment.palette.primary), ::applyColors)
+    }
     protected final override var initialized = false
         private set
     private var mode = ReverbRetentionMode.TIME
@@ -58,6 +61,7 @@ open class ReverbRetentionInputView(
     private var focusPending = false
     private var appliedTypeface: Typeface? = null
     private var appliedEnvironment: ReverbEnvironment? = null
+    private var appliedDirection: LayoutDirection? = null
     private var lineHeightSpan: RetentionLineHeightSpan? = null
     protected override val editing = NativeEditableState(this, ::installLineHeightSpan)
 
@@ -173,33 +177,47 @@ open class ReverbRetentionInputView(
         if (layoutDirection == LAYOUT_DIRECTION_RTL) LayoutDirection.Rtl else LayoutDirection.Ltr
 
     private fun publishTextInk() {
-        val ink = smallthingz.ui.controls.textSurfaceForeground(ReverbTextSurface.sample(this),colorMotion.color(0))
+        val ink = smallthingz.ui.controls.textSurfaceForeground(ReverbTextSurface.sample(this), colorMotion.color(0))
         if (currentTextColor != ink) setTextColor(ink)
     }
     private fun applyColors() {
         publishTextInk()
-        val primary=colorMotion.color(1)
+        val primary = colorMotion.color(1)
         val recipe = environment.appearance.editorVisuals
         bindCaret(recipe.cursorWidthDp * environment.textDensity.density, primary, recipe.selectionColor(primary))
     }
 
     private fun applyTypography() {
-        val style = currentStyle()
-        val resolved = resolveDefaults(style, direction())
-        val face = editorTypeface(resolved, environment.sharedFontResolver)
-        if (appliedEnvironment === environment && appliedTypeface === face) return
-        appliedEnvironment = environment
+        val next = environment
+        val direction = direction()
+        val resolved = resolveDefaults(currentStyle(), direction)
+        val face = editorTypeface(resolved, next.sharedFontResolver)
+        val previous = appliedEnvironment
+        val recipe = next.appearance.editorVisuals
+        val geometryChanged = previous == null || previous.textDensity !== next.textDensity ||
+            previous.sharedFontResolver !== next.sharedFontResolver || appliedTypeface !== face || appliedDirection != direction ||
+            previous.appearance.editorVisuals != recipe ||
+            previous.appearance.typography[ReverbTextRole.BODY_LARGE] != next.appearance.typography[ReverbTextRole.BODY_LARGE]
+        val paletteChanged = previous?.palette != next.palette
+        appliedEnvironment = next
         appliedTypeface = face
-        val metrics = environment.appearance.editorVisuals.largeValueText.resolveEditorMetrics(environment.textDensity)
-        applyEditorTypography(face, metrics)
-        lineHeightSpan = RetentionLineHeightSpan(metrics.lineHeightPx)
-        installCaret()
-        colorMotion.retarget(environment.palette.ink,environment.palette.primary)
+        appliedDirection = direction
+        if (!geometryChanged && !paletteChanged) return
+
+        if (geometryChanged) {
+            val metrics = recipe.largeValueText.resolveEditorMetrics(next.textDensity)
+            applyEditorTypography(face, metrics)
+            lineHeightSpan = RetentionLineHeightSpan(metrics.lineHeightPx)
+            installCaret()
+        }
+        colorMotion.retarget(next.palette.ink, next.palette.primary)
         applyColors()
-        applyEditorMinimum(resolved, environment.textDensity, environment.sharedFontResolver)
-        installLineHeightSpan()
-        requestLayout()
-        invalidate()
+        if (geometryChanged) {
+            applyEditorMinimum(resolved, next.textDensity, next.sharedFontResolver)
+            installLineHeightSpan()
+            requestLayout()
+            invalidate()
+        }
     }
 
     private fun installLineHeightSpan() {

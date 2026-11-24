@@ -7,6 +7,7 @@ import android.app.UiAutomation
 import android.graphics.Rect
 import android.os.Bundle
 import android.os.SystemClock
+import android.view.Choreographer
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -26,6 +27,8 @@ import smallthingz.ui.components.NativeDropdownContent
 import smallthingz.ui.components.NativeUiAppearance
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /** Exercises Android accessibility, touch and key input against the library dropdown. */
@@ -448,34 +451,7 @@ class DropdownInteractionTest {
                     tap(slot)
                     awaitClosed("16-bit PCM")
                 }
-                val started = SystemClock.uptimeMillis()
-                tap(slot)
-                val startDeadline = started + 1000
-                fun progress(alpha: Float) = if (opening) alpha / full else 1f - alpha / full
-                var alpha = scrimAlpha(label)
-                while (progress(alpha) < phase && SystemClock.uptimeMillis() < startDeadline) {
-                    SystemClock.sleep(4)
-                    alpha = scrimAlpha(label)
-                }
-                val before = alpha
-                val trace = mutableListOf(before)
-                assertTrue("No in-flight sample at phase=$phase opening=$opening alpha=$before",
-                    progress(before) >= phase && before > 0f && before < full)
-                val tapped = SystemClock.uptimeMillis()
-                tap(slot)
-                var reversed = false
-                while (!reversed && SystemClock.uptimeMillis() - tapped < 75) {
-                    alpha = scrimAlpha(label)
-                    trace += alpha
-                    assertTrue("Reached old endpoint before reversing: opening=$opening phase=$phase alpha=$trace",
-                        if (opening) alpha < full else alpha > 0f)
-                    reversed = if (opening) alpha < before else alpha > before
-                    if (!reversed) SystemClock.sleep(4)
-                }
-                val elapsed = SystemClock.uptimeMillis() - tapped
-                val timing = "opening=$opening phase=$phase actualPhase=${progress(before)} interTapMs=${tapped - started} reversalMs=$elapsed alpha=$trace"
-                report(timing)
-                assertTrue(timing, reversed && elapsed <= 75)
+                report(measureFrameReversal(it, label, slot, full, phase, opening))
                 if (opening) {
                     awaitClosed("16-bit PCM")
                     tap(slot)
@@ -485,6 +461,101 @@ class DropdownInteractionTest {
         }
         tap(slot)
         awaitClosed("16-bit PCM")
+    }
+
+    /** Measures the real control's frame response, independently of system input transport. */
+    private fun measureFrameReversal(activity: Activity, label: String, slot: Rect, full: Float,
+                                     phase: Float, opening: Boolean): String {
+        // This verifies the external window authority before scheduling Main callbacks. Each local
+        // dispatch also checks the original Activity still owns focus. No input is injected here.
+        guardInput()
+        val decor = activity.window.decorView
+        val complete = CountDownLatch(1)
+        var choreographer: Choreographer? = null
+        var pane: ViewGroup? = null
+        var firstUp = 0L
+        var before = Float.NaN
+        var reverseUp: Long? = null
+        var result: Result<String>? = null
+        val trace = ArrayList<Float>()
+        fun progress(alpha: Float) = if (opening) alpha / full else 1f - alpha / full
+        fun verifyFocus() {
+            check(decor.isAttachedToWindow && decor.isShown && activity.hasWindowFocus() && focusLostAt.get() == null) {
+                "Demo window $demoWindowId lost input ownership during the frame measurement"
+            }
+        }
+        fun dispatchTap(): Long {
+            verifyFocus()
+            val origin = IntArray(2).also(decor::getLocationOnScreen)
+            val x = slot.exactCenterX() - origin[0]
+            val y = slot.exactCenterY() - origin[1]
+            val down = SystemClock.uptimeMillis()
+            fun dispatch(action: Int, time: Long) {
+                val event = MotionEvent.obtain(down, time, action, x, y, 0).apply { source = InputDevice.SOURCE_TOUCHSCREEN }
+                try { check(activity.dispatchTouchEvent(event)) { "Owned demo window rejected touch action $action" } }
+                finally { event.recycle() }
+            }
+            dispatch(MotionEvent.ACTION_DOWN, down)
+            verifyFocus()
+            val up = SystemClock.uptimeMillis()
+            dispatch(MotionEvent.ACTION_UP, up)
+            return up
+        }
+        val observer = object : Choreographer.FrameCallback {
+            override fun doFrame(frameTimeNanos: Long) {
+                try {
+                    verifyFocus()
+                    val current = popupPane(label)
+                    check(current != null && pane === current) {
+                        "Original pane disappeared or was replaced: opening=$opening phase=$phase alpha=$trace"
+                    }
+                    val alpha = current.getChildAt(0).alpha
+                    val up = reverseUp
+                    if (up == null) {
+                        check(if (opening) alpha < full else alpha > 0f) {
+                            "No in-flight frame for opening=$opening phase=$phase before the old endpoint"
+                        }
+                        if (progress(alpha) >= phase && alpha > 0f && alpha < full) {
+                            before = alpha
+                            trace += alpha
+                            reverseUp = dispatchTap()
+                        }
+                    } else {
+                        trace += alpha
+                        val observed = SystemClock.uptimeMillis()
+                        val elapsed = observed - up
+                        val timing = "direct_window_dispatch opening=$opening phase=$phase actualPhase=${progress(before)} " +
+                            "firstUpMs=$firstUp acceptedUpMs=$up frameObservedMs=$observed frameNanos=$frameTimeNanos " +
+                            "interTapMs=${up - firstUp} reversalMs=$elapsed alpha=$trace"
+                        check(if (opening) alpha < full else alpha > 0f) { "Reached the old endpoint: $timing" }
+                        check(elapsed <= 75) { "No reversing frame within 75ms of delivered UP: $timing" }
+                        if (if (opening) alpha < before else alpha > before) {
+                            result = Result.success(timing)
+                            complete.countDown()
+                            return
+                        }
+                    }
+                    checkNotNull(choreographer).postFrameCallback(this)
+                } catch (failure: Throwable) {
+                    result = Result.failure(failure)
+                    complete.countDown()
+                }
+            }
+        }
+        try {
+            instrumentation.runOnMainSync {
+                val previous = popupPane(label)
+                check(opening == (previous == null)) { "Unexpected pane state at start of frame measurement" }
+                firstUp = dispatchTap()
+                pane = checkNotNull(popupPane(label)) { "Starting tap did not establish the in-flight pane" }
+                check(opening || pane === previous) { "Starting collapse replaced its pane" }
+                choreographer = Choreographer.getInstance().also { it.postFrameCallback(observer) }
+            }
+            check(complete.await(5, TimeUnit.SECONDS)) { "No terminal frame observation: opening=$opening phase=$phase" }
+            return checkNotNull(result).getOrThrow()
+        } finally {
+            instrumentation.runOnMainSync { choreographer?.removeFrameCallback(observer) }
+        }
     }
 
     @Test fun oneDragCrossesMultipleRowsAndSnapsToTheOriginalSlot() = withActivity {
