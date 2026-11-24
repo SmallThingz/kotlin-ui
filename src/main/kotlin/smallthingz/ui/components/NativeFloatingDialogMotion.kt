@@ -50,7 +50,7 @@ internal class NativeFloatingVisibilityMotion {
 
     /** A settled pre-measure exit still needs one frame to deliver its owner callback. */
     fun needsFrame(predictiveContinuation: Boolean, exitDelivered: Boolean): Boolean =
-        !finished || predictiveContinuation || (exiting && !exitDelivered)
+        predictiveContinuation || (configured && (!finished || (exiting && !exitDelivered)))
 
     /** Called after actual content measurement, before its first presented frame. */
     fun setHeight(height: Int) {

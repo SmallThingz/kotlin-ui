@@ -7,9 +7,24 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NativeFloatingDialogMotionTest {
+    @Test fun visibilityWaitsForMeasurementWhilePredictiveContinuationCanRunIndependently() {
+        val motion = NativeFloatingVisibilityMotion()
+        assertFalse(motion.needsFrame(predictiveContinuation = false, exitDelivered = false))
+        assertTrue(motion.needsFrame(predictiveContinuation = true, exitDelivered = false))
+        motion.frame(0, 1f)
+        assertFalse(motion.needsFrame(predictiveContinuation = false, exitDelivered = false))
+
+        motion.setHeight(503)
+        assertTrue(motion.needsFrame(predictiveContinuation = false, exitDelivered = false))
+        motion.frame(100, 0f)
+        assertTrue(motion.finished)
+        assertFalse(motion.needsFrame(predictiveContinuation = false, exitDelivered = false))
+    }
+
     @Test fun closeBeforeFirstMeasureStillSchedulesOneTerminalDelivery() {
         val motion = NativeFloatingVisibilityMotion()
         motion.requestExit()
+        assertFalse(motion.needsFrame(predictiveContinuation = false, exitDelivered = false))
         motion.setHeight(503)
         assertTrue(motion.finished)
         assertTrue(motion.needsFrame(predictiveContinuation = false, exitDelivered = false))
