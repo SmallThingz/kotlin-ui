@@ -5,6 +5,8 @@
  */
 package smallthingz.ui.input.phase
 
+import smallthingz.ui.util.closePreservingPrimaryFailure
+
 /** Input-only retained path, not a render/state tree. Nodes are existing concrete input owners. */
 interface NativePhasePointerNode {
     val attached: Boolean
@@ -50,17 +52,20 @@ class NativePointerPhaseTree {
 
     /** Called at the event boundary, not in the middle of another node's callback. */
     fun pruneDetached() {
+        var retired: MutableList<Branch>? = null
         fun prune(branches: MutableList<Branch>) {
             val iterator = branches.iterator()
             while (iterator.hasNext()) {
                 val branch = iterator.next()
                 if (!branch.node.attached) {
-                    cancelBranch(branch)
                     iterator.remove()
+                    (retired ?: mutableListOf<Branch>().also { retired = it }).add(branch)
                 } else prune(branch.children)
             }
         }
         prune(roots)
+        // Finish mutating the tree before invoking callbacks that may cancel/reenter it.
+        retired?.let(::cancelBranches)
     }
 
     fun dispatch(
@@ -70,7 +75,6 @@ class NativePointerPhaseTree {
             branch.event = eventFor(branch.node, branch.pointers)
             branch.children.forEach(::cache)
         }
-        roots.forEach(::cache)
         var dispatched = false
         fun initialAndMain(branch: Branch) {
             if (!branch.node.attached) return
@@ -93,17 +97,22 @@ class NativePointerPhaseTree {
             branch.children.forEach(::clear)
         }
         dispatching = true
+        var failure: Throwable? = null
         try {
+            roots.forEach(::cache)
             roots.forEach(::initialAndMain)
             roots.forEach(::final)
+        } catch (error: Throwable) {
+            failure = error
         } finally {
             dispatching = false
             roots.forEach(::clear)
             if (cancelAfterDispatch) {
                 cancelAfterDispatch = false
-                cancel()
+                failure = closePreservingPrimaryFailure(failure, ::cancel)
             }
         }
+        failure?.let { throw it }
         return dispatched
     }
 
@@ -113,12 +122,20 @@ class NativePointerPhaseTree {
             cancelAfterDispatch = true
             return
         }
-        roots.forEach(::cancelBranch)
+        val retired = roots.toList()
         roots.clear()
+        // Revoke ownership first: cancel callbacks may reenter or install a new stream.
+        cancelBranches(retired)
     }
 
-    private fun cancelBranch(branch: Branch) {
-        branch.children.forEach(::cancelBranch)
-        branch.node.cancel()
+    private fun cancelBranches(branches: List<Branch>) {
+        var failure: Throwable? = null
+        fun cancelBranch(branch: Branch) {
+            branch.children.forEach(::cancelBranch)
+            branch.event = null
+            failure = closePreservingPrimaryFailure(failure, branch.node::cancel)
+        }
+        branches.forEach(::cancelBranch)
+        failure?.let { throw it }
     }
 }

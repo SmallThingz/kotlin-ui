@@ -12,6 +12,7 @@ import android.os.Bundle
 import android.os.Parcelable
 import android.os.SystemClock
 import android.text.Editable
+import android.text.TextWatcher
 import android.text.method.PasswordTransformationMethod
 import android.util.SparseArray
 import android.view.KeyEvent
@@ -868,6 +869,58 @@ class CredentialFieldGroupIntegrationTest {
         } finally {
             instrumentation.runOnMainSync {
                 try { if (created) group.close() } finally { activity.finish() }
+            }
+        }
+    }
+
+    @Test fun throwingRetirementWatchersStillClearOtherFieldsAndRetireActionsOnce() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync {
+            val context = instrumentation.targetContext
+            val reveal = CredentialActionTarget(Field.CONNECTOR, CredentialFieldAction.REVEAL)
+            val copy = CredentialActionTarget(Field.CLIENT, CredentialFieldAction.COPY)
+            var callbacks = 0
+            val group = CredentialFieldGroup(context, ReverbDesign.theme(context, false).controls,
+                listOf(CredentialFieldSpec(Field.CONNECTOR, "Connector"), CredentialFieldSpec(Field.CLIENT, "Client")),
+                actions = setOf(reveal, copy), onAction = { callbacks++ }, onEdit = { _, _ -> callbacks++ })
+            group.bind(listOf(CredentialFieldState(Field.CONNECTOR, "first fixture"),
+                CredentialFieldState(Field.CLIENT, "second fixture")),
+                listOf(CredentialActionState(reveal, "Show"), CredentialActionState(copy, "Copy")))
+            val fields = descendants(group.view).filterIsInstance<NativeLabeledTextField>().toList()
+            val failures = listOf(IllegalStateException("first watcher"), IllegalStateException("second watcher"))
+            val clears = IntArray(2)
+            val watchers = fields.mapIndexed { index, field ->
+                object : TextWatcher {
+                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                    override fun afterTextChanged(s: Editable?) {
+                        if (s.isNullOrEmpty()) {
+                            clears[index]++
+                            group.close() // Reentrancy cannot restart retirement or skip the sibling.
+                            throw failures[index]
+                        }
+                    }
+                }.also { field.editor.addTextChangedListener(it) }
+            }
+            try {
+                val failure = runCatching { group.close() }.exceptionOrNull()
+                assertSame(failures[0], failure)
+                assertEquals(listOf(failures[1]), failure?.suppressed?.toList())
+                assertTrue(fields.all { it.editor.text.isNullOrEmpty() && !it.editor.isEnabled })
+                assertEquals(View.GONE, group.view.visibility)
+                assertTrue(descendants(group.view).filterIsInstance<NativeMaterialButtonView>()
+                    .all { it.visibility == View.GONE })
+                assertTrue(descendants(group.view).filterIsInstance<ReverbStandardIconButtonView>()
+                    .all { it.visibility == View.GONE })
+                group.bind(listOf(CredentialFieldState(Field.CONNECTOR, "retired bind"),
+                    CredentialFieldState(Field.CLIENT, "retired bind")))
+                group.close()
+                assertTrue(fields.all { it.editor.text.isNullOrEmpty() })
+                assertArrayEquals(intArrayOf(1, 1), clears)
+                assertEquals(0, callbacks)
+            } finally {
+                fields.forEachIndexed { index, field -> field.editor.removeTextChangedListener(watchers[index]) }
+                group.close()
             }
         }
     }

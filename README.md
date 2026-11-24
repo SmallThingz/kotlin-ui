@@ -400,6 +400,31 @@ Sampler and clock-owner tests run with the unit suite. The separate
 uses `src/testViewHost` to check View owner cancellation against a narrow host
 fixture. This verifies production control flow, not Android rendering or timing.
 
+## Font-scaling host regression
+
+Run all five `FontScaleConverterSnapshotHostTest` cases separately from Gradle:
+
+```sh
+python3 -B scripts/test_font_scaling_host.py \
+  --compiler-classpath "$KOTLIN_COMPILER_CP" \
+  --test-classpath "$FONT_SCALING_TEST_CP" \
+  --output /path/to/new/font-scaling-receipt
+```
+
+Run from this repository root with JDK 17+ (`--java-home` is optional).
+The compiler classpath needs Kotlin compiler-embeddable and its dependencies;
+the test classpath needs Kotlin stdlib, AndroidX and JetBrains annotations,
+JUnit 4 and Hamcrest. No built library or Android runtime is needed. The runner
+compiles the actual font-scaling sources and `unit/InlineClassHelper.kt` against
+the existing host SparseArray fixture. `--source-root` can select another
+native-ui production checkout while retaining this runner's fixtures.
+
+The output directory must be new. It retains stage logs (including JUnit's test
+count), `commands.json`, and `summary.json` with before/after source, fixture,
+test and runner hashes. Compilation/test failures or changed inputs fail the
+run. This checks deterministic publication interleavings, not Android rendering
+or platform SparseArray behavior.
+
 ## Procedural background grain
 
 ```kotlin

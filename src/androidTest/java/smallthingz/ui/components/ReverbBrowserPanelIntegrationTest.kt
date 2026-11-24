@@ -5,11 +5,15 @@ import android.app.Dialog
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Rect
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.GridLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
@@ -153,6 +157,61 @@ class ReverbBrowserPanelIntegrationTest {
                 assertEquals(listOf("clear"), events)
             }
         } finally { main { modal?.dismiss(); installed?.close(); activity.finish() } }
+    }
+
+    @Test fun throwingFocusRetirementReleasesAllTabPreviewsWithoutRecyclingHostBitmaps() {
+        val activity = activity()
+        var installed: ReverbBrowserPanelTabs<String>? = null
+        var focused: View? = null
+        val bitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888)
+        val failure = IllegalStateException("focus retirement")
+        var focusLosses = 0
+        try {
+            main {
+                val panel = ReverbBrowserPanelTabs<String>(activity, ReverbDesign.theme(activity, false),
+                    "Tabs", "Back", "New tab").also { installed = it }
+                val a = ReverbBrowserPanelTab("a", "Alpha", null, bitmap, null, true, "Current", "Close Alpha")
+                panel.bindTabs("Tabs", listOf(a, a.copy(key = "b", title = "Beta")))
+                panel.onTabAction = { _, _ -> fail("Retired tab action") }
+                activity.setContentView(panel)
+            }
+            idle()
+            main {
+                val panel = checkNotNull(installed)
+                val images = panel.descendants().filterIsInstance<ImageView>()
+                    .filter { (it.drawable as? BitmapDrawable)?.bitmap === bitmap }.toList()
+                assertEquals(2, images.size)
+                assertTrue(images.all { it.drawable != null })
+                val row = panel.descendants().filterIsInstance<ReverbBrowserPanelSettingRow>().first()
+                focused = row
+                row.isFocusableInTouchMode = true
+                assertTrue(row.requestFocus())
+                row.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+                    if (!hasFocus) {
+                        focusLosses++
+                        panel.close() // Already retired; cannot retain or restart ownership.
+                        throw failure
+                    }
+                }
+                assertSame(failure, runCatching { panel.close() }.exceptionOrNull())
+                assertNull(panel.onTabAction)
+                assertTrue(images.all { it.drawable == null })
+                assertFalse(bitmap.isRecycled)
+                assertEquals(0, panel.descendants().filterIsInstance<GridLayout>().single().childCount)
+                // The closed panel must release its snapshot registry as well as painted images.
+                val cards = ReverbBrowserPanelTabs::class.java.getDeclaredField("cards").apply { isAccessible = true }
+                assertTrue((cards.get(panel) as Map<*, *>).isEmpty())
+                row.performClick()
+                panel.close()
+                assertEquals(1, focusLosses)
+            }
+        } finally {
+            main {
+                focused?.onFocusChangeListener = null
+                try { installed?.close() } finally { activity.finish() }
+            }
+            bitmap.recycle()
+        }
     }
 
     @Test fun tabReorderRemovalAndDisabledBindingsKeepIdentityAndFocus() {

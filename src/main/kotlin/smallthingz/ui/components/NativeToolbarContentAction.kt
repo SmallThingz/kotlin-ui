@@ -61,7 +61,8 @@ open class NativeToolbarContentAction @JvmOverloads constructor(
             if (exposesScopedDescription()) super.createAccessibilityNodeInfo() else null
 
         override fun performAccessibilityAction(action: Int, args: Bundle?): Boolean =
-            exposesScopedDescription() && super.performAccessibilityAction(action, args)
+            (action == AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS || exposesScopedDescription()) &&
+                super.performAccessibilityAction(action, args)
     }
     private val accessibilityChildren = listOf(descriptionView)
     override val mergedRowAccessibility = MergedRowAccessibility(

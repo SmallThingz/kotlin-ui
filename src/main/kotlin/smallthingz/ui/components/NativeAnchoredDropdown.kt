@@ -5,11 +5,14 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Region
+import android.graphics.Shader
+import android.os.Build
 import android.view.FocusFinder
 import android.view.Gravity
 import android.view.KeyEvent
@@ -18,6 +21,8 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
+import android.view.WindowInsets
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
@@ -34,6 +39,7 @@ import kotlin.math.roundToInt
 /** Draft anchored choice wheel. Colors, text, joined geometry and input all belong to the library. */
 data class NativeAnchoredDropdownStyle(
     val cornerRadiusDp: Float = 16f,
+    // Retained for source compatibility; vertical bounds now use the safe app viewport.
     val screenMarginDp: Float = 8f,
     val scrimOpacity: Float = .55f,
     val expandMillis: Long = 300,
@@ -183,8 +189,11 @@ class NativeAnchoredDropdown(
         var disposed = false
         var animator: ValueAnimator? = null
         var anchorY = 0
-        var slotsAbove = 0
-        var slotsBelow = 0
+        var viewport: NativeDropdownViewport? = null
+        val windowBounds = Rect()
+        val visibleFrame = Rect()
+        var safeTop = 0
+        var safeBottom = 0
         var modalX = 0
         var modalY = 0
         var modalWidth = 0
@@ -204,6 +213,10 @@ class NativeAnchoredDropdown(
             if (!disposed) {
                 root.getLocationOnScreen(observed)
                 if (observed[0] != modalX || observed[1] != modalY || root.width != modalWidth || root.height != modalHeight) dispose()
+                if (!disposed) {
+                    readSafeEdges()
+                    if (safeTop != viewport?.top || safeBottom != viewport?.bottom) dispose()
+                }
             }
             true
         }
@@ -234,10 +247,15 @@ class NativeAnchoredDropdown(
             modalWidth = root.width; modalHeight = root.height
             val x = origin[0] - observed[0]
             anchorY = origin[1] - observed[1]
-            val margin = (style.screenMarginDp * density.density).roundToInt()
-            val up = ((anchorY - margin) / rowHeight).coerceAtLeast(0)
-            val down = ((root.height - margin - anchorY - rowHeight) / rowHeight).coerceAtLeast(0)
-            slotsAbove = up; slotsBelow = down
+            if (Build.VERSION.SDK_INT >= 30) {
+                windowBounds.set(context.getSystemService(WindowManager::class.java).currentWindowMetrics.bounds)
+            }
+            readSafeEdges()
+            if (anchorY < safeTop || anchorY.toLong() + rowHeight > safeBottom) { dispose(); return }
+            val geometry = NativeDropdownViewport(safeTop, safeBottom, anchorY, rowHeight)
+            viewport = geometry
+            val up = geometry.slotsAbove(content.options.size)
+            val down = geometry.slotsBelow(content.options.size)
             // An unavailable stored value has no wheel row. Browse from the first real option.
             val layout = NativeAnchoredDropdownPlan(content.options.size, initial.coerceAtLeast(0), up, down)
             plan = layout; settled = layout.selectedPosition; position = settled.toFloat()
@@ -262,6 +280,23 @@ class NativeAnchoredDropdown(
             anchor.viewTreeObserver.addOnPreDrawListener(geometryGuard)
             anchor.addOnAttachStateChangeListener(anchorDetach)
             animate(position, 1f, style.expandMillis) {}
+        }
+
+        private fun readSafeEdges() {
+            root.getWindowVisibleDisplayFrame(visibleFrame)
+            var top = visibleFrame.top
+            var bottom = visibleFrame.bottom
+            if (Build.VERSION.SDK_INT >= 30) {
+                val insets = root.rootWindowInsets?.getInsets(
+                    WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout() or WindowInsets.Type.ime())
+                if (insets != null) {
+                    // Insets are relative to the window, not an already padded/panned/resized decor.
+                    top = maxOf(top, windowBounds.top + insets.top)
+                    bottom = minOf(bottom, windowBounds.bottom - insets.bottom)
+                }
+            }
+            safeTop = nativeDropdownLocalEdge(top, modalY, root.height)
+            safeBottom = nativeDropdownLocalEdge(bottom, modalY, root.height)
         }
 
         fun publish(index: Int, activated: Boolean = false) {
@@ -359,6 +394,10 @@ class NativeAnchoredDropdown(
             private val hitShape by lazy { Region() }
             private val hitClip by lazy { Region() }
             val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+            private val cuePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+            private val cueHeight = 20f * density.density
+            private val cueFade = LinearGradient(0f, 0f, 0f, cueHeight,
+                palette.collapsed, palette.collapsed and 0x00ffffff, Shader.TileMode.CLAMP)
             var downX = 0f
             var downY = 0f
             var dragging = false
@@ -368,8 +407,8 @@ class NativeAnchoredDropdown(
             var pointer = -1
             var gesturePosition = 0f
             val slop = ViewConfiguration.get(context).scaledTouchSlop
-            private val revealTop get() = anchorY - minOf(position, slotsAbove.toFloat()) * rowHeight * reveal
-            private val revealBottom get() = anchorY + rowHeight + minOf(rows.lastIndex - position, slotsBelow.toFloat()) * rowHeight * reveal
+            private val revealTop get() = viewport?.revealTop(position, reveal) ?: anchorY.toFloat()
+            private val revealBottom get() = viewport?.revealBottom(position, rows.lastIndex, reveal) ?: (anchorY + rowHeight).toFloat()
             init { setWillNotDraw(false); clipChildren = false; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES }
             fun updatePositions() {
                 if (plan == null) return
@@ -412,14 +451,13 @@ class NativeAnchoredDropdown(
                 row.layout(0, 0, rowWidth, rowHeight)
             }
             fun extents(): Pair<Float, Float> {
-                val p = plan ?: return anchorY.toFloat() to (anchorY + rowHeight).toFloat()
-                return anchorY - minOf(position, slotsAbove.toFloat()) * rowHeight * reveal to
-                    anchorY + rowHeight + minOf(rows.lastIndex - position, slotsBelow.toFloat()) * rowHeight * reveal
+                return revealTop to revealBottom
             }
             private fun updateRevealPath() {
                 rectangle.set(.5f, revealTop + .5f, width - .5f, revealBottom - .5f)
                 for (corner in 0..3) {
-                    val rowsFromSlot = if (corner < 2) minOf(position, slotsAbove.toFloat()) else minOf(rows.lastIndex - position, slotsBelow.toFloat())
+                    val geometry = checkNotNull(viewport)
+                    val rowsFromSlot = if (corner < 2) minOf(position, geometry.rowsAbove) else minOf(rows.lastIndex - position, geometry.rowsBelow)
                     val fraction = rowsFromSlot.coerceIn(0f, 1f)
                     val blend = fraction * fraction * (3f - 2f * fraction) * reveal
                     val radius = radii[corner] + (style.cornerRadiusDp * density.density - radii[corner]) * blend
@@ -435,6 +473,7 @@ class NativeAnchoredDropdown(
                 paint.style = Paint.Style.FILL; paint.color = palette.collapsed
                 canvas.drawPath(path, paint)
                 super.draw(canvas)
+                drawOverflowCues(canvas)
                 // The slot never moves. Its divider and outline share the existing group border role.
                 paint.style = Paint.Style.STROKE; paint.strokeWidth = density.density; paint.color = palette.divider
                 canvas.drawLine(0f, anchorY.toFloat(), width.toFloat(), anchorY.toFloat(), paint)
@@ -445,6 +484,34 @@ class NativeAnchoredDropdown(
                     collapseAfterDraw = false
                     postOnAnimation(startCollapse)
                 }
+            }
+
+            private fun drawOverflowCues(canvas: Canvas) {
+                val geometry = viewport ?: return
+                if (reveal <= 0f) return
+                if (geometry.overflowsAbove(position)) drawCue(canvas, revealTop, upward = true)
+                if (geometry.overflowsBelow(position, rows.lastIndex)) drawCue(canvas, revealBottom, upward = false)
+            }
+
+            private fun drawCue(canvas: Canvas, edge: Float, upward: Boolean) {
+                val saved = canvas.save()
+                canvas.translate(0f, edge)
+                if (!upward) canvas.scale(1f, -1f)
+                cuePaint.style = Paint.Style.FILL
+                cuePaint.shader = cueFade
+                cuePaint.alpha = (255 * reveal).roundToInt()
+                canvas.drawRect(0f, 0f, width.toFloat(), cueHeight, cuePaint)
+                cuePaint.shader = null
+                cuePaint.color = palette.ink
+                cuePaint.alpha = (220 * reveal).roundToInt()
+                cuePaint.strokeWidth = 1.5f * density.density
+                cuePaint.strokeCap = Paint.Cap.ROUND
+                val center = width / 2f
+                val half = 3f * density.density
+                val y = 5f * density.density
+                canvas.drawLine(center - half, y + half, center, y, cuePaint)
+                canvas.drawLine(center, y, center + half, y + half, cuePaint)
+                canvas.restoreToCount(saved)
             }
             override fun drawChild(canvas: Canvas, child: View, drawingTime: Long): Boolean {
                 // The wheel's clip already hides these rows. Skip recording their contents until

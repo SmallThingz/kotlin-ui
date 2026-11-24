@@ -61,6 +61,9 @@ open class NativeActionDescriptionView(context: Context, description: String) : 
         sourceNode?.invoke()?.populate(info)
     }
     override fun performAccessibilityAction(action: Int, args: Bundle?): Boolean {
+        // A retained native leaf can still own focus after its source node has retired.
+        if (action == AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS)
+            return super.performAccessibilityAction(action, args)
         if (sourceNode?.invoke()?.present == false) return false
         return text?.performAction(action, args) ?: super.performAccessibilityAction(action, args)
     }

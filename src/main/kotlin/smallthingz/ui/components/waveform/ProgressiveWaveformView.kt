@@ -99,10 +99,12 @@ class ProgressiveWaveformView @JvmOverloads constructor(
 
     private fun applyColors(body: Int, track: Int, emphasis: Int) {
         if (colorMotion != null && bodyColor == body && trackColor == track && emphasisColor == emphasis) return
+        val shadersChanged = builtShader == null || bodyColor != body
         bodyColor = body
         trackColor = track
         emphasisColor = emphasis
-        rebuildShaders()
+        // Track/emphasis are solid strokes; only body color and size feed the gradients.
+        if (shadersChanged) rebuildShaders()
         invalidate()
     }
 

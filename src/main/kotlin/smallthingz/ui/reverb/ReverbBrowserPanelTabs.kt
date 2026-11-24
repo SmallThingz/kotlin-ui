@@ -18,6 +18,7 @@ import smallthingz.ui.components.NativeButtonTouchTarget
 import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.NativeMaterialButtonView
 import smallthingz.ui.components.NativeToolbarBackground
+import smallthingz.ui.util.closePreservingPrimaryFailure
 import kotlin.math.roundToInt
 
 /** Content only. Preview bitmap ownership and tab identity remain with the browser. */
@@ -214,20 +215,27 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         override fun close() {
             if (closed) return
             closed = true
-            gesture.cancelBrowserPanelInput()
-            row.close()
-            close.bind(environment, ReverbIcon.Close, "", false, theme.palette.muted, theme.palette.ink) {}
-            image.setImageDrawable(null)
-            snapshot = null
+            // Preview ownership stays with the host; release references even if input retirement throws.
             preview.setOnClickListener(null)
+            var failure = closePreservingPrimaryFailure(null) { gesture.cancelBrowserPanelInput() }
+            failure = closePreservingPrimaryFailure(failure, row::close)
+            failure = closePreservingPrimaryFailure(failure) {
+                close.bind(environment, ReverbIcon.Close, "", false, theme.palette.muted, theme.palette.ink) {}
+            }
+            failure = closePreservingPrimaryFailure(failure) { image.setImageDrawable(null) }
+            snapshot = null
+            failure?.let { throw it }
         }
     }
     override fun close() {
         if (panelClosed) return
-        super.close()
         onTabAction = null
-        cards.values.forEach { it.close() }; cards.clear(); grid.removeAllViews()
-        newTab.close()
+        var failure = closePreservingPrimaryFailure(null) { super.close() }
+        cards.values.forEach { failure = closePreservingPrimaryFailure(failure, it::close) }
+        cards.clear()
+        failure = closePreservingPrimaryFailure(failure) { grid.removeAllViews() }
+        failure = closePreservingPrimaryFailure(failure, newTab::close)
+        failure?.let { throw it }
     }
     private fun dp(value: Int) = (value * theme.density.density).roundToInt()
     private fun dp(value: Float) = (value * theme.density.density).roundToInt()

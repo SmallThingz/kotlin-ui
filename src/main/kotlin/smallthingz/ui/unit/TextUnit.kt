@@ -296,7 +296,7 @@ inline operator fun Float.times(other: TextUnit): TextUnit {
  */
 inline operator fun Double.times(other: TextUnit): TextUnit {
     checkArithmetic(other)
-    return pack(other.rawType, this.toFloat() * other.value)
+    return pack(other.rawType, (this * other.value).toFloat())
 }
 
 /**

@@ -397,11 +397,13 @@ class MergedRowAccessibility(
         }
 
         override fun performAccessibilityAction(action: Int, arguments: Bundle?): Boolean {
+            // Retiring the source role must not block cleanup of its existing native focus.
+            if (action == AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS)
+                return super.performAccessibilityAction(action, arguments)
             val current = snapshot()
             if (!isAttachedToWindow || !current.present || !current.rolePresent || current.originalChildCount == 0) return false
             return when (action) {
-                AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS,
-                AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS ->
+                AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS ->
                     super.performAccessibilityAction(action, arguments)
                 else -> false
             }

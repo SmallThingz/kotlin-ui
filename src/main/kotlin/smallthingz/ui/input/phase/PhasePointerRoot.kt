@@ -6,6 +6,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 import smallthingz.ui.geometry.Offset
+import smallthingz.ui.util.closePreservingPrimaryFailure
 
 /** Captured authoritative float matrices from the window's existing geometry owner. */
 class NativePointerCoordinates(
@@ -72,7 +73,8 @@ open class PhasePointerRoot(
             }
         }
         val bound = mutableListOf<NativeViewPhasePointerNode>()
-        return try {
+        var failure: Throwable? = null
+        val result = try {
             val dispatched = paths.dispatch { owner, ids ->
                 val node = owner as NativeViewPhasePointerNode
                 val transform = coordinates(node.view)
@@ -80,8 +82,9 @@ open class PhasePointerRoot(
                 for (change in frame.changes) {
                     if (change.id in ids) mask = mask or (1 shl change.androidPointerId)
                 }
-                node.bindMotion(event, transform, mask)
+                // A binder may retain motion before throwing; it already owes an unbind.
                 bound += node
+                node.bindMotion(event, transform, mask)
                 frame.project(transform::local, transform.originOnScreen, ids)
             }
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) {
@@ -91,19 +94,26 @@ open class PhasePointerRoot(
             // AndroidView interop can suppress this request on the SAME per-event state.
             if (frame.anyMovementConsumed()) parent?.requestDisallowInterceptTouchEvent(true)
             dispatched
+        } catch (error: Throwable) {
+            failure = error
+            false
         } finally {
-            bound.forEach { it.bindMotion(null, null, 0) }
+            bound.forEach { node ->
+                failure = closePreservingPrimaryFailure(failure) { node.bindMotion(null, null, 0) }
+            }
         }
+        failure?.let { throw it }
+        return result
     }
 
     fun cancelPointerInput() {
-        paths.cancel()
+        // Retire pressed-source state before callbacks can throw or admit another stream.
         source.cancel()
+        paths.cancel()
     }
 
     override fun onDetachedFromWindow() {
-        cancelPointerInput()
-        super.onDetachedFromWindow()
+        try { cancelPointerInput() } finally { super.onDetachedFromWindow() }
     }
 
 }

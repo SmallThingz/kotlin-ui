@@ -119,7 +119,10 @@ public class FloatSpringSpec(
             initialDisplacement = (initialValue - targetValue) / visibilityThreshold,
             initialVelocity = initialVelocity / visibilityThreshold,
             delta = 1f,
-        ) * MillisToNanos
+        // Very small positive damping/stiffness can exceed the nanosecond clock range.
+        // Match the undamped spring's maximum whole-millisecond duration instead of
+        // wrapping negative and making the vectorized animation finish immediately.
+        ).coerceAtMost(Long.MAX_VALUE / MillisToNanos) * MillisToNanos
 }
 
 public class FloatTweenSpec(
