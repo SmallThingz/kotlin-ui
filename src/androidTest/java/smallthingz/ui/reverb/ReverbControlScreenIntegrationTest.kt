@@ -3,6 +3,7 @@ package smallthingz.ui.reverb
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Color
 import android.os.SystemClock
 import android.text.Spanned
 import android.view.ContextThemeWrapper
@@ -28,7 +29,10 @@ import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.NativeLabeledTextField
 import smallthingz.ui.components.NativeMaterialButtonView
 import smallthingz.ui.components.NativeMenuAccessibilityTestActivity
+import smallthingz.ui.controls.textSurfaceForeground
 import smallthingz.ui.graphics.NoiseDrawable
+import smallthingz.ui.reverb.settings.ReverbRetentionMode
+import smallthingz.ui.reverb.settings.ReverbRetentionSection
 import smallthingz.ui.text.view.ParagraphView
 import kotlin.math.roundToInt
 
@@ -137,6 +141,65 @@ class ReverbControlScreenIntegrationTest {
                 assertNotNull(message.paintedTextSurface)
                 assertEquals((warning as NativeGroupLayout).paintedTextSurface, ReverbTextSurface.sample(message))
                 assertNotEquals(0L, ReverbTextSurface.sample(message))
+            }
+        }
+    }
+
+    @Test fun retentionCallerInkTracksPagePaintAboveAnOpaqueGroup() = withFixture { f ->
+        main {
+            val page = f.frame.background as NoiseDrawable
+            page.setBackgroundColor(Color.BLACK)
+            // This public content slot has a caller-owned dependency, not nearest-group ink.
+            val caller = object : TextView(f.context), ReverbTextSurfaceTarget {
+                var refreshes = 0
+                var sampledPage = page.paintedTextSurface
+                override fun invalidateTextSurfaceInk() {
+                    refreshes++
+                    sampledPage = page.paintedTextSurface
+                    setTextColor(textSurfaceForeground(sampledPage, Color.BLACK))
+                }
+            }.apply {
+                text = "Page-dependent retention value"
+                invalidateTextSurfaceInk()
+            }
+            val section = ReverbRetentionSection(f.context, ReverbRetentionMode.TIME, f.environment,
+                { "Retention" }, { true }, { error("Paint changes must not request a mode") },
+                caller, TextView(f.context).apply { text = "Looping value" })
+            try {
+                f.frame.controlsContent.addView(section)
+                f.measure(widthDp = 320, heightDp = 700)
+                assertTrue(caller.isAttachedToWindow && caller.isShown)
+                assertTrue(caller.width > 0 && caller.height > 0)
+                val surface = generateSequence(caller.parent as? View) { it.parent as? View }
+                    .filterIsInstance<NativeGroupLayout>().first()
+                val groupPaint = surface.paintedTextSurface
+                assertEquals(255L, groupPaint ushr 56)
+                assertEquals(255L, (groupPaint ushr 24) and 255L)
+                assertEquals(1f, surface.alpha, 0f)
+
+                for (color in listOf(Color.WHITE, Color.BLACK)) {
+                    val previousPage = caller.sampledPage
+                    val previousInk = caller.currentTextColor
+                    val previousRefreshes = caller.refreshes
+                    page.setBackgroundColor(color)
+                    assertNotEquals(previousPage, page.paintedTextSurface)
+                    ReverbTextSurface.invalidate(f.frame)
+                    assertEquals("Page paint must reach the caller through the opaque group",
+                        previousRefreshes + 1, caller.refreshes)
+                    assertEquals(page.paintedTextSurface, caller.sampledPage)
+                    assertNotEquals(previousInk, caller.currentTextColor)
+                    assertEquals("Only page paint changed", groupPaint, surface.paintedTextSurface)
+                }
+
+                // Conservative traversal must also retain the surface's own paint callback.
+                val previousRefreshes = caller.refreshes
+                val nextFill = if (surface.paintedFillColor == Color.BLACK) Color.WHITE else Color.BLACK
+                surface.setPaletteImmediately(nextFill, Color.TRANSPARENT)
+                assertEquals(previousRefreshes + 1, caller.refreshes)
+                assertEquals(page.paintedTextSurface, caller.sampledPage)
+            } finally {
+                f.frame.controlsContent.removeView(section)
+                section.close()
             }
         }
     }
