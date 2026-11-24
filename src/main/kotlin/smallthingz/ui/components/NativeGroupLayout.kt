@@ -59,6 +59,8 @@ class NativeGroupLayout(
     /**
      * Explicit ownership of descendant ink that depends on this group's current paint. The
      * callback must synchronously invalidate those consumers when called with this group.
+     * Opt in only when their paint dependencies are contained by this group's underlay;
+     * an arbitrary descendant that samples a page above this group is not eligible.
      * The ordinary paint callback makes no such promise. Null restores conservative traversal.
      * Install while constructing the group, before publishing its first palette.
      */

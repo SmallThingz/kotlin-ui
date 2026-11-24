@@ -16,7 +16,11 @@ interface ReverbTextSurfaceTarget {
 
 /** Current paint only: no target-palette approximation, retained ancestry, or frame loop. */
 object ReverbTextSurface {
-    /** Group creation opt-in; a generic paint callback is not proof of ink ownership. */
+    /**
+     * Group creation opt-in for nearest-underlay consumers, including [sample]. Descendants
+     * that deliberately sample paint above this group must keep conservative traversal.
+     * A generic paint callback alone is not proof of this contained dependency.
+     */
     fun ownGroupInk(group: NativeGroupLayout): NativeGroupLayout = group.apply {
         setTextSurfaceInkInvalidator(::invalidate)
     }
