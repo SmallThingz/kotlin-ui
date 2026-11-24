@@ -1,6 +1,8 @@
 package smallthingz.ui.reverb.home
 
 import smallthingz.ui.reverb.ReverbEnvironment
+import smallthingz.ui.reverb.ReverbTextRole
+import smallthingz.ui.text.view.ParagraphView
 import smallthingz.ui.components.NativeCircularProgress
 import smallthingz.ui.interaction.view.NativeClickEnvironment
 import android.content.Context
@@ -31,6 +33,7 @@ data class ReverbHomeBodyState<S : Any, M : Any>(
     val loopingController: ReverbHomeBlobAttachment,
     val visualizerVisible: Boolean,
     val skipSilenceEnabled: Boolean = false,
+    val serviceBindingRejected: Boolean = false,
 )
 
 /**
@@ -68,6 +71,7 @@ class ReverbHomeBodyView<S : Any, M : Any> internal constructor(
     private var disabledBufferLabel = context.getString(R.string.buffer_disabled)
     private val blob = ReverbHomeBlobControl(context, initialEnvironment, blobInputEnvironment, animationScope) {}
     private var progress: NativeCircularProgress? = null
+    private var unavailable: ParagraphView? = null
     private val controls = ReverbHomeControls(context, initialEnvironment, nativeInputRoot, animationScope, oneShot, looping)
     /** Attach the source-equivalent horizontal detector to this exact weighted Box only. */
     val swipeSurface: ViewGroup = swipeSurfaceFactory(blob)
@@ -126,7 +130,22 @@ class ReverbHomeBodyView<S : Any, M : Any> internal constructor(
         controls.bind(ReverbHomeControlsState(renderedBuffer, value.activeBuffer, value.listening,
             value.oneShotEnabled, value.oneShotFull, value.loopingEnabled, serviceReady, value.saving,
             metrics.seconds > 0f, recording, captureStateKnown), frame, actions)
-        val showProgress = value.visualizerVisible && (!value.serviceStateHydrated || value.preparingRange)
+        val showUnavailable = value.visualizerVisible && value.serviceBindingRejected
+        if (showUnavailable) {
+            val label = context.getString(R.string.recorder_connection_unavailable)
+            val message = unavailable ?: environment.paragraph(
+                context, label, ReverbTextRole.BODY_MEDIUM, environment.palette.muted,
+            ).also {
+                unavailable = it
+                swipeSurface.addView(it)
+            }
+            message.setText(label)
+        } else unavailable?.let {
+            swipeSurface.removeView(it)
+            unavailable = null
+        }
+        val showProgress = value.visualizerVisible && !showUnavailable &&
+            (!value.serviceStateHydrated || value.preparingRange)
         if (showProgress) {
             val indicator = progress ?: NativeCircularProgress(
                 context, environment.palette.primary,
@@ -154,6 +173,7 @@ class ReverbHomeBodyView<S : Any, M : Any> internal constructor(
         blob.setEnvironment(value)
         controls.setEnvironment(value)
         progress?.setColor(value.palette.primary)
+        unavailable?.let { value.bindParagraphStyle(it, ReverbTextRole.BODY_MEDIUM, value.palette.muted) }
         val current = state
         val callbacks = actions
         if (current != null && callbacks != null) bind(current, renderedBuffer, flip, callbacks)
@@ -174,6 +194,10 @@ class ReverbHomeBodyView<S : Any, M : Any> internal constructor(
         controls.measure(exact(geometry.clusterWidth), exact(geometry.clusterHeight))
         swipeSurface.measure(exact(geometry.bodyWidth), exact(geometry.blobAreaHeight))
         blob.measure(exact(geometry.blobSize), exact(geometry.blobSize))
+        unavailable?.measure(
+            MeasureSpec.makeMeasureSpec(geometry.bodyWidth, MeasureSpec.AT_MOST),
+            MeasureSpec.makeMeasureSpec((geometry.blobAreaHeight - dp(12)).coerceAtLeast(0), MeasureSpec.AT_MOST),
+        )
         progress?.let { progress ->
             val size = dp(24)
             // The bottom padding is outside the size modifier and consumes height first.
@@ -190,6 +214,11 @@ class ReverbHomeBodyView<S : Any, M : Any> internal constructor(
             val left = ((geometry.bodyWidth - progress.measuredWidth) / 2f).roundToInt()
             val bottom = geometry.blobAreaHeight - dp(12).coerceAtMost(geometry.blobAreaHeight)
             progress.layout(left, bottom - progress.measuredHeight, left + progress.measuredWidth, bottom)
+        }
+        unavailable?.let { message ->
+            val left = ((geometry.bodyWidth - message.measuredWidth) / 2f).roundToInt()
+            val bottom = geometry.blobAreaHeight - dp(12).coerceAtMost(geometry.blobAreaHeight)
+            message.layout(left, bottom - message.measuredHeight, left + message.measuredWidth, bottom)
         }
         val clusterLeft = geometry.side + ((geometry.bodyWidth - controls.measuredWidth) / 2f).roundToInt()
         controls.layout(clusterLeft, geometry.blobAreaHeight,

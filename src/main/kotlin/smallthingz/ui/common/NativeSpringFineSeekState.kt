@@ -111,8 +111,10 @@ class NativeSpringFineSeekState(
         } catch (error: Throwable) {
             // Source awaitEachGesture's finally retires its session even when a callback throws.
             val active = run
-            if (active != null) finishRun(active, normal = false, stillPressed = false)
-            else pointerOwner?.cancel()
+            closePreservingPrimaryFailure(error) {
+                if (active != null) finishRun(active, normal = false, stillPressed = false)
+                else pointerOwner?.cancel()
+            }
             throw error
         }
     }
@@ -144,10 +146,11 @@ class NativeSpringFineSeekState(
                     val ownsPointer = pointerOwner === cancelled
                     val ownsDrag = dragSession === cancelled
                     if (ownsPointer) pointerOwner = null
-                    if (ownsDrag) stopDrag()
+                    var failure = if (ownsDrag) closePreservingPrimaryFailure(null, ::stopDrag) else null
                     if (stillCurrent && ((rangeOwnsPointerTap && ownsPointer) || ownsDrag)) {
-                        binding?.onCancelFineAdjust?.invoke()
+                        failure = closePreservingPrimaryFailure(failure) { binding?.onCancelFineAdjust?.invoke() }
                     }
+                    failure?.let { throw it }
                 },
             )
             pointerOwner = session
@@ -235,26 +238,36 @@ class NativeSpringFineSeekState(
     }
 
     private fun finishRun(active: PointerRun, normal: Boolean, stillPressed: Boolean) {
+        // Retire the run before callbacks can reenter cancel/release.
+        if (run === active) run = null
+        waitingForAllUp = stillPressed
+        if (!stillPressed) awaitingRangeTapOwner = binding?.createInputGesture != null
+        var failure: Throwable? = null
         try {
             when {
                 !normal -> active.session.cancel()
                 active.fineAdjustStarted -> active.session.finishFineAdjust(
                     onCommit = { active.binding.onFineAdjust(it, .04f) },
                     onEnd = {
-                        if (dragSession === active.session) stopDrag()
-                        active.binding.onEndFineAdjust()
+                        // A failed visual return must still notify the host that its gesture ended.
+                        val visualFailure = closePreservingPrimaryFailure(null) {
+                            if (dragSession === active.session) stopDrag()
+                        }
+                        closePreservingPrimaryFailure(visualFailure, active.binding.onEndFineAdjust)?.let { throw it }
                     },
                 )
                 active.ownsPointerTap&&active.startedOnPuck->active.session.finishPointerTap(active.binding.onTogglePlayback)
                 else -> active.session.finish {} // Library's child clickable owns ordinary tap.
             }
+        } catch (error: Throwable) {
+            failure = error
         } finally {
-            if (dragSession === active.session) stopDrag()
             if (pointerOwner === active.session) pointerOwner = null
-            if (run === active) run = null
-            waitingForAllUp = stillPressed
-            if(!stillPressed)awaitingRangeTapOwner=binding?.createInputGesture!=null
+            if (dragSession === active.session) {
+                failure = closePreservingPrimaryFailure(failure, ::stopDrag)
+            }
         }
+        failure?.let { throw it }
     }
 
     private fun stopDrag() {

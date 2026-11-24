@@ -54,12 +54,32 @@ class NativeGroupLayout(
     private var paletteTransition: ViewColorTransition? = null
     private val progressPaint = Paint(GROUP_PAINT_FLAGS)
     private var progressFraction = 0f
+    private var textSurfaceInkInvalidator: ((View) -> Unit)? = null
+
+    /**
+     * Explicit ownership of descendant ink that depends on this group's current paint. The
+     * callback must synchronously invalidate those consumers when called with this group.
+     * Opt in only when their paint dependencies are contained by this group's underlay;
+     * an arbitrary descendant that samples a page above this group is not eligible.
+     * The ordinary paint callback makes no such promise. Null restores conservative traversal.
+     * Install while constructing the group, before publishing its first palette.
+     */
+    fun setTextSurfaceInkInvalidator(invalidator: ((View) -> Unit)?) {
+        textSurfaceInkInvalidator = invalidator
+    }
+
+    val hasOwnTextSurfaceInkInvalidator: Boolean get() = textSurfaceInkInvalidator != null
+
+    private fun paintedSurfaceChanged() {
+        textSurfaceInkInvalidator?.invoke(this)
+        onPaintedSurfaceChanged(this)
+    }
 
     fun setBackgroundProgress(fraction: Float, color: Int) {
         val wasCovered=progressFraction>0f
         progressFraction = fraction.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
         progressPaint.color = color
-        if(wasCovered!=(progressFraction>0f))onPaintedSurfaceChanged(this)
+        if(wasCovered!=(progressFraction>0f))paintedSurfaceChanged()
         invalidate()
     }
 
@@ -157,7 +177,7 @@ class NativeGroupLayout(
         val fillChanged = fillPaint.color != field
         if (fillPaint.color != field || borderPaint.color != border) {
             fillPaint.color = field
-            if (fillChanged) onPaintedSurfaceChanged(this)
+            if (fillChanged) paintedSurfaceChanged()
             borderPaint.color = border
             invalidate()
         }

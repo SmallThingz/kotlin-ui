@@ -42,7 +42,7 @@ class ReverbAudioChoices<Channels, Format, Source, Route>(
         inputRoot()?.rootView?.findViewById<View>(android.R.id.content) as? FrameLayout
     }, inputAllowed)
     private val fields = ReverbDesign.appearance.groupSurfaces.settingsChoices
-    internal val group = fields.create(context, ReverbTextSurface::invalidate)
+    internal val group = ReverbTextSurface.ownGroupInk(fields.create(context))
     val view: View get() = group
     private val channels = dropdowns.field(context, initial.channels, inputRoot, actions.channels)
     private val format = dropdowns.field(context, initial.format, inputRoot, actions.format)
