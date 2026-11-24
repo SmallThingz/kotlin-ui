@@ -74,12 +74,25 @@ open class ReverbCommandRecordView(
     private var record: ReverbCommandRecord? = null
     private var toggle: (() -> Unit)? = null
     private var read: ((View) -> Unit)? = null
+    // A callback-only bind is still a new action owner, even when it needs no visual work.
+    private var bindingRevision = 0L
+    private var toggleActivationRevision: Long? = null
     private var expansion: NativeExpansionView? = null
     private val caret = ReverbGlyphView(context, ReverbIcon.ArrowDropDown, palette.content)
     private val header = object : NativeSettingsRow(context, palette, NativeSettingsRowStyle(
         minHeightDp = 48f, verticalPaddingDp = 8f, minTextWidthDp = 92f, trailingGapDp = 8f,
         titleTextStyle = appearance.typography.nativeTextStyle(NativeTypographyRole.TITLE_MEDIUM),
     )) {
+        override fun performClick(): Boolean {
+            if (record == null) return false
+            // NativeSettingsRow consults ancestor gates before invoking its listener. A gate
+            // can synchronously rebind/recycle this row; capture ownership before that call.
+            val previous = toggleActivationRevision
+            toggleActivationRevision = bindingRevision
+            return try { super.performClick() }
+            finally { toggleActivationRevision = previous }
+        }
+
         override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
             super.onInitializeAccessibilityNodeInfo(info)
             if (record == null) return
@@ -173,6 +186,7 @@ open class ReverbCommandRecordView(
 
     fun bind(value: ReverbCommandRecord, onToggle: () -> Unit, onReadFull: (View) -> Unit,
              animateExpansion: Boolean = false) {
+        bindingRevision++
         val previous = record
         toggle = onToggle
         read = onReadFull
@@ -205,18 +219,27 @@ open class ReverbCommandRecordView(
         visibility = if (value.isEmpty()) GONE else VISIBLE
     }
 
-    private fun admits(value: ReverbCommandRecord): Boolean =
-        isAttachedToWindow && isShown && hasWindowFocus() && isEnabled && acceptsNativeInput() &&
-            record === value && isAttachedToWindow && isShown && hasWindowFocus() && isEnabled
+    private fun admits(value: ReverbCommandRecord, revision: Long): Boolean =
+        bindingRevision == revision && record === value &&
+            isAttachedToWindow && isShown && hasWindowFocus() && isEnabled && acceptsNativeInput() &&
+            bindingRevision == revision && record === value &&
+            isAttachedToWindow && isShown && hasWindowFocus() && isEnabled
 
     private fun requestToggle() {
+        val revision = toggleActivationRevision ?: return
         val current = record ?: return
-        if (admits(current)) toggle?.invoke()
+        val action = toggle ?: return
+        if (admits(current, revision)) action()
     }
 
     private fun requestFullText() {
+        // Both the button's ordinary and merged accessibility actions enter here before
+        // consulting NativeInputGate. Keep the same owner across that reentrant boundary.
+        val revision = bindingRevision
         val current = record ?: return
-        if (current.expanded && readFullTarget.visibility == VISIBLE && admits(current)) read?.invoke(readFull)
+        val action = read ?: return
+        if (current.expanded && readFull.isShown && admits(current, revision) &&
+            readFull.isShown && readFull.isEnabled) action(readFull)
     }
 
     private fun cancelInput() {
@@ -234,6 +257,7 @@ open class ReverbCommandRecordView(
     }
 
     fun recycle() {
+        bindingRevision++
         retireInput()
         record = null
         toggle = null
@@ -315,6 +339,7 @@ open class ReverbCommandRecordView(
     override fun onDetachedFromWindow() {
         // A detached window can return with the same reader position and keyboard focus.
         // Only a recycled identity retires focus; detached input and motion still stop here.
+        bindingRevision++
         cancelInput()
         discardExpansion()
         super.onDetachedFromWindow()

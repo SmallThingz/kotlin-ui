@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
 import android.os.SystemClock
+import android.text.Layout
+import android.text.TextUtils
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
@@ -19,6 +21,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.reverb.*
+import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
@@ -252,34 +255,140 @@ class ReverbCommandRecordIntegrationTest {
     @Test fun actionAdmissionRechecksHiddenAndReboundOwners() = withFixture(1) { f ->
         main {
             val row = f.row(0)
-            f.root.allowed = false
-            row.header().performClick()
-            f.root.allowed = true
-            f.root.probe = { row.bind(record(key = 9), { f.toggleRequests.add(9) }, {}) }
-            row.header().performClick()
-            assertTrue(f.toggleRequests.isEmpty())
-            f.root.probe = { f.frame.visibility = View.GONE }
-            row.header().performClick()
-            assertTrue(f.toggleRequests.isEmpty())
-            f.root.probe = null
-            f.frame.visibility = View.VISIBLE
-            row.header().performClick()
-            assertEquals(listOf(9L), f.toggleRequests)
+            for (accessibility in listOf(false, true)) {
+                val activate = {
+                    if (accessibility) row.header().performAccessibilityAction(
+                        AccessibilityNodeInfo.AccessibilityAction.ACTION_EXPAND.id, null)
+                    else row.header().performClick()
+                }
+                f.toggleRequests.clear()
+                row.bind(record(), { f.toggleRequests.add(1) }, {})
+                f.root.allowed = false
+                activate()
+                assertTrue("Blocked gate must reject activation", f.toggleRequests.isEmpty())
+                f.root.allowed = true
+                f.root.probe = { row.bind(record(key = 9), { f.toggleRequests.add(9) }, {}) }
+                activate()
+                assertTrue("Gate rebind must not redirect an old activation", f.toggleRequests.isEmpty())
+                f.root.probe = { f.frame.visibility = View.GONE }
+                activate()
+                assertTrue("Gate hiding the owner must reject activation", f.toggleRequests.isEmpty())
+                f.root.probe = null
+                f.frame.visibility = View.VISIBLE
+                activate()
+                assertEquals(listOf(9L), f.toggleRequests)
+            }
         }
     }
 
-    @Test fun fullTextBodyDoesNotInterpretOrShortenDisplayContent() {
-        val context = instrumentation.targetContext
-        val command = "printf 'α\\nשלום'\n".repeat(2000)
+    @Test fun callbackOnlyRebindDuringAdmissionRetiresToggleAndFullTextActions() = withFixture(1) { f ->
         main {
-            val body = ReverbCommandFullTextBody(context, ReverbDesign.theme(context, true),
-                ReverbCommandFullText("Folder: /a b", command, technical = true))
-            val leaves = body.descendants().filterIsInstance<NativeText>().toList()
-            assertEquals(listOf("Folder: /a b", command), leaves.map { it.text.toString() })
-            assertEquals(View.TEXT_DIRECTION_LTR, leaves.last().textDirection)
-            val notice = ReverbCommandFullTextBody(context, ReverbDesign.theme(context, false),
-                ReverbCommandFullText(null, "Localized notice", technical = false))
-            assertEquals(View.TEXT_DIRECTION_LOCALE, notice.descendants().filterIsInstance<NativeText>().single().textDirection)
+            f.records[0] = record(expanded = true).copy(fullCommandAvailable = true)
+            f.bindVisible()
+        }
+        f.settle()
+        main {
+            val row = f.row(0)
+            val fullText = row.descendants().filterIsInstance<NativeMaterialButtonView>().single()
+            val value = f.records[0]
+            for ((action, semanticAction) in listOf(
+                row.header() to AccessibilityNodeInfo.AccessibilityAction.ACTION_COLLAPSE.id,
+                fullText to AccessibilityNodeInfo.ACTION_CLICK,
+            )) {
+                for (accessibility in listOf(false, true)) {
+                    val requests = mutableListOf<String>()
+                    val activate = {
+                        if (accessibility) action.performAccessibilityAction(semanticAction, null)
+                        else action.performClick()
+                    }
+                    row.bind(value, { requests.add("old toggle") }, { requests.add("old full text") })
+                    var probes = 0
+                    f.root.probe = {
+                        probes++
+                        f.root.probe = null
+                        // Equal display state takes bind's no-layout fast path, but replaces owners.
+                        row.bind(value.copy(), { requests.add("new toggle") }, { requests.add("new full text") })
+                    }
+                    assertTrue(action.isShown)
+                    activate()
+                    assertEquals("The production admission path must reach the gate", 1, probes)
+                    assertTrue("Neither old nor rebound callback may receive the pending activation", requests.isEmpty())
+                    activate()
+                    assertEquals(listOf(if (action === fullText) "new full text" else "new toggle"), requests)
+                }
+            }
+        }
+    }
+
+    @Test fun detachAndReturnInsideAdmissionCannotReviveThePendingActivation() = withFixture(1) { f ->
+        main {
+            val row = f.row(0)
+            var probes = 0
+            f.root.probe = {
+                probes++
+                f.root.probe = null
+                val params = f.frame.layoutParams
+                f.root.removeView(f.frame)
+                f.root.addView(f.frame, params)
+            }
+            row.header().performClick()
+            assertEquals(1, probes)
+            assertTrue("Returning to the same window must not revive an admitted old click", f.toggleRequests.isEmpty())
+        }
+        f.settle()
+        main {
+            f.row(0).header().performClick()
+            assertEquals(listOf(1L), f.toggleRequests)
+        }
+    }
+
+    @Test fun fullTextBodyDoesNotInterpretOrShortenDisplayContent() = withFixture(1) { f ->
+        // Leading strong RTL text makes FIRST_STRONG observably different from forced LTR.
+        val command = "שלום printf 'α\\nשלום'\n".repeat(2000)
+        val localeRtl = TextUtils.getLayoutDirectionFromLocale(Locale.getDefault()) == View.LAYOUT_DIRECTION_RTL
+        val notice = if (localeRtl) "Localized notice α\nשלום" else "שלום\nLocalized notice α"
+        for (technical in listOf(true, false)) {
+            var sheet: NativeActionSheet? = null
+            lateinit var body: ReverbCommandFullTextBody
+            val content = if (technical) ReverbCommandFullText("Folder: /a b", command, true)
+                else ReverbCommandFullText(null, notice, false)
+            try {
+                main {
+                    val theme = ReverbDesign.theme(f.activity, technical)
+                    val dialog = createReverbActionSheet(f.frame, theme, "Full command", {})
+                    sheet = dialog
+                    body = ReverbCommandFullTextBody(dialog.context,
+                        ReverbDesign.theme(dialog.context, technical), content)
+                    body.installIn(dialog)
+                    dialog.show()
+                }
+                for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
+                    main { body.layoutDirection = direction }
+                    // addView resets resolved RTL properties. Inspect after actual window layout,
+                    // never manually resolve/measure the subject or accept FIRST_STRONG instead.
+                    repeat(3) { awaitDraw(body) }
+                    main {
+                        assertTrue(body.isAttachedToWindow)
+                        assertTrue(body.isLaidOut)
+                        val leaves = body.descendants().filterIsInstance<NativeText>().toList()
+                        assertEquals(listOfNotNull(content.folderLabel, content.command), leaves.map { it.text.toString() })
+                        val text = leaves.last()
+                        assertTrue(text.isTextDirectionResolved)
+                        assertEquals(if (technical) View.TEXT_DIRECTION_LTR else View.TEXT_DIRECTION_LOCALE,
+                            text.textDirection)
+                        assertEquals(View.TEXT_ALIGNMENT_TEXT_START, text.textAlignment)
+                        val layout = requireNotNull(text.layout)
+                        assertEquals(content.command!!.length, layout.getLineEnd(layout.lineCount - 1))
+                        if (technical) assertTrue("Full command must retain all 2,000 paragraphs", layout.lineCount >= 2000)
+                        val paragraphDirection = if (technical || !localeRtl) Layout.DIR_LEFT_TO_RIGHT
+                            else Layout.DIR_RIGHT_TO_LEFT
+                        for (line in 0 until layout.lineCount) {
+                            assertEquals("Paragraph direction at line $line", paragraphDirection, layout.getParagraphDirection(line))
+                            assertEquals("No full-text ellipsis at line $line", 0, layout.getEllipsisCount(line))
+                        }
+                    }
+                }
+            } finally { main { sheet?.dismiss() } }
         }
     }
 
