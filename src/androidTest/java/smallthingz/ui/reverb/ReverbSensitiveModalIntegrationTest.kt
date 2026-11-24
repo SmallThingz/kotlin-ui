@@ -23,8 +23,10 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeActionSheet
+import smallthingz.ui.components.NativeActionSheetState
 import smallthingz.ui.components.NativeMaterialButtonView
 import smallthingz.ui.components.NativeMenuAccessibilityTestActivity
+import smallthingz.ui.components.NativeSheetValue
 import smallthingz.ui.components.SheetRoot
 import smallthingz.ui.components.SheetScrim
 import java.util.concurrent.CountDownLatch
@@ -81,7 +83,7 @@ class ReverbSensitiveModalIntegrationTest {
             pointer = Pointer(f.decor, f.confirm, f.dialog::dispatchTouchEvent)
             pointer.send(MotionEvent.ACTION_DOWN)
         }
-        changeFocus(f.decor, false) { show(f.cover) }
+        changeFocus(f.decor, false, requireNotNull(f.cover.window).decorView) { show(f.cover) }
         changeFocus(f.decor, true) { f.cover.dismiss() }
         main {
             pointer.send(MotionEvent.ACTION_UP)
@@ -100,7 +102,7 @@ class ReverbSensitiveModalIntegrationTest {
                     assertTrue(f.confirm.requestFocusFromTouch())
                     assertTrue(f.dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, key)))
                 }
-                changeFocus(f.decor, false) { show(f.cover) }
+                changeFocus(f.decor, false, requireNotNull(f.cover.window).decorView) { show(f.cover) }
                 main { assertTrue("Local button focus must survive window focus loss", f.confirm.isFocused) }
                 changeFocus(f.decor, true) { f.cover.dismiss() }
                 main {
@@ -117,7 +119,7 @@ class ReverbSensitiveModalIntegrationTest {
 
     @Test fun confirmationRequiresFocusedProgrammaticAndAccessibleResponse() {
         for (accessible in listOf(false, true)) withConfirmation { f ->
-            changeFocus(f.decor, false) { show(f.cover) }
+            changeFocus(f.decor, false, requireNotNull(f.cover.window).decorView) { show(f.cover) }
             main {
                 assertFalse(f.sheet.canRespond)
                 assertFalse(f.sheet.respond(true))
@@ -148,7 +150,7 @@ class ReverbSensitiveModalIntegrationTest {
             root = f.dialog.contentView.parent as SheetRoot
             scrim = descendants(f.decor).filterIsInstance<SheetScrim>().single()
         }
-        changeFocus(f.decor, false) { show(f.cover) }
+        changeFocus(f.decor, false, requireNotNull(f.cover.window).decorView) { show(f.cover) }
         main {
             assertTrue(f.dialog.contentContext.accessibility.sourceNode(scrim).present)
             scrim.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null)
@@ -170,7 +172,7 @@ class ReverbSensitiveModalIntegrationTest {
 
     @Test fun confirmationEscapeCannotCrossFocusAndFreshEscapeCancelsOnce() = withConfirmation { f ->
         main { assertTrue(f.dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ESCAPE))) }
-        changeFocus(f.decor, false) { show(f.cover) }
+        changeFocus(f.decor, false, requireNotNull(f.cover.window).decorView) { show(f.cover) }
         changeFocus(f.decor, true) { f.cover.dismiss() }
         main {
             f.dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ESCAPE))
@@ -285,13 +287,9 @@ class ReverbSensitiveModalIntegrationTest {
             }
             val f = requireNotNull(fixture)
             changeFocus(f.decor, true) {}
-            await("Confirmation did not reach its visible anchor") {
-                val root = f.dialog.contentView.parent as SheetRoot
-                f.dialog.contentView.isLaidOut && f.dialog.contentView.height > 0 &&
-                    f.dialog.contentView.bottom == root.sourceSemanticsHeight
-            }
+            awaitConfirmationReady(f)
             main {
-                assertTrue(f.sheet.canRespond)
+                assertTrue("Settled confirmation must admit a focused response", f.sheet.canRespond)
                 assertTrue(requireNotNull(f.sheet.window).attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
                 f.confirm = button(f.decor, "Confirm fixture")
                 f.cancel = button(f.decor, "Cancel fixture")
@@ -299,6 +297,34 @@ class ReverbSensitiveModalIntegrationTest {
             test(f)
         } finally {
             main { try { fixture?.cover?.dismiss() } finally { owned?.close() } }
+        }
+    }
+
+    private fun awaitConfirmationReady(f: Confirmation) {
+        lateinit var state: NativeActionSheetState
+        lateinit var content: View
+        lateinit var root: SheetRoot
+        main {
+            state = NativeActionSheet::class.java.getDeclaredField("state")
+                .apply { isAccessible = true }.get(f.dialog) as NativeActionSheetState
+            content = f.dialog.contentView
+            root = content.parent as SheetRoot
+        }
+        // placeSheet rounds the animated offset to pixels. Its bottom can reach the anchor while
+        // show() still has currentValue=HIDDEN; visible becomes true only in finishClosest().
+        // Wait for the real opening operation and admission, without advancing or mutating state.
+        await("Confirmation did not finish opening within 5 seconds", diagnostics = {
+            "current=${state.currentValue}, target=${state.targetValue}, animating=${state.animationRunning}, " +
+                "offset=${state.offset}, anchors=${state.anchors}, showing=${f.dialog.isShowing}, " +
+                "attached=${root.isAttachedToWindow}, focus=${f.dialog.hasCurrentWindowFocus}, " +
+                "canAccept=${f.dialog.canAcceptSensitiveAction}, canRespond=${f.sheet.canRespond}, " +
+                "laidOut=${content.isLaidOut}, height=${content.height}, " +
+                "bottom=${content.bottom}, anchor=${root.sourceSemanticsHeight}"
+        }) {
+            state.currentValue == NativeSheetValue.EXPANDED &&
+                state.targetValue == NativeSheetValue.EXPANDED && !state.animationRunning &&
+                f.sheet.canRespond && content.isLaidOut && content.height > 0 &&
+                content.bottom == root.sourceSemanticsHeight
         }
     }
 
@@ -404,16 +430,41 @@ class ReverbSensitiveModalIntegrationTest {
         } finally { main { activity.finish() } }
     }
 
-    private fun changeFocus(view: View, focused: Boolean, change: () -> Unit) {
+    private fun changeFocus(view: View, focused: Boolean, gainingFocus: View? = null, change: () -> Unit) {
         val changed = CountDownLatch(1)
-        val listener = ViewTreeObserver.OnWindowFocusChangeListener { if (it == focused) changed.countDown() }
-        main { view.viewTreeObserver.addOnWindowFocusChangeListener(listener) }
+        fun ready() = view.hasWindowFocus() == focused &&
+            (gainingFocus == null || (gainingFocus.isAttachedToWindow && gainingFocus.hasWindowFocus()))
+        // Both sides must complete: window focus loss can be delivered before the cover gains it.
+        val listener = ViewTreeObserver.OnWindowFocusChangeListener { if (ready()) changed.countDown() }
+        main {
+            view.viewTreeObserver.addOnWindowFocusChangeListener(listener)
+            gainingFocus?.viewTreeObserver?.addOnWindowFocusChangeListener(listener)
+        }
         try {
-            main { change(); if (view.hasWindowFocus() == focused) changed.countDown() }
-            assertTrue("Owned window focus did not become $focused", changed.await(5, TimeUnit.SECONDS))
+            main { change(); if (ready()) changed.countDown() }
+            if (!changed.await(5, TimeUnit.SECONDS)) {
+                var detail = ""
+                main {
+                    detail = "sheet(attached=${view.isAttachedToWindow}, shown=${view.isShown}, " +
+                        "focus=${view.hasWindowFocus()}); cover(attached=${gainingFocus?.isAttachedToWindow}, " +
+                        "shown=${gainingFocus?.isShown}, focus=${gainingFocus?.hasWindowFocus()})"
+                }
+                fail("Owned-window focus handoff did not reach sheet=$focused within 5 seconds: $detail")
+            }
             instrumentation.waitForIdleSync()
-            main { assertEquals(focused, view.hasWindowFocus()) }
-        } finally { main { view.viewTreeObserver.removeOnWindowFocusChangeListener(listener) } }
+            main {
+                assertEquals(focused, view.hasWindowFocus())
+                gainingFocus?.let {
+                    assertTrue("Interrupting window must be attached", it.isAttachedToWindow)
+                    assertTrue("Interrupting window must own focus", it.hasWindowFocus())
+                }
+            }
+        } finally {
+            main {
+                view.viewTreeObserver.removeOnWindowFocusChangeListener(listener)
+                gainingFocus?.viewTreeObserver?.removeOnWindowFocusChangeListener(listener)
+            }
+        }
     }
 
     private fun assertForFrames(view: View, assertion: () -> Unit) {
@@ -433,7 +484,7 @@ class ReverbSensitiveModalIntegrationTest {
         } finally { main { view.removeCallbacks(frame) } }
     }
 
-    private fun await(message: String, condition: () -> Boolean) {
+    private fun await(message: String, diagnostics: () -> String = { "" }, condition: () -> Boolean) {
         val deadline = SystemClock.uptimeMillis() + 5_000
         do {
             var ready = false
@@ -441,7 +492,9 @@ class ReverbSensitiveModalIntegrationTest {
             if (ready) return
             SystemClock.sleep(16)
         } while (SystemClock.uptimeMillis() < deadline)
-        fail(message)
+        var detail = ""
+        main { detail = diagnostics() }
+        fail(if (detail.isEmpty()) message else "$message: $detail")
     }
 
     private class Pointer(private val root: View, private val target: View, private val dispatch: (MotionEvent) -> Boolean) {

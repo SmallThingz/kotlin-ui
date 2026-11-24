@@ -213,7 +213,7 @@ class NativePermissionDialogIntegrationTest {
                     buttons = nodes(decor).filterIsInstance<NativeMaterialButtonView>()
                     assertEquals(2, buttons.size)
                 }
-                changeWindowFocus(decor, false) { showFixture(cover) }
+                changeWindowFocus(decor, false, requireNotNull(cover.window).decorView) { showFixture(cover) }
                 instrumentation.runOnMainSync {
                     assertTrue(requireNotNull(cover.window).decorView.hasWindowFocus())
                     assertTrue(dialog.isShowing && decor.isAttachedToWindow && decor.isShown)
@@ -264,7 +264,7 @@ class NativePermissionDialogIntegrationTest {
                         assertTrue(allow.requestFocusFromTouch())
                         if (startFocused) assertTrue(dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, key)))
                     }
-                    changeWindowFocus(decor, false) { showFixture(cover) }
+                    changeWindowFocus(decor, false, requireNotNull(cover.window).decorView) { showFixture(cover) }
                     instrumentation.runOnMainSync {
                         // Local View focus is retained: ordinary onFocusChanged(false) cannot
                         // accidentally supply the cancellation this regression requires.
@@ -302,7 +302,7 @@ class NativePermissionDialogIntegrationTest {
             instrumentation.runOnMainSync {
                 assertTrue(dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ESCAPE)))
             }
-            changeWindowFocus(decor, false) { showFixture(cover) }
+            changeWindowFocus(decor, false, requireNotNull(cover.window).decorView) { showFixture(cover) }
             changeWindowFocus(decor, true) { cover.dismiss() }
             instrumentation.runOnMainSync {
                 // Retain tracking explicitly so framework dispatcher cleanup cannot mask stale
@@ -630,21 +630,45 @@ class NativePermissionDialogIntegrationTest {
         }
     }
 
-    private fun changeWindowFocus(view: View, focused: Boolean, change: () -> Unit) {
+    private fun changeWindowFocus(view: View, focused: Boolean, gainingFocus: View? = null, change: () -> Unit) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val changed = CountDownLatch(1)
-        val listener = ViewTreeObserver.OnWindowFocusChangeListener { if (it == focused) changed.countDown() }
-        instrumentation.runOnMainSync { view.viewTreeObserver.addOnWindowFocusChangeListener(listener) }
+        fun ready() = view.hasWindowFocus() == focused &&
+            (gainingFocus == null || (gainingFocus.isAttachedToWindow && gainingFocus.hasWindowFocus()))
+        // Focus-loss and focus-gain are separate window messages. Losing this window's focus (or
+        // draining today's main queue) does not prove the interrupting window acquired it.
+        val listener = ViewTreeObserver.OnWindowFocusChangeListener { if (ready()) changed.countDown() }
+        instrumentation.runOnMainSync {
+            view.viewTreeObserver.addOnWindowFocusChangeListener(listener)
+            gainingFocus?.viewTreeObserver?.addOnWindowFocusChangeListener(listener)
+        }
         try {
             instrumentation.runOnMainSync {
                 change()
-                if (view.hasWindowFocus() == focused) changed.countDown()
+                if (ready()) changed.countDown()
             }
-            assertTrue("Permission window focus did not become $focused", changed.await(5, TimeUnit.SECONDS))
+            if (!changed.await(5, TimeUnit.SECONDS)) {
+                var detail = ""
+                instrumentation.runOnMainSync {
+                    detail = "permission(attached=${view.isAttachedToWindow}, shown=${view.isShown}, " +
+                        "focus=${view.hasWindowFocus()}); cover(attached=${gainingFocus?.isAttachedToWindow}, " +
+                        "shown=${gainingFocus?.isShown}, focus=${gainingFocus?.hasWindowFocus()})"
+                }
+                fail("Permission focus handoff did not reach permission=$focused within 5 seconds: $detail")
+            }
             instrumentation.waitForIdleSync()
-            instrumentation.runOnMainSync { assertEquals(focused, view.hasWindowFocus()) }
+            instrumentation.runOnMainSync {
+                assertEquals(focused, view.hasWindowFocus())
+                gainingFocus?.let {
+                    assertTrue("Interrupting window must be attached", it.isAttachedToWindow)
+                    assertTrue("Interrupting window must own focus", it.hasWindowFocus())
+                }
+            }
         } finally {
-            instrumentation.runOnMainSync { view.viewTreeObserver.removeOnWindowFocusChangeListener(listener) }
+            instrumentation.runOnMainSync {
+                view.viewTreeObserver.removeOnWindowFocusChangeListener(listener)
+                gainingFocus?.viewTreeObserver?.removeOnWindowFocusChangeListener(listener)
+            }
         }
     }
 
