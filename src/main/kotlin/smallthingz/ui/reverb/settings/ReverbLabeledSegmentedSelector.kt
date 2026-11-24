@@ -105,12 +105,16 @@ class ReverbLabeledSegmentedSelector<T : Any>(
         helpButton.bind(environment, ReverbIcon.Info, action?.label.orEmpty(), enabled,
             environment.palette.muted, environment.palette.ink) {
             val current = help
-            if (!closed && current?.enabled == true && helpButton.isShown && isEnabled &&
-                isAttachedToWindow && hasWindowFocus() && inputAdmission?.invoke() == true &&
-                helpButton.visual.acceptsNativeInput() && !closed && help === current) current.onClick()
+            if (current != null && canDispatchHelp(current) && inputAdmission?.invoke() == true &&
+                canDispatchHelp(current) && helpButton.visual.acceptsNativeInput() &&
+                canDispatchHelp(current)) current.onClick()
         }
         helpButton.visibility = if (action == null || closed) GONE else VISIBLE
     }
+
+    private fun canDispatchHelp(action: ReverbSelectorHelp) =
+        !closed && help === action && action.enabled && helpButton.isShown && isEnabled &&
+            isAttachedToWindow && hasWindowFocus()
 
     private fun bindReason(enabled: Boolean) {
         val text = visibleReason(enabled, disabledReason)

@@ -14,6 +14,7 @@ import android.util.SparseArray
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.view.ViewTreeObserver
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.inputmethod.EditorInfo
@@ -445,6 +446,8 @@ class CredentialFieldGroupIntegrationTest {
                 }
                 activity.setContentView(host)
                 dialog = Dialog(activity).apply {
+                    window?.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
+                    window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
                     setContentView(View(activity), ViewGroup.LayoutParams(100, 100))
                 }
             }

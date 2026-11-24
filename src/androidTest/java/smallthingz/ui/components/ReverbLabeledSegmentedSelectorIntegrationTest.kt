@@ -316,6 +316,41 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
         }
     }
 
+    @Test fun helpRechecksVisibilityWhenAdmissionRetiresItsOwner() {
+        for (retireInAncestor in listOf(false, true)) {
+            var calls = 0
+            var retire: (() -> Unit)? = null
+            withSelector(help = ReverbSelectorHelp("Help") { calls++ },
+                inputAllowed = { if (!retireInAncestor) retire?.invoke(); true },
+                ancestorInputAllowed = { if (retireInAncestor) retire?.invoke(); true },
+            ) { fixture ->
+                main {
+                    val selector = fixture.selector
+                    val action = selector.helpButton().visual
+                    retire = { selector.visibility = View.GONE }
+                    action.performClick()
+                    assertEquals(View.GONE, selector.visibility)
+                    assertEquals(0, calls)
+                    selector.visibility = View.VISIBLE
+                    action.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null)
+                    assertEquals(View.GONE, selector.visibility)
+                    assertEquals(0, calls)
+                    selector.visibility = View.VISIBLE
+                    action.isFocusableInTouchMode = true
+                    assertTrue(action.requestFocus())
+                    assertTrue(action.dispatchKeyEvent(key(KeyEvent.ACTION_DOWN)))
+                    action.dispatchKeyEvent(key(KeyEvent.ACTION_UP))
+                    assertEquals(View.GONE, selector.visibility)
+                    assertEquals(0, calls)
+                    retire = null
+                    selector.visibility = View.VISIBLE
+                    action.performClick()
+                    assertEquals(1, calls)
+                }
+            }
+        }
+    }
+
     @Test fun detachingHelpRetiresPendingKeyBeforeReattachment() {
         var calls = 0
         withSelector(help = ReverbSelectorHelp("Help") { calls++ }) { fixture ->
