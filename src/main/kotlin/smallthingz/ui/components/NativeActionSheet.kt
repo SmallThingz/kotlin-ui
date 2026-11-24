@@ -93,6 +93,7 @@ class NativeActionSheet(
     private var sensitiveInput=false
     private var blockedSensitiveGesture=true
     private var sensitiveEscapeDown=false
+    private var sensitiveDismissalRequested=false
     private val runtime=NativeModalWindowRuntime(context)
     private val anchorLifecycle=anchor.findViewTreeLifecycleOwner()?.lifecycle
     private var dismissalAllowed:()->Boolean={true}
@@ -143,10 +144,12 @@ class NativeActionSheet(
         }
         override fun handleOnBackPressed() {
             if(!dismissalAllowed()) {refreshDismissalAdmission();return}
+            if(sensitiveInput)sensitiveDismissalRequested=true
             val dismissAtRequest=onOwnerDismiss
             runtime.scope.launch {state.hide()}.invokeOnCompletion {
                 // Ordinary sheets retain the released completion callback on cancellation.
                 if(!hasDismissalAdmission||(!disposed&&!state.visible&&dismissalAllowed()))dismissAtRequest()
+                else if(sensitiveInput)sensitiveDismissalRequested=false
             }
         }
     }
@@ -247,6 +250,8 @@ class NativeActionSheet(
     }
     val contentView:View get()=surface
     val hasCurrentWindowFocus get()=root.isAttachedToWindow&&root.hasWindowFocus()
+    val canAcceptSensitiveAction get()=!disposed&&hasCurrentWindowFocus&&
+        !sensitiveDismissalRequested&&state.visible&&state.targetValue==NativeSheetValue.EXPANDED
 
     /** Opt-in for authorization/disclosure actions; ordinary sheet input is unchanged. */
     fun protectSensitiveInput() {
@@ -267,6 +272,10 @@ class NativeActionSheet(
     override fun onWindowFocusChanged(hasFocus:Boolean) {
         if(sensitiveInput)cancelSensitiveInput()
         super.onWindowFocusChanged(hasFocus)
+        if(sensitiveInput) {
+            refreshDismissalAdmission()
+            if(!hasFocus)sensitiveDismissalRequested=false
+        }
     }
 
     override fun dispatchTouchEvent(event:MotionEvent):Boolean {
@@ -309,15 +318,21 @@ class NativeActionSheet(
     }
     fun requestAnimatedDismiss() {
         if(!dismissalAllowed()) {refreshDismissalAdmission();return}
+        if(sensitiveInput)sensitiveDismissalRequested=true
         val dismissAtRequest=onOwnerDismiss
         runtime.scope.launch {state.hide()}.invokeOnCompletion {
             if(!state.visible&&dismissalAllowed())dismissAtRequest()
+            else if(sensitiveInput)sensitiveDismissalRequested=false
         }
     }
     private fun settleToDismiss(velocity:Float) {
+        if(sensitiveInput&&dismissalAllowed()&&
+            state.computeTarget(state.requireOffset(),state.currentValue,velocity)==NativeSheetValue.HIDDEN)
+            sensitiveDismissalRequested=true
         val dismissAtRequest=onOwnerDismiss
         runtime.scope.launch {state.settle(velocity)}.invokeOnCompletion {
             if(!state.visible&&dismissalAllowed())dismissAtRequest()
+            else if(sensitiveInput)sensitiveDismissalRequested=false
         }
     }
     private fun returnAfterCancelledDrag() {
@@ -389,7 +404,10 @@ class NativeActionSheet(
         }
         release {
             window?.decorView?.let { decor ->
-                if(decor.isAttachedToWindow&&decor.hasWindowFocus()) {
+                val flags=window?.attributes?.flags?:0
+                if(decor.isAttachedToWindow&&decor.hasWindowFocus()&&
+                    flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE==0&&
+                    flags and WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM==0) {
                     decor.windowToken?.let { token ->
                         (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
                             ?.hideSoftInputFromWindow(token,0)

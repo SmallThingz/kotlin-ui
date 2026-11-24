@@ -22,7 +22,7 @@ class ReverbConfirmationSheet(
 ) : AutoCloseable {
     private var closed=false
     private var enabled=true
-    private val dialog=createReverbActionSheet(anchor,theme,title) { respond(false) }
+    private val dialog=createReverbActionSheet(anchor,theme,title,::completeCancellation)
     private val host=dialog.contentContext
     private val body=theme.paragraph(anchor.context,message,NativeTypographyRole.BODY_LARGE)
     private val cancel=ReverbSheetButton(anchor.context,host,theme,false,cancelText,{respond(false)})
@@ -33,13 +33,14 @@ class ReverbConfirmationSheet(
 
     init {
         dialog.protectSensitiveInput()
+        dialog.setDismissalAdmission { !closed&&dialog.hasCurrentWindowFocus }
         dialog.setContent(body,actions,listOf(actions.hitLayout,host.hit(body,emptyList())),scrollable=true)
         dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
 
     /** Window access is for host security/test admission, never for app-local presentation. */
     val window:Window? get()=dialog.window
-    val canRespond:Boolean get()=!closed&&enabled&&dialog.isShowing&&dialog.hasCurrentWindowFocus
+    val canRespond:Boolean get()=!closed&&enabled&&dialog.isShowing&&dialog.canAcceptSensitiveAction
 
     fun show() {check(!closed);dialog.show()}
 
@@ -49,6 +50,12 @@ class ReverbConfirmationSheet(
         close()
         if(accept)onConfirm() else onCancel()
         return true
+    }
+
+    private fun completeCancellation() {
+        if(closed||!dialog.isShowing||!dialog.hasCurrentWindowFocus)return
+        close()
+        onCancel()
     }
 
     override fun close() {

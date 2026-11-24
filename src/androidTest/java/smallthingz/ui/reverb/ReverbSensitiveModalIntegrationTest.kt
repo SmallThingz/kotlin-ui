@@ -46,6 +46,19 @@ class ReverbSensitiveModalIntegrationTest {
         else -> error("reverb_sensitive_modal_exclude_ime must be true or false")
     }
 
+    @Test fun acceptedDismissalRejectsConfirmationBeforeItsAnimationCompletes() = withConfirmation { f ->
+        main {
+            f.dialog.requestAnimatedDismiss()
+            assertFalse(f.sheet.canRespond)
+            assertFalse(f.sheet.respond(true))
+            f.confirm.performClick()
+            f.confirm.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK,null)
+            assertFalse(f.responses.contains(true))
+        }
+        await("Accepted cancellation did not retire the route") { f.responses==listOf(false) }
+        main { assertRetired(f,false) }
+    }
+
     @Test fun confirmationRejectsObscuredGestureThenAcceptsCleanGestureOnce() {
         for (flag in obscurationFlags()) withConfirmation { f ->
             main {
