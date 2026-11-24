@@ -89,7 +89,7 @@ data class NativeColorScheme(
     val buttonPalette = NativeButtonPalette(accent = primary, onAccent = onPrimary, content = onSurface,
         muted = onSurfaceVariant, quietSurface = surfaceContainerLow, tonalSurface = secondaryContainer,
         onTonal = onSecondaryContainer, errorSurface = errorContainer, onError = onErrorContainer,
-        raisedSurface = surfaceContainerHigh)
+        raisedSurface = surfaceContainerHigh, surfacePreset = surfacePreset)
     val waveformStyle = WaveformStyle(
         bodyColor = primary,
         trackColor = onSurfaceVariant,
@@ -108,7 +108,7 @@ data class NativeColorScheme(
 
     val settingsControls = ControlPalette(field, field, ink, muted, primary, settingsOnSelection, settingsSelection, border, surfacePreset)
     val pageControls = ControlPalette(surface, surfaceContainerHigh, onSurface, onSurfaceVariant,
-        primary, onPrimary, primaryContainer, outlineVariant)
+        primary, onPrimary, primaryContainer, outlineVariant, surfacePreset)
     val switchPalette = NativeMaterialSwitchPalette(surface, onSurface, primary, onPrimary, outline, surfaceContainerHighest)
 
     companion object : NativeColorSchemeResolver {

@@ -70,7 +70,7 @@ internal class NativeSheetSurface(
     val insets=SheetInsets(context)
     val predictiveContent=nativeView(context, ::NativeSheetFrame)
     val overflowContent=nativeView(context, ::NativeSheetFrame)
-    val column=SheetColumn(context,handle,appContent,contentBackground,style.recipe.grainSeed,entryEdge)
+    val column=SheetColumn(context,handle,appContent,contentBackground,entryEdge)
     init {
         child(predictiveLayer);predictiveLayer.child(overflowLayer);overflowLayer.child(painted)
         painted.clip.child(insets);insets.child(predictiveContent)
@@ -80,7 +80,8 @@ internal class NativeSheetSurface(
         isScreenReaderFocusable=false
     }
     fun updateStyle(next:NativeActionSheetStyle) {
-        style=next;painted.updateStyle(next);column.bindBackground(next.recipe.grainSeed)
+        if (style == next) return
+        style=next;painted.updateStyle(next)
     }
     fun applyMotion(offset:Float,minimumAnchor:Float,progress:Float) {
         val value=nativeSheetPredictiveTransform(width.toFloat(),height.toFloat(),offset,
@@ -115,24 +116,40 @@ internal class NativeSheetSurface(
         context: Context,
         private var env: NativeActionSheetStyle,
         private val entryEdge: NativeDialogEdge,
-    ) : NativeSheetFrame(context) {
+    ) : NativeSheetFrame(context), NativeModalPaintedSurface {
         private val fill=Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
             color=env.palette.surfaceContainerLow
         }
+        private val grain = NoiseDrawable(fill.color, env.recipe.grainSeed).apply {
+            setNoiseIntensity(env.recipe.grainIntensity)
+        }
+        override val paintedTextSurface: Long get() = grain.paintedTextSurface
         private val shape=Path()
         private val colorMotion:ViewColorTransition by lazy {ViewColorTransition(this,intArrayOf(fill.color),{
-            fill.color=colorMotion.color(0);invalidate()
+            val next = colorMotion.color(0)
+            if (fill.color != next) {
+                fill.color=next;grain.setBackgroundColor(fill.color)
+                NativeModalTextSurface.invalidate(this);invalidate()
+            }
         })}
         val clip=SheetClip(context)
         private var radius=0f
-        init {setWillNotDraw(false);addView(clip)}
+        init {setWillNotDraw(false);addView(clip);grain.callback=this}
         fun updateStyle(next:NativeActionSheetStyle) {
             val shapeChanged=env.textDensity!=next.textDensity || env.recipe.radiusDp!=next.recipe.radiusDp
+            val grainChanged=env.recipe.grainSeed!=next.recipe.grainSeed ||
+                env.recipe.grainIntensity!=next.recipe.grainIntensity
             env=next;colorMotion.retarget(next.palette.surfaceContainerLow)
-            if(shapeChanged)onSizeChanged(width,height,width,height)
-            invalidate()
+            if (grainChanged) {
+                grain.setGrainSeed(next.recipe.grainSeed)
+                grain.setNoiseIntensity(next.recipe.grainIntensity)
+                NativeModalTextSurface.invalidate(this)
+                invalidate()
+            }
+            if(shapeChanged) { onSizeChanged(width,height,width,height);invalidate() }
         }
         override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int) {
+            grain.setBounds(0,0,w,h)
             val raw=env.recipe.radiusDp*env.textDensity.density
             // CornerBasedShape first normalizes each start/end pair against minDimension;
             // the path backend then normalizes the exposed pair if it exceeds the actual width.
@@ -148,7 +165,12 @@ internal class NativeSheetSurface(
             shape.addRoundRect(RectF(0f,0f,w.toFloat(),h.toFloat()),rounds,Path.Direction.CW)
             clip.setShape(shape)
         }
-        override fun onDraw(canvas:Canvas) {canvas.drawPath(shape,fill)}
+        override fun verifyDrawable(who: android.graphics.drawable.Drawable): Boolean =
+            who === grain || super.verifyDrawable(who)
+        override fun onDraw(canvas:Canvas) {
+            canvas.drawPath(shape,fill)
+            grain.drawGrain(canvas,shape)
+        }
         fun containsShape(p:Offset):Boolean {
             if(p.x<0f||p.y<0f||p.x>=width||p.y>=height)return false
             val edgeDistance = if (entryEdge == NativeDialogEdge.TOP) height-p.y else p.y
@@ -201,26 +223,13 @@ internal class NativeSheetSurface(
         }
     }
     internal class SheetColumn(context:Context,val handle:NativeSheetDragHandle,var content:View,
-        private val contentBackground: android.graphics.drawable.Drawable?, grainSeed: Int?,
+        private val contentBackground: android.graphics.drawable.Drawable?,
         private val entryEdge: NativeDialogEdge,
     ):ViewGroup(context) {
         private val handleAtBottom = entryEdge == NativeDialogEdge.TOP
-        private var grain: NoiseDrawable? = if (contentBackground == null)
-            grainSeed?.let { NoiseDrawable(seed = it) } else null
         init {clipChildren=false;clipToPadding=false;importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO
-            background=contentBackground ?: grain
+            background=contentBackground
             addView(handle);addView(content, if (handleAtBottom) 0 else 1)}
-        fun bindBackground(seed: Int?) {
-            if (contentBackground != null) return
-            val current = grain
-            if (current == null && seed != null) {
-                grain = NoiseDrawable(seed = seed).also { background = it }
-            } else if (current != null) {
-                current.setGrainSeed(seed)
-                val nextBackground = if (seed != null) current else null
-                if (background !== nextBackground) background = nextBackground
-            }
-        }
         fun wrapContent(wrapper:NativeVerticalViewport) {
             val index = indexOfChild(content)
             removeView(content)
@@ -274,15 +283,18 @@ internal class NativeSheetContent(
         clipChildren=false;clipToPadding=false;importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO
         addView(header)
         bindClose(style,dismiss)
+        NativeModalTextSurface.bindTree(titleView)
     }
     fun setContent(body:View,actions:View) {
         this.body?.let(::removeView);this.actions?.let(::removeView)
-        this.body=body;this.actions=actions;addView(body);addView(actions);requestLayout()
+        this.body=body;this.actions=actions;addView(body);addView(actions)
+        NativeModalTextSurface.bindTree(this);requestLayout()
     }
     fun bind(title:String,dismiss:()->Unit) {
         currentDismiss=dismiss
         titleView.setText(title)
         bindClose(style,dismiss)
+        NativeModalTextSurface.bindTree(titleView)
     }
     fun updateStyle(next:NativeActionSheetStyle) {
         if(style===next)return

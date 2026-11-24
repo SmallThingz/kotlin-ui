@@ -8,7 +8,7 @@ data class NativeMenuAction<I>(val label: String, val icon: I, val textColor: In
                               val enabled: Boolean = true, val onClick: () -> Unit)
 data class NativeMenuChoices<T>(val selected: T, val options: List<T>, val optionLabel: (T) -> String)
 data class NativeMenuColors(val raised: Int, val surfaceContainerHigh: Int, val ink: Int,
-                            val muted: Int, val primary: Int)
+                            val muted: Int, val primary: Int, val grainIntensity: Float = 0f)
 
 /** One retained icon view per row; bind must accept every icon produced by this renderer. */
 interface NativeMenuIcons<I> {

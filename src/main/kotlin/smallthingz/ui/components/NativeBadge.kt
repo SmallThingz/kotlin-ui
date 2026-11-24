@@ -64,6 +64,7 @@ class NativeBadge(
         row.addView(icon, LinearLayout.LayoutParams(0, 0))
         row.addView(label, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
         addView(row, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        setSurfacePreset(componentPalette.surfacePreset)
         applyGeometry()
         applyInk()
     }
@@ -83,6 +84,7 @@ class NativeBadge(
     fun applyPalette(palette: ControlPalette) {
         if (componentPalette == palette) return
         componentPalette = palette
+        setSurfacePreset(palette.surfacePreset)
         label.applyPalette(palette)
         super.applyStyle(surfaceStyle(palette, componentStyle))
         applyInk()
@@ -93,6 +95,7 @@ class NativeBadge(
         componentStyle = style
         label.applyStyle(style.textStyle)
         super.applyStyle(surfaceStyle(componentPalette, style))
+        setSurfacePreset(componentPalette.surfacePreset)
         applyGeometry()
         applyInk()
     }

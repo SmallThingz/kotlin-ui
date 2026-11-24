@@ -136,6 +136,7 @@ internal class OnboardingPermissionGroup(
             }
             rowOrder = desiredOrder
         }
+        view.setSurfacePreset(palette.surfacePreset)
         view.setPalette(palette.field, palette.border)
         return membershipChanged
     }

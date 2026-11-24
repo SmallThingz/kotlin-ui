@@ -102,6 +102,7 @@ data class NativeRangeTimeBubbleStyle(
     }
 
     fun bind(surface: NativeGroupLayout, colors: NativeColorScheme, active: Boolean, density: Float): Int {
+        surface.setSurfacePreset(colors.surfacePreset)
         surface.setPalette(if (active) colors.primaryContainer else colors.surfaceContainerHighest, 0)
         surface.elevation = if (active) activeElevationDp * density else 0f
         return if (active) colors.onPrimaryContainer else colors.onSurfaceVariant
@@ -140,6 +141,7 @@ data class NativeFeedbackSurfaceStyle(
     }
 
     fun bind(surface: NativeGroupLayout, colors: NativeColorScheme, tone: NativeFeedbackTone): Int {
+        surface.setSurfacePreset(colors.surfacePreset)
         surface.setPalette(fillColor(colors, tone), 0)
         return inkColor(colors, tone)
     }

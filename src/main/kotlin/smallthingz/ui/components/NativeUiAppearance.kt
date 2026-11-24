@@ -206,6 +206,7 @@ private class GroupedSegmentedPresentation(
         surface.setPalette(palette.surface, palette.outline)
     }
     override val paintedSurfaceColor: Int get() = surface.paintedFillColor
+    override val paintedTextSurface: Long get() = surface.paintedTextSurface
 }
 
 internal class SettingsThemePresentation(

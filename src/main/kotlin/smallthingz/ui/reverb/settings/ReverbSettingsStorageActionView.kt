@@ -50,6 +50,7 @@ class ReverbSettingsStorageActionView(
     fun bind(next: ReverbEnvironment, enabled: Boolean) {
         environment = next
         val palette = next.palette.buttonPalette
+        surface.setSurfacePreset(next.palette.surfacePreset)
         surface.setPalette(recipe.surroundingColor(palette), AndroidColor.TRANSPARENT)
         if (glyph != null) {
             glyph.bind(requireNotNull(icon), recipe.contentColor(palette, enabled))

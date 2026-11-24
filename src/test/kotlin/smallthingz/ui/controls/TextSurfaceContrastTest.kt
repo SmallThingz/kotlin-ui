@@ -56,6 +56,33 @@ class TextSurfaceContrastTest {
         assertEquals(0, textSurfaceForeground(textSurfaceRange(-1), 0))
     }
 
+    @Test fun flatRippleQualificationMatchesTheExistingLightRenderer() {
+        for (channel in 0..255) {
+            val surface = -0x1000000 or (channel * 0x010101)
+            for (ink in listOf(-1, -0x1000000, 0xff6750a4.toInt())) {
+                for (indication in listOf(0x28ffffff, 0x28000000, 0x286750a4)) {
+                    assertEquals(selectionForegroundWithIndication(0, surface, ink, indication),
+                        textSurfaceForegroundWithIndication(textSurfaceRange(surface), ink, indication))
+                }
+            }
+        }
+    }
+
+    @Test fun texturedRippleQualificationProtectsEveryAcceptedOpacity() {
+        for (base in listOf(0xff101010.toInt(), 0xffeeeeee.toInt())) {
+            val surface = smallthingz.ui.graphics.noiseSurfaceRange(base, 128)
+            val indication = 0x28aaff33
+            val result = textSurfaceForegroundWithIndication(surface, 0xff777777.toInt(), indication)
+            val ink = result.toInt()
+            for (alpha in 0..(result ushr 32).toInt()) {
+                val range = smallthingz.ui.graphics.noiseSurfaceRangeOver(surface,
+                    (indication and 0x00ffffff) or (alpha shl 24), 0)
+                assertTrue(contrast(ink, (range ushr 32).toInt()) >= 4.5)
+                assertTrue(contrast(ink, range.toInt()) >= 4.5)
+            }
+        }
+    }
+
     private fun contrast(first: Int, second: Int): Double {
         val a = srgbLuminance(first)
         val b = srgbLuminance(second)

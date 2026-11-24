@@ -7,6 +7,7 @@ package smallthingz.ui.components
 
 import smallthingz.ui.animation.view.ViewColorTransition
 
+import smallthingz.ui.graphics.bindGrainLayer
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -169,6 +170,7 @@ private class SliderBody(
     private val colorMotion by lazy {ViewColorTransition(this,targetColors(isEnabled),{invalidate()})}
     private val configuration=ViewConfiguration.get(context)
     private var dragging=false
+    private var grain = bindGrainLayer(null, palette.surfacePreset?.foregroundGrain ?: 0f)
     private val paint=Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val path=Path()
     private val radii=FloatArray(8)
@@ -198,6 +200,7 @@ private class SliderBody(
         this.density = density
         this.style = style
         this.palette = palette
+        grain = bindGrainLayer(grain, palette.surfacePreset?.foregroundGrain ?: 0f)
         model.bind(value)
         drag.enabled=enabled
         if(!enabled)tap.cancel()
@@ -247,6 +250,7 @@ private class SliderBody(
         val x=g.thumbX.toFloat();val y=(g.thumbY-g.visualTop).toFloat()
         val radius=minOf(g.thumbWidth,g.thumbHeight)/2f
         canvas.drawRoundRect(x,y,x+g.thumbWidth,y+g.thumbHeight,radius,radius,paint)
+        grain?.draw(canvas, x, y, x+g.thumbWidth, y+g.thumbHeight, radius, paint.alpha)
     }
     private fun drawTrack(canvas:Canvas,g:DiscreteSliderGeometry,active:Int,inactive:Int,activeTick:Int) {
         val width=g.trackWidth.toFloat()
@@ -282,6 +286,7 @@ private class SliderBody(
         radii[4]=right;radii[5]=right;radii[6]=left;radii[7]=left
         path.rewind();path.addRoundRect(x,y,x+width,y+height,radii,Path.Direction.CCW)
         paint.color=color;canvas.drawPath(path,paint)
+        grain?.draw(canvas, path, paint.alpha)
     }
     private fun circle(canvas:Canvas,x:Float,y:Float,radius:Float,color:Int) {
         paint.color=color;canvas.drawCircle(x,y,radius,paint)

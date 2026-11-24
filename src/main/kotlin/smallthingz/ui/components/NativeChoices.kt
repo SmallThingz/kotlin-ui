@@ -257,10 +257,10 @@ class NativeChip(
     internal var uniformSelectionInk: NativeSelectionInk? = null
         private set
 
-    internal fun prepareUniformSelectionInk(surface: Int, fill: Int) {
+    internal fun prepareUniformSelectionInk(surface: Int, fill: Int, trackRange: Long, pillRange: Long) {
         val state = selectionAnimation ?: return
         val ink = checkNotNull(uniformSelectionInk)
-        if (ink.update(surface, fill, currentTextColor or -0x1000000, state.animatedRippleColor)) invalidate()
+        if (ink.update(surface, fill, currentTextColor or -0x1000000, state.animatedRippleColor, trackRange, pillRange)) invalidate()
         state.publishParentRipple(ink.rippleColor)
     }
     internal var parentDrawsSelectedFill = false
@@ -717,6 +717,7 @@ class NativeChip(
                 indicatorColor=indicator
             }).also {selectionAnimation=it}
         retained.parentOwnsForeground = uniformSelectionForeground != null
+        retained.setSurfacePreset(currentPalette.surfacePreset)
         retained.bind(fill,stroke,text,ripple,choiceStyle.radiusDp*density,density,icons,accent,currentPalette.surface)
         retained.paintFill = !parentDrawsSelectedFill
         val visual = visualBackground ?: (if (choiceStyle.visualMinHeightDp == null) retained.background
@@ -793,7 +794,7 @@ open class NativeSegmentedChoice(
     private val choiceSemantics: NativeChoiceSemantics
         get() = if (tabSemantics) NativeChoiceSemantics.TAB else semantics
     private val selectionIndicator = if (movingSelectionBackground && style.selectedFill)
-        NativeSelectionIndicator(this, palette.selection) else null
+        NativeSelectionIndicator(this, palette.selection).also { it.setNoiseIntensity(palette.surfacePreset?.foregroundGrain ?: 0f) } else null
     private var uniformSelectionForeground: NativeSelectionForeground? = null
     internal fun setIndicatorNoiseIntensity(intensity: Float) { selectionIndicator?.setNoiseIntensity(intensity) }
     internal var capsuleColumns: Int? = null
@@ -815,10 +816,10 @@ open class NativeSegmentedChoice(
     }
 
     /** Capsule presentation uses matching text/icon roles; other choice styles retain their own ink. */
-    internal fun useUniformSelectionForeground(surfaceColor: () -> Int?) {
+    internal fun useUniformSelectionForeground(surfaceRange: (() -> Long)? = null, surfaceColor: () -> Int?) {
         check(chips.isEmpty() && uniformSelectionForeground == null)
         uniformSelectionForeground = NativeSelectionForeground(this, checkNotNull(selectionIndicator),
-            { choiceStyle.radiusDp * density }, surfaceColor)
+            { choiceStyle.radiusDp * density }, surfaceColor, surfaceRange)
     }
 
     init {
@@ -889,6 +890,7 @@ open class NativeSegmentedChoice(
     open fun applyPalette(palette: ControlPalette) {
         if (configuration.changed(context)) requestLayout()
         choicePalette = palette
+        setIndicatorNoiseIntensity(palette.surfacePreset?.foregroundGrain ?: 0f)
         chips.values.forEach { it.applyPalette(palette) }
         updateSelectionIndicator()
     }

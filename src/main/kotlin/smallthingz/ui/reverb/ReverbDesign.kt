@@ -23,7 +23,7 @@ object ReverbDesign {
 
     val appearance: NativeUiAppearance = NativeUiAppearance.Default.copy(
         colorScheme = NativeColorSchemeResolver { dark, sdk, readColor ->
-            if (dark) darkColors.resolve(dark, sdk, readColor).copy(surfacePreset = darkSurfaces)
+            if (dark) darkColors.resolve(dark, sdk, readColor)
             else NativeColorScheme.resolve(dark, sdk, readColor).let { base ->
                 base.copy(background = darken(base.background, .04f), surface = darken(base.surface, .04f))
             }

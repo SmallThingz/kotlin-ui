@@ -19,10 +19,11 @@ data class NativeBackdropStyle(
     fun panelScrimColor(palette: NativeColorScheme): Int = srgbColorWithAlpha(palette.scrim, panelScrimAlpha)
 
     fun attachPage(view: View, palette: NativeColorScheme, onPaintChanged: () -> Unit = {}): NativeBackdropBinding =
-        NativeBackdropBinding(view, pageGrainSeed, palette.surface, onPaintChanged)
+        NativeBackdropBinding(view, pageGrainSeed, palette.surface,
+            palette.surfacePreset?.backgroundGrain ?: 1f, onPaintChanged)
 
     fun bindPage(binding: NativeBackdropBinding, palette: NativeColorScheme) =
-        binding.bind(pageGrainSeed, palette.surface)
+        binding.bind(pageGrainSeed, palette.surface, palette.surfacePreset?.backgroundGrain ?: 1f)
 
     fun windowBackground(context: Context): NoiseDrawable? {
         val value = TypedValue()
@@ -41,15 +42,26 @@ open class NativeBackdropBinding(
     view: View,
     private var grainSeed: Int?,
     initialColor: Int,
+    initialGrainIntensity: Float = 1f,
     private val onPaintChanged: () -> Unit = {},
 ) {
-    private val drawable = NoiseDrawable(initialColor, grainSeed)
+    constructor(view: View, grainSeed: Int?, initialColor: Int, onPaintChanged: () -> Unit) :
+        this(view, grainSeed, initialColor, 1f, onPaintChanged)
+
+    private val drawable = NoiseDrawable(initialColor, grainSeed).apply { setNoiseIntensity(initialGrainIntensity) }
+    private var grainIntensity = initialGrainIntensity
     private var published = initialColor
     private val motion: ViewColorTransition = ViewColorTransition(view, intArrayOf(initialColor), ::publish)
 
     init { view.background = drawable }
 
-    fun bind(grainSeed: Int?, color: Int) {
+    fun bind(grainSeed: Int?, color: Int, intensity: Float = 1f) {
+        require(intensity in 0f..1f)
+        if (grainIntensity != intensity) {
+            grainIntensity = intensity
+            drawable.setNoiseIntensity(intensity)
+            onPaintChanged()
+        }
         if (this.grainSeed != grainSeed) {
             this.grainSeed = grainSeed
             drawable.setGrainSeed(grainSeed)

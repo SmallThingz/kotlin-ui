@@ -1,0 +1,46 @@
+package smallthingz.ui.components
+
+import android.view.View
+import android.view.ViewGroup
+import java.util.function.LongSupplier
+import smallthingz.ui.graphics.NoiseDrawable
+import smallthingz.ui.text.view.ParagraphView
+
+/** Current opaque modal paint, including grain; never the destination palette of an animation. */
+interface NativeModalPaintedSurface {
+    val paintedTextSurface: Long
+}
+
+/** Modal labels follow their nearest painted underlay. Controls with their own paint keep ownership. */
+internal object NativeModalTextSurface {
+    fun sample(view: View): Long {
+        if (view.background != null) return 0L
+        var parent = view.parent as? View
+        while (parent != null) {
+            when (parent) {
+                is NativeModalPaintedSurface -> return parent.paintedTextSurface
+                is NativeGroupLayout -> return parent.paintedTextSurface
+                is NativeSurface, is NativeMaterialButtonView -> return 0L // Buttons and fields own their own foreground pairing.
+            }
+            val background = parent.background
+            if (background is NoiseDrawable) return background.paintedTextSurface
+            if (background != null) return 0L
+            parent = parent.parent as? View
+        }
+        return 0L
+    }
+
+    fun bindTree(view: View) {
+        if (view is NativeSurface || view is NativeMaterialButtonView || view.background != null) return
+        if (view is ParagraphView && view.paintedTextSurface == null) {
+            view.bindPaintedTextSurface(LongSupplier { sample(view) })
+        }
+        if (view is ViewGroup) for (index in 0 until view.childCount) bindTree(view.getChildAt(index))
+    }
+
+    fun invalidate(owner: View) {
+        if (owner is NativeSurface || owner is NativeMaterialButtonView || owner.background != null) return
+        if (owner is ParagraphView && owner.paintedTextSurface != null) owner.invalidate()
+        if (owner is ViewGroup) for (index in 0 until owner.childCount) invalidate(owner.getChildAt(index))
+    }
+}

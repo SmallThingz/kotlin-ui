@@ -8,6 +8,7 @@ import android.graphics.RectF
 import android.view.View
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.controls.ControlPalette
+import smallthingz.ui.graphics.bindGrainLayer
 import kotlin.math.roundToInt
 
 /** Retains the drawing scratch and animated color roles used by both native sliders. */
@@ -16,6 +17,7 @@ internal class SliderPaint(
     private var palette: ControlPalette,
     private var colors: NativeSliderColors,
 ) {
+    private var grain = owner.bindGrainLayer(null, palette.surfacePreset?.foregroundGrain ?: 0f)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val path = Path()
     private val bounds = RectF()
@@ -31,6 +33,7 @@ internal class SliderPaint(
     fun applyPalette(palette: ControlPalette) {
         if (this.palette == palette) return
         this.palette = palette
+        grain = owner.bindGrainLayer(grain, palette.surfacePreset?.foregroundGrain ?: 0f)
         onEnabledChanged()
     }
 
@@ -65,6 +68,7 @@ internal class SliderPaint(
         path.addRoundRect(bounds, cornerRadii, Path.Direction.CW)
         paint.color = color
         canvas.drawPath(path, paint)
+        grain?.draw(canvas, path, paint.alpha)
     }
 
     fun drawDot(canvas: Canvas, x: Float, y: Float, radius: Float, color: Int) {
@@ -76,6 +80,7 @@ internal class SliderPaint(
         paint.color = thumb
         bounds.set(x - halfWidth, y - halfHeight, x + halfWidth, y + halfHeight)
         canvas.drawRoundRect(bounds, halfWidth, halfWidth, paint)
+        grain?.draw(canvas, bounds.left, bounds.top, bounds.right, bounds.bottom, halfWidth, paint.alpha)
     }
 
     private fun resolveColors(): IntArray {

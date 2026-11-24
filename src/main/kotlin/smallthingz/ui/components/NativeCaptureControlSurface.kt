@@ -197,12 +197,7 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
 
     override fun onDraw(canvas: Canvas) {
         canvas.drawPath(shape, fill)
-        grain?.let { layer ->
-            val save = canvas.save()
-            canvas.clipPath(shape)
-            layer.draw(canvas, bounds.left, bounds.top, bounds.right, bounds.bottom)
-            canvas.restoreToCount(save)
-        }
+        grain?.draw(canvas, shape, fill.alpha)
     }
 
     override fun draw(canvas: Canvas) {

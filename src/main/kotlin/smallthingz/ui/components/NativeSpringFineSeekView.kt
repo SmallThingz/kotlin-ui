@@ -16,6 +16,7 @@ import smallthingz.ui.text.view.PlainTextAccessibilityWindowScope
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.animation.view.transitionForegroundInk
 
+import smallthingz.ui.graphics.bindGrainLayer
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.LinearGradient
@@ -163,6 +164,7 @@ class NativeSpringFineSeekView<B : NativeSpringFineSeekBinding>(
         }
         if (paletteTarget == palette) return
         paletteTarget = palette
+        puck.bindSurfacePreset(palette.surfacePreset)
         paletteMotion.retarget(palette.primary,palette.secondary,palette.tertiary,palette.onSurfaceVariant,palette.onSurface,palette.surface)
     }
 
@@ -340,6 +342,11 @@ class NativeSpringFineSeekView<B : NativeSpringFineSeekBinding>(
         val glyph = FineSeekGlyph(context, resources.displayMetrics.density, environment.palette.surface)
         private val surfaceBounds = RectF()
         private val surfacePaint = Paint(PAINT_FLAGS)
+        private var grain = bindGrainLayer(null, environment.palette.surfacePreset?.foregroundGrain ?: 0f)
+
+        fun bindSurfacePreset(preset: NativeDarkSurfacePreset?) {
+            grain = bindGrainLayer(grain, preset?.foregroundGrain ?: 0f)
+        }
         val controller = ViewClickController(this, object : NativeClickEnvironment {
             override val nativeInputRoot get() = environment.inputRoot
             override fun admitDown(event: MotionEvent) =
@@ -418,6 +425,8 @@ class NativeSpringFineSeekView<B : NativeSpringFineSeekBinding>(
             surfacePaint.color = fill.toArgb()
             val radius = minOf(surfaceBounds.width(), surfaceBounds.height()) * .5f
             canvas.drawRoundRect(surfaceBounds, radius, radius, surfacePaint)
+            grain?.draw(canvas, surfaceBounds.left, surfaceBounds.top, surfaceBounds.right, surfaceBounds.bottom,
+                radius, surfacePaint.alpha)
         }
 
         override fun onAttachedToWindow() { super.onAttachedToWindow(); controller.attached() }

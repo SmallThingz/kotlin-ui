@@ -12,6 +12,7 @@ import android.graphics.drawable.RippleDrawable
 import android.view.View
 import smallthingz.ui.animation.view.ViewColorTransition
 import kotlin.math.min
+import smallthingz.ui.graphics.bindGrainLayer
 
 /** Retained native surface, ripple and paired ink; state/palette admission never rebuilds per frame. */
 class StateColorSurface(
@@ -57,6 +58,17 @@ class StateColorSurface(
                 publish()
             }
         }
+    private var grain: smallthingz.ui.graphics.ViewGrain? = null
+    private var grainIntensity = 0f
+
+    internal fun setSurfacePreset(preset: smallthingz.ui.components.NativeDarkSurfacePreset?) {
+        val intensity = preset?.foregroundGrain ?: 0f
+        if (grainIntensity == intensity) return
+        grainIntensity = intensity
+        grain = view.bindGrainLayer(grain, intensity)
+        if (ready) publish()
+    }
+
     private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
     private val mask=GradientDrawable().apply {setColor(-1);cornerRadius=radiusPx}
     private val surface=object:Drawable() {
@@ -70,7 +82,10 @@ class StateColorSurface(
             val corner=min(radius,min(bounds.width(),bounds.height())/2f)
             paint.style=Paint.Style.FILL;paint.color=motion.color(0)
             paint.alpha=(paint.alpha*opacity+127)/255
-            if(paintFill)canvas.drawRoundRect(bounds.left.toFloat(),bounds.top.toFloat(),bounds.right.toFloat(),bounds.bottom.toFloat(),corner,corner,paint)
+            if (paintFill) {
+                canvas.drawRoundRect(bounds.left.toFloat(),bounds.top.toFloat(),bounds.right.toFloat(),bounds.bottom.toFloat(),corner,corner,paint)
+                grain?.draw(canvas, bounds.left.toFloat(), bounds.top.toFloat(), bounds.right.toFloat(), bounds.bottom.toFloat(), corner, paint.alpha)
+            }
             paint.style=Paint.Style.STROKE;paint.color=motion.color(1)
             paint.alpha=(paint.alpha*opacity+127)/255
             paint.strokeWidth=strokeWidth*if(android.R.attr.state_enabled in state&&android.R.attr.state_focused in state)focusedStrokeScale else 1f
@@ -115,8 +130,15 @@ class StateColorSurface(
     private fun retarget(state:IntArray=view.drawableState){motion.retarget(*colors(state))}
     fun updateState(state:IntArray){retarget(state)}
     private fun publish() {
-        fun readable(color:Int)=if(!parentOwnsForeground&&motion.isInterpolating&&color ushr 24==255&&motion.color(6) ushr 24==255)
-            selectionForeground(motion.color(0),motion.color(6),color,color) else color
+        fun readable(color: Int): Int {
+            if (parentOwnsForeground || color ushr 24 != 255 || motion.color(6) ushr 24 != 255) return color
+            if (grainIntensity > 0f && paintFill) {
+                val fill = motion.color(0)
+                val background = androidx.core.graphics.ColorUtils.compositeColors(fill, motion.color(6))
+                return textSurfaceForeground(checkNotNull(grain).surfaceRange(background, fill ushr 24), color)
+            }
+            return if (motion.isInterpolating) selectionForeground(motion.color(0), motion.color(6), color, color) else color
+        }
         val accent = motion.color(5)
         publishInk(readable(motion.color(2)),readable(motion.color(4)),if (qualifyAccentInk) readable(accent) else accent)
         if (!parentOwnsForeground) publishRipple(motion.color(3))

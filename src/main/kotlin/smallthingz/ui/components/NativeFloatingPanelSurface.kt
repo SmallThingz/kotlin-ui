@@ -22,7 +22,7 @@ open class NativeFloatingPanelSurface(
     private var density: Float,
     private var recipe: NativeFloatingPanelRecipe,
     palette: NativeColorScheme,
-) : ViewGroup(context) {
+) : ViewGroup(context), NativeModalPaintedSurface {
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         color = recipe.surfaceColor(palette)
     }
@@ -32,18 +32,23 @@ open class NativeFloatingPanelSurface(
     private val radii = FloatArray(8)
     private var dialogEdge = NativeDialogEdge.TOP
     private val clipped = NativeFloatingPanelClip(context)
-    private val grain = NoiseDrawable(seed = recipe.grainSeed)
+    private var grainIntensity = palette.surfacePreset?.foregroundGrain ?: 1f
+    private val grain = NoiseDrawable(fill.color, recipe.grainSeed).apply {
+        setNoiseIntensity(grainIntensity)
+    }
+    override val paintedTextSurface: Long get() = grain.paintedTextSurface
     val clipHost: View get() = clipped
 
     init {
         setWillNotDraw(false)
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         addView(clipped)
+        // Drawable callbacks also repaint when the shared grain shader becomes ready.
+        grain.callback = this
     }
 
     protected fun setPanelViewport(view: View) {
         check(clipped.childCount == 0)
-        view.background = grain
         clipped.addView(view, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
     }
 
@@ -54,15 +59,27 @@ open class NativeFloatingPanelSurface(
 
     fun bindSurface(density: Float, recipe: NativeFloatingPanelRecipe, palette: NativeColorScheme) {
         val shapeChanged = this.density != density || this.recipe.cornerRadiusDp != recipe.cornerRadiusDp
+        val nextGrainIntensity = palette.surfacePreset?.foregroundGrain ?: 1f
+        val grainChanged = this.recipe.grainSeed != recipe.grainSeed || grainIntensity != nextGrainIntensity
         this.density = density
         this.recipe = recipe
         fillMotion.retarget(recipe.surfaceColor(palette))
-        grain.setGrainSeed(recipe.grainSeed)
+        if (grainChanged) {
+            grainIntensity = nextGrainIntensity
+            grain.setGrainSeed(recipe.grainSeed)
+            grain.setNoiseIntensity(grainIntensity)
+            NativeModalTextSurface.invalidate(this)
+            invalidate()
+        }
         if (shapeChanged) rebuildShape()
     }
 
     private fun publishFill() {
-        fill.color = fillMotion.color(0)
+        val next = fillMotion.color(0)
+        if (fill.color == next) return
+        fill.color = next
+        grain.setBackgroundColor(fill.color)
+        NativeModalTextSurface.invalidate(this)
         invalidate()
     }
 
@@ -94,7 +111,10 @@ open class NativeFloatingPanelSurface(
         clipped.layout(0, 0, width, height)
     }
 
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) = rebuildShape()
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        grain.setBounds(0, 0, w, h)
+        rebuildShape()
+    }
 
     private fun rebuildShape() {
         val radius = recipe.cornerRadiusPx(density, width, height)
@@ -106,10 +126,19 @@ open class NativeFloatingPanelSurface(
         invalidate()
     }
 
+    override fun verifyDrawable(who: android.graphics.drawable.Drawable): Boolean =
+        who === grain || super.verifyDrawable(who)
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        NativeModalTextSurface.bindTree(this)
+    }
+
     // Keep fill outside the child clip, preserving the shape's edge coverage.
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         canvas.drawPath(path, fill)
+        grain.drawGrain(canvas, path)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean = true

@@ -33,7 +33,9 @@ class ReverbApplicationWidgets(private val context: Context, theme: ReverbTheme)
     private fun dp(value: Float) = (value * textDensity.density).roundToInt()
 
     fun background(topBar: Boolean = false) = if (topBar)
-        NoiseDrawable(appearance.toolbars.backgroundColor(colors), appearance.toolbars.grainSeed)
+        NoiseDrawable(appearance.toolbars.backgroundColor(colors), appearance.toolbars.grainSeed).apply {
+            setNoiseIntensity(colors.surfacePreset?.backgroundGrain ?: 1f)
+        }
     else appearance.backdrops.pageBackground(colors)
 
     fun informationalSheet(anchor: View, title: String, onDismiss: () -> Unit): NativeActionSheet =
@@ -152,6 +154,7 @@ class ReverbApplicationWidgets(private val context: Context, theme: ReverbTheme)
     }
 
     fun bindToolbarIcon(button: NativeTopBarAction, enabled: Boolean, action: () -> Unit) {
+        button.bindSurfacePreset(colors.surfacePreset)
         button.bindAction(textDensity.density, enabled, colors.muted, appearance.toolbars.contentColor(colors), action)
     }
 
@@ -165,9 +168,10 @@ class ReverbApplicationWidgets(private val context: Context, theme: ReverbTheme)
         }, onChanged = changed).apply {
         filterTouchesWhenObscured = true
     }
-    fun bindToggle(row: NativeToggleRow, checked: Boolean, enabled: Boolean = true) = row.bindToggle(
-        checked, enabled, textDensity.density, colors.ink, colors.switchPalette,
-    )
+    fun bindToggle(row: NativeToggleRow, checked: Boolean, enabled: Boolean = true) {
+        row.bindSurfacePreset(colors.surfacePreset)
+        row.bindToggle(checked, enabled, textDensity.density, colors.ink, colors.switchPalette)
+    }
 
     fun settingsSegments(inputAllowed: () -> Boolean): NativeSegmentedControl =
         appearance.settingsSelectors.createSegmentedControl(

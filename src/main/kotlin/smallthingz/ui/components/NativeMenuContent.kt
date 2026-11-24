@@ -71,12 +71,14 @@ internal class NativeMenuContent<I>(
     )
 
     init {
+        bindGrain(palette.grainIntensity)
         viewport.setContent(column)
         setBody(viewport)
     }
 
     fun <T> bind(content: NativeMenuChoices<T>, palette: NativeMenuColors, select: (T) -> Unit) {
         bindFill(palette.raised)
+        bindGrain(palette.grainIntensity)
         column.bind(content, palette, select)
         requestLayout()
         invalidate()
@@ -85,6 +87,7 @@ internal class NativeMenuContent<I>(
     /** Released Incidents/Library use default12dp horizontal/zero vertical item padding. */
     fun bindActions(actions: List<NativeMenuAction<I>>, palette: NativeMenuColors, background: Int = palette.surfaceContainerHigh) {
         bindFill(background)
+        bindGrain(palette.grainIntensity)
         column.bindActions(actions, palette)
         requestLayout()
         invalidate()
@@ -174,7 +177,9 @@ internal class NativeMenuRowView<I>(
     private val interestedParent: (MotionEvent) -> Boolean,
 ) : ViewGroup(context), AutoCloseable {
     // DropdownMenuItem's ProvideTextStyle(labelLarge) merges the inherited default body style.
-    private val text = ParagraphView(context, style, density, resolver, palette.muted)
+    private val text = ParagraphView(context, style, density, resolver, palette.muted).also {
+        NativeModalTextSurface.bindTree(it)
+    }
     private val check = icons.create(context, icons.check, palette.primary)
     private val horizontal = dp(16f)
     private val vertical = dp(8f)

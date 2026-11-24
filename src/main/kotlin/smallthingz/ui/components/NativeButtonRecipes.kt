@@ -17,6 +17,7 @@ data class NativeButtonPalette(
     val errorSurface: Int,
     val onError: Int,
     val raisedSurface: Int = quietSurface,
+    internal val surfacePreset: NativeDarkSurfacePreset? = null,
 )
 
 enum class NativeButtonColorRole {
@@ -86,8 +87,10 @@ data class NativeProgressButtonRecipe(
 ) {
     fun progressColor(palette: NativeButtonPalette): Int = progress.resolve(palette)
 
-    fun bindSurroundingSurface(surface: NativeGroupLayout, palette: NativeButtonPalette, enabled: Boolean) =
+    fun bindSurroundingSurface(surface: NativeGroupLayout, palette: NativeButtonPalette, enabled: Boolean) {
+        surface.setSurfacePreset(palette.surfacePreset)
         surface.setPalette(button.surroundingColor(palette, enabled), Color.TRANSPARENT)
+    }
 }
 
 private val filledSurface = NativeMaterialButtonStyle(24)
@@ -113,8 +116,10 @@ data class NativeTrimActionRecipes(
 ) {
     internal constructor(labelStyle: TextStyle) : this(cancel = trimCancel(labelStyle), save = trimSave(labelStyle))
 
-    fun bindSurface(surface: NativeGroupLayout, palette: NativeColorScheme) =
+    fun bindSurface(surface: NativeGroupLayout, palette: NativeColorScheme) {
+        surface.setSurfacePreset(palette.surfacePreset)
         surface.setPalette(palette.surfaceContainerHigh, palette.border)
+    }
 }
 
 private fun trimCancel(labelStyle: TextStyle): NativeButtonRecipe {

@@ -36,6 +36,8 @@ internal class NativeSelectionIndicator(
 
     internal val paintedBounds: RectF get() = displayed
     internal val paintedColor: Int get() = colors.color(0)
+    internal fun surfaceRangeOver(surface: Long): Long = grain?.surfaceRangeOver(surface, paintedColor)
+        ?: smallthingz.ui.graphics.noiseSurfaceRangeOver(surface, paintedColor, 0)
     internal val isVisible: Boolean get() = initialized && !closed
 
     init { host.addOnAttachStateChangeListener(this) }
@@ -77,7 +79,7 @@ internal class NativeSelectionIndicator(
         paint.color = colors.color(0)
         val corner = min(radius, min(displayed.width(), displayed.height()) / 2f)
         canvas.drawRoundRect(displayed, corner, corner, paint)
-        grain?.draw(canvas, displayed.left, displayed.top, displayed.right, displayed.bottom, corner)
+        grain?.draw(canvas, displayed.left, displayed.top, displayed.right, displayed.bottom, corner, paint.alpha)
     }
 
     override fun doFrame(frameTimeNanos: Long) {

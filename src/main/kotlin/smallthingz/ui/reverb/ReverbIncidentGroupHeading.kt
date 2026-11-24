@@ -93,6 +93,7 @@ internal class ReverbIncidentGroupHeading(
         val border = value.style.surface.borderColor(value.palette)
         surface.setJoinedEdges(edges)
         surface.setJoinedSeparatorColor(border)
+        surface.setSurfacePreset(value.palette.surfacePreset)
         surface.setPaletteImmediately(value.style.surface.fillColor(value.palette), border)
         val horizontal = (12f * value.density.density).roundToInt()
         title.setPaddingRelative(horizontal, (8f * value.density.density).roundToInt(),

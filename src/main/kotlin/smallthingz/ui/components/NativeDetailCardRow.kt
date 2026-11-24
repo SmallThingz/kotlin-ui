@@ -79,6 +79,7 @@ class NativeDetailCardMarker(
         text?.isScreenReaderFocusable = false
     }
     fun bind(palette: NativeColorScheme) {
+        view.setSurfacePreset(palette.surfacePreset)
         view.setPalette(palette.primaryContainer, Color.TRANSPARENT)
         text?.animateTextColor(palette.onPrimaryContainer)
         onGlyphTint?.invoke(palette.onPrimaryContainer)

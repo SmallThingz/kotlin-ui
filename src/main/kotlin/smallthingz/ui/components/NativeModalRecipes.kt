@@ -30,7 +30,8 @@ data class NativeModalRecipes(
         NativeActionSheetStyle(density, resolver,
             NativeActionSheetColors(palette.surfaceContainerLow, palette.onSurface, palette.onSurfaceVariant,
                 palette.scrim, palette.inverseSurface, palette.inverseOnSurface, palette.onSurface),
-            typography[sheet.titleRole], typography[sheet.tooltipRole], sheet)
+            typography[sheet.titleRole], typography[sheet.tooltipRole],
+            sheet.copy(grainIntensity = palette.surfacePreset?.foregroundGrain ?: sheet.grainIntensity))
 }
 
 data class NativeStatusBarStyle(
@@ -57,6 +58,7 @@ data class NativeActionSheetRecipe(
     val handleVerticalPaddingDp: Float = 22f,
     /** Space above the sheet content header. */
     val topPaddingDp: Float = 0f,
+    val grainIntensity: Float = 1f,
 )
 
 /** Top-origin panel with a retained rounded viewport and themed brand/detail content. */
@@ -104,24 +106,8 @@ data class NativeFloatingLinkStyle(
     fun fill(palette: NativeColorScheme): Int =
         modalTonalColor(palette.surfaceContainerHighest, palette, elevationDp)
 
-    // Resolve the first matching color value, including aliases in a dynamic palette.
-    fun content(palette: NativeColorScheme): Int = with(palette) {
-        when (surfaceContainerHighest) {
-            primary -> onPrimary
-            secondary -> onSecondary
-            tertiary -> onTertiary
-            background -> onBackground
-            error -> onError
-            primaryContainer -> onPrimaryContainer
-            secondaryContainer -> onSecondaryContainer
-            tertiaryContainer -> onTertiaryContainer
-            errorContainer -> onErrorContainer
-            inverseSurface -> inverseOnSurface
-            surface -> onSurface
-            surfaceVariant -> onSurfaceVariant
-            else -> onSurface
-        }
-    }
+    // This is a surface role, even when its numeric value aliases an accent/container role.
+    fun content(palette: NativeColorScheme): Int = palette.onSurface
 
     fun titleColor(palette: NativeColorScheme, style: TextStyle): Int =
         if (style.color != Color.Unspecified) style.color.toArgb() else content(palette)

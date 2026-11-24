@@ -75,4 +75,19 @@ class NativeDarkSurfacesTest {
         assertEquals(1f, preset.borderWidthDp, 0f)
         assertEquals(0xff262626.toInt(), preset.borderColor)
     }
+    @Test fun presetTravelsThroughEveryControlPaletteButLeavesLightResolutionUntouched() {
+        val light = NativeColorScheme.fallback(false)
+        val resolver = NativeDarkSurfacePreset.Amoled.colorScheme(
+            NativeColorSchemeResolver { dark, _, _ -> if (dark) base else light })
+        val dark = resolver.resolve(true, 30) { error("Unused") }
+        assertSame(NativeDarkSurfacePreset.Amoled, dark.surfacePreset)
+        assertSame(dark.surfacePreset, dark.settingsControls.surfacePreset)
+        assertSame(dark.surfacePreset, dark.pageControls.surfacePreset)
+        assertSame(dark.surfacePreset, dark.buttonPalette.surfacePreset)
+        assertEquals(NativeDarkSurfacePreset.Amoled.borderColor, dark.border)
+        assertSame(light, resolver.resolve(false, 30) { error("Unused") })
+        assertEquals(null, light.pageControls.surfacePreset)
+        assertEquals(null, light.buttonPalette.surfacePreset)
+    }
+
 }

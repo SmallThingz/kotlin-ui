@@ -6,7 +6,8 @@ import smallthingz.ui.components.NativeMenuColors
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeMenuIcons
 
-internal fun NativeColorScheme.menuColors() = NativeMenuColors(raised, surfaceContainerHigh, ink, muted, primary)
+internal fun NativeColorScheme.menuColors() = NativeMenuColors(raised, surfaceContainerHigh, ink, muted, primary,
+    surfacePreset?.foregroundGrain ?: 0f)
 internal object ReverbMenuIcons : NativeMenuIcons<ReverbIcon> {
     override val check = ReverbIcon.Check
     override fun create(context: Context, icon: ReverbIcon, color: Int): View = ReverbGlyphView(context, icon, color)

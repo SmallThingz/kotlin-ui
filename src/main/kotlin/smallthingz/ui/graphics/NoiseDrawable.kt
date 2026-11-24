@@ -38,21 +38,13 @@ class NoiseDrawable(
         get() = if (drawsBackground && drawableAlpha == 255 && outputColorFilter == null)
             textSurfaceRange else 0L
 
-    private fun grainSurfaceRange(color: Int): Long {
-        if (color ushr 24 != 255) return 0L
-        val grainAlpha = if (seed == null) 0 else (17 * noisePaint.alpha + 254) / 255
-        if (grainAlpha == 0) return smallthingz.ui.controls.textSurfaceRange(color)
-        val fillAlpha = 255 - grainAlpha
-        var darkest = 0xff000000.toInt()
-        var lightest = 0xff000000.toInt()
-        for (shift in 0..16 step 8) {
-            val channel = color ushr shift and 255
-            // Floor/ceiling enclose integer raster rounding and bilinear grain interpolation.
-            darkest = darkest or ((channel * fillAlpha / 255) shl shift)
-            lightest = lightest or (((channel * fillAlpha + 255 * grainAlpha + 254) / 255) shl shift)
-        }
-        return smallthingz.ui.controls.textSurfaceRange(darkest, lightest)
-    }
+    internal fun surfaceRange(color: Int, coverage: Int = 255): Long =
+        noiseSurfaceRange(color, if (seed == null) 0 else (noisePaint.alpha * coverage + 127) / 255)
+
+    internal fun surfaceRangeOver(surface: Long, fill: Int): Long = noiseSurfaceRangeOver(surface, fill,
+        if (seed == null) 0 else (noisePaint.alpha * (fill ushr 24) + 127) / 255)
+
+    private fun grainSurfaceRange(color: Int): Long = surfaceRange(color)
 
     init {
         backgroundColor?.let { backgroundPaint.color = it }
@@ -111,14 +103,31 @@ class NoiseDrawable(
     }
 
     /** Paint just the shared grain over a shape already filled by its owner. */
-    internal fun drawGrain(canvas: Canvas, left: Float, top: Float, right: Float, bottom: Float, corner: Float = 0f) {
-        if (noisePaint.alpha == 0 || right <= left || bottom <= top) return
-        val currentSeed = seed ?: return
+    internal fun drawGrain(canvas: Canvas, left: Float, top: Float, right: Float, bottom: Float,
+        corner: Float = 0f, coverage: Int = 255) {
+        if (right <= left || bottom <= top || !prepareGrain(coverage)) return
+        val alpha = noisePaint.alpha
+        noisePaint.alpha = (alpha * coverage + 127) / 255
+        try {
+            if (corner > 0f) canvas.drawRoundRect(left, top, right, bottom, corner, corner, noisePaint)
+            else canvas.drawRect(left, top, right, bottom, noisePaint)
+        } finally { noisePaint.alpha = alpha }
+    }
+
+    /** Use the owner's retained geometry, avoiding a second path and per-frame clip. */
+    internal fun drawGrain(canvas: Canvas, path: android.graphics.Path, coverage: Int = 255) {
+        if (!prepareGrain(coverage)) return
+        val alpha = noisePaint.alpha
+        noisePaint.alpha = (alpha * coverage + 127) / 255
+        try { canvas.drawPath(path, noisePaint) } finally { noisePaint.alpha = alpha }
+    }
+
+    private fun prepareGrain(coverage: Int): Boolean {
+        if (noisePaint.alpha == 0 || coverage == 0) return false
+        val currentSeed = seed ?: return false
         if (noisePaint.shader == null) noisePaint.shader = NoiseTexture.shader(currentSeed)
         // Until generation completes, leave the owner's exact fill visible.
-        if (noisePaint.shader == null) return
-        if (corner > 0f) canvas.drawRoundRect(left, top, right, bottom, corner, corner, noisePaint)
-        else canvas.drawRect(left, top, right, bottom, noisePaint)
+        return noisePaint.shader != null
     }
 
     override fun setAlpha(alpha: Int) {
