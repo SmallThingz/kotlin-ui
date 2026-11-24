@@ -79,6 +79,8 @@ open class NativeSettingsRow(
     val valueView = NativeText(context, palette, NativeTextStyle(style.valueSizeSp), NativeTextRole.MUTED)
     private val iconView = ImageView(context)
     private val textColumn = LinearLayout(context)
+    private var detailContent: View? = null
+    private var hasDetailText = false
     private val trailing = LinearLayout(context)
     private val accessory = FrameLayout(context)
     private var action: (() -> Unit)? = null
@@ -112,9 +114,7 @@ open class NativeSettingsRow(
         accessory.visibility = GONE
         textColumn.orientation = LinearLayout.VERTICAL
         textColumn.addView(titleView, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-        textColumn.addView(detailView, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-            topMargin = dp(style.detailGapDp)
-        })
+        textColumn.addView(detailView, detailLayoutParams())
         trailing.orientation = LinearLayout.HORIZONTAL
         trailing.gravity = Gravity.CENTER_VERTICAL
         trailing.addView(valueView, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
@@ -140,7 +140,8 @@ open class NativeSettingsRow(
         setText(titleView, title)
         setText(detailView, detail)
         setText(valueView, value)
-        detailView.visibility = if (detail.isNullOrEmpty()) GONE else VISIBLE
+        hasDetailText = !detail.isNullOrEmpty()
+        updateDetailVisibility()
         valueView.visibility = if (value.isNullOrEmpty()) GONE else VISIBLE
         if (iconView.drawable !== icon) iconView.setImageDrawable(icon)
         iconView.visibility = if (icon == null) GONE else VISIBLE
@@ -156,6 +157,24 @@ open class NativeSettingsRow(
             listOfNotNull(title, detail?.takeUnless { it.isEmpty() }, value?.takeUnless { it.isEmpty() }).joinToString(", ")
         requestLayout()
     }
+
+    /** Replaces the text detail with caller-owned content below the title. Pass null to restore it. */
+    fun setDetailContent(view: View?) {
+        if (detailContent === view) return
+        require(view?.parent == null) { "Detail content already belongs to another parent" }
+        detailContent?.let(textColumn::removeView)
+        detailContent = view
+        view?.let { textColumn.addView(it, detailLayoutParams()) }
+        updateDetailVisibility()
+        requestLayout()
+    }
+
+    private fun updateDetailVisibility() {
+        detailView.visibility = if (detailContent == null && hasDetailText) VISIBLE else GONE
+    }
+
+    private fun detailLayoutParams() = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        .apply { topMargin = dp(style.detailGapDp) }
 
     /**
      * Only an explicit replacement reparents a control; repaint and reflow never do.
@@ -210,10 +229,10 @@ open class NativeSettingsRow(
             titleView.componentTypography(resolvedTitleStyle)
             detailView.componentTypography(resolvedDetailStyle)
             valueView.componentTypography(NativeTextStyle(style.valueSizeSp))
-            val detailParams = detailView.layoutParams as LinearLayout.LayoutParams
             val detailGap = dp(style.detailGapDp)
-            if (detailParams.topMargin != detailGap) {
-                detailView.layoutParams = detailParams.apply { topMargin = detailGap }
+            for (view in listOfNotNull(detailView, detailContent)) {
+                val params = view.layoutParams as LinearLayout.LayoutParams
+                if (params.topMargin != detailGap) view.layoutParams = params.apply { topMargin = detailGap }
             }
         }
         val iconColor = palette.roleColor(style.iconRole)

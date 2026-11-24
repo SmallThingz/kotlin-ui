@@ -7,6 +7,7 @@ import android.os.SystemClock
 import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -16,9 +17,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import smallthingz.ui.geometry.Offset
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.text.view.NativeActionDescriptionView
 import smallthingz.ui.unit.Density
@@ -98,6 +101,70 @@ class NativeActionSheetHoverIntegrationTest {
         }
     }
 
+    @Test fun sheetWithoutHeaderCloseUsesFullTitleWidthAndKeepsBackdropDismissal() {
+        withSheet(showHeaderClose = false) { fixture ->
+            main {
+                val app = fixture.surface.appContent
+                val title = app.titleView
+                val header = title.parent as ViewGroup
+                assertNull(app.close)
+                assertEquals(1, header.childCount)
+                assertEquals(header.measuredWidth, title.measuredWidth)
+                assertEquals(title.measuredHeight, header.measuredHeight)
+                assertTrue(fixture.scrim.createAccessibilityNodeInfo().actionList.any {
+                    it.id == AccessibilityNodeInfo.ACTION_CLICK
+                })
+                tap(fixture.root, backdropCenter(fixture))
+            }
+            assertTrue(fixture.dismissed.await(3, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test fun sheetWithoutHeaderCloseRetainsTheDragHandleTouchTarget() {
+        withSheet(showHeaderClose = false) { fixture ->
+            main {
+                val handle = fixture.surface.column.handle
+                tap(fixture.root, centerInRoot(fixture.root, handle))
+            }
+            assertTrue(fixture.dismissed.await(3, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test fun sheetWithoutHeaderCloseKeepsBackDismissal() {
+        withSheet(showHeaderClose = false) { fixture ->
+            main { fixture.sheet.onBackPressedDispatcher.onBackPressed() }
+            assertTrue(fixture.dismissed.await(3, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test fun topEntryUsesTheTopAnchorAndRoundsOnlyTheExposedCorners() {
+        withSheet(showHeaderClose = false, entryEdge = NativeDialogEdge.TOP) { fixture ->
+            main {
+                val surface = fixture.surface
+                assertEquals(0, surface.top)
+                assertEquals(surface.column.content.bottom, surface.column.handle.top)
+                assertTrue(surface.containsShape(Offset(0f, 0f)))
+                assertFalse(surface.containsShape(Offset(0f, surface.height - 1f)))
+                assertBackdropDoesNotCoverSheet(fixture)
+            }
+        }
+    }
+
+    @Test fun topEntryDismissesOnlyWhenTheHandleIsDraggedTowardTheTop() {
+        withSheet(showHeaderClose = false, entryEdge = NativeDialogEdge.TOP) { fixture ->
+            fun dragHandle(towardTop: Boolean) = main {
+                val point = centerInRoot(fixture.root, fixture.surface.column.handle)
+                val distance = if (towardTop) -point.second + 1f
+                    else minOf(point.second, fixture.root.sourceSemanticsHeight - point.second - 1f)
+                drag(fixture.root, point, distance)
+            }
+            dragHandle(towardTop = false)
+            assertFalse(fixture.dismissed.await(600, TimeUnit.MILLISECONDS))
+            dragHandle(towardTop = true)
+            assertTrue(fixture.dismissed.await(3, TimeUnit.SECONDS))
+        }
+    }
+
     private class Editor(context: Context) : EditText(context) {
         val hoverEvents = arrayListOf<Int>()
 
@@ -109,9 +176,13 @@ class NativeActionSheetHoverIntegrationTest {
     }
 
     private data class Fixture(val sheet: NativeActionSheet, val root: SheetRoot, val surface: NativeSheetSurface,
-        val scrim: SheetScrim, val editor: Editor, val dismissed: CountDownLatch)
+        val scrim: SheetScrim, val editor: Editor, val dismissed: CountDownLatch, val entryEdge: NativeDialogEdge)
 
-    private fun withSheet(test: (Fixture) -> Unit) {
+    private fun withSheet(
+        showHeaderClose: Boolean = true,
+        entryEdge: NativeDialogEdge = NativeDialogEdge.BOTTOM,
+        test: (Fixture) -> Unit,
+    ) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -119,15 +190,21 @@ class NativeActionSheetHoverIntegrationTest {
         try {
             lateinit var fixture: Fixture
             main {
-                val anchor = FrameLayout(activity)
+                val anchor = FrameLayout(activity).apply {
+                    if (!showHeaderClose) layoutDirection = View.LAYOUT_DIRECTION_RTL
+                }
                 activity.setContentView(anchor)
                 val appearance = NativeUiAppearance.Default
                 val style = appearance.modals.actionSheetStyle(Density(activity), createFontFamilyResolver(activity),
                     NativeColorScheme.fallback(false))
-                val glyph = NativeActionDescriptionView(activity, "Close")
                 val dismissed = CountDownLatch(1)
-                val dialog = NativeActionSheet(anchor, style, "Rename", dismissed::countDown,
-                    NativeActionSheetIcon(glyph, { cursor, node -> glyph.bindAccessibility(cursor) { node(glyph) } }, {}))
+                val dialog = if (showHeaderClose) {
+                    val glyph = NativeActionDescriptionView(activity, "Close")
+                    NativeActionSheet(anchor, style, "Rename", dismissed::countDown,
+                        NativeActionSheetIcon(glyph, { cursor, node -> glyph.bindAccessibility(cursor) { node(glyph) } }, {}))
+                } else {
+                    NativeActionSheet(anchor, style, "Rename", dismissed::countDown, entryEdge = entryEdge)
+                }
                 sheet = dialog
                 val editor = Editor(dialog.context).apply {
                     showSoftInputOnFocus = false
@@ -136,7 +213,7 @@ class NativeActionSheetHoverIntegrationTest {
                 dialog.setContent(editor, View(dialog.context), emptyList(), scrollable = true)
                 val surface = dialog.contentView as NativeSheetSurface
                 val root = surface.parent as SheetRoot
-                fixture = Fixture(dialog, root, surface, root.getChildAt(0) as SheetScrim, editor, dismissed)
+                fixture = Fixture(dialog, root, surface, root.getChildAt(0) as SheetScrim, editor, dismissed, entryEdge)
                 dialog.show()
             }
             awaitSettledLayout(fixture)
@@ -151,8 +228,9 @@ class NativeActionSheetHoverIntegrationTest {
         do {
             var settled = false
             main {
-                settled = fixture.editor.isLaidOut && fixture.scrim.opacity >= .99f &&
-                    fixture.surface.bottom == fixture.root.sourceSemanticsHeight
+                val atAnchor = if (fixture.entryEdge == NativeDialogEdge.TOP) fixture.surface.top == 0
+                    else fixture.surface.bottom == fixture.root.sourceSemanticsHeight
+                settled = fixture.editor.isLaidOut && fixture.scrim.opacity >= .99f && atAnchor
             }
             if (settled) return
             Thread.sleep(20)
@@ -197,8 +275,26 @@ class NativeActionSheetHoverIntegrationTest {
         }
     }
 
-    private fun motion(down: Long, action: Int, point: Pair<Float, Float>): MotionEvent = MotionEvent.obtain(
-        down, SystemClock.uptimeMillis(), action, 1,
+    private fun drag(root: SheetRoot, point: Pair<Float, Float>, distance: Float) {
+        val down = SystemClock.uptimeMillis() - 64L
+        for (step in 0..4) {
+            val action = when (step) {
+                0 -> MotionEvent.ACTION_DOWN
+                4 -> MotionEvent.ACTION_UP
+                else -> MotionEvent.ACTION_MOVE
+            }
+            val event = motion(down, action, point.first to (point.second + distance * step / 4f), down + step * 16L)
+            try { assertTrue(root.dispatchTouchEvent(event)) } finally { event.recycle() }
+        }
+    }
+
+    private fun motion(
+        down: Long,
+        action: Int,
+        point: Pair<Float, Float>,
+        eventTime: Long = SystemClock.uptimeMillis(),
+    ): MotionEvent = MotionEvent.obtain(
+        down, eventTime, action, 1,
         arrayOf(MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_FINGER }),
         arrayOf(MotionEvent.PointerCoords().apply { x = point.first; y = point.second; pressure = 1f; size = 1f }),
         0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)

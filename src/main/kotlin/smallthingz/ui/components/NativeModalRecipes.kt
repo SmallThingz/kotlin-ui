@@ -55,6 +55,8 @@ data class NativeActionSheetRecipe(
     val tooltipRole: NativeTypographyRole = NativeTypographyRole.BODY_SMALL,
     val handleHeightDp: Float = 4f,
     val handleVerticalPaddingDp: Float = 22f,
+    /** Space above the sheet content header. */
+    val topPaddingDp: Float = 0f,
 )
 
 /** Top-origin panel with a retained rounded viewport and themed brand/detail content. */

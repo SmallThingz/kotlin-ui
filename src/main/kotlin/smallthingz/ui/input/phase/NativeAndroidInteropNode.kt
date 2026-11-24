@@ -27,6 +27,8 @@ class NativeAndroidInteropNode(
     private var localEvent: MotionEvent? = null
     private var currentEvent: NativeDragPointerEvent? = null
     private var closed = false
+    private var cancelling = false
+    private var deliveredTerminal = false
     private val state = NativeAndroidInteropDispatch(::dispatchLocal, ::dispatchEmptyCancel) { suppress ->
         requireNotNull(currentEvent).dispatchState.suppressMovementConsumption = suppress
         suppressMovementConsumption(suppress)
@@ -43,10 +45,14 @@ class NativeAndroidInteropNode(
         pointerMask = androidPointerMask
     }
     override fun dispatch(event: NativeDragPointerEvent, pass: NativePointerPass) {
+        if (closed) return
         val previous = currentEvent
         currentEvent = event
         try { state.dispatch(event, pass, localMotion().actionMasked == MotionEvent.ACTION_DOWN) }
-        finally { currentEvent = previous }
+        finally {
+            currentEvent = previous
+            if (closed && previous == null) release()
+        }
     }
     private fun localMotion(): MotionEvent = localEvent ?: requireNotNull(rootEvent)
         .nativePointerSubset(pointerMask).also {
@@ -57,6 +63,7 @@ class NativeAndroidInteropNode(
         val motion = localMotion()
         val action = motion.action
         if (cancel) motion.action = MotionEvent.ACTION_CANCEL
+        deliveredTerminal = motion.actionMasked == MotionEvent.ACTION_UP || motion.actionMasked == MotionEvent.ACTION_CANCEL
         return try { dispatchAndroid(motion) } finally { motion.action = action }
     }
     private fun dispatchAndroid(motion: MotionEvent): Boolean = when (motion.actionMasked) {
@@ -66,15 +73,28 @@ class NativeAndroidInteropNode(
         else -> view.dispatchGenericMotionEvent(motion)
     }
     private fun dispatchEmptyCancel() {
+        if (deliveredTerminal) return
+        deliveredTerminal = true
         val now = SystemClock.uptimeMillis()
         val motion = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
         motion.source = InputDevice.SOURCE_UNKNOWN
         try { dispatchAndroid(motion) } finally { motion.recycle() }
     }
-    override fun cancel() = state.cancel()
+    override fun cancel() {
+        if (closed || cancelling) return
+        cancelling = true
+        try { state.cancel() } finally {
+            cancelling = false
+            if (closed && currentEvent == null) release()
+        }
+    }
     override fun close() {
         if (closed) return
         closed = true
+        // The Android callback may dismiss its own window while ancestors still use localEvent.
+        if (currentEvent == null && !cancelling) release()
+    }
+    private fun release() {
         try { state.cancel() } finally {
             requestLease.close()
             bindMotion(null, null, 0)

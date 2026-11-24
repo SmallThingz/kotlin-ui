@@ -30,6 +30,7 @@ open class NativeFloatingPanelSurface(
     private val path = Path()
     private val bounds = RectF()
     private val radii = FloatArray(8)
+    private var dialogEdge = NativeDialogEdge.TOP
     private val clipped = NativeFloatingPanelClip(context)
     private val grain = NoiseDrawable(seed = recipe.grainSeed)
     val clipHost: View get() = clipped
@@ -65,15 +66,22 @@ open class NativeFloatingPanelSurface(
         invalidate()
     }
 
+    internal fun bindDialogEdge(edge: NativeDialogEdge) {
+        if (dialogEdge == edge) return
+        dialogEdge = edge
+        if (width > 0 && height > 0) rebuildShape()
+    }
+
     fun containsShape(point: Offset): Boolean {
         val x = point.x
         val y = point.y
         if (x < 0f || y < 0f || x >= width || y >= height) return false
         val radius = recipe.cornerRadiusPx(density, width, height)
-        if (y <= height - radius || x in radius..(width - radius)) return true
+        val edgeY = if (dialogEdge == NativeDialogEdge.TOP) y else height - y
+        if (edgeY <= height - radius || x in radius..(width - radius)) return true
         val centerX = if (x < radius) radius else width - radius
         val dx = x - centerX
-        val dy = y - (height - radius)
+        val dy = edgeY - (height - radius)
         return dx * dx + dy * dy <= radius * radius
     }
 
@@ -90,7 +98,7 @@ open class NativeFloatingPanelSurface(
 
     private fun rebuildShape() {
         val radius = recipe.cornerRadiusPx(density, width, height)
-        for (index in 4..7) radii[index] = radius
+        for (index in radii.indices) radii[index] = if ((index >= 4) == (dialogEdge == NativeDialogEdge.TOP)) radius else 0f
         bounds.set(0f, 0f, width.toFloat(), height.toFloat())
         path.rewind()
         path.addRoundRect(bounds, radii, Path.Direction.CW)

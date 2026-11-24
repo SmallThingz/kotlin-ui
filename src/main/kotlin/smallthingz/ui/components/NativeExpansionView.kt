@@ -21,6 +21,7 @@ class NativeExpansionView(
     private var motion=NativeExpansionMotion(initiallyVisible)
     private val frames=AttachedFrameLoop(parentScope,{motion.running},::sampleFrame)
     private var closed=false
+    private var retainCollapsed=false
     var content:NativeExpansionContent?=null
         private set
     init {
@@ -33,6 +34,14 @@ class NativeExpansionView(
         val created=factory()
         content=created
         addView(created.view)
+    }
+    /** Keep an owned child attached while the collapsed reveal occupies zero height. */
+    fun retainContentOnCollapse() {
+        check(!closed)
+        retainCollapsed=true
+        ensureContent()
+        publish()
+        requestLayout()
     }
     fun visible(value:Boolean) {
         if(closed)return
@@ -60,8 +69,11 @@ class NativeExpansionView(
         }
     }
     private fun publish() {
-        content?.view?.alpha=motion.alpha
-        if(!motion.present&&!motion.visibleTarget)retireContent()
+        content?.view?.apply {
+            alpha=motion.alpha
+            if(retainCollapsed)visibility=if(motion.present)VISIBLE else INVISIBLE
+        }
+        if(!retainCollapsed&&!motion.present&&!motion.visibleTarget)retireContent()
     }
     private fun schedule() {
         if(!closed)frames.schedule()
