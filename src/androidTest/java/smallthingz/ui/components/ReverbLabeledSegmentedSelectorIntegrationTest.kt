@@ -1,11 +1,13 @@
 package smallthingz.ui.components
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -18,14 +20,25 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.common.SegmentOption
+import smallthingz.ui.reverb.ReverbDesign
 import smallthingz.ui.reverb.ReverbEnvironment
+import smallthingz.ui.reverb.ReverbHeaderAction
+import smallthingz.ui.reverb.ReverbSettingsTopBar
 import smallthingz.ui.reverb.ReverbStandardIconButtonView
+import smallthingz.ui.reverb.ReverbTextSurface
 import smallthingz.ui.reverb.createReverbSupportingParagraph
 import smallthingz.ui.reverb.settings.ReverbLabeledSegmentedSelector
 import smallthingz.ui.reverb.settings.ReverbSelectorHelp
+import smallthingz.ui.reverb.settings.ReverbSettingsScreenLayout
+import smallthingz.ui.reverb.settings.ReverbSettingsSection
+import smallthingz.ui.reverb.settings.ReverbSettingsSectionFactory
+import smallthingz.ui.reverb.settings.ReverbSettingsSectionKey
+import smallthingz.ui.reverb.settings.ReverbSettingsSectionListView
 import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.text.view.ParagraphView
 import smallthingz.ui.unit.Density
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
 @RunWith(AndroidJUnit4::class)
@@ -426,6 +439,272 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
             assertTrue(fixture.requests.isEmpty())
         }
     }
+
+    @Test fun unchangedAndSelectionOnlyBindsAvoidTraversalInProductionSettingsHierarchy() {
+        var oldCalls = 0
+        var currentCalls = 0
+        withTraversalFixture(ReverbSelectorHelp("Help") { oldCalls++ }) { fixture ->
+            lateinit var time: NativeChip
+            lateinit var size: NativeChip
+            lateinit var geometry: List<Rect>
+            main {
+                time = fixture.selector.chip("Time")
+                size = fixture.selector.chip("Size")
+                geometry = fixture.selector.selectorGeometry()
+                assertTrue(ReverbTextSurface.sample(fixture.selector.title()) != 0L)
+            }
+            // Positive control: the attached section must observe a real ViewRoot traversal.
+            measureBinding(fixture, "explicit layout request", expectLayout = true) {
+                fixture.selector.requestLayout()
+            }
+            // These are separate rendered updates, not many binds coalesced into one traversal.
+            // At 5f26bbc each fails: both bindHelp -> bindAction and bind() request layout.
+            repeat(3) { measureBinding(fixture, "identical bind $it", expectLayout = false) {} }
+            measureBinding(fixture, "selection only", expectLayout = false) {
+                fixture.state = fixture.state.copy(selected = Mode.SIZE)
+            }
+            main {
+                assertSame(time, fixture.selector.chip("Time"))
+                assertSame(size, fixture.selector.chip("Size"))
+                assertFalse(time.isChecked)
+                assertTrue(size.isChecked)
+                assertTrue(requireNotNull(size.createAccessibilityNodeInfo()).isChecked)
+                assertEquals(geometry, fixture.selector.selectorGeometry())
+            }
+            measureBinding(fixture, "same Help presentation, new callback", expectLayout = false) {
+                fixture.state = fixture.state.copy(help = ReverbSelectorHelp("Help") { currentCalls++ })
+            }
+            main {
+                assertTrue(fixture.selector.helpButton().visual.performAccessibilityAction(
+                    AccessibilityNodeInfo.ACTION_CLICK, null))
+                assertEquals(0, oldCalls)
+                assertEquals(1, currentCalls)
+            }
+            measureBinding(fixture, "remove Help", expectLayout = true) {
+                fixture.state = fixture.state.copy(help = null)
+            }
+            measureBinding(fixture, "identical bind without Help", expectLayout = false) {}
+            measureBinding(fixture, "selection without Help", expectLayout = false) {
+                fixture.state = fixture.state.copy(selected = Mode.TIME)
+            }
+        }
+    }
+
+    @Test fun geometryAndHelpStateChangesTraverseAndMatchFreshProductionLayout() =
+        withTraversalFixture { fixture ->
+            fun change(name: String, update: () -> Unit) {
+                measureBinding(fixture, name, expectLayout = true, update = update)
+                main { assertMatchesFreshSelector(fixture) }
+                measureBinding(fixture, "$name retained bind", expectLayout = false) {}
+            }
+            change("show Help") { fixture.state = fixture.state.copy(help = ReverbSelectorHelp("Help") {}) }
+            main {
+                assertEquals((48 * fixture.state.environment.textDensity.density).roundToInt(),
+                    fixture.selector.helpButton().width)
+            }
+            change("localize Help") { fixture.state = fixture.state.copy(help = ReverbSelectorHelp("Aide") {}) }
+            main {
+                assertEquals("Aide", fixture.selector.helpButton().visual.createAccessibilityNodeInfo()
+                    ?.contentDescription?.toString())
+            }
+            change("disable Help") {
+                fixture.state = fixture.state.copy(help = requireNotNull(fixture.state.help).copy(enabled = false))
+            }
+            main {
+                val action = fixture.selector.helpButton().visual
+                assertFalse(requireNotNull(action.createAccessibilityNodeInfo()).isEnabled)
+                assertFalse(action.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+            }
+            change("show supporting reason") {
+                fixture.state = fixture.state.copy(enabled = false, reason = "Requires setup")
+            }
+            main {
+                assertTrue(fixture.selector.reason() in fixture.selector.accessibilityChildren())
+                assertNull(fixture.selector.chip("Automatic").createAccessibilityNodeInfo().contentDescription)
+            }
+            change("wrap supporting reason") {
+                fixture.state = fixture.state.copy(reason = "Paused by the owner until setup has completed. ".repeat(4))
+            }
+            change("hide supporting reason") { fixture.state = fixture.state.copy(reason = null) }
+            main { assertFalse(fixture.selector.reason() in fixture.selector.accessibilityChildren()) }
+            change("title and option labels") {
+                fixture.state = fixture.state.copy(label = "Recording retention options",
+                    options = fixture.state.options.map { it.copy(label = "${it.label} mode") })
+            }
+            change("palette with retained density and resolver") {
+                val old = fixture.state.environment
+                fixture.state = fixture.state.copy(environment = old.withPalette(
+                    ReverbDesign.appearance.resolveColorScheme(fixture.activity, true)))
+                assertSame(old.textDensity, fixture.state.environment.textDensity)
+                assertSame(old.sharedFontResolver, fixture.state.environment.sharedFontResolver)
+                fixture.screen.bindEnvironment(fixture.state.environment)
+            }
+            // Palette binding still traverses the shared icon child's bindAction; this test does
+            // not suppress that work or mistake it for an identical retained-theme bind.
+            change("density and font scale") {
+                val old = fixture.state.environment
+                fixture.state = fixture.state.copy(environment = ReverbEnvironment(
+                    Density(old.textDensity.density * 1.25f, old.textDensity.fontScale * 1.3f),
+                    old.sharedFontResolver, old.palette).forSettings(), reason = "Paused by owner")
+                fixture.screen.bindEnvironment(fixture.state.environment)
+            }
+            main {
+                assertEquals((48 * fixture.state.environment.textDensity.density).roundToInt(),
+                    fixture.selector.helpButton().width)
+            }
+        }
+
+    private data class SelectorState(val environment: ReverbEnvironment, val options: List<SegmentOption<Mode>>,
+        val label: String = "Retention", val selected: Mode = Mode.TIME, val enabled: Boolean = true,
+        val help: ReverbSelectorHelp? = null, val reason: String? = null) {
+        fun bind(selector: ReverbLabeledSegmentedSelector<Mode>) = selector.bind(
+            label, options, selected, enabled, environment, help, reason)
+    }
+
+    /** Count real child requests and traversals without overriding or manually measuring the selector. */
+    private class MeasuredSection(context: Context, selector: View) : FrameLayout(context) {
+        var requests = 0
+        var measures = 0
+        var layouts = 0
+        init { addView(selector, LayoutParams(-1, -2)) }
+        fun reset() { requests = 0; measures = 0; layouts = 0 }
+        override fun requestLayout() { requests++; super.requestLayout() }
+        override fun onMeasure(w: Int, h: Int) { measures++; super.onMeasure(w, h) }
+        override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+            layouts++; super.onLayout(changed, l, t, r, b)
+        }
+    }
+
+    private class TraversalScreen(context: Context, environment: ReverbEnvironment,
+        runtime: NativeModalWindowRuntime, sections: ReverbSettingsSectionListView) :
+        ReverbSettingsScreenLayout(context, environment, runtime.frames, runtime.scope), NativeInputGate {
+        override val acceptsNativeInput get() = isAttachedToWindow && isShown && hasWindowFocus()
+        private val header = ReverbSettingsTopBar(context, environment.theme, this)
+        private val backdrop = ReverbDesign.appearance.backdrops.attachPage(this, environment.palette) {
+            ReverbTextSurface.invalidate(this)
+        }
+        init { installTopBar(header); setSettingsList(sections); bindEnvironment(environment) }
+        fun bindEnvironment(environment: ReverbEnvironment) {
+            ReverbDesign.appearance.backdrops.bindPage(backdrop, environment.palette)
+            header.bind(environment.theme, "Settings", ReverbHeaderAction("Back", {}), null,
+                ReverbHeaderAction("Apply", {}))
+            bindSettingsSurface(environment, NativeTopBarInsets(0, 0, 0), 0, inputAllowed = true, pending = false)
+        }
+        override fun onSettingsLayoutChanged() = Unit
+        fun close() = releaseSettingsSurface()
+    }
+
+    private class TraversalFixture(val activity: Activity, var state: SelectorState) {
+        val requests = mutableListOf<Mode>()
+        val runtime = NativeModalWindowRuntime(activity)
+        val selector = ReverbLabeledSegmentedSelector(activity, state.environment, state.label, state.options,
+            state.selected, state.enabled, state.help, state.reason, { true }) { requests.add(it) }
+        val section = MeasuredSection(activity, selector)
+        val sections = ReverbSettingsSectionListView(activity, ReverbSettingsSectionFactory { key ->
+            object : ReverbSettingsSection {
+                // Other domain sections are empty; the selector uses the real retained Settings
+                // list, screen, painted backdrop, toolbar and input gate without test appearances.
+                override val view: View = if (key == ReverbSettingsSectionKey.RETENTION) section else View(activity)
+                override fun bind() { if (key == ReverbSettingsSectionKey.RETENTION) state.bind(selector) }
+                override fun close() { if (key == ReverbSettingsSectionKey.RETENTION) selector.close() }
+            }
+        }, state.environment, restricted = false)
+        val screen = TraversalScreen(activity, state.environment, runtime, sections)
+        fun bind() = sections.bindSection(ReverbSettingsSectionKey.RETENTION)
+        fun close() {
+            screen.close()
+            sections.close()
+            selector.close()
+            runtime.close()
+        }
+    }
+
+    private fun withTraversalFixture(help: ReverbSelectorHelp? = null, block: (TraversalFixture) -> Unit) {
+        val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
+            NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        var fixture: TraversalFixture? = null
+        try {
+            main {
+                fixture = TraversalFixture(activity, SelectorState(
+                    ReverbEnvironment(activity, false).forSettings(), options, help = help)).also {
+                    activity.setContentView(it.screen)
+                    it.runtime.setStarted(true)
+                }
+            }
+            val mounted = requireNotNull(fixture)
+            repeat(2) { awaitDraw(mounted.screen) }
+            main {
+                assertTrue(mounted.selector.isShown && mounted.selector.hasWindowFocus())
+                assertTrue(mounted.selector.width > 0 && mounted.selector.height > 0)
+            }
+            block(mounted)
+        } finally {
+            main { fixture?.close(); activity.finish() }
+        }
+    }
+
+    private fun measureBinding(fixture: TraversalFixture, name: String, expectLayout: Boolean, update: () -> Unit) {
+        main {
+            assertFalse("$name starts with settled section", fixture.section.isLayoutRequested)
+            assertFalse("$name starts with settled selector", fixture.selector.isLayoutRequested)
+            fixture.section.reset()
+            update()
+            fixture.bind()
+        }
+        // Invalidate drawing only. No measure/layout/forceLayout calls may repair missing requests.
+        repeat(2) { awaitDraw(fixture.screen) }
+        main {
+            if (expectLayout) {
+                assertTrue("$name requests section layout", fixture.section.requests > 0)
+                assertTrue("$name actually measures section", fixture.section.measures > 0)
+                assertTrue("$name actually lays out section", fixture.section.layouts > 0)
+            } else {
+                assertEquals("$name layout requests", 0, fixture.section.requests)
+                assertEquals("$name measures", 0, fixture.section.measures)
+                assertEquals("$name layouts", 0, fixture.section.layouts)
+            }
+            assertFalse("$name finishes layout", fixture.selector.isLayoutRequested)
+            assertTrue("$name must bind silently", fixture.requests.isEmpty())
+        }
+    }
+
+    private fun awaitDraw(view: View) {
+        val drawn = CountDownLatch(1)
+        var posted = false
+        val listener = ViewTreeObserver.OnDrawListener {
+            if (!posted) { posted = true; view.post { drawn.countDown() } }
+        }
+        main { view.viewTreeObserver.addOnDrawListener(listener); view.postInvalidateOnAnimation() }
+        try {
+            assertTrue("The attached production hierarchy must draw", drawn.await(5, TimeUnit.SECONDS))
+        } finally {
+            main { view.viewTreeObserver.removeOnDrawListener(listener) }
+        }
+    }
+
+    private fun assertMatchesFreshSelector(fixture: TraversalFixture) {
+        val state = fixture.state
+        val reference = ReverbLabeledSegmentedSelector(fixture.activity, state.environment, state.label,
+            state.options, state.selected, state.enabled, state.help, state.reason, { true }) { false }
+        try {
+            // Only the fresh reference is manually measured; the retained subject had to traverse.
+            reference.layoutDirection = fixture.selector.layoutDirection
+            reference.layoutAtWidth(fixture.selector.width)
+            assertEquals(reference.height, fixture.selector.height)
+            assertEquals(reference.selectorGeometry(), fixture.selector.selectorGeometry())
+            assertEquals(reference.reason().getText(), fixture.selector.reason().getText())
+            assertEquals(reference.reason().visibility, fixture.selector.reason().visibility)
+            for (option in state.options) {
+                assertEquals(reference.chip(option.label).isChecked, fixture.selector.chip(option.label).isChecked)
+                assertEquals(reference.chip(option.label).isEnabled, fixture.selector.chip(option.label).isEnabled)
+            }
+        } finally { reference.close() }
+    }
+
+    private fun ViewGroup.title() = (helpButton().parent as ViewGroup).descendants().filterIsInstance<ParagraphView>().single()
+    private fun ViewGroup.selectorGeometry(): List<Rect> = listOf(
+        title(), helpButton(), reason(), descendants().filterIsInstance<NativeSegmentedControl>().single(),
+    ).map { if (it.visibility == View.GONE) Rect() else boundsOf(it) }
 
     private data class Fixture(val activity: Activity, val root: FrameLayout,
         val selector: ReverbLabeledSegmentedSelector<Mode>, val environment: ReverbEnvironment,

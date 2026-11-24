@@ -79,7 +79,15 @@ class ReverbLabeledSegmentedSelector<T : Any>(
              environment: ReverbEnvironment, help: ReverbSelectorHelp? = this.help,
              disabledReason: String? = this.disabledReason) {
         if (closed) return
-        if (this.environment !== environment) {
+        val environmentChanged = this.environment !== environment
+        // These dimensions belong to this wrapper, rather than to a child's text or visibility.
+        val geometryChanged = this.environment.textDensity != environment.textDensity ||
+            recipe != environment.appearance.settingsSelectors.retentionSection ||
+            this.environment.appearance.outlinedField.supportingPaddingDp !=
+            environment.appearance.outlinedField.supportingPaddingDp
+        val helpChanged = environmentChanged || this.help?.label != help?.label ||
+            this.help?.enabled != help?.enabled
+        if (environmentChanged) {
             this.environment = environment
             bindSectionTitle(title, environment)
             environment.theme.bindSupportingParagraph(reason, NativeTypographyRole.BODY_SMALL)
@@ -87,27 +95,33 @@ class ReverbLabeledSegmentedSelector<T : Any>(
         this.help = help
         this.disabledReason = disabledReason
         title.setText(label)
-        bindHelp()
+        bindHelp(rebind = helpChanged)
         bindReason(enabled)
         if (!enabled) selector.view.findFocus()?.clearFocus()
         selector.bind(availableOptions(options, enabled, visibleReason(enabled, disabledReason)), selected,
             environment.theme)
-        requestLayout()
+        // Text, Help/reason visibility and capsule option changes request their own layout.
+        // Selection-only binds retain the capsule's existing geometry and animation bounds.
+        if (geometryChanged) requestLayout()
     }
 
-    private fun bindHelp() {
+    private fun bindHelp(rebind: Boolean = true) {
         val action = help
         val enabled = !closed && action?.enabled == true
         if (!enabled) {
             helpButton.cancelInput()
             clearActionFocus(helpButton.visual)
         }
-        helpButton.bind(environment, ReverbIcon.Info, action?.label.orEmpty(), enabled,
-            environment.palette.muted, environment.palette.ink) {
-            val current = help
-            if (current != null && canDispatchHelp(current) && inputAdmission?.invoke() == true &&
-                canDispatchHelp(current) && helpButton.visual.acceptsNativeInput() &&
-                canDispatchHelp(current)) current.onClick()
+        if (rebind) {
+            // The shared icon action requests layout on bind. Its callback reads the current Help
+            // owner, so a callback-only replacement needs neither rebinding nor a new traversal.
+            helpButton.bind(environment, ReverbIcon.Info, action?.label.orEmpty(), enabled,
+                environment.palette.muted, environment.palette.ink) {
+                val current = help
+                if (current != null && canDispatchHelp(current) && inputAdmission?.invoke() == true &&
+                    canDispatchHelp(current) && helpButton.visual.acceptsNativeInput() &&
+                    canDispatchHelp(current)) current.onClick()
+            }
         }
         helpButton.visibility = if (action == null || closed) GONE else VISIBLE
     }
