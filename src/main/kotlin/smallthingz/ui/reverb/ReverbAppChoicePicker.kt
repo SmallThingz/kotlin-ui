@@ -97,7 +97,7 @@ class ReverbAppChoicePicker(
         ViewCompat.setAccessibilityPaneTitle(this, title)
     }
     internal val panel = ReverbDesign.appearance.modals.anchoredPanel.createPanel(scroll, theme.density, theme.palette)
-    internal val window = PopupWindow(panel, -2, -2, true).apply {
+    internal val window: PopupWindow = PopupWindow(panel, -2, -2, true).apply {
         panel.applyWindowStyle(this)
         isOutsideTouchable = true
         inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
