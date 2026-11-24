@@ -12,12 +12,16 @@ import smallthingz.ui.util.closePreservingPrimaryFailure
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Outline
+import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Rect
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.view.accessibility.AccessibilityNodeInfo
 import smallthingz.ui.input.phase.NativeClickPhaseHost
 import smallthingz.ui.input.phase.NativeClickPhaseNode
@@ -41,7 +45,7 @@ class NativeSheetDragHandle(
     internal val verticalTouchInsetPx: Int get() =
         kotlin.math.ceil(max(0f, 48f * style.textDensity.density - measuredHeight) * .5f).toInt()
     internal val mark=HandleMark(context,style)
-    private val indication=RowIndication.install(this,style.palette.onSurface,
+    private val indication=RowIndication.install(mark,style.palette.onSurface,
         { readCachedAnimatorDurationScale(context) })
     private val controller=ViewClickController(this,object:NativeClickEnvironment {
         override val nativeInputRoot get()=inputRoot()
@@ -56,7 +60,7 @@ class NativeSheetDragHandle(
         }
         override fun interestedParent(event:MotionEvent)=false
         override fun longPressOwnershipChanged(owns:Boolean)=Unit
-    },RowIndicationSink(indication) {x,y,out->out.set(x,y)})
+    },RowIndicationSink(indication) {x,y,out->out.set(x-mark.left,y-mark.top)})
     override val nativeClickEndpoint=ViewClickPhaseEndpoint(controller)
     internal val tooltip=NativeSheetTooltip(this,style,runtime,mark.contentDescription.toString())
     var sourceNode:(()->NativeSourceAccessibilityNode)?=null
@@ -99,7 +103,7 @@ class NativeSheetDragHandle(
     override fun onLayout(changed:Boolean,l:Int,t:Int,r:Int,b:Int) {
         val y=((height-mark.measuredHeight)*.5f).roundToInt()
         mark.layout(0,y,width,y+mark.measuredHeight)
-        indication.onMeasured(width,height,style.textDensity.density)
+        indication.onMeasured(mark.width,mark.height,style.textDensity.density)
     }
     override fun addChildrenForAccessibility(outChildren:ArrayList<View>) {
         if(mark.visibility==VISIBLE&&mark.sourceNode?.invoke()?.present!=false)outChildren.add(mark)
@@ -167,6 +171,7 @@ class NativeSheetDragHandle(
     override fun getAccessibilityClassName():CharSequence="android.view.View"
     internal class HandleMark(context:Context,style:NativeActionSheetStyle):View(context) {
         var sourceNode:(()->NativeSourceAccessibilityNode)?=null
+        private val clip=Path()
         private val paint=Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
             color=sheetColorWithAlpha(style.palette.onSurfaceVariant,.45f)
         }
@@ -174,8 +179,27 @@ class NativeSheetDragHandle(
             paint.color=colorMotion.color(0);invalidate()
         })}
         init {contentDescription=context.getString(smallthingz.ui.R.string.native_sheet_drag_handle_description)
-            importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_YES;isScreenReaderFocusable=false}
+            importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_YES;isScreenReaderFocusable=false
+            // Input stays on the expanded parent; every visual state is confined to the mark.
+            clipToOutline=true
+            outlineProvider=object:ViewOutlineProvider() {
+                override fun getOutline(view:View,outline:Outline) {
+                    outline.setRoundRect(0,0,width,height,minOf(width,height)*.5f)
+                }
+            }
+        }
         fun bindColor(color:Int) {colorMotion.retarget(sheetColorWithAlpha(color,.45f))}
+        override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int) {
+            val r=minOf(w,h)*.5f
+            clip.rewind();clip.addRoundRect(RectF(0f,0f,w.toFloat(),h.toFloat()),r,r,Path.Direction.CW)
+            invalidateOutline()
+        }
+        override fun draw(canvas:Canvas) {
+            if(canvas.isHardwareAccelerated)super.draw(canvas) else {
+                val save=canvas.save()
+                try {canvas.clipPath(clip);super.draw(canvas)} finally {canvas.restoreToCount(save)}
+            }
+        }
         override fun onDraw(canvas:Canvas) {
             val r=minOf(width,height)*.5f
             canvas.drawRoundRect(0f,0f,width.toFloat(),height.toFloat(),r,r,paint)
