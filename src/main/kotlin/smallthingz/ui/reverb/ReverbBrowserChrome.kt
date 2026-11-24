@@ -40,9 +40,12 @@ data class ReverbBrowserChromeAction(val id: String, val label: String, val icon
 /** Canonical toolbar action with current semantic content and independent input retirement. */
 class ReverbBrowserChromeActionView internal constructor(context: Context, private val theme: ReverbTheme,
     initial: ReverbBrowserChromeAction, onAction: (String) -> Unit,
+    inputAllowed: () -> Boolean = { true },
 ) : ReverbToolbarActionView(context, theme.density.density, theme.palette, { null }, initial.label, rolePresent = true), AutoCloseable {
     private var action = initial
+    private var bindingRevision = 0L
     private var callback: ((String) -> Unit)? = onAction
+    private var admission: (() -> Boolean)? = inputAllowed
     private var closed = false
     private var bound = false
     init { bindContent(initial) }
@@ -50,6 +53,7 @@ class ReverbBrowserChromeActionView internal constructor(context: Context, priva
         if (closed) return
         if (bound && action == next) return
         bound = true
+        bindingRevision++
         if (action.id != next.id || !next.enabled) cancelInput()
         action = next
         setGlyph(requireNotNull(next.icon.drawable(context, theme, sampledIconTint)), sampledIconTint)
@@ -58,8 +62,12 @@ class ReverbBrowserChromeActionView internal constructor(context: Context, priva
         accessibilityAction.filterTouchesWhenObscured = true
         bindToolbarAction(theme.density.density, theme.palette, next.enabled, NativeToolbarActionTone.MUTED) {
             val current = action
-            if (!closed && isEnabled && current.enabled && accessibilityAction.browserPanelAdmitsInput() && !closed && action === current)
-                callback?.invoke(current.id)
+            val revision = bindingRevision
+            val deliver = callback
+            fun currentOwner() = !closed && isEnabled && current.enabled && action === current && bindingRevision == revision
+            if (currentOwner() && accessibilityAction.browserPanelAdmitsInput() && currentOwner() &&
+                admission?.invoke() == true && accessibilityAction.browserPanelAdmitsInput() && currentOwner())
+                deliver?.invoke(current.id)
         }
     }
     override fun onCancelPendingInputEvents() {
@@ -70,6 +78,7 @@ class ReverbBrowserChromeActionView internal constructor(context: Context, priva
         if (closed) return
         closed = true
         callback = null
+        admission = null
         cancelInput()
         bindToolbarAction(theme.density.density, theme.palette, false, NativeToolbarActionTone.MUTED) {}
     }
@@ -83,13 +92,14 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
     var chromeInputAllowed: (() -> Boolean)? = null
     var canSwipeToolbar: (() -> Boolean)? = null
     var onToolbarSwipe: ((Int) -> Unit)? = null
+    private fun admitsChromeAction() = !panelClosed && chromeInputAllowed?.invoke() == true
     private fun action(id: String) {
-        if (!panelClosed && chromeInputAllowed?.invoke() == true && !panelClosed && browserPanelAdmitsInput())
-            onChromeAction?.invoke(id)
+        // All reentrant admission runs inside the button's captured owner/revision check.
+        if (!panelClosed) onChromeAction?.invoke(id)
     }
-    val siteAction = ReverbBrowserChromeActionView(context, chromeTheme, site, ::action)
-    val tabsAction = ReverbBrowserChromeActionView(context, chromeTheme, tabs, ::action)
-    val menuAction = ReverbBrowserChromeActionView(context, chromeTheme, menu, ::action)
+    val siteAction = ReverbBrowserChromeActionView(context, chromeTheme, site, ::action, ::admitsChromeAction)
+    val tabsAction = ReverbBrowserChromeActionView(context, chromeTheme, tabs, ::action, ::admitsChromeAction)
+    val menuAction = ReverbBrowserChromeActionView(context, chromeTheme, menu, ::action, ::admitsChromeAction)
     private val field = ReverbDesign.appearance.compactField.style
     // The surrounding compact surface owns the fill and leading action; retain the canonical editor metrics.
     val addressEditor: NativeTextField = ReverbBrowserChromeAddressEditor(context, chromeTheme.palette.pageControls,

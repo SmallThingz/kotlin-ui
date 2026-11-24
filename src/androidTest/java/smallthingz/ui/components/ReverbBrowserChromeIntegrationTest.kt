@@ -309,6 +309,95 @@ class ReverbBrowserChromeIntegrationTest {
         } finally { main { chrome?.close(); activity.finish() } }
     }
 
+    @Test fun toolbarAdmissionCannotDeliverAnActionReboundOrRestoredDuringAdmission() {
+        val activity = activity()
+        var installed: ReverbBrowserChrome? = null
+        val events = mutableListOf<String>()
+        try {
+            lateinit var view: ReverbBrowserChrome
+            val site = ReverbBrowserChromeAction("site", "Site", ReverbBrowserChromeIcon.Shared(ReverbIcon.Browser))
+            main {
+                view = ReverbBrowserChrome(activity, ReverbDesign.theme(activity, false), "Address", site,
+                    site.copy(id = "tabs", label = "Tabs"), site.copy(id = "menu", label = "Menu"))
+                installed = view
+                view.onChromeAction = events::add
+                activity.setContentView(view)
+            }
+            awaitReady(view)
+            for (restoreOriginal in listOf(false, true)) main {
+                events.clear()
+                view.bindSiteAction(site, "Original")
+                var admissions = 0
+                view.chromeInputAllowed = {
+                    admissions++
+                    view.bindSiteAction(site.copy(id = "replacement", enabled = false), "Disabled replacement")
+                    // Returning to the exact original object must not revive the older activation.
+                    if (restoreOriginal) view.bindSiteAction(site, "Restored original")
+                    true
+                }
+                view.siteAction.accessibilityAction.performClick()
+                assertEquals(1, admissions)
+                assertTrue("No old action may cross reentrant admission", events.isEmpty())
+                view.chromeInputAllowed = { true }
+                view.bindSiteAction(site.copy(id = "fresh"), "Fresh enabled action")
+                view.siteAction.accessibilityAction.performClick()
+                assertEquals(listOf("fresh"), events)
+            }
+        } finally { main { installed?.close(); activity.finish() } }
+    }
+
+    @Test fun throwingPopupRetirementAlwaysDismissesAndPreservesTheAdmissionFailure() {
+        val activity = activity()
+        var installed: ReverbBrowserChromePopup? = null
+        try {
+            lateinit var anchor: View
+            main {
+                anchor = View(activity)
+                activity.setContentView(FrameLayout(activity).apply { addView(anchor, FrameLayout.LayoutParams(100, 100)) })
+            }
+            for (failAdmission in listOf(false, true)) {
+                awaitReady(anchor)
+                lateinit var popup: ReverbBrowserChromePopup
+                var admissionFailure: Throwable? = null
+                val primary = IllegalStateException("owner admission")
+                val retirement = IllegalArgumentException("retirement callback")
+                var retired = 0
+                val events = mutableListOf<String>()
+                main {
+                    popup = ReverbBrowserChromePopup(anchor, ReverbDesign.theme(activity, false),
+                        ReverbBrowserChromeMenuKind.NAVIGATION, content(),
+                        canUse = { admissionFailure?.let { throw it }; true },
+                        onAction = events::add,
+                        onRetired = {
+                            retired++
+                            assertFalse("Dismissal precedes retirement notification", popup.window.isShowing)
+                            popup.close() // A reentrant close must not notify twice.
+                            throw retirement
+                        })
+                    installed = popup
+                    assertTrue(popup.show())
+                }
+                awaitPopup(popup)
+                main {
+                    val row = popup.panel.descendants().filterIsInstance<ReverbBrowserPanelSettingRow>().first()
+                    if (failAdmission) admissionFailure = primary
+                    val caught = runCatching { if (failAdmission) row.performClick() else popup.close() }.exceptionOrNull()
+                    assertSame(if (failAdmission) primary else retirement, caught)
+                    if (failAdmission) assertEquals(listOf(retirement), primary.suppressed.toList())
+                    assertFalse(popup.window.isShowing)
+                    assertEquals(1, retired)
+                    popup.close()
+                    row.performClick()
+                    assertEquals(1, retired)
+                    assertTrue(events.isEmpty())
+                }
+                await("Throwing retirement still detaches the window", { "${popupState(popup)}; anchor=${viewState(anchor)}" }) {
+                    !popup.panel.isAttachedToWindow && ready(anchor)
+                }
+            }
+        } finally { main { installed?.close(); activity.finish() } }
+    }
+
     @Test fun addressBindingIsLosslessWhileNativeUserInputRemainsBounded() {
         val activity = activity()
         var installed: ReverbBrowserChrome? = null

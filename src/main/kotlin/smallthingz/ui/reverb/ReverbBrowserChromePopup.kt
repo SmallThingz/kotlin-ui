@@ -15,6 +15,7 @@ import androidx.core.view.doOnLayout
 import smallthingz.ui.components.NativeAnchoredMenuPanel
 import smallthingz.ui.components.NativeInputGate
 import smallthingz.ui.components.acceptsNativeInput
+import smallthingz.ui.util.closePreservingPrimaryFailure
 import kotlin.math.roundToInt
 
 /** One response can be claimed only after its requested dismissal. Cancellation is terminal. */
@@ -128,8 +129,8 @@ class ReverbBrowserChromePopup(
     }
     init {
         window.setOnDismissListener {
-            body.cancelBrowserPanelInput()
             if (closed) return@setOnDismissListener
+            closePreservingPrimaryFailure(null) { body.cancelBrowserPanelInput() }?.let(::closeAfterFailure)
             if (response.dismiss(intentionalDismiss)) {
                 waitingForFocus = true
                 complete()
@@ -142,7 +143,7 @@ class ReverbBrowserChromePopup(
         panel.isShown && panel.hasWindowFocus() && anchorVisible() && anchor.isEnabled && anchor.acceptsNativeInput()
     private fun ownerAdmitted(): Boolean = try {
         admission?.invoke() == true && !closed && anchorVisible() && anchor.isEnabled && anchor.acceptsNativeInput()
-    } catch (failure: Throwable) { close(); throw failure }
+    } catch (failure: Throwable) { closeAfterFailure(failure) }
     fun show(): Boolean {
         if (closed || shown) return false
         shown = true
@@ -154,8 +155,14 @@ class ReverbBrowserChromePopup(
                 panel.expanded(true)
                 true
             }
-        } catch (_: WindowManager.BadTokenException) { close(); false }
-        catch (failure: RuntimeException) { close(); throw failure }
+        } catch (failure: WindowManager.BadTokenException) {
+            val cleanup = closePreservingPrimaryFailure(null, ::close)
+            if (cleanup != null) {
+                if (cleanup !== failure) failure.addSuppressed(cleanup)
+                throw failure
+            }
+            false
+        } catch (failure: Throwable) { closeAfterFailure(failure) }
     }
     private fun choose(id: String) {
         if (actions[id] != true || !ownsInput()) return
@@ -174,12 +181,19 @@ class ReverbBrowserChromePopup(
         if (closed || !waitingForFocus || window.isShowing) return
         if (!anchorVisible() || !ownerAdmitted()) { close(); return }
         if (!anchor.hasWindowFocus()) return
+        if (wasFocused) {
+            try { anchor.requestFocus() } catch (failure: Throwable) { closeAfterFailure(failure) }
+            if (!ownerAdmitted()) { close(); return }
+            if (!anchor.hasWindowFocus()) return
+        }
         val action = response.take(true)
         val deliver = callback
         // Retire all input before dispatch; the callback may synchronously open another menu.
-        if (wasFocused) anchor.requestFocus()
-        finish(notify = false)
-        try { if (action != null) deliver?.invoke(action) } finally { notifyRetired() }
+        completeReverbBrowserChromeAction(
+            retire = { finish(notify = false) },
+            deliver = { if (action != null) deliver?.invoke(action) },
+            notifyRetired = ::notifyRetired,
+        )
     }
     private fun bounds() = Rect().also {
         val location = IntArray(2); anchor.getLocationOnScreen(location)
@@ -221,23 +235,36 @@ class ReverbBrowserChromePopup(
         panel.setAnimationPivot(x, browserChromePopupPivotY(window.isAboveAnchor))
     }
     override fun close() {
-        if (closed) return
-        response.cancel()
-        finish()
-        window.dismiss()
+        // Retry the platform dismissal if an earlier attempt failed after logical retirement.
+        if (closed) window.dismiss() else finish()
     }
     private fun finish(notify: Boolean = true) {
         if (closed) return
         closed = true; waitingForFocus = false
+        response.cancel()
         admission = null; callback = null
-        body.close()
-        anchor.removeOnAttachStateChangeListener(detach)
-        observed?.takeIf { it.isAlive }?.let { it.removeOnWindowFocusChangeListener(focus); it.removeOnGlobalLayoutListener(layout) }
+        val observer = observed
         observed = null
-        if (notify) notifyRetired()
+        var failure = closePreservingPrimaryFailure(null, body::close)
+        failure = closePreservingPrimaryFailure(failure) { anchor.removeOnAttachStateChangeListener(detach) }
+        failure = closePreservingPrimaryFailure(failure) { observer?.takeIf { it.isAlive }?.removeOnWindowFocusChangeListener(focus) }
+        failure = closePreservingPrimaryFailure(failure) { observer?.takeIf { it.isAlive }?.removeOnGlobalLayoutListener(layout) }
+        failure = closePreservingPrimaryFailure(failure) { window.setOnDismissListener(null) }
+        failure = closePreservingPrimaryFailure(failure, window::dismiss)
+        if (notify) failure = closePreservingPrimaryFailure(failure, ::notifyRetired)
+        failure?.let { throw it }
     }
+    private fun closeAfterFailure(failure: Throwable): Nothing =
+        throw checkNotNull(closePreservingPrimaryFailure(failure, ::close))
     private fun notifyRetired() { val notify = retiredCallback; retiredCallback = null; notify?.invoke() }
     private fun dp(value: Int) = (value * theme.density.density).roundToInt()
 }
 
 internal fun browserChromePopupPivotY(aboveAnchor: Boolean) = if (aboveAnchor) 1f else 0f
+
+/** Retirement always completes; a later callback failure must never replace the action's failure. */
+internal fun completeReverbBrowserChromeAction(retire: () -> Unit, deliver: () -> Unit, notifyRetired: () -> Unit) {
+    var failure = closePreservingPrimaryFailure(null, retire)
+    if (failure == null) failure = closePreservingPrimaryFailure(null, deliver)
+    closePreservingPrimaryFailure(failure, notifyRetired)?.let { throw it }
+}

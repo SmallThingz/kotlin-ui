@@ -38,4 +38,39 @@ class ReverbBrowserChromeResponseTest {
         assertNull(response.take(true))
         assertFalse(response.choose("navigate"))
     }
+    @Test fun completionRetiresBeforeActionAndNotifiesLast() {
+        val order = mutableListOf<String>()
+        completeReverbBrowserChromeAction({ order += "retire" }, { order += "action" }, { order += "notify" })
+        assertEquals(listOf("retire", "action", "notify"), order)
+    }
+    @Test fun completionPreservesActionFailureAndSuppressesRetirementCallbackFailure() {
+        val actionFailure = IllegalStateException("action")
+        val cleanupFailure = IllegalArgumentException("retirement callback")
+        var notifications = 0
+        val caught = runCatching {
+            completeReverbBrowserChromeAction({}, { throw actionFailure }, { notifications++; throw cleanupFailure })
+        }.exceptionOrNull()
+        assertSame(actionFailure, caught)
+        assertEquals(listOf(cleanupFailure), actionFailure.suppressed.toList())
+        assertEquals(1, notifications)
+    }
+    @Test fun failedInputRetirementSkipsActionButStillNotifiesAndPreservesItsFailure() {
+        val retirementFailure = IllegalStateException("input retirement")
+        val callbackFailure = IllegalArgumentException("retirement callback")
+        var deliveries = 0
+        var notifications = 0
+        val caught = runCatching {
+            completeReverbBrowserChromeAction({ throw retirementFailure }, { deliveries++ }, { notifications++; throw callbackFailure })
+        }.exceptionOrNull()
+        assertSame(retirementFailure, caught)
+        assertEquals(listOf(callbackFailure), retirementFailure.suppressed.toList())
+        assertEquals(0, deliveries)
+        assertEquals(1, notifications)
+    }
+    @Test fun identicalCallbackFailureCannotReplaceItselfWithSelfSuppressionError() {
+        val failure = IllegalStateException("same failure")
+        val caught = runCatching { completeReverbBrowserChromeAction({}, { throw failure }, { throw failure }) }.exceptionOrNull()
+        assertSame(failure, caught)
+        assertTrue(failure.suppressed.isEmpty())
+    }
 }
