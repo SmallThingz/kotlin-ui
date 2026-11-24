@@ -17,6 +17,14 @@ interface NativeMenuIcons<I> {
     fun bind(view: View, icon: I, color: Int)
 }
 
+/** A checkable menu item can be independent or belong to an exclusive group. */
+data class NativeMenuCheckState(val checked: Boolean, val exclusive: Boolean = false)
+
+/** Optional checked state for action rows. Null retains the action's ordinary leading icon. */
+interface NativeCheckableMenuIcons<I> : NativeMenuIcons<I> {
+    fun checkState(icon: I): NativeMenuCheckState?
+}
+
 internal fun exact(size: Int): Int = View.MeasureSpec.makeMeasureSpec(size.coerceAtLeast(0), View.MeasureSpec.EXACTLY)
 internal fun atMost(size: Int): Int = View.MeasureSpec.makeMeasureSpec(size.coerceAtLeast(0), View.MeasureSpec.AT_MOST)
 internal fun unspecified(): Int = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)

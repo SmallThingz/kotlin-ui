@@ -30,7 +30,7 @@ class DropdownGroup(
         val dropdown: NativeAnchoredDropdown,
         val label: String,
         val options: List<*>,
-        val optionLabels: List<String>,
+        val optionLabels: Map<*, String>,
         var selected: Any?,
     ) {
         val layoutDirection = field.view.layoutDirection
@@ -73,7 +73,7 @@ class DropdownGroup(
         if (closed || current != null || !inputAllowed()) return
 
         val options = content.options.toList()
-        val labels = options.map(content.optionLabel)
+        val labels = options.associateWith(content.optionLabel)
         val config = theme
         val dropdown = NativeAnchoredDropdown(anchor.context, host, config.appearance, config.colors,
             config.density, config.fontResolver, palette = palette)
@@ -81,7 +81,7 @@ class DropdownGroup(
         current = session
         try {
             val mounted = dropdown.open(anchor, content.copy(options = options,
-                optionLabel = { labels[options.indexOf(it)] }), selectionPolicy, { terminal(session) }) select@{ value ->
+                optionLabel = labels::getValue), selectionPolicy, { terminal(session) }) select@{ value ->
                 if (current !== session) return@select
                 if (!inputAllowed() || !anchor.isEnabled || !anchor.isShown) {
                     dismiss()
@@ -104,7 +104,7 @@ class DropdownGroup(
         val session = current?.takeIf { it.field === field } ?: return
         if (!inputAllowed() || session.layoutDirection != field.view.layoutDirection ||
             session.label != content.label || session.options != content.options ||
-            content.options.indices.any { session.optionLabels[it] != content.optionLabel(content.options[it]) } ||
+            content.options.any { session.optionLabels[it] != content.optionLabel(it) } ||
             (session.selected != content.selected && session.expectedSelection != content.selected)) {
             dismiss()
             return
