@@ -176,7 +176,10 @@ class ReverbBrowserPanelIntegrationTest {
             idle()
             main {
                 val alpha = panel.descendants().filterIsInstance<ReverbBrowserPanelSettingRow>().single { it.titleView.text == "Alpha" }
+                val beta = panel.descendants().filterIsInstance<ReverbBrowserPanelSettingRow>().single { it.titleView.text == "Beta" }
+                // Exercise native focus without changing the device/display's global touch mode.
                 alpha.isFocusableInTouchMode = true
+                beta.isFocusableInTouchMode = true
                 assertTrue(alpha.requestFocus())
                 panel.bindTabs("Two tabs", listOf(b, a.copy(title = "Renamed")))
                 assertSame(alpha, panel.findFocus())
@@ -198,10 +201,17 @@ class ReverbBrowserPanelIntegrationTest {
                 panel.updateTab(a.copy(enabled = false))
                 close.visual.performClick(); alpha.performClick()
                 assertTrue(events.isEmpty())
+                // Hiding/disabling a card can clear its focus. Re-establish ownership so the
+                // removal assertion exercises focus transfer, not an unrelated visibility reset.
+                panel.updateTab(a.copy(title = "Renamed"))
+                assertTrue(alpha.isEnabled)
+                assertTrue(alpha.requestFocus())
+                assertSame(alpha, panel.findFocus())
+                assertTrue(events.isEmpty())
                 panel.bindTabs("One tab", listOf(b))
                 close.visual.performClick(); alpha.performClick()
                 assertTrue(events.isEmpty())
-                assertNotNull(panel.findFocus())
+                assertSame(beta, panel.findFocus())
                 panel.close()
                 panel.descendants().filterIsInstance<ReverbToolbarActionView>().first().accessibilityAction.performClick()
                 assertTrue(events.isEmpty())
