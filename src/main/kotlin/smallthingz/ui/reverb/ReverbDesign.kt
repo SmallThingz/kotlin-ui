@@ -41,7 +41,10 @@ object ReverbDesign {
         style.create(appearance.resolveColorScheme(context, darkTheme = !style.darkIcons))
     }
 
-    private fun darken(color: Int, amount: Float): Int = ColorUtils.blendARGB(color, Color.BLACK, amount)
+    // Darkening changes RGB, not opacity. Float blending can truncate even opaque alpha to 254.
+    private fun darken(color: Int, amount: Float): Int = ColorUtils.setAlphaComponent(
+        ColorUtils.blendARGB(color, Color.BLACK, amount), Color.alpha(color),
+    )
 
     fun theme(context: Context, dark: Boolean): ReverbTheme = windowTheme(
         Density(context), createFontFamilyResolver(context), appearance.resolveColorScheme(context, dark),
