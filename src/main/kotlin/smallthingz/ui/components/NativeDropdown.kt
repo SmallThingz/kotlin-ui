@@ -64,6 +64,7 @@ class NativeDropdown<T>(
     private var textWidth = 0
     private var iconGap = 0
     private var optionHeights: DropdownOptionHeights? = null
+    private var choiceLabel = false
     private var closed = false
     internal var optionAccessibilityLabel: CharSequence? = null
     override val hasRowAction get() = content != null
@@ -95,6 +96,11 @@ class NativeDropdown<T>(
         optionHeights?.bindTypography(selectedStyle, density, resolver)
     }
 
+    internal fun useChoiceLabel() {
+        choiceLabel = true
+        title.visibility = GONE
+    }
+
     internal fun wrapValues(heights: DropdownOptionHeights? = null) {
         selected.wrapDropdownValue()
         optionHeights = heights
@@ -120,7 +126,7 @@ class NativeDropdown<T>(
             colorMotion = null
         }
         visibility = if (present) VISIBLE else GONE
-        title.setText(next.label)
+        if (!choiceLabel) title.setText(next.label)
         selected.setText(next.optionLabel(next.selected))
         val colors = intArrayOf(if (expanded) palette.expanded else palette.collapsed,
             palette.muted, palette.ink, palette.divider)
@@ -139,7 +145,7 @@ class NativeDropdown<T>(
         val muted = foregroundColor(colors, fill.color, colors.color(1))
         title.setTextColor(muted)
         selected.setTextColor(foregroundColor(colors, fill.color, colors.color(2)))
-        arrow.setTint(muted)
+        arrow.setTint(if (choiceLabel) colors.color(2) else muted)
         divider.color = colors.color(3)
         invalidate()
     }
@@ -147,7 +153,7 @@ class NativeDropdown<T>(
     fun intrinsicHeight(width: Int): Int {
         val textWidth = availableTextWidth(width)
         val valueHeight = max(selected.intrinsicTextHeight(textWidth), optionHeights?.height(textWidth, layoutDirection) ?: 0)
-        val stack = title.intrinsicTextHeight(textWidth) + dp(2) + valueHeight
+        val stack = valueHeight + if (choiceLabel) 0 else title.intrinsicTextHeight(textWidth) + dp(2)
         return max(dp(72), dp(10) * 2 + max(stack, dp(24)))
     }
 
@@ -162,22 +168,25 @@ class NativeDropdown<T>(
         iconGap = minOf(dp(10), (innerWidth - arrow.view.measuredWidth).coerceAtLeast(0))
         textWidth = (innerWidth - arrow.view.measuredWidth - iconGap).coerceAtLeast(0)
         fun heightLimit(limit: Int) = if (unboundedHeight) unspecified() else atMost(limit)
-        title.measure(atMost(textWidth), heightLimit(innerMaximumHeight))
-        val afterTitle = (innerMaximumHeight - title.measuredHeight).coerceAtLeast(0)
-        textGap = minOf(dp(2), afterTitle)
+        val titleHeight = if (choiceLabel) 0 else {
+            title.measure(atMost(textWidth), heightLimit(innerMaximumHeight))
+            title.measuredHeight
+        }
+        val afterTitle = (innerMaximumHeight - titleHeight).coerceAtLeast(0)
+        textGap = if (choiceLabel) 0 else minOf(dp(2), afterTitle)
         selected.measure(atMost(textWidth), heightLimit((afterTitle - textGap).coerceAtLeast(0)))
-        textHeight = title.measuredHeight + textGap + selected.measuredHeight
+        textHeight = titleHeight + textGap + selected.measuredHeight
         val reserved = optionHeights?.height(textWidth, layoutDirection) ?: 0
         val valueHeight = max(selected.measuredHeight, reserved)
-        val height = max(dp(72), dp(10) * 2 + max(title.measuredHeight + textGap + valueHeight, arrow.view.measuredHeight))
+        val height = max(dp(72), dp(10) * 2 + max(titleHeight + textGap + valueHeight, arrow.view.measuredHeight))
         setMeasuredDimension(resolveSize(width, widthSpec), resolveSize(height, heightSpec))
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         val rowHeight = (height - dp(10) * 2).coerceAtLeast(0)
         val textY = dp(10) + ((rowHeight - textHeight) / 2f).roundToInt()
-        placeStart(title, dp(14), textY)
-        placeStart(selected, dp(14), textY + title.measuredHeight + textGap)
+        if (!choiceLabel) placeStart(title, dp(14), textY)
+        placeStart(selected, dp(14), textY + textHeight - selected.measuredHeight)
         placeStart(arrow.view, dp(14) + textWidth + iconGap,
             dp(10) + ((rowHeight - arrow.view.measuredHeight) / 2f).roundToInt())
         layoutRowIndication()
@@ -219,3 +228,28 @@ class NativeDropdown<T>(
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
 }
 
+/** A decorative trailing mark. Selection propagates from the clickable option row. */
+internal fun createDropdownChoiceMark(context: Context, palette: NativeDropdownColors): NativeDropdownIcon {
+    val mark = object : View(context) {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND }
+        var ink = palette.ink
+        override fun onDraw(canvas: Canvas) {
+            if (!isSelected) return
+            val unit = minOf(width, height) / 24f
+            val x = width / 2f
+            val y = height / 2f
+            paint.color = ink
+            canvas.drawCircle(x, y, 9f * unit, paint)
+            paint.color = palette.collapsed
+            paint.strokeWidth = 2f * unit
+            canvas.drawLine(x - 4f * unit, y, x - unit, y + 3f * unit, paint)
+            canvas.drawLine(x - unit, y + 3f * unit, x + 4f * unit, y - 3f * unit, paint)
+        }
+    }
+    return NativeDropdownIcon(mark) { ink ->
+        if (mark.ink != ink) {
+            mark.ink = ink
+            mark.invalidate()
+        }
+    }
+}

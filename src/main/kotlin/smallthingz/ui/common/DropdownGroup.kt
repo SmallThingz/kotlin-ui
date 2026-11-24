@@ -16,12 +16,16 @@ import smallthingz.ui.text.view.ParagraphView
 import smallthingz.ui.util.closePreservingPrimaryFailure
 
 /** A window-scoped group of typed dropdown fields with one expanded field at a time. */
-class DropdownGroup(
+class DropdownGroup internal constructor(
     initialTheme: ControlTheme,
     private val overlayHost: () -> FrameLayout?,
     private val inputAllowed: () -> Boolean,
     internal val selectionPolicy: DropdownSelectionPolicy,
+    private val choiceRows: Boolean,
 ) : AutoCloseable {
+    constructor(initialTheme: ControlTheme, overlayHost: () -> FrameLayout?, inputAllowed: () -> Boolean,
+        selectionPolicy: DropdownSelectionPolicy) : this(initialTheme, overlayHost, inputAllowed, selectionPolicy, false)
+
     constructor(initialTheme: ControlTheme, overlayHost: () -> FrameLayout?, inputAllowed: () -> Boolean) :
         this(initialTheme, overlayHost, inputAllowed, DropdownSelectionPolicy.PROGRESSIVE)
 
@@ -81,7 +85,7 @@ class DropdownGroup(
         current = session
         try {
             val mounted = dropdown.open(anchor, content.copy(options = options,
-                optionLabel = labels::getValue), selectionPolicy, { terminal(session) }) select@{ value ->
+                optionLabel = labels::getValue), selectionPolicy, choiceRows, { terminal(session) }) select@{ value ->
                 if (current !== session) return@select
                 if (!inputAllowed() || !anchor.isEnabled || !anchor.isShown) {
                     dismiss()

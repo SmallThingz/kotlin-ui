@@ -73,12 +73,15 @@ class NativeAnchoredDropdown(
         face(content) { anchor, value -> open(anchor, value, onSelected) }
 
     private fun <T> face(content: NativeDropdownContent<T>, optionRow: Boolean = false, wrapValue: Boolean = false,
+        choiceRow: Boolean = false,
         activate: (View, NativeDropdownContent<T>) -> Unit): NativeDropdown<T> {
         return NativeDropdown(context,
             ParagraphView(context, titleStyle, density, resolver, palette.muted),
             ParagraphView(context, selectedStyle, density, resolver, palette.ink),
-            createDropdownIcon(context, palette.muted), palette, { null }, { _, _ -> }, activate,
+            if (choiceRow) createDropdownChoiceMark(context, palette) else createDropdownIcon(context, palette.muted),
+            palette, { null }, { _, _ -> }, activate,
         ).apply {
+            if (choiceRow) useChoiceLabel()
             if (wrapValue) wrapValues()
             bindDescription(content.label)
             bind(content, false, palette, present = optionRow || content.options.size > 1)
@@ -95,7 +98,11 @@ class NativeAnchoredDropdown(
         open(anchor, content, DropdownSelectionPolicy.PROGRESSIVE, onTerminal, onSelected)
 
     fun <T> open(anchor: View, content: NativeDropdownContent<T>, selectionPolicy: DropdownSelectionPolicy,
-        onTerminal: () -> Unit, onSelected: (T) -> Unit): Boolean {
+        onTerminal: () -> Unit, onSelected: (T) -> Unit): Boolean =
+        open(anchor, content, selectionPolicy, false, onTerminal, onSelected)
+
+    internal fun <T> open(anchor: View, content: NativeDropdownContent<T>, selectionPolicy: DropdownSelectionPolicy,
+        choiceRows: Boolean, onTerminal: () -> Unit, onSelected: (T) -> Unit): Boolean {
         close()
         // A terminal callback can synchronously establish a newer session.
         if (sessionIdentity != null || !anchor.isAttachedToWindow || !anchor.isShown || anchor.width <= 0 || anchor.height <= 0) return false
@@ -103,7 +110,7 @@ class NativeAnchoredDropdown(
         val selected = options.indexOf(content.selected)
         if (!content.canOpen(selectionPolicy)) return false
         require(options.distinct().size == options.size) { "Choice identities must be unique" }
-        val session = Session(anchor, content.copy(options = options), selected, selectionPolicy, onSelected, onTerminal)
+        val session = Session(anchor, content.copy(options = options), selected, selectionPolicy, choiceRows, onSelected, onTerminal)
         sessionIdentity = session
         dismissCurrent = session::dispose
         try {
@@ -123,7 +130,7 @@ class NativeAnchoredDropdown(
 
     private inner class Session<T>(
         val anchor: View, val content: NativeDropdownContent<T>, val initial: Int,
-        val selectionPolicy: DropdownSelectionPolicy, val select: (T) -> Unit,
+        val selectionPolicy: DropdownSelectionPolicy, val choiceRows: Boolean, val select: (T) -> Unit,
         val onTerminal: () -> Unit,
     ) {
         val origin = IntArray(2).also(anchor::getLocationOnScreen)
@@ -268,7 +275,7 @@ class NativeAnchoredDropdown(
             val option = content.options[optionIndex]
             val label = optionLabels[optionIndex]
             return face(content.copy(selected = option, optionLabel = { label }), optionRow = true,
-                wrapValue = selectionPolicy == DropdownSelectionPolicy.EXPLICIT) { source, _ ->
+                wrapValue = selectionPolicy == DropdownSelectionPolicy.EXPLICIT, choiceRow = choiceRows) { source, _ ->
                 if (!disposed && rows[index] === source && (selectionPolicy == DropdownSelectionPolicy.PROGRESSIVE ||
                         source.importantForAccessibility == View.IMPORTANT_FOR_ACCESSIBILITY_YES)) collapse(index)
             }.apply {
