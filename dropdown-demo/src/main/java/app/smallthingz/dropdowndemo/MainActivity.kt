@@ -34,7 +34,7 @@ class MainActivity : Activity() {
     private val resourcesToClose = ArrayList<AutoCloseable>()
     private val values = linkedMapOf("Top edge" to "3", "Channels" to "mono", "Sample format" to "pcm16",
         "Sample rate" to "44100", "Audio source" to "recognition", "Input device" to "default", "Bottom edge" to "1",
-        "Message sort" to "newest", "Archive folder" to "old")
+        "Message sort" to "newest", "Archive folder" to "old", "From" to "personal")
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -134,7 +134,7 @@ class MainActivity : Activity() {
         val mailChoices = EmailDropdownGroup(emailTheme, { root }) { root.hasWindowFocus() }
         emailGroup = mailChoices
         val mail = group()
-        fun emailChoice(label: String, options: List<String>, labels: Map<String, String>) {
+        fun emailChoice(label: String, options: List<String>, labels: Map<String, String>): View {
             var value = DropdownContent(label, values.getValue(label), options, labels::getValue)
             lateinit var choice: DropdownField<String>
             val fixed = paragraph("", NativeTypographyRole.BODY_LARGE).apply {
@@ -153,18 +153,23 @@ class MainActivity : Activity() {
             }
             resourcesToClose += choice
             showFixed()
-            val slot = FrameLayout(this).apply {
+            return FrameLayout(this).apply {
                 addView(choice.view, FrameLayout.LayoutParams(-1, -2))
                 addView(fixed, FrameLayout.LayoutParams(-1, -2))
             }
-            mail.addRow(slot, NativeGroupLayout.LayoutParams(-1, -2).apply { dividerTop = mail.childCount > 0 })
         }
-        emailChoice("Message sort", listOf("newest", "oldest", "subject"),
-            mapOf("newest" to "Newest first", "oldest" to "Oldest first", "subject" to "Subject"))
-        emailChoice("Archive folder", listOf("archive"), mapOf("old" to "Old archive", "archive" to "Archive"))
+        mail.addRow(emailChoice("Message sort", listOf("newest", "oldest", "subject"),
+            mapOf("newest" to "Newest first", "oldest" to "Oldest first", "subject" to "Subject")),
+            NativeGroupLayout.LayoutParams(-1, -2))
+        mail.addRow(emailChoice("Archive folder", listOf("archive"), mapOf("old" to "Old archive", "archive" to "Archive")),
+            NativeGroupLayout.LayoutParams(-1, -2).apply { dividerTop = true })
         page.addView(mail)
         val composer = EmailComposerFields(this, emailTheme, "Subject")
         composerFields = composer
+        val from = emailChoice("From", listOf("personal", "projects"), mapOf(
+            "personal" to "Personal <one@example.invalid>", "projects" to "Projects <two@example.invalid>",
+        ))
+        composer.addRecipientRow(from, LinearLayout.LayoutParams(-1, -2))
         val recipient = EmailRecipientRow(this, emailTheme).apply {
             setPadding(dp(12), dp(10), dp(12), dp(10))
             val address = TextView(context).apply { text = "team@example.test" }

@@ -41,6 +41,10 @@ centered choice delivers the value. Back, Escape and outside dismissal leave the
 owner's value intact. An unavailable stored value can be displayed and replaced
 with an available choice, including a single remaining option.
 
+Email values wrap to four lines. The field reserves room for its tallest option
+at the actual field width, keeping the open wheel aligned to its trigger.
+Longer values end in an ellipsis and retain the complete accessibility label.
+
 Rebind the authoritative value after accepting a change. Dismiss the group
 when the screen stops. Close the field when its row retires and close the group
 with the owning window. Supply a new `ControlTheme` on a configuration or theme

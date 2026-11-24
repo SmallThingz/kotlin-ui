@@ -63,6 +63,7 @@ class NativeDropdown<T>(
     private var textGap = 0
     private var textWidth = 0
     private var iconGap = 0
+    private var optionHeights: DropdownOptionHeights? = null
     private var closed = false
     internal var optionAccessibilityLabel: CharSequence? = null
     override val hasRowAction get() = content != null
@@ -91,6 +92,12 @@ class NativeDropdown<T>(
         if (closed) return
         title.setTypography(titleStyle, density, resolver)
         selected.setTypography(selectedStyle, density, resolver)
+        optionHeights?.bindTypography(selectedStyle, density, resolver)
+    }
+
+    internal fun wrapValues(heights: DropdownOptionHeights? = null) {
+        selected.wrapDropdownValue()
+        optionHeights = heights
     }
 
     fun bindDescription(description: CharSequence?) {
@@ -104,6 +111,10 @@ class NativeDropdown<T>(
     internal fun bind(next: NativeDropdownContent<T>, expanded: Boolean, palette: NativeDropdownColors, present: Boolean) {
         if (closed) return
         content = next
+        optionHeights?.let { heights ->
+            val labels = next.options.map(next.optionLabel)
+            if (heights.bindLabels(labels)) requestLayout()
+        }
         if (visibility != VISIBLE || !present) {
             colorMotion?.close()
             colorMotion = null
@@ -135,7 +146,8 @@ class NativeDropdown<T>(
 
     fun intrinsicHeight(width: Int): Int {
         val textWidth = availableTextWidth(width)
-        val stack = title.intrinsicTextHeight(textWidth) + dp(2) + selected.intrinsicTextHeight(textWidth)
+        val valueHeight = max(selected.intrinsicTextHeight(textWidth), optionHeights?.height(textWidth, layoutDirection) ?: 0)
+        val stack = title.intrinsicTextHeight(textWidth) + dp(2) + valueHeight
         return max(dp(72), dp(10) * 2 + max(stack, dp(24)))
     }
 
@@ -155,7 +167,9 @@ class NativeDropdown<T>(
         textGap = minOf(dp(2), afterTitle)
         selected.measure(atMost(textWidth), heightLimit((afterTitle - textGap).coerceAtLeast(0)))
         textHeight = title.measuredHeight + textGap + selected.measuredHeight
-        val height = max(dp(72), dp(10) * 2 + max(textHeight, arrow.view.measuredHeight))
+        val reserved = optionHeights?.height(textWidth, layoutDirection) ?: 0
+        val valueHeight = max(selected.measuredHeight, reserved)
+        val height = max(dp(72), dp(10) * 2 + max(title.measuredHeight + textGap + valueHeight, arrow.view.measuredHeight))
         setMeasuredDimension(resolveSize(width, widthSpec), resolveSize(height, heightSpec))
     }
 

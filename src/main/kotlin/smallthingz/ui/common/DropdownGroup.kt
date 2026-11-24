@@ -7,6 +7,7 @@ import android.widget.FrameLayout
 import smallthingz.ui.R
 import smallthingz.ui.animation.view.transitionForegroundInk
 import smallthingz.ui.components.NativeAnchoredDropdown
+import smallthingz.ui.components.DropdownOptionHeights
 import smallthingz.ui.components.NativeDropdown
 import smallthingz.ui.components.NativeDropdownColors
 import smallthingz.ui.components.createDropdownIcon
@@ -163,7 +164,13 @@ class DropdownField<T> internal constructor(
     )
     val view: View get() = native
 
-    init { bind(initial) }
+    init {
+        if (group.selectionPolicy == DropdownSelectionPolicy.EXPLICIT) {
+            val theme = group.theme
+            native.wrapValues(DropdownOptionHeights(context, theme.appearance.typography[valueRole], theme.density, theme.fontResolver))
+        }
+        bind(initial)
+    }
 
     fun bind(next: DropdownContent<T>, onSelected: ((T) -> Unit)? = null) {
         if (closed) return
