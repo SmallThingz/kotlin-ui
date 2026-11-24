@@ -35,7 +35,8 @@ class ReverbControlScreenFrame(
 ) : LinearLayout(context), ReverbTextSurfaceScope {
     private val appearance = theme.appearance
     private val sections = appearance.settingsSelectors.retentionSection
-    private fun dp(value: Int) = (value * theme.density.density).roundToInt()
+    private val density = theme.density.density
+    private fun dp(value: Int) = (value * density).roundToInt()
     private fun column() = LinearLayout(context).apply { orientation = VERTICAL }
     private fun row() = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
 
