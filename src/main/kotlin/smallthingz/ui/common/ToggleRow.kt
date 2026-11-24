@@ -31,8 +31,8 @@ class ToggleRow internal constructor(
         labelColor(initial, theme))
     private val summary = ParagraphView(context, theme.appearance.typography[summaryRole], theme.density, theme.fontResolver,
         theme.colors.muted)
-    private val row = NativeToggleRow(context, title, summary,
-        NativeMaterialSwitchView(context, theme.colors.switchPalette, initial.checked, initial.enabled), inputRoot, onChanged)
+    private val switch = NativeMaterialSwitchView(context, theme.colors.switchPalette, initial.checked, initial.enabled)
+    private val row = NativeToggleRow(context, title, summary, switch, inputRoot, onChanged)
     val view: View get() = row
     private var closed = false
 
@@ -46,6 +46,10 @@ class ToggleRow internal constructor(
 
     /** Decorative caller-owned glyph, laid out at 24dp before the text in either direction. */
     fun setLeadingIcon(icon: View?) { if (!closed) row.setLeadingIcon(icon) }
+
+    fun setTrackNoiseIntensity(intensity: Float) { if (!closed) switch.setTrackNoiseIntensity(intensity) }
+
+    fun setTrackOutline(widthDp: Float, color: Int) { if (!closed) switch.setTrackOutline(widthDp, color) }
 
     fun bind(next: ToggleState, theme: ControlTheme) {
         if (closed) return

@@ -1,0 +1,17 @@
+apply plugin: 'com.android.application'
+repositories { google(); mavenCentral() }
+
+android {
+    namespace = 'app.smallthingz.themedemo'
+    compileSdk = 37
+    defaultConfig {
+        applicationId = 'app.smallthingz.themedemo'
+        minSdk = 30
+        targetSdk = 35
+        versionCode = 7
+        versionName = '1.6'
+    }
+    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+}
+kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17 } }
+dependencies { implementation project(':') }

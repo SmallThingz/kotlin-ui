@@ -14,6 +14,10 @@ class ControlTheme internal constructor(
     internal val density: Density,
     internal val fontResolver: FontFamily.Resolver,
 ) {
+    /** Recolor retained controls while keeping their window's typography and density. */
+    fun withColorScheme(colors: NativeColorScheme): ControlTheme =
+        if (colors == this.colors) this else ControlTheme(appearance, colors, density, fontResolver)
+
     companion object {
         fun resolve(context: Context, dark: Boolean): ControlTheme {
             val appearance = NativeUiAppearance.Default

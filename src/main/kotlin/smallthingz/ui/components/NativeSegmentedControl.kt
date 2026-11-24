@@ -111,6 +111,20 @@ class NativeSegmentedControl private constructor(
         if (!closed) choices.isEnabled = enabled
     }
 
+    /** Apply grain to the moving selection and the built-in capsule, behind their labels. */
+    fun setNoiseIntensity(intensity: Float) {
+        require(intensity in 0f..1f)
+        if (closed) return
+        (presentation as? DefaultSegmentedPresentation)?.setNoiseIntensity(intensity)
+        choices.setIndicatorNoiseIntensity(intensity)
+    }
+
+    /** Set the built-in capsule's outline width. Zero leaves it unoutlined. */
+    fun setOutlineWidth(widthDp: Float) {
+        require(widthDp.isFinite() && widthDp >= 0f)
+        if (!closed) (presentation as? DefaultSegmentedPresentation)?.setOutlineWidth(widthDp)
+    }
+
     fun bind(options: List<NativeChoice>, selectedId: String, palette: ControlPalette,
              density: Float = resources.displayMetrics.density) {
         if (closed) return
@@ -193,10 +207,23 @@ internal class DefaultSegmentedPresentation(
     palette: ControlPalette,
     private val radiusDp: Float,
 ) : NativeSegmentedPresentation {
-    override val surface = NativeSurface(context, NativeSurfaceStyle(palette.surface, cornerRadiusDp = radiusDp,
-        outlineColor = palette.outline))
+    private var paint = NativeSurfaceStyle(palette.surface, cornerRadiusDp = radiusDp, outlineColor = palette.outline)
+    override val surface = NativeSurface(context, paint)
     override fun bindSurface(palette: ControlPalette) {
-        surface.applyStyle(NativeSurfaceStyle(palette.surface, cornerRadiusDp = radiusDp, outlineColor = palette.outline))
+        paint = paint.copy(fillColor = palette.surface, outlineColor = palette.outline)
+        surface.applyStyle(paint)
+    }
+    fun setNoiseIntensity(intensity: Float) {
+        surface.setNoiseIntensity(intensity)
+        if (intensity > 0f && !paint.noise) {
+            paint = paint.copy(noise = true)
+            surface.applyStyle(paint)
+        }
+    }
+    fun setOutlineWidth(widthDp: Float) {
+        if (paint.outlineWidthDp == widthDp) return
+        paint = paint.copy(outlineWidthDp = widthDp)
+        surface.applyStyle(paint)
     }
     override val paintedSurfaceColor: Int get() = surface.paintedFillColor
 }
