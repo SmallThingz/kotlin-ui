@@ -72,6 +72,27 @@ class EmailDemoPrivateCaptureTest {
             check(onMain { hasValue(field("Archive folder"), "Old archive") })
             tapRow(open("Archive folder", missing = true).first, "Archive")
             await("read-only recovered folder") { views(decor).any { it.isShown && text(it) == "Archive folder: Archive" }.takeIf { it } }
+            val (from, fromSlot) = open("From")
+            await("both sender options fully revealed") {
+                true.takeIf { rows(from).size == 2 && rows(from).all { it.importantForAccessibility == View.IMPORTANT_FOR_ACCESSIBILITY_YES } }
+            }
+            capture("email-demo-sender-options")
+            onMain {
+                val senders = rows(from)
+                check(senders.map(::option).toSet() == setOf("Personal <one@example.invalid>", "Projects <two@example.invalid>"))
+                for (row in senders) {
+                    val address = option(row)
+                    val label = views(row).filterIsInstance<ParagraphView>().single { text(it) == address }
+                    val layout = checkNotNull(label.createOriginalSemanticsParagraph())
+                    val last = layout.lineCount - 1
+                    check(!layout.didExceedMaxLines && !layout.isLineEllipsized(last) &&
+                        layout.getLineEnd(last, visibleEnd = true) == address.length) { "Incomplete sender: $address" }
+                    check(layout.height <= label.height + 1f && rect(row).height() == fromSlot.height())
+                    val visible = Rect()
+                    check(label.getLocalVisibleRect(visible) && visible.contains(0, 0, label.width, label.height))
+                }
+            }
+            cancel(from)
             val heading = onMain { views(decor).single { it.isShown && text(it) == "Email" } }
             onMain { heading.requestRectangleOnScreen(Rect(0, 0, heading.width, heading.height), true) }
             check(onMain { listOf("team@example.test", "Team update").all { value -> views(decor).any { text(it) == value } } })

@@ -70,13 +70,14 @@ class NativeAnchoredDropdown(
     fun <T> createField(content: NativeDropdownContent<T>, onSelected: (T) -> Unit): NativeDropdown<T> =
         face(content) { anchor, value -> open(anchor, value, onSelected) }
 
-    private fun <T> face(content: NativeDropdownContent<T>, optionRow: Boolean = false,
+    private fun <T> face(content: NativeDropdownContent<T>, optionRow: Boolean = false, wrapValue: Boolean = false,
         activate: (View, NativeDropdownContent<T>) -> Unit): NativeDropdown<T> {
         return NativeDropdown(context,
             ParagraphView(context, titleStyle, density, resolver, palette.muted),
             ParagraphView(context, selectedStyle, density, resolver, palette.ink),
             createDropdownIcon(context, palette.muted), palette, { null }, { _, _ -> }, activate,
         ).apply {
+            if (wrapValue) wrapValues()
             bindDescription(content.label)
             bind(content, false, palette, present = optionRow || content.options.size > 1)
         }
@@ -238,7 +239,8 @@ class NativeAnchoredDropdown(
             }
             repeat(layout.count) { i ->
                 val option = content.options[layout.optionAt(i)]
-                val row = face(content.copy(selected = option), optionRow = true) { source, _ ->
+                val row = face(content.copy(selected = option), optionRow = true,
+                    wrapValue = selectionPolicy == DropdownSelectionPolicy.EXPLICIT) { source, _ ->
                     if (selectionPolicy == DropdownSelectionPolicy.PROGRESSIVE ||
                         source.importantForAccessibility == View.IMPORTANT_FOR_ACCESSIBILITY_YES) collapse(i)
                 }
