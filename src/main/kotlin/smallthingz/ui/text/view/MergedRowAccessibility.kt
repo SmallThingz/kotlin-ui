@@ -196,12 +196,8 @@ class MergedRowAccessibility(
         if (!sourceGeometryWasBound && nativeExposure != null) {
             val bounds = Rect()
             val present = nativeExposure() && host.isAttachedToWindow && host.isShown &&
-                host.windowVisibility == View.VISIBLE && !hasTransparentAncestor(host) && host.getGlobalVisibleRect(bounds)
-            if (present) {
-                val rootLocation = IntArray(2)
-                host.rootView.getLocationOnScreen(rootLocation)
-                bounds.offset(rootLocation[0], rootLocation[1])
-            }
+                host.windowVisibility == View.VISIBLE && !hasTransparentAncestor(host) &&
+                host.getGlobalVisibleRectInScreen(bounds)
             val stateDescription = state.stateDescription ?: ViewCompat.getStateDescription(host)
                 .takeIf { role == NativeMergedRowRole.BUTTON }
             return NativeMergedRowAccessibilitySnapshot(present, !present, present, state.enabled,
