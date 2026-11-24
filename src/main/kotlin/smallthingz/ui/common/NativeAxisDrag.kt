@@ -38,8 +38,15 @@ open class NativeAxisDrag(
         if (pass == NativePointerPass.INITIAL) return
         if (state == State.WAIT_UP) {
             // awaitEachGesture waits for all pointers up in FINAL before beginning another cycle.
-            if (pass == NativePointerPass.FINAL && event.changes.none { it.pressed }) restart()
-            return
+            // A terminal MAIN callback can disable this node before FINAL is delivered. When
+            // readmitted, a fresh routed DOWN batch with no old logical ID proves that no held
+            // pointer remains in this node's path. Restart and process that SAME DOWN below.
+            val freshPath = pass == NativePointerPass.MAIN && event.changes.isNotEmpty() &&
+                event.changes.all { it.changedToDown && it.id != pointerId }
+            if (freshPath) restart() else {
+                if (pass == NativePointerPass.FINAL && event.changes.none { it.pressed }) restart()
+                return
+            }
         }
         if (pass == NativePointerPass.FINAL) {
             val watched = verifyFinal
