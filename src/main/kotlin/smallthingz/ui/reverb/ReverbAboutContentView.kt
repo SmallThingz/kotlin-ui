@@ -307,7 +307,7 @@ private class AboutColumn(
         handle.measure(wrapWidth, unbounded)
         contentHeight = dp(panel.topPaddingDp) + header.measuredHeight + dp(panel.headingGapDp) + name.measuredHeight +
             dp(panel.summaryGapDp) + version.measuredHeight + dp(panel.linkGapDp) + repository.measuredHeight +
-            handle.measuredHeight
+            handle.measuredHeight + handle.verticalTouchInsetPx
         if (error.visibility != GONE) {
             error.measure(exactWidth, unbounded)
             contentHeight += dp(panel.errorGapDp) + error.measuredHeight

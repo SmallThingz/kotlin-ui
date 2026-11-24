@@ -25,10 +25,12 @@ class ReverbLibraryTextAction(context: Context, environment: ReverbEnvironment, 
         clipToPadding = false
         addView(visual)
     }
-    fun bind(environment: ReverbEnvironment, text: String, onClick: () -> Unit) {
+    fun bind(environment: ReverbEnvironment, text: String, onClick: () -> Unit) = bind(environment, text, true, onClick)
+
+    fun bind(environment: ReverbEnvironment, text: String, enabled: Boolean, onClick: () -> Unit) {
         density = environment.textDensity.density
         visual.bindTypography(environment.textDensity, environment.sharedFontResolver)
-        visual.bind(text, true, environment.palette.buttonPalette, onClick = onClick)
+        visual.bind(text, enabled, environment.palette.buttonPalette, onClick = onClick)
         requestLayout()
     }
 

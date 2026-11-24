@@ -8,6 +8,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.Region
 import android.view.FocusFinder
 import android.view.Gravity
 import android.view.KeyEvent
@@ -154,6 +155,12 @@ class NativeAnchoredDropdown(
         var modalHeight = 0
         val rowHeight = anchor.height
         val rowWidth = anchor.width
+        private var collapseAfterDraw = false
+        private val startCollapse = Runnable {
+            if (closing && !disposed) animate(settled.toFloat(), 0f, style.collapseMillis) {
+                if (wheel.pointer < 0) dispose()
+            }
+        }
         val geometryGuard = ViewTreeObserver.OnPreDrawListener {
             anchor.getLocationOnScreen(observed)
             if (!anchor.isShown || !anchor.isAttachedToWindow || observed[0] != origin[0] || observed[1] != origin[1]
@@ -238,7 +245,7 @@ class NativeAnchoredDropdown(
             }
         }
 
-        fun collapse(index: Int) {
+        fun collapse(index: Int, afterTapIndication: Boolean = false) {
             if (disposed) return
             wheel.pointer = -1; wheel.dragging = false; wheel.earlyTap = false
             if (closing) { if (reveal == 0f) dispose(); return }
@@ -248,12 +255,17 @@ class NativeAnchoredDropdown(
             settled = target
             publish(target)
             if (disposed) return
-            animate(target.toFloat(), 0f, style.collapseMillis) {
-                if (wheel.pointer < 0) dispose()
-            }
+            if (afterTapIndication && ValueAnimator.areAnimatorsEnabled()) {
+                animator?.removeAllListeners()
+                animator?.cancel()
+                collapseAfterDraw = true
+                wheel.invalidate()
+            } else startCollapse.run()
         }
 
         fun animate(target: Float, opened: Float, duration: Long, move: Boolean = true, complete: () -> Unit) {
+            collapseAfterDraw = false
+            wheel.removeCallbacks(startCollapse)
             animator?.removeAllListeners(); animator?.cancel()
             val startPosition = position; val startReveal = reveal
             animator = ValueAnimator.ofFloat(0f, 1f).apply {
@@ -278,6 +290,7 @@ class NativeAnchoredDropdown(
             if (sessionIdentity === this) { dismissCurrent = null; sessionIdentity = null }
             val motion = animator
             animator = null
+            wheel.removeCallbacks(startCollapse)
             var failure = closePreservingPrimaryFailure(null) { motion?.removeAllListeners() }
             failure = closePreservingPrimaryFailure(failure) { motion?.cancel() }
             failure = closePreservingPrimaryFailure(failure) {
@@ -295,6 +308,8 @@ class NativeAnchoredDropdown(
             val path = Path()
             val rectangle = RectF()
             val cornerValues = FloatArray(8)
+            private val hitShape by lazy { Region() }
+            private val hitClip by lazy { Region() }
             val paint = Paint(Paint.ANTI_ALIAS_FLAG)
             var downY = 0f
             var dragging = false
@@ -351,11 +366,8 @@ class NativeAnchoredDropdown(
                 return anchorY - minOf(position, slotsAbove.toFloat()) * rowHeight * reveal to
                     anchorY + rowHeight + minOf(rows.lastIndex - position, slotsBelow.toFloat()) * rowHeight * reveal
             }
-            override fun draw(canvas: Canvas) {
-                if (plan == null) return
-                val top = anchorY - minOf(position, slotsAbove.toFloat()) * rowHeight * reveal
-                val bottom = anchorY + rowHeight + minOf(rows.lastIndex - position, slotsBelow.toFloat()) * rowHeight * reveal
-                rectangle.set(.5f, top + .5f, width - .5f, bottom - .5f)
+            private fun updateRevealPath() {
+                rectangle.set(.5f, revealTop + .5f, width - .5f, revealBottom - .5f)
                 for (corner in 0..3) {
                     val rowsFromSlot = if (corner < 2) minOf(position, slotsAbove.toFloat()) else minOf(rows.lastIndex - position, slotsBelow.toFloat())
                     val fraction = rowsFromSlot.coerceIn(0f, 1f)
@@ -364,6 +376,11 @@ class NativeAnchoredDropdown(
                     cornerValues[corner * 2] = radius; cornerValues[corner * 2 + 1] = radius
                 }
                 path.rewind(); path.addRoundRect(rectangle, cornerValues, Path.Direction.CW)
+            }
+
+            override fun draw(canvas: Canvas) {
+                if (plan == null) return
+                updateRevealPath()
                 val saved = canvas.save(); canvas.clipPath(path)
                 paint.style = Paint.Style.FILL; paint.color = palette.collapsed
                 canvas.drawPath(path, paint)
@@ -374,6 +391,10 @@ class NativeAnchoredDropdown(
                 canvas.drawLine(0f, (anchorY + rowHeight).toFloat(), width.toFloat(), (anchorY + rowHeight).toFloat(), paint)
                 canvas.restoreToCount(saved)
                 canvas.drawPath(path, paint)
+                if (collapseAfterDraw) {
+                    collapseAfterDraw = false
+                    postOnAnimation(startCollapse)
+                }
             }
             override fun drawChild(canvas: Canvas, child: View, drawingTime: Long): Boolean {
                 // The wheel's clip already hides these rows. Skip recording their contents until
@@ -403,7 +424,7 @@ class NativeAnchoredDropdown(
                     }
                     MotionEvent.ACTION_MOVE -> {
                         val i = event.findPointerIndex(pointer)
-                        if (i < 0) { pointer = -1; dragging = false; settle(settled); return true }
+                        if (i < 0) { endGesture(); return true }
                         val delta = downY - event.getY(i)
                         if (!dragging && abs(delta) > slop) {
                             gesturePosition = position
@@ -421,7 +442,7 @@ class NativeAnchoredDropdown(
                     MotionEvent.ACTION_UP -> {
                         if (pointer < 0) return true
                         val i = event.findPointerIndex(pointer)
-                        if (i < 0) { pointer = -1; dragging = false; settle(settled); return true }
+                        if (i < 0) { endGesture(); return true }
                         val delta = downY - event.getY(i)
                         val moved = dragging || abs(delta) > slop
                         if (moved) {
@@ -436,16 +457,43 @@ class NativeAnchoredDropdown(
                         }
                         pointer = -1
                         if (!moved) {
+                            val x = event.getX(i)
+                            val y = event.getY(i)
+                            if (!insideReveal(x, y)) {
+                                if (closing && reveal == 0f) dispose()
+                                return true
+                            }
                             if (closing) {
                                 closing = false
                                 animate(settled.toFloat(), 1f, style.expandMillis) {}
-                            } else collapse(downRow)
+                            } else {
+                                val row = rows[downRow]
+                                val rowY = y - row.translationY
+                                if (rowY >= 0f && rowY < rowHeight) {
+                                    row.showTapIndication(x, rowY)
+                                    collapse(downRow, afterTapIndication = true)
+                                }
+                            }
                         }
                     }
-                    MotionEvent.ACTION_CANCEL -> { pointer = -1; dragging = false; if (closing && reveal == 0f) dispose() else settle(settled) }
-                    MotionEvent.ACTION_POINTER_UP -> if (event.getPointerId(event.actionIndex) == pointer) { pointer = -1; dragging = false; if (closing && reveal == 0f) dispose() else settle(settled) }
+                    MotionEvent.ACTION_CANCEL -> endGesture()
+                    MotionEvent.ACTION_POINTER_UP -> if (event.getPointerId(event.actionIndex) == pointer) endGesture()
                 }
                 return true
+            }
+
+            private fun insideReveal(x: Float, y: Float): Boolean {
+                if (x < 0f || x >= width || y < revealTop || y >= revealBottom) return false
+                updateRevealPath()
+                hitClip.set(0, 0, width, height)
+                hitShape.setPath(path, hitClip)
+                return hitShape.contains(x.toInt(), y.toInt())
+            }
+
+            private fun endGesture() {
+                pointer = -1
+                dragging = false
+                if (closing && reveal == 0f) dispose() else settle(settled)
             }
         }
     }

@@ -24,6 +24,8 @@ open class NativeToggleRow(
     private var textHeight = 0
     private var textWidth = 0
     private var gap = 0
+    private var leadingIcon: View? = null
+    private var leadingWidth = 0
     private var closed = false
 
     init {
@@ -48,6 +50,17 @@ open class NativeToggleRow(
     }
 
     override fun accessibilityChildren(): List<View> = text.filter { it.visibility == VISIBLE }
+
+    internal fun setLeadingIcon(icon: View?) {
+        if (leadingIcon === icon) return
+        leadingIcon?.let(::removeView)
+        leadingIcon = icon
+        icon?.let {
+            it.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+            it.isFocusable = false
+            addView(it)
+        }
+    }
     override val hasRowAction get() = onChanged != null
     override fun activateRow() { onChanged?.invoke(rowChecked != true) }
 
@@ -69,7 +82,14 @@ open class NativeToggleRow(
         val unspecified = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
         switch.measure(MeasureSpec.makeMeasureSpec(inner, MeasureSpec.AT_MOST), unspecified)
         gap = min(dp(12), (inner - switch.measuredWidth).coerceAtLeast(0))
-        textWidth = (inner - switch.measuredWidth - gap).coerceAtLeast(0)
+        val available = (inner - switch.measuredWidth - gap).coerceAtLeast(0)
+        leadingWidth = leadingIcon?.let {
+            val size = min(dp(24), available)
+            val spec = MeasureSpec.makeMeasureSpec(size, MeasureSpec.EXACTLY)
+            it.measure(spec, spec)
+            min(available, size + dp(12))
+        } ?: 0
+        textWidth = available - leadingWidth
         val textSpec = MeasureSpec.makeMeasureSpec(textWidth, MeasureSpec.EXACTLY)
         title.measure(textSpec, unspecified)
         val visibleDescription = description?.takeIf { it.visibility != GONE }
@@ -88,9 +108,11 @@ open class NativeToggleRow(
         val inset = dp(8)
         fun center(childHeight: Int) = inset + ((height - 2 * inset - childHeight) / 2f).roundToInt()
         val textY = center(textHeight)
-        place(title, dp(14), textY)
-        description?.takeIf { it.visibility != GONE }?.let { place(it, dp(14), textY + title.measuredHeight + dp(2)) }
-        place(switch, dp(14) + textWidth + gap, center(switch.measuredHeight))
+        leadingIcon?.let { place(it, dp(14), center(it.measuredHeight)) }
+        val textStart = dp(14) + leadingWidth
+        place(title, textStart, textY)
+        description?.takeIf { it.visibility != GONE }?.let { place(it, textStart, textY + title.measuredHeight + dp(2)) }
+        place(switch, textStart + textWidth + gap, center(switch.measuredHeight))
         layoutRowRole()
     }
 

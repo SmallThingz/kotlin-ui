@@ -70,6 +70,12 @@ abstract class NativeClickableRow(
 
     protected fun layoutRowIndication() = indication.onMeasured(width, height, density)
 
+    /** An accepted tap routed by a parent instead of this row's click controller. */
+    internal fun showTapIndication(x: Float, y: Float) {
+        indication.press(x, y)
+        indication.release()
+    }
+
     protected fun retireRow() {
         rowEnabled = false
         isEnabled = false

@@ -28,7 +28,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import smallthingz.ui.animation.view.ViewColorTransition
 
-/** M3's32dp handle box with22dp vertical padding;48dp is touch expansion, not layout width. */
+/** 32dp mark with recipe spacing; the retained finger target expands to at least 48dp. */
 class NativeSheetDragHandle(
     context:Context,
     private var style:NativeActionSheetStyle,
@@ -38,6 +38,8 @@ class NativeSheetDragHandle(
     private val dismissSheet:()->Unit,
 ):ViewGroup(context),NativeClickPhaseHost,AutoCloseable {
     private val identity=Any()
+    internal val verticalTouchInsetPx: Int get() =
+        kotlin.math.ceil(max(0f, 48f * style.textDensity.density - measuredHeight) * .5f).toInt()
     internal val mark=HandleMark(context,style)
     private val indication=RowIndication.install(this,style.palette.onSurface,
         { readCachedAnimatorDurationScale(context) })
@@ -46,9 +48,11 @@ class NativeSheetDragHandle(
         override val minimumTouchWidthPx get()=48f*style.textDensity.density
         override val minimumTouchHeightPx get()=minimumTouchWidthPx
         override fun admitDown(event:MotionEvent):Boolean {
-            val expand=if(event.getToolType(0)==MotionEvent.TOOL_TYPE_FINGER)
+            val finger=event.getToolType(0)==MotionEvent.TOOL_TYPE_FINGER
+            val expand=if(finger)
                 max(0f,minimumTouchWidthPx-width)*.5f else 0f
-            return event.x>=-expand&&event.x<=width+expand&&event.y>=0&&event.y<=height
+            val vertical=if(finger)max(0f,minimumTouchHeightPx-height)*.5f else 0f
+            return event.x>=-expand&&event.x<=width+expand&&event.y>=-vertical&&event.y<=height+vertical
         }
         override fun interestedParent(event:MotionEvent)=false
         override fun longPressOwnershipChanged(owns:Boolean)=Unit
@@ -74,7 +78,8 @@ class NativeSheetDragHandle(
 
     fun updateStyle(next:NativeActionSheetStyle) {
         if(style===next)return
-        val layoutChanged = style.textDensity != next.textDensity || style.recipe.handleHeightDp != next.recipe.handleHeightDp
+        val layoutChanged = style.textDensity != next.textDensity || style.recipe.handleHeightDp != next.recipe.handleHeightDp ||
+            style.recipe.handleVerticalPaddingDp != next.recipe.handleVerticalPaddingDp
         style=next
         mark.bindColor(next.palette.onSurfaceVariant)
         indication.updateColor(next.palette.onSurface)
@@ -85,7 +90,7 @@ class NativeSheetDragHandle(
     override fun onMeasure(widthMeasureSpec:Int,heightMeasureSpec:Int) {
         val d=style.textDensity.density
         val w=resolveSize((32f*d).roundToInt(),widthMeasureSpec)
-        val pad=(22f*d).roundToInt()
+        val pad=(style.recipe.handleVerticalPaddingDp*d).roundToInt()
         val markHeight = (style.recipe.handleHeightDp * d).roundToInt().coerceAtLeast(1)
         val h=resolveSize(pad*2+markHeight,heightMeasureSpec)
         mark.measure(sheetHandleExact(w),sheetHandleExact(minOf(h, markHeight)))

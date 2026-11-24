@@ -5,7 +5,7 @@ package smallthingz.ui.reverb
 import smallthingz.ui.input.phase.NativePointerLayerShape
 import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.NativeGroupEdges
-import smallthingz.ui.components.NativeAlertCardStyle
+import smallthingz.ui.components.NativeRecordingRowStyle
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeRoundedClipLayout
 import smallthingz.ui.interaction.view.isNativeClickActivationKey
@@ -24,6 +24,7 @@ import smallthingz.ui.text.view.ParagraphView
 import android.content.Context
 import android.os.Build
 import android.os.SystemClock
+import android.text.TextUtils
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -32,8 +33,8 @@ import android.widget.FrameLayout
 import android.view.accessibility.AccessibilityNodeInfo
 import smallthingz.ui.text.TextStyle
 import smallthingz.ui.text.font.FontFamily
-import smallthingz.ui.text.font.FontWeight
 import smallthingz.ui.unit.Density
+import smallthingz.ui.unit.LayoutDirection
 import smallthingz.ui.input.phase.NativeClickPhaseHost
 import smallthingz.ui.input.phase.NativeClickPhaseEndpoint
 import smallthingz.ui.input.phase.ViewClickPhaseEndpoint
@@ -44,12 +45,11 @@ import kotlin.math.roundToInt
 /** Exact released typography roles; the host supplies its current immutable font context. */
 internal data class IncidentCardAppearance(
     val palette: NativeColorScheme,
-    val bodyLarge: TextStyle,
     val bodyMedium: TextStyle,
     val bodySmall: TextStyle,
     val density: Density,
     val fontResolver: FontFamily.Resolver,
-    val style: NativeAlertCardStyle,
+    val style: NativeRecordingRowStyle,
 )
 
 /** Row views keep display state while the mounted screen owns current action admission. */
@@ -98,7 +98,7 @@ class ReverbIncidentCardView internal constructor(
     private var binding: Binding? = null
     private var menuCreated = false
     private var menuLifetime = Any()
-    private val surface = NativeGroupLayout(context, cornerRadiusDp = initialAppearance.style.radiusDp)
+    private val surface = initialAppearance.style.surface.create(context, ReverbTextSurface::invalidate)
     private val body = IncidentBody(context, initialAppearance, texts,
         onPrimaryAction = ::performPrimaryAction,
         onOpenMenu = ::openMenu)
@@ -194,12 +194,13 @@ class ReverbIncidentCardView internal constructor(
         if (appearance == value) return
         appearance = value
         body.setAppearance(value)
-        surface.setCornerRadiusDp(value.style.radiusDp)
+        surface.setCornerRadiusDp(value.style.surface.cornerRadiusDp)
         bodyIndication.updateColor(value.palette.ink)
         checkIndication.updateColor(value.palette.ink)
         bodyIndication.onMeasured(width, height, value.density.density)
         checkIndication.onMeasured(body.checkTarget.width, body.checkTarget.height, value.density.density)
-        applyAppearance()
+        // Keep the outline and fill continuous with the separately recycled heading.
+        applyAppearance(immediately = true)
     }
 
     /** Explicit recycler/disposal boundary; stale popup callbacks become inert. */
@@ -217,13 +218,13 @@ class ReverbIncidentCardView internal constructor(
         val unacknowledged = !current.row.acknowledged
         val style = appearance.style
         val selected = current.selected == true
-        val fill = if (selected) colors.primaryContainer else style.fill(colors, alert = false)
-        val border = style.border(colors, alert = false)
-        surface.setJoinedSeparatorColor(style.dividerColor(border))
+        val fill = if (selected) colors.primaryContainer else style.surface.fillColor(colors)
+        val border = style.surface.borderColor(colors)
+        surface.setJoinedSeparatorColor(border)
         if (immediately) surface.setPaletteImmediately(fill, border) else surface.setPalette(fill, border)
         body.setColors(if (selected) colors.onPrimaryContainer else colors.ink,
             if (selected) colors.onPrimaryContainer else colors.muted,
-            if (selected) colors.onPrimaryContainer else style.statusTint(colors, unacknowledged), immediately)
+            if (selected) colors.onPrimaryContainer else if (unacknowledged) colors.primary else colors.muted, immediately)
     }
 
     private fun performPrimaryAction(): Boolean {
@@ -331,13 +332,10 @@ private class IncidentBody(
     private var clickLabel: String? = null
     private var selected: Boolean? = null
     private var canMutate = false
-    private val date = label(initial.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-    private val summary = label(initial.bodyMedium)
-    private val cause = label(initial.bodySmall)
-    private val diagnostics = label(initial.bodySmall)
+    private val time = label(initial.bodyMedium)
+    private val process = label(initial.bodySmall)
     val checkTarget = IncidentCheckTarget(context, initial.density.density, texts, onPrimaryAction, onOpenMenu)
-    private val details = arrayOf<View>(cause, diagnostics)
-    private val accessibilityChildren = arrayOf<View>(date, summary, checkTarget, cause, diagnostics)
+    private val accessibilityChildren = arrayOf<View>(time, process, checkTarget)
     override val mergedRowAccessibility = MergedRowAccessibility(this, NativeMergedRowRole.BUTTON, {
         val visible = ArrayList<View>(accessibilityChildren.size)
         for (child in accessibilityChildren) if (child.visibility == VISIBLE) visible.add(child)
@@ -353,11 +351,11 @@ private class IncidentBody(
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         ViewCompat.setScreenReaderFocusable(this, true)
         accessibilityDelegate = mergedRowAccessibility
-        addView(date); addView(summary); addView(cause); addView(diagnostics); addView(checkTarget)
+        addView(time); addView(process); addView(checkTarget)
         clear()
     }
 
-    private fun label(style: TextStyle) = ParagraphView(context, style, appearance.density,
+    private fun label(style: TextStyle) = ParagraphView(context, labelStyle(style), appearance.density,
         appearance.fontResolver, appearance.palette.ink).apply {
         // Source keeps the original unmerged Text children under its role-less merging card.
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
@@ -365,13 +363,9 @@ private class IncidentBody(
     }
 
     fun bind(row: ReverbIncidentOccurrence, canMutate: Boolean, selected: Boolean?) {
-        date.setText(row.startLabel)
         setObservationEnd(row, SystemClock.elapsedRealtime())
-        cause.setText(row.causeLabel)
-        diagnostics.setText(row.diagnostics)
-        diagnostics.visibility = if (row.diagnostics.isNotEmpty()) VISIBLE else GONE
+        process.setText(row.processLabel)
         bindSelection(canMutate, selected, row.acknowledged)
-        requestLayout()
     }
 
     fun bindSelection(canMutate: Boolean, selected: Boolean?, acknowledged: Boolean) {
@@ -389,8 +383,8 @@ private class IncidentBody(
     }
 
     fun setObservationEnd(row: ReverbIncidentOccurrence, elapsedMillis: Long) {
-        val end = row.liveEnd?.takeIf { it.ongoing }?.labelAt(elapsedMillis) ?: row.endLabel
-        summary.setText(end)
+        val live = row.liveEnd?.takeIf { it.ongoing }
+        time.setText(live?.labelAt(elapsedMillis) ?: row.timeLabel)
     }
 
     fun clear() {
@@ -401,70 +395,56 @@ private class IncidentBody(
 
     fun setAppearance(value: IncidentCardAppearance) {
         appearance = value
-        date.setTypography(value.bodyMedium.copy(fontWeight = FontWeight.SemiBold), value.density, value.fontResolver)
-        summary.setTypography(value.bodyMedium, value.density, value.fontResolver)
-        cause.setTypography(value.bodySmall, value.density, value.fontResolver)
-        diagnostics.setTypography(value.bodySmall, value.density, value.fontResolver)
+        time.setTypography(labelStyle(value.bodyMedium), value.density, value.fontResolver)
+        process.setTypography(labelStyle(value.bodySmall), value.density, value.fontResolver)
         checkTarget.setDensity(value.density.density)
         requestLayout()
     }
 
     fun setColors(ink: Int, muted: Int, icon: Int, immediately: Boolean) {
         if (immediately) {
-            date.setTextColor(ink)
-            summary.setTextColor(muted)
-            cause.setTextColor(muted)
-            diagnostics.setTextColor(muted)
+            time.setTextColor(ink)
+            process.setTextColor(muted)
         } else {
-            date.animateTextColor(ink)
-            summary.animateTextColor(muted)
-            cause.animateTextColor(muted)
-            diagnostics.animateTextColor(muted)
+            time.animateTextColor(ink)
+            process.animateTextColor(muted)
         }
         checkTarget.setTint(icon, immediately)
     }
 
     private fun dp(value: Int): Int = (value * appearance.density.density).roundToInt()
 
+    private fun labelStyle(style: TextStyle): TextStyle {
+        val locale = resources.configuration.locales[0]
+        val direction = if (TextUtils.getLayoutDirectionFromLocale(locale) == LAYOUT_DIRECTION_RTL)
+            LayoutDirection.Rtl else LayoutDirection.Ltr
+        return style.copy(layoutDirection = direction)
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
-        val paddingX = dp(8)
-        val paddingY = dp(4)
-        val innerWidth = (width - paddingX * 2).coerceAtLeast(0)
-        val checkWidth = minOf(dp(46), innerWidth)
-        checkTarget.measure(MeasureSpec.makeMeasureSpec(checkWidth, MeasureSpec.EXACTLY),
-            MeasureSpec.makeMeasureSpec(dp(46), MeasureSpec.EXACTLY))
-        val textWidth = (innerWidth - checkWidth - dp(10)).coerceAtLeast(0)
+        val textWidth = (width - dp(12) - dp(48)).coerceAtLeast(0)
+        val textSpec = MeasureSpec.makeMeasureSpec(textWidth, MeasureSpec.AT_MOST)
         val unbounded = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
-        date.measure(MeasureSpec.makeMeasureSpec(textWidth, MeasureSpec.AT_MOST), unbounded)
-        summary.measure(MeasureSpec.makeMeasureSpec(textWidth, MeasureSpec.AT_MOST), unbounded)
-        var height = maxOf(date.measuredHeight + summary.measuredHeight, checkTarget.measuredHeight)
-        details.forEach {
-            if (it.visibility == GONE) return@forEach
-            it.measure(MeasureSpec.makeMeasureSpec(innerWidth, MeasureSpec.AT_MOST), unbounded)
-            height += it.measuredHeight
-        }
-        setMeasuredDimension(resolveSize(width, widthMeasureSpec), resolveSize(height + paddingY * 2, heightMeasureSpec))
+        time.measure(textSpec, unbounded)
+        process.measure(textSpec, unbounded)
+        val height = resolveSize(maxOf(dp(46), time.measuredHeight + process.measuredHeight + dp(8)), heightMeasureSpec)
+        checkTarget.measure(MeasureSpec.makeMeasureSpec(minOf(dp(48), width), MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY))
+        setMeasuredDimension(width, height)
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
-        val paddingX = dp(8)
-        var y = dp(4)
         val rtl = layoutDirection == LAYOUT_DIRECTION_RTL
-        val checkX = if (rtl) paddingX else width - paddingX - checkTarget.measuredWidth
-        checkTarget.layout(checkX, y, checkX + checkTarget.measuredWidth, y + checkTarget.measuredHeight)
-        fun layoutText(view: View, textY: Int) {
-            val x = if (rtl) width - paddingX - view.measuredWidth else paddingX
-            view.layout(x, textY, x + view.measuredWidth, textY + view.measuredHeight)
+        val checkX = if (rtl) 0 else width - checkTarget.measuredWidth
+        checkTarget.layout(checkX, 0, checkX + checkTarget.measuredWidth, height)
+        val y = (height - time.measuredHeight - process.measuredHeight) / 2
+        fun place(label: View, top: Int) {
+            val x = if (rtl) width - dp(12) - label.measuredWidth else dp(12)
+            label.layout(x, top, x + label.measuredWidth, top + label.measuredHeight)
         }
-        layoutText(date, y)
-        layoutText(summary, y + date.measuredHeight)
-        y += maxOf(date.measuredHeight + summary.measuredHeight, checkTarget.measuredHeight)
-        details.forEach {
-            if (it.visibility == GONE) return@forEach
-            layoutText(it, y)
-            y += it.measuredHeight
-        }
+        place(time, y)
+        place(process, y + time.measuredHeight)
     }
 
     override fun onRtlPropertiesChanged(layoutDirection: Int) {

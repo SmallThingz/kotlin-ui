@@ -26,7 +26,7 @@ fun NativeActionSheet.bindReverbTheme(environment: ReverbTheme) =
 fun reverbActionSheetStyle(theme: ReverbTheme): NativeActionSheetStyle {
     val palette = theme.palette.copy(surfaceContainerLow = ReverbDesign.modalSurface(theme.palette))
     return ReverbDesign.appearance.modals.actionSheetStyle(theme.density, theme.fontResolver, palette).let {
-        it.copy(recipe = it.recipe.copy(handleHeightDp = 2f))
+        it.copy(recipe = it.recipe.copy(handleHeightDp = 2f, handleVerticalPaddingDp = 16f, grainSeed = null))
     }
 }
 

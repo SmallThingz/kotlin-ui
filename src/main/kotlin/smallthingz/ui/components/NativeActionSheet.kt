@@ -74,6 +74,7 @@ class NativeActionSheet(
     title:String,
     onDismiss:()->Unit,
     closeIcon: NativeActionSheetIcon?,
+    // Shared background spans the handle and content inside the sheet's shape clip.
     contentBackground: android.graphics.drawable.Drawable?,
     private val statusBarProtection: NativeStatusBarProtection?,
 ):ComponentDialog(ContextThemeWrapper(anchor.context,smallthingz.ui.R.style.NativeSheetWindowTheme)) {
@@ -102,8 +103,8 @@ class NativeActionSheet(
     private var showEffect:Job?=null
     private val pointer=SheetPointerOwner(style.textDensity.density)
     private val handle=NativeSheetDragHandle(context,style,{pointer.inputRoot},runtime,::handleClick,::requestAnimatedDismiss)
-    private val appContent=NativeSheetContent(context,style,title,{pointer.inputRoot},closeIcon,contentBackground) {onOwnerDismiss()}
-    private val surface=NativeSheetSurface(context,style,handle,appContent)
+    private val appContent=NativeSheetContent(context,style,title,{pointer.inputRoot},closeIcon) {onOwnerDismiss()}
+    private val surface=NativeSheetSurface(context,style,handle,appContent,contentBackground)
     private val scrim=SheetScrim(context,style.palette.scrim,style.recipe.scrimAlpha,::requestAnimatedDismiss)
     private val root:SheetRoot=SheetRoot(context,pointer,state,surface,scrim,style.textDensity.density,
         style.recipe.maxWidthDp,::measured,::applyMotion)

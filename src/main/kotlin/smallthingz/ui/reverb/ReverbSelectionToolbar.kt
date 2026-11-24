@@ -2,9 +2,8 @@ package smallthingz.ui.reverb
 
 import android.content.Context
 import android.view.View
-import android.view.ViewGroup.LayoutParams.MATCH_PARENT
-import android.widget.LinearLayout
-import smallthingz.ui.components.NativeGroupLayout
+import smallthingz.ui.common.MergedList
+import smallthingz.ui.common.mergedButtonGroup
 import smallthingz.ui.components.NativeToolbarActionTone
 import smallthingz.ui.components.NativeToolbarBackground
 import smallthingz.ui.text.style.TextOverflow
@@ -17,12 +16,12 @@ open class ReverbSelectionToolbar private constructor(
     start: View,
     endActions: List<View>,
     private val title: ParagraphView,
-    private val group: NativeGroupLayout,
+    private val group: MergedList,
 ) : ReverbSelectionTopBarLayout(context, start, title, group, endActions) {
     constructor(context: Context, theme: ReverbTheme, start: View, endActions: List<View>) : this(
         context, theme, start, endActions, theme.paragraph(context, "", ReverbDesign.appearance.toolbars.selectionTitleRole),
-        NativeGroupLayout(context, ReverbDesign.appearance.toolbars.action.radiusDp,
-            LinearLayout.HORIZONTAL, onPaintedSurfaceChanged = ReverbTextSurface::invalidate),
+        mergedButtonGroup(context, ReverbDesign.appearance.toolbars.action.radiusDp, endActions,
+            ReverbTextSurface::invalidate),
     )
 
     private val chrome = NativeToolbarBackground(this, toolbarStyle, toolbarStyle.backgroundColor(theme.palette))
@@ -30,11 +29,6 @@ open class ReverbSelectionToolbar private constructor(
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         title.setTextLayout(maxLines = 1, overflow = TextOverflow.Ellipsis)
-        endActions.forEachIndexed { index, action ->
-            group.addRow(action, NativeGroupLayout.LayoutParams(0, MATCH_PARENT, 1f).apply {
-                dividerStart = index > 0
-            })
-        }
     }
 
     fun bindSelectionToolbar(theme: ReverbTheme, label: String) {

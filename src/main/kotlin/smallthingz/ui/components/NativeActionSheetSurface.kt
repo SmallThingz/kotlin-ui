@@ -56,8 +56,9 @@ internal open class NativeSheetFrame(context: Context) : ViewGroup(context) {
 internal class NativeSheetSurface(
     context:Context,
     private var style:NativeActionSheetStyle,
-    handle:View,
+    handle:NativeSheetDragHandle,
     val appContent:NativeSheetContent,
+    contentBackground: android.graphics.drawable.Drawable?,
 ) : NativeSheetFrame(context) {
     var sourceChildPresent:((View)->Boolean)?=null
     val predictiveLayer=nativeView(context, ::NativeSheetFrame)
@@ -66,7 +67,7 @@ internal class NativeSheetSurface(
     val insets=SheetInsets(context)
     val predictiveContent=nativeView(context, ::NativeSheetFrame)
     val overflowContent=nativeView(context, ::NativeSheetFrame)
-    val column=SheetColumn(context,handle,appContent)
+    val column=SheetColumn(context,handle,appContent,contentBackground,style.recipe.grainSeed)
     init {
         child(predictiveLayer);predictiveLayer.child(overflowLayer);overflowLayer.child(painted)
         painted.clip.child(insets);insets.child(predictiveContent)
@@ -76,7 +77,7 @@ internal class NativeSheetSurface(
         isScreenReaderFocusable=false
     }
     fun updateStyle(next:NativeActionSheetStyle) {
-        style=next;painted.updateStyle(next)
+        style=next;painted.updateStyle(next);column.bindBackground(next.recipe.grainSeed)
     }
     fun applyMotion(offset:Float,minimumAnchor:Float,progress:Float) {
         val value=nativeSheetPredictiveTransform(width.toFloat(),height.toFloat(),offset,
@@ -181,9 +182,25 @@ internal class NativeSheetSurface(
             getChildAt(0).let {it.layout(0,contentTop,it.measuredWidth,contentTop+it.measuredHeight)}
         }
     }
-    internal class SheetColumn(context:Context,val handle:View,var content:View):ViewGroup(context) {
+    internal class SheetColumn(context:Context,val handle:NativeSheetDragHandle,var content:View,
+        private val contentBackground: android.graphics.drawable.Drawable?, grainSeed: Int?,
+    ):ViewGroup(context) {
+        private var grain: NoiseDrawable? = if (contentBackground == null)
+            grainSeed?.let { NoiseDrawable(seed = it) } else null
         init {clipChildren=false;clipToPadding=false;importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO
+            background=contentBackground ?: grain
             addView(handle);addView(content)}
+        fun bindBackground(seed: Int?) {
+            if (contentBackground != null) return
+            val current = grain
+            if (current == null && seed != null) {
+                grain = NoiseDrawable(seed = seed).also { background = it }
+            } else if (current != null) {
+                current.setGrainSeed(seed)
+                val nextBackground = if (seed != null) current else null
+                if (background !== nextBackground) background = nextBackground
+            }
+        }
         fun wrapContent(wrapper:NativeVerticalViewport) {
             removeView(content)
             wrapper.setContent(content)
@@ -194,13 +211,16 @@ internal class NativeSheetSurface(
             val width=MeasureSpec.getSize(widthMeasureSpec)
             val remaining=MeasureSpec.getSize(heightMeasureSpec)
             handle.measure(sheetSurfaceAtMost(width),sheetSurfaceAtMost(remaining))
-            content.measure(sheetSurfaceExact(width),sheetSurfaceAtMost(max(0,remaining-handle.measuredHeight)))
-            setMeasuredDimension(width,resolveSize(handle.measuredHeight+content.measuredHeight,heightMeasureSpec))
+            val handleSpace=handle.verticalTouchInsetPx+handle.measuredHeight
+            content.measure(sheetSurfaceExact(width),sheetSurfaceAtMost(max(0,remaining-handleSpace)))
+            setMeasuredDimension(width,resolveSize(handleSpace+content.measuredHeight,heightMeasureSpec))
         }
         override fun onLayout(changed:Boolean,l:Int,t:Int,r:Int,b:Int) {
             val x=((width-handle.measuredWidth)*.5f).roundToInt()
-            handle.layout(x,0,x+handle.measuredWidth,handle.measuredHeight)
-            content.layout(0,handle.measuredHeight,width,handle.measuredHeight+content.measuredHeight)
+            // Keep the expanded target inside the rounded sheet; its lower expansion covers the title edge.
+            val top=handle.verticalTouchInsetPx
+            handle.layout(x,top,x+handle.measuredWidth,top+handle.measuredHeight)
+            content.layout(0,handle.bottom,width,handle.bottom+content.measuredHeight)
         }
     }
 }
@@ -212,7 +232,6 @@ internal class NativeSheetContent(
     title:String,
     inputRoot:()->View?,
     private val closeIcon: NativeActionSheetIcon?,
-    private val contentBackground: android.graphics.drawable.Drawable?,
     dismiss:()->Unit,
 ):ViewGroup(context) {
     private var currentDismiss=dismiss
@@ -226,13 +245,10 @@ internal class NativeSheetContent(
     private var actions:View?=null
     private var topBody=0
     private var topActions=0
-    private var grain: NoiseDrawable? = if (contentBackground == null)
-        style.recipe.grainSeed?.let { NoiseDrawable(seed = it) } else null
     private val density get()=style.textDensity.density
     val minimumTouchTargetPx:Float get()=48f*density
     init {
         clipChildren=false;clipToPadding=false;importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO
-        background=contentBackground ?: grain
         addView(header)
         bindClose(style,dismiss)
     }
@@ -249,20 +265,9 @@ internal class NativeSheetContent(
         if(style===next)return
         val layoutChanged=style.textDensity!=next.textDensity || style.recipe!=next.recipe
         style=next
-        if (contentBackground == null) bindGrain(next.recipe.grainSeed)
         next.bindTitle(titleView)
         bindClose(next,currentDismiss)
         if(layoutChanged)requestLayout()
-    }
-    private fun bindGrain(seed: Int?) {
-        val current = grain
-        if (current == null && seed != null) {
-            grain = NoiseDrawable(seed = seed).also { background = it }
-        } else if (current != null) {
-            current.setGrainSeed(seed)
-            val nextBackground = if (seed != null) current else null
-            if (background !== nextBackground) background = nextBackground
-        }
     }
     private fun bindClose(value:NativeActionSheetStyle,dismiss:()->Unit) {
         closeIcon?.setColor(value.palette.onSurfaceVariant)

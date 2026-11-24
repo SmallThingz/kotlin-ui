@@ -2,6 +2,12 @@
 
 package smallthingz.ui.reverb
 
+import android.content.res.Resources
+import smallthingz.ui.R
+
+fun formatReverbIncidentTime(resources: Resources?, start: String, duration: String): String =
+    resources?.getString(R.string.reverb_incident_time_duration, start, duration) ?: "$start · $duration"
+
 /** An occurrence's opaque action identity, independent from its group or displayed message. */
 interface ReverbIncidentTarget {
     fun matches(reference: ReverbIncidentTarget): Boolean
@@ -16,19 +22,19 @@ interface ReverbIncidentOccurrence {
     val key: String
     val target: ReverbIncidentTarget
     val acknowledged: Boolean
-    val startLabel: String
-    val endLabel: String
-    val causeLabel: String
-    val diagnostics: String
+    val timeLabel: String
+    val processLabel: String
     val liveEnd: ReverbIncidentLiveEnd?
 }
 
 data class ReverbIncidentGroup(val key: String, val message: String, val occurrences: List<ReverbIncidentOccurrence>)
 
+data class ReverbIncidentDay(val epochDay: Long, val label: String, val groups: List<ReverbIncidentGroup>)
+
 enum class ReverbIncidentLoadStatus { LOADING, READY, UNAVAILABLE }
 
 data class ReverbIncidentHistory(
-    val groups: List<ReverbIncidentGroup> = emptyList(),
+    val days: List<ReverbIncidentDay> = emptyList(),
     val status: ReverbIncidentLoadStatus = ReverbIncidentLoadStatus.LOADING,
     val rows: List<ReverbIncidentOccurrence> = emptyList(),
 ) {

@@ -9,7 +9,6 @@ import smallthingz.ui.scroll.NativeSourceRecyclerView
 import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.components.NativeToolbarActionTone
 import android.widget.FrameLayout
-import android.widget.LinearLayout
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import smallthingz.ui.components.NativeGroupEdges
@@ -35,6 +34,7 @@ import kotlinx.coroutines.CoroutineScope
 import androidx.core.graphics.Insets
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
+import smallthingz.ui.common.mergedButtonGroup
 import androidx.recyclerview.widget.RecyclerView
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -54,9 +54,9 @@ private fun incidentAppearance(theme: ReverbTheme): IncidentsContentAppearance {
     val appearance = ReverbDesign.appearance
     val typography = appearance.typography
     return IncidentsContentAppearance(
-        IncidentCardAppearance(theme.palette, typography[NativeTypographyRole.BODY_LARGE],
-            typography[NativeTypographyRole.BODY_MEDIUM], typography[NativeTypographyRole.BODY_SMALL],
-            theme.density, theme.fontResolver, appearance.listDecorations.alertCard),
+        IncidentCardAppearance(theme.palette, typography[NativeTypographyRole.BODY_MEDIUM],
+            typography[NativeTypographyRole.BODY_SMALL],
+            theme.density, theme.fontResolver, appearance.groupSurfaces.recordingRow),
         typography[NativeTypographyRole.TITLE_MEDIUM], appearance.backdrops)
 }
 
@@ -413,16 +413,17 @@ private class IncidentsHeader(
 ) : FrameLayout(context) {
     private val style = ReverbDesign.appearance.toolbars
     private var selectionMode = false
-    private fun action(theme: ReverbTheme, inputRoot: View, label: String) =
+    private fun action(theme: ReverbTheme, inputRoot: View, label: String, joined: Boolean = false) =
         ReverbToolbarActionView(context, theme.density.density, theme.palette,
-            { inputRoot }, label, selectionWrapper = true)
+            { inputRoot }, label, selectionWrapper = true, sharedSurface = joined)
     private val navigation = action(theme, inputRoot, texts.back)
-    private val destructive = action(theme, inputRoot, texts.clearAll)
-    private val selection = action(theme, inputRoot, texts.multiSelect)
+    private val destructive = action(theme, inputRoot, texts.clearAll, joined = true)
+    private val selection = action(theme, inputRoot, texts.multiSelect, joined = true)
     private val title = theme.paragraph(context, "", style.leadingTitleRole).apply {
         setTextLayout(maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
-    private val actions = LinearLayout(context)
+    private val actions = mergedButtonGroup(context, style.action.radiusDp,
+        listOf(destructive, selection), ReverbTextSurface::invalidate)
     private val bar = ReverbSelectionTopBarLayout(context, navigation, title, actions, listOf(destructive, selection))
     private val chrome = NativeToolbarBackground(this, style, style.backgroundColor(theme.palette))
     private var glyphDensity: Float? = null
@@ -431,10 +432,6 @@ private class IncidentsHeader(
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         clipChildren = false
         clipToPadding = false
-        actions.orientation = LinearLayout.HORIZONTAL
-        actions.clipChildren = false
-        actions.addView(destructive, LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
-        actions.addView(selection, LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
         addView(bar, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
     }
 
@@ -473,11 +470,11 @@ private class IncidentsHeader(
         title.animateTextColor(style.contentColor(palette))
         navigation.setDescription(if (selecting) texts.clearSelection else texts.back)
         navigation.bindToolbarAction(density, palette, true, NativeToolbarActionTone.MUTED, back)
-        destructive.visibility = if (count > 0) VISIBLE else INVISIBLE
+        actions.visibility = if (count > 0) VISIBLE else INVISIBLE
+        actions.setPalette(style.actionFill(palette), style.actionOutline(palette, NativeToolbarActionTone.NEUTRAL))
         destructive.setDescription(if (selecting) texts.deleteSelected else texts.clearAll)
         destructive.bindToolbarAction(density, palette, ready && (if (selecting) selected > 0 else count > 0),
             NativeToolbarActionTone.DESTRUCTIVE, if (selecting) deleteSelected else clearAll)
-        selection.visibility = if (count > 0) VISIBLE else INVISIBLE
         selection.setDescription(when {
             !selecting -> texts.multiSelect
             selected == count -> texts.deselectAll
@@ -690,7 +687,8 @@ private class IncidentsAdapter(
         val heading: String? = null,
         val edges: NativeGroupEdges? = null,
     )
-    private data class HeadingKey(val key: String)
+    private data class DayKey(val day: Long)
+    private data class HeadingKey(val day: Long, val key: String)
     private object SelectionPayload
     private var items = emptyList<Item>()
     private var occurrencePositions = emptyMap<String, Int>()
@@ -710,12 +708,17 @@ private class IncidentsAdapter(
             if (state.rows.isNotEmpty() && state.status == ReverbIncidentLoadStatus.UNAVAILABLE) {
                 add(Item("incident-history-status", ids["incident-history-status"] ?: nextId++))
             }
-            state.groups.forEach { group ->
-                val heading = HeadingKey(group.key)
-                add(Item(heading, ids[heading] ?: nextId++, heading = group.message))
-                group.occurrences.forEachIndexed { index, row ->
-                    add(Item(row.key, ids[row.key] ?: nextId++, row = row,
-                        edges = NativeGroupEdges(index == 0, index == group.occurrences.lastIndex)))
+            state.days.forEach { day ->
+                val dayKey = DayKey(day.epochDay)
+                add(Item(dayKey, ids[dayKey] ?: nextId++, heading = day.label))
+                for (group in day.groups) {
+                    val heading = HeadingKey(day.epochDay, group.key)
+                    add(Item(heading, ids[heading] ?: nextId++, heading = group.message,
+                        edges = NativeGroupEdges(first = true, last = false)))
+                    group.occurrences.forEachIndexed { index, row ->
+                        add(Item(row.key, ids[row.key] ?: nextId++, row = row,
+                            edges = NativeGroupEdges(first = false, last = index == group.occurrences.lastIndex)))
+                    }
                 }
             }
         }
@@ -775,6 +778,7 @@ private class IncidentsAdapter(
     private fun selectionFor(key: String): Boolean? = if (selecting) key in selectedKeys else null
 
     fun setAppearance(value: IncidentCardAppearance) {
+        if (appearance == value) return
         appearance = value
         notifyItemRangeChanged(0, itemCount)
     }
@@ -783,6 +787,7 @@ private class IncidentsAdapter(
     override fun getItemCount() = items.size
     override fun getItemId(position: Int) = items[position].id
     override fun getItemViewType(position: Int) = when {
+        items[position].key is HeadingKey -> 3
         items[position].heading != null -> 2
         items[position].row != null -> 1
         else -> 0
@@ -790,9 +795,10 @@ private class IncidentsAdapter(
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         val view = when (viewType) {
             0 -> IncidentStaleView(context, appearance, texts.stale)
-            2 -> paragraph(context, appearance, appearance.bodyLarge, appearance.palette.ink).apply {
+            2 -> paragraph(context, appearance, appearance.bodyMedium, appearance.palette.muted).apply {
                 ViewCompat.setAccessibilityHeading(this, true)
             }
+            3 -> IncidentGroupHeading(context, appearance)
             else -> ReverbIncidentCardView(context, appearance, menus, texts, authority).apply {
                 parentInterestedInDown = { true }
                 pointerInputRoot = inputRoot
@@ -805,13 +811,14 @@ private class IncidentsAdapter(
         val item = items[position]
         when (val view = holder.itemView) {
             is IncidentStaleView -> view.bind(appearance)
+            is IncidentGroupHeading -> view.bind(appearance, checkNotNull(item.heading), checkNotNull(item.edges))
             is ParagraphView -> {
                 val density = appearance.density.density
-                view.setPaddingRelative((8f * density).roundToInt(), (12f * density).roundToInt(),
-                    (8f * density).roundToInt(), (4f * density).roundToInt())
-                view.setTypography(appearance.bodyLarge.copy(fontWeight = smallthingz.ui.text.font.FontWeight.SemiBold),
+                view.setPaddingRelative((12f * density).roundToInt(), (10f * density).roundToInt(),
+                    (12f * density).roundToInt(), (4f * density).roundToInt())
+                view.setTypography(appearance.bodyMedium.copy(fontWeight = smallthingz.ui.text.font.FontWeight.SemiBold),
                     appearance.density, appearance.fontResolver)
-                view.animateTextColor(appearance.palette.ink)
+                view.animateTextColor(appearance.palette.muted)
                 view.setText(checkNotNull(item.heading))
             }
             is ReverbIncidentCardView -> {
@@ -840,3 +847,30 @@ private class IncidentsAdapter(
 
 private fun paragraph(context: Context, appearance: IncidentCardAppearance, style: TextStyle, color: Int) =
     ParagraphView(context, style, appearance.density, appearance.fontResolver, color)
+
+private class IncidentGroupHeading(context: Context, initial: IncidentCardAppearance) : FrameLayout(context) {
+    private val surface = initial.style.surface.create(context, ReverbTextSurface::invalidate)
+    private val title = paragraph(context, initial, initial.bodyMedium, initial.palette.ink)
+
+    init {
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+        ViewCompat.setAccessibilityHeading(title, true)
+        surface.addRow(title, NativeGroupLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        addView(surface, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+    }
+
+    fun bind(appearance: IncidentCardAppearance, message: String, edges: NativeGroupEdges) {
+        val border = appearance.style.surface.borderColor(appearance.palette)
+        surface.setJoinedEdges(edges)
+        surface.setJoinedSeparatorColor(border)
+        surface.setPaletteImmediately(appearance.style.surface.fillColor(appearance.palette), border)
+        val horizontal = (12f * appearance.density.density).roundToInt()
+        val top = (8f * appearance.density.density).roundToInt()
+        val bottom = (5f * appearance.density.density).roundToInt()
+        title.setPaddingRelative(horizontal, top, horizontal, bottom)
+        title.setTypography(appearance.bodyMedium.copy(fontWeight = smallthingz.ui.text.font.FontWeight.SemiBold),
+            appearance.density, appearance.fontResolver)
+        title.setTextColor(appearance.palette.ink)
+        title.setText(message)
+    }
+}

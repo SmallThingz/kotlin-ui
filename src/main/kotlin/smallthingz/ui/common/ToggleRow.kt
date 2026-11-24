@@ -44,6 +44,9 @@ class ToggleRow internal constructor(
         bind(initial, theme)
     }
 
+    /** Decorative caller-owned glyph, laid out at 24dp before the text in either direction. */
+    fun setLeadingIcon(icon: View?) { if (!closed) row.setLeadingIcon(icon) }
+
     fun bind(next: ToggleState, theme: ControlTheme) {
         if (closed) return
         title.setText(next.label)

@@ -52,6 +52,7 @@ data class LibraryRecordingRow(
     val interactionsEnabled: Boolean,
     val edges: NativeGroupEdges?,
     val expanded: Boolean = false,
+    val activationLabel: String? = null,
 )
 
 /** Both short clicks share the released action; the leading target has its own long-click action. */
@@ -81,6 +82,7 @@ class ReverbLibraryRecordingRow(
 ) : FrameLayout(context) {
     private var environment = initialEnvironment
     private var row: LibraryRecordingRow? = null
+    val recordingId: String? get() = row?.recordingId
     private var actions: LibraryRecordingRowActions? = null
     private val surfaceStyle = initialEnvironment.appearance.groupSurfaces.recordingRow
     private val surface = surfaceStyle.surface.create(context, ReverbTextSurface::invalidate)
@@ -198,6 +200,9 @@ class ReverbLibraryRecordingRow(
         body.leading.setContent(leadingContent)
         body.setTrailingContent(trailingContent)
     }
+    /** Replaces the complete summary, including icon, timestamp and size, without moving the card. */
+    fun setHeaderView(view: View?) = column.setHeaderView(view)
+
     val paragraphLeaves: List<ParagraphView> get() = body.paragraphLeaves
     val summarySurface: NativeGroupLayout get() = surface
 
@@ -252,6 +257,7 @@ class ReverbLibraryRecordingRow(
         outerSizeMotion = null
         expansionViewport.setContent(null)
         column.setExpansionView(null)
+        column.setHeaderView(null)
         body.clear()
         visibility = INVISIBLE
     }
@@ -325,7 +331,17 @@ class ReverbLibraryRecordingRow(
 }
 
 /** Source Column: both summary and inline content share the one selection-alpha layer. */
-private class RecordingCardColumn(context: Context, private val body: View) : ViewGroup(context) {
+private class RecordingCardColumn(context: Context, private val summary: View) : ViewGroup(context) {
+    private var header: View? = null
+    private val body: View get() = header ?: summary
+    fun setHeaderView(view: View?) {
+        if (header === view) return
+        header?.let(::removeView)
+        header = view
+        summary.visibility = if (view == null) VISIBLE else GONE
+        view?.let { (it.parent as? ViewGroup)?.removeView(it); addView(it, 0) }
+        requestLayout()
+    }
     private var expansion: View? = null
     val measuredExpansionHeight: Int
         get() = expansion?.takeIf { it.parent === this && it.visibility != GONE }?.measuredHeight
@@ -483,7 +499,7 @@ private class RecordingRowBody(context: Context, initial: ReverbEnvironment) : R
         hasTimestamp = row.timestamp != null
         timestamp.visibility = if (!hasTimestamp || trailingContent != null) GONE else VISIBLE
         val selectedLabel = context.getString(if (row.selected) R.string.recording_deselect else R.string.recording_select)
-        clickLabel = if (row.selectionActive) selectedLabel else context.getString(
+        clickLabel = row.activationLabel ?: if (row.selectionActive) selectedLabel else context.getString(
             if (row.expanded) R.string.recording_close_player else R.string.recording_open_player)
         longClickLabel = if (row.selectionActive) selectedLabel else context.getString(R.string.open_options)
         selectedSemantic = row.selected.takeIf { row.selectionActive }

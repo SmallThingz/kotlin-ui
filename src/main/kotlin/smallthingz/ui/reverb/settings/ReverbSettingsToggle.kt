@@ -7,6 +7,8 @@ import smallthingz.ui.common.ToggleRow
 import smallthingz.ui.common.ToggleState
 import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.reverb.ReverbDesign
+import smallthingz.ui.reverb.ReverbGlyphView
+import smallthingz.ui.reverb.ReverbIcon
 import smallthingz.ui.reverb.ReverbTextSurface
 import smallthingz.ui.reverb.ReverbTheme
 import kotlin.math.roundToInt
@@ -21,15 +23,30 @@ class ReverbSettingsToggle(
     inputRoot: () -> View?,
     onChanged: (Boolean) -> Unit,
 ) : AutoCloseable {
+    private val icon = when (role) {
+        ReverbSettingsToggleRole.AUTO_START -> ReverbIcon.Reset
+        ReverbSettingsToggleRole.OUTPUT_COMPRESSION -> ReverbIcon.AudioFile
+        ReverbSettingsToggleRole.SAVE_NOTIFICATION -> ReverbIcon.Save
+        ReverbSettingsToggleRole.SILENCE_DETECTION -> ReverbIcon.Capture
+    }
+    private val glyph = ReverbGlyphView(context, icon,
+        if (initial.enabled) theme.controls.colors.ink else theme.controls.colors.muted).apply {
+        useTextSurfaceContrast = true
+    }
     private val row = ToggleRow(context, initial, theme.controls, inputRoot,
         muteDisabledLabel = when (role) {
             ReverbSettingsToggleRole.AUTO_START, ReverbSettingsToggleRole.OUTPUT_COMPRESSION -> true
             ReverbSettingsToggleRole.SAVE_NOTIFICATION, ReverbSettingsToggleRole.SILENCE_DETECTION -> false
-        }, paintedSurface = ReverbTextSurface::sample, onChanged = onChanged)
+        }, paintedSurface = ReverbTextSurface::sample, onChanged = onChanged).apply { setLeadingIcon(glyph) }
     val view: View get() = row.view
+    private var closed = false
 
-    fun bind(next: ToggleState, theme: ReverbTheme) = row.bind(next, theme.controls)
-    override fun close() = row.close()
+    fun bind(next: ToggleState, theme: ReverbTheme) {
+        if (closed) return
+        row.bind(next, theme.controls)
+        glyph.bind(icon, if (next.enabled) theme.controls.colors.ink else theme.controls.colors.muted)
+    }
+    override fun close() { closed = true; row.close() }
 }
 
 /** Auto-start's standalone Settings surface and its row. */

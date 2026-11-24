@@ -64,6 +64,7 @@ class ReverbSingleLineInputView(
         intArrayOf(initialConfiguration.textColor,initialConfiguration.selectionBackgroundColor,
             initialConfiguration.cursorColor,initialConfiguration.selectionHandleColor),::applyColors)}
     private var onDone: (() -> Unit)? = null
+    private var inputSession: NativeQueuedInputConnection? = null
     var onNativeFocusChanged: ((Boolean) -> Unit)? = null
     private var appliedTypeface: Typeface? = null
     private var appliedEnvironment: ReverbEnvironment? = null
@@ -116,6 +117,20 @@ class ReverbSingleLineInputView(
         editing.releaseCallbacks()
         onDone = null
         onNativeFocusChanged = null
+        retireInputSession()
+    }
+
+    /** Revoke first: an old connection cannot regain authority when this retained View reattaches. */
+    fun retireInputSession() {
+        val previous = inputSession
+        inputSession = null
+        previous?.closeConnection()
+    }
+
+    override fun onDetachedFromWindow() {
+        val failure = smallthingz.ui.util.closePreservingPrimaryFailure(null, ::retireInputSession)
+        smallthingz.ui.util.closePreservingPrimaryFailure(failure) { super.onDetachedFromWindow() }
+            ?.let { throw it }
     }
 
     private fun applyImeHints() {
@@ -127,6 +142,7 @@ class ReverbSingleLineInputView(
     }
 
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
+        retireInputSession()
         val connection = super.onCreateInputConnection(outAttrs) ?: return null
         val hints = configuration.ime
         outAttrs.inputType = hints.inputType
@@ -144,7 +160,7 @@ class ReverbSingleLineInputView(
             @RequiresApi(33)
             override fun requestCursorUpdates(cursorUpdateMode: Int, cursorUpdateFilter: Int): Boolean =
                 requestCursorUpdates(cursorUpdateMode or cursorUpdateFilter)
-        }
+        }.also { inputSession = it }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {

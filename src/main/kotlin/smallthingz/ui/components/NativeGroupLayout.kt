@@ -132,6 +132,15 @@ class NativeGroupLayout(
         if (joinedEdges == null) geometry.contains(x, y)
         else checkNotNull(joinedShape).acceptsPointer(x, y, false, 0f)
 
+    /** Copy the actual retained fill geometry for overlays; never reconstruct joined radii. */
+    fun copyVisualPath(destination: Path) {
+        if (joinedEdges != null) checkNotNull(joinedShape).copyFillPath(destination)
+        else {
+            destination.rewind()
+            destination.addRoundRect(bounds, geometry.radius, geometry.radius, Path.Direction.CW)
+        }
+    }
+
     fun acceptsVisualPointer(x: Float, y: Float, touch: Boolean, minimumTarget: Float): Boolean =
         if (joinedEdges == null) geometry.acceptsPointer(x, y, touch, minimumTarget)
         else checkNotNull(joinedShape).acceptsPointer(x, y, touch, minimumTarget)
