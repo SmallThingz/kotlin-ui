@@ -136,6 +136,22 @@ class NativeActionSheetStateTest {
         assertEquals(1, cancelled)
         assertEquals(listOf(-500f,250f),flings)
     }
+    @Test fun topEdgeNestedMotionPreservesCancellationWithoutFlinging() = runBlocking {
+        val state = state()
+        state.measured(600, 300)
+        val flings = mutableListOf<Float>()
+        var cancelled = 0
+        val nested = NativeActionSheetNestedScroll(state, { flings += it }, { cancelled++ }, NativeDialogEdge.TOP)
+        assertEquals(100f, nested.preScroll(100f, NativeVerticalScrollSource.USER_INPUT), 0f)
+        assertEquals(-100f, nested.postScroll(0f, -100f, NativeVerticalScrollSource.USER_INPUT), 0f)
+        assertEquals(500f, nested.preFling(500f), 0f)
+        assertEquals(-250f, nested.postFling(0f, -250f), 0f)
+        assertEquals(listOf(-500f, 250f), flings)
+        nested.onPointerDragCancelled()
+        assertEquals(1, cancelled)
+        assertEquals(listOf(-500f, 250f), flings)
+    }
+
     @Test fun blockedDismissalPreservesOpeningAndKeepsCloseTargetExpanded()=runBlocking {
         val state=NativeActionSheetState({1f},{},{false})
         state.measured(600,300)
