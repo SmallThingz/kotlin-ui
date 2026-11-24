@@ -289,6 +289,50 @@ are `smallthingz.ui` in either build. The standalone project is `kotlin-ui`, wit
 Gradle group `smallthingz`.
 Consumers import the direct View DSL from `smallthingz.ui.dsl`.
 
+## Dark surfaces
+
+Choose neutral `GRAY`, darker `TINTED`, or black `AMOLED` surfaces through the
+window's existing appearance. The resolver keeps the base scheme's accents,
+content colors and light theme. Tint color and strength are configurable.
+AMOLED makes the main surface fills `#000000`. Call `setNoiseIntensity` on a
+`NoiseDrawable` or a `NativeSurface` with grain enabled to change grain opacity
+independently of the fill. `0f` draws only the base color and `1f` draws the
+full texture. Existing components default to full strength.
+
+```kotlin
+import smallthingz.ui.components.*
+
+val appearance = NativeUiAppearance.Default.copy(
+    colorScheme = NativeColorScheme.withDarkSurfaces(
+        NativeDarkSurfaces.TINTED, tint = 0xff6682dc.toInt(), tintStrength = 0.45f,
+    ),
+)
+```
+
+`NativeDarkSurfacePreset.Amoled` combines a black page and 25% foreground
+lightness with 100% page grain, 50% foreground grain, and a 1 dp outline at
+15% lightness (`#262626`). Use its resolver for the fills and its paint values
+with the surface and control recipes. The system Material accents carry through.
+
+```kotlin
+val preset = NativeDarkSurfacePreset.Amoled
+val appearance = NativeUiAppearance.Default.copy(colorScheme = preset.colorScheme())
+val colors = appearance.resolveColorScheme(context, darkTheme = true)
+page.background = appearance.backdrops.pageBackground(colors).apply {
+    setNoiseIntensity(preset.backgroundGrain)
+}
+val card = NativeSurface(context, NativeSurfaceStyle(colors.raised, noise = true,
+    outlineColor = preset.borderColor, outlineWidthDp = preset.borderWidthDp)).apply {
+    setNoiseIntensity(preset.foregroundGrain)
+}
+```
+
+Build the interactive comparison with `./gradlew :theme-demo:assembleDebug`.
+It starts on the AMOLED preset and also offers Tinted. A sample Reverb player
+and export form use native library controls. Use the sliders to adjust page and
+foreground lightness and grain independently. Width zero hides decorative
+outlines, and the active field still shows focus.
+
 ## Localized theme selector
 
 `smallthingz.ui.components.NativeThemeSelector` owns its Theme/Auto/Light/Dark
@@ -399,6 +443,31 @@ Sampler and clock-owner tests run with the unit suite. The separate
 `scripts/test_view_animation_host.py` runner accepts compiler/test classpaths and
 uses `src/testViewHost` to check View owner cancellation against a narrow host
 fixture. This verifies production control flow, not Android rendering or timing.
+
+## Font-scaling host regression
+
+Run all five `FontScaleConverterSnapshotHostTest` cases separately from Gradle:
+
+```sh
+python3 -B scripts/test_font_scaling_host.py \
+  --compiler-classpath "$KOTLIN_COMPILER_CP" \
+  --test-classpath "$FONT_SCALING_TEST_CP" \
+  --output /path/to/new/font-scaling-receipt
+```
+
+Run from this repository root with JDK 17+ (`--java-home` is optional).
+The compiler classpath needs Kotlin compiler-embeddable and its dependencies;
+the test classpath needs Kotlin stdlib, AndroidX and JetBrains annotations,
+JUnit 4 and Hamcrest. No built library or Android runtime is needed. The runner
+compiles the actual font-scaling sources and `unit/InlineClassHelper.kt` against
+the existing host SparseArray fixture. `--source-root` can select another
+native-ui production checkout while retaining this runner's fixtures.
+
+The output directory must be new. It retains stage logs (including JUnit's test
+count), `commands.json`, and `summary.json` with before/after source, fixture,
+test and runner hashes. Compilation/test failures or changed inputs fail the
+run. This checks deterministic publication interleavings, not Android rendering
+or platform SparseArray behavior.
 
 ## Procedural background grain
 

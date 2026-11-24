@@ -65,6 +65,8 @@ class ReverbSingleLineInputView(
             initialConfiguration.cursorColor,initialConfiguration.selectionHandleColor),::applyColors)}
     private var onDone: (() -> Unit)? = null
     private var inputSession: NativeQueuedInputConnection? = null
+    private var inputActive = true
+    private var callbacksReleased = false
     var onNativeFocusChanged: ((Boolean) -> Unit)? = null
     private var appliedTypeface: Typeface? = null
     private var appliedEnvironment: ReverbEnvironment? = null
@@ -98,6 +100,7 @@ class ReverbSingleLineInputView(
         onRawChanged: (String) -> Unit,
         onDone: () -> Unit,
     ) {
+        if (callbacksReleased) return
         editing.bindCallbacks(readCurrentRaw, onRawChanged)
         this.onDone = onDone
         this.environment = environment
@@ -114,11 +117,22 @@ class ReverbSingleLineInputView(
 
     /** A temporary detach retains owner callbacks; the actual sheet lifetime calls this. */
     fun releaseCallbacks() {
+        callbacksReleased = true
         editing.releaseCallbacks()
         onDone = null
         onNativeFocusChanged = null
         retireInputSession()
     }
+
+    /** Temporary owner deactivation rejects replacement connections as well as the old one. */
+    fun setInputActive(active: Boolean) {
+        if (inputActive == active) return
+        inputActive = active
+        if (!active) retireInputSession()
+    }
+
+    override fun onCheckIsTextEditor(): Boolean = !callbacksReleased && inputActive &&
+        isEnabled && smallthingz.ui.common.nativeSurfaceInputAllowed(this) && super.onCheckIsTextEditor()
 
     /** Revoke first: an old connection cannot regain authority when this retained View reattaches. */
     fun retireInputSession() {
@@ -143,6 +157,10 @@ class ReverbSingleLineInputView(
 
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
         retireInputSession()
+        // ViewRoot may establish the new connection before delivering window-focus gain.
+        // Old wrappers retire on focus loss; do not reject that legitimate replacement handshake.
+        if (callbacksReleased || !inputActive || !isEnabled || !isAttachedToWindow || !isFocused ||
+            !isShown || !smallthingz.ui.common.nativeSurfaceInputAllowed(this)) return null
         val connection = super.onCreateInputConnection(outAttrs) ?: return null
         val hints = configuration.ime
         outAttrs.inputType = hints.inputType
@@ -249,7 +267,13 @@ class ReverbSingleLineInputView(
         }
     }
 
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        if (!hasWindowFocus) retireInputSession()
+        super.onWindowFocusChanged(hasWindowFocus)
+    }
+
     override fun onFocusChanged(gainFocus: Boolean, direction: Int, previouslyFocusedRect: android.graphics.Rect?) {
+        if (!gainFocus) retireInputSession()
         super.onFocusChanged(gainFocus, direction, previouslyFocusedRect)
         onNativeFocusChanged?.invoke(gainFocus)
     }

@@ -305,8 +305,12 @@ class ParagraphView(
     }
 
     fun setTextColor(argb: Int) {
-        colorTransition?.close()
-        colorTransition = null
+        if (colorTransition != null) {
+            colorTransition?.close()
+            colorTransition = null
+            // Removing palette ownership can change contrast-adjusted ink even at equal ARGB.
+            invalidate()
+        }
         applyTextColor(argb)
     }
 
@@ -314,7 +318,11 @@ class ParagraphView(
     fun animateTextColor(argb: Int) {
         val motion = colorTransition ?: ViewColorTransition(this, intArrayOf(textColor.toArgb()), {
             colorTransition?.let { applyTextColor(it.color(0)) }
-        }).also { colorTransition = it }
+        }).also {
+            colorTransition = it
+            // An equal first target is a no-op for motion, but enables surface contrast handling.
+            invalidate()
+        }
         motion.retarget(argb)
     }
 

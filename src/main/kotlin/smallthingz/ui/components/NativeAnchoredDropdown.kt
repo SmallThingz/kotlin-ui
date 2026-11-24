@@ -5,23 +5,30 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Region
+import android.graphics.Shader
+import android.os.Build
 import android.util.SparseArray
 import android.view.FocusFinder
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
+import android.view.WindowInsets
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
+import android.widget.OverScroller
 import smallthingz.ui.common.DropdownSelectionPolicy
 import smallthingz.ui.common.canOpen
 import smallthingz.ui.text.NativeTypographyRole
@@ -35,6 +42,7 @@ import kotlin.math.roundToInt
 /** Draft anchored choice wheel. Colors, text, joined geometry and input all belong to the library. */
 data class NativeAnchoredDropdownStyle(
     val cornerRadiusDp: Float = 16f,
+    // Retained for source compatibility; vertical bounds now use the safe app viewport.
     val screenMarginDp: Float = 8f,
     val scrimOpacity: Float = .55f,
     val expandMillis: Long = 300,
@@ -51,7 +59,7 @@ data class NativeAnchoredDropdownStyle(
 
 /**
  * A window owner for [NativeDropdown] fields. Each option occurs once in the rotated list.
- * A drag crosses any number of rows and snaps to a slot; a tap selects while collapsing.
+ * A drag can coast after release, then snaps to a slot; a tap selects while collapsing.
  * The caller owns values and must [close] this host with its screen lifetime.
  */
 class NativeAnchoredDropdown(
@@ -65,6 +73,8 @@ class NativeAnchoredDropdown(
     private val palette: NativeDropdownColors = NativeDropdownColors(colors.field, colors.field, colors.muted, colors.ink, colors.border),
 ) : AutoCloseable {
     private var dismissCurrent: (() -> Unit)? = null
+    internal var noiseIntensity = 0f
+    internal var outlineWidthDp: Float? = null
     private var sessionIdentity: Any? = null
     private val titleStyle = appearance.typography[NativeTypographyRole.BODY_SMALL]
     private val selectedStyle = appearance.typography[NativeTypographyRole.BODY_LARGE]
@@ -83,6 +93,7 @@ class NativeAnchoredDropdown(
         ).apply {
             if (choiceRow) useChoiceLabel()
             if (wrapValue) wrapValues()
+            setNoiseIntensity(noiseIntensity)
             bindDescription(content.label)
             bind(content, false, palette, present = optionRow || content.options.size > 1)
         }
@@ -194,8 +205,11 @@ class NativeAnchoredDropdown(
         var disposed = false
         var animator: ValueAnimator? = null
         var anchorY = 0
-        var slotsAbove = 0
-        var slotsBelow = 0
+        var viewport: NativeDropdownViewport? = null
+        val windowBounds = Rect()
+        val visibleFrame = Rect()
+        var safeTop = 0
+        var safeBottom = 0
         var modalX = 0
         var modalY = 0
         var modalWidth = 0
@@ -215,6 +229,10 @@ class NativeAnchoredDropdown(
             if (!disposed) {
                 root.getLocationOnScreen(observed)
                 if (observed[0] != modalX || observed[1] != modalY || root.width != modalWidth || root.height != modalHeight) dispose()
+                if (!disposed) {
+                    readSafeEdges()
+                    if (safeTop != viewport?.top || safeBottom != viewport?.bottom) dispose()
+                }
             }
             true
         }
@@ -252,10 +270,15 @@ class NativeAnchoredDropdown(
             modalWidth = root.width; modalHeight = root.height
             val x = origin[0] - observed[0]
             anchorY = origin[1] - observed[1]
-            val margin = (style.screenMarginDp * density.density).roundToInt()
-            val up = ((anchorY - margin) / rowHeight).coerceAtLeast(0)
-            val down = ((root.height - margin - anchorY - rowHeight) / rowHeight).coerceAtLeast(0)
-            slotsAbove = up; slotsBelow = down
+            if (Build.VERSION.SDK_INT >= 30) {
+                windowBounds.set(context.getSystemService(WindowManager::class.java).currentWindowMetrics.bounds)
+            }
+            readSafeEdges()
+            if (anchorY < safeTop || anchorY.toLong() + rowHeight > safeBottom) { dispose(); return }
+            val geometry = NativeDropdownViewport(safeTop, safeBottom, anchorY, rowHeight)
+            viewport = geometry
+            val up = geometry.slotsAbove(content.options.size)
+            val down = geometry.slotsBelow(content.options.size)
             // An unavailable stored value has no wheel row. Browse from the first real option.
             val layout = NativeAnchoredDropdownPlan(content.options.size, initial.coerceAtLeast(0), up, down)
             plan = layout; settled = layout.selectedPosition; position = settled.toFloat()
@@ -268,6 +291,23 @@ class NativeAnchoredDropdown(
             anchor.viewTreeObserver.addOnPreDrawListener(geometryGuard)
             anchor.addOnAttachStateChangeListener(anchorDetach)
             animate(position, 1f, style.expandMillis) {}
+        }
+
+        private fun readSafeEdges() {
+            root.getWindowVisibleDisplayFrame(visibleFrame)
+            var top = visibleFrame.top
+            var bottom = visibleFrame.bottom
+            if (Build.VERSION.SDK_INT >= 30) {
+                val insets = root.rootWindowInsets?.getInsets(
+                    WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout() or WindowInsets.Type.ime())
+                if (insets != null) {
+                    // Insets are relative to the window, not an already padded/panned/resized decor.
+                    top = maxOf(top, windowBounds.top + insets.top)
+                    bottom = minOf(bottom, windowBounds.bottom - insets.bottom)
+                }
+            }
+            safeTop = nativeDropdownLocalEdge(top, modalY, root.height)
+            safeBottom = nativeDropdownLocalEdge(bottom, modalY, root.height)
         }
 
         fun createRow(index: Int): NativeDropdown<T> {
@@ -305,6 +345,7 @@ class NativeAnchoredDropdown(
 
         fun settle(index: Int) {
             if (closing || disposed || plan == null) return
+            wheel.stopFling()
             val target = index.coerceIn(0, lastPosition)
             settled = target
             animate(target.toFloat(), 1f, style.settleMillis) {
@@ -320,7 +361,8 @@ class NativeAnchoredDropdown(
 
         fun collapse(index: Int, activated: Boolean = true, afterTapIndication: Boolean = false) {
             if (disposed) return
-            wheel.pointer = -1; wheel.dragging = false; wheel.earlyTap = false
+            wheel.cancelMotion()
+            wheel.earlyTap = false
             if (closing) { if (reveal == 0f) dispose(); return }
             if (plan == null) { dispose(); return }
             closing = true
@@ -336,10 +378,16 @@ class NativeAnchoredDropdown(
             } else startCollapse.run()
         }
 
-        fun animate(target: Float, opened: Float, duration: Long, move: Boolean = true, complete: () -> Unit) {
+        fun stopAnimation() {
             collapseAfterDraw = false
             wheel.removeCallbacks(startCollapse)
-            animator?.removeAllListeners(); animator?.cancel()
+            val previous = animator
+            animator = null
+            previous?.removeAllListeners(); previous?.cancel()
+        }
+
+        fun animate(target: Float, opened: Float, duration: Long, move: Boolean = true, complete: () -> Unit) {
+            stopAnimation()
             val startPosition = position; val startReveal = reveal
             animator = ValueAnimator.ofFloat(0f, 1f).apply {
                 val travel = maxOf(abs(opened - startReveal), if (move) abs(target - startPosition).coerceAtMost(1f) else 0f)
@@ -364,7 +412,8 @@ class NativeAnchoredDropdown(
             val motion = animator
             animator = null
             wheel.removeCallbacks(startCollapse)
-            var failure = closePreservingPrimaryFailure(null) { motion?.removeAllListeners() }
+            var failure = closePreservingPrimaryFailure(null, wheel::retireMotion)
+            failure = closePreservingPrimaryFailure(failure) { motion?.removeAllListeners() }
             failure = closePreservingPrimaryFailure(failure) { motion?.cancel() }
             failure = closePreservingPrimaryFailure(failure) {
                 if (anchor.viewTreeObserver.isAlive) anchor.viewTreeObserver.removeOnPreDrawListener(geometryGuard)
@@ -384,6 +433,10 @@ class NativeAnchoredDropdown(
             private val hitShape by lazy { Region() }
             private val hitClip by lazy { Region() }
             val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+            private val cuePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+            private val cueHeight = 20f * density.density
+            private val cueFade = LinearGradient(0f, 0f, 0f, cueHeight,
+                palette.collapsed, palette.collapsed and 0x00ffffff, Shader.TileMode.CLAMP)
             var downX = 0f
             var downY = 0f
             var dragging = false
@@ -392,12 +445,107 @@ class NativeAnchoredDropdown(
             var earlyTap = false
             var pointer = -1
             var gesturePosition = 0f
-            val slop = ViewConfiguration.get(context).scaledTouchSlop
-            private val revealTop get() = anchorY - minOf(position, slotsAbove.toFloat()) * rowHeight * reveal
-            private val revealBottom get() = anchorY + rowHeight + minOf(lastPosition - position, slotsBelow.toFloat()) * rowHeight * reveal
+            private val configuration = ViewConfiguration.get(context)
+            val slop = configuration.scaledTouchSlop
+            private val minimumFlingVelocity = configuration.scaledMinimumFlingVelocity
+            private val maximumFlingVelocity = configuration.scaledMaximumFlingVelocity
+            private var velocityTracker: VelocityTracker? = null
+            private var scroller: OverScroller? = null
+            private var flinging = false
+            private var stopTap = false
+            private var motionGeneration = 0
+            private val flingFrame = Runnable { advanceFling() }
+            private val revealTop get() = viewport?.revealTop(position, reveal) ?: anchorY.toFloat()
+            private val revealBottom get() = viewport?.revealBottom(position, lastPosition, reveal) ?: (anchorY + rowHeight).toFloat()
             private var firstMounted = -1
             private var lastMounted = -1
             init { setWillNotDraw(false); clipChildren = false; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES }
+
+            fun stopFling() {
+                flinging = false
+                motionGeneration++
+                removeCallbacks(flingFrame)
+                // Keep the displayed position; abortAnimation would jump the scroller to its end.
+                scroller?.forceFinished(true)
+            }
+
+            fun cancelMotion() {
+                stopFling()
+                pointer = -1
+                dragging = false
+                explicitTap = false
+                stopTap = false
+                velocityTracker?.clear()
+            }
+
+            fun retireMotion() {
+                cancelMotion()
+                velocityTracker?.recycle()
+                velocityTracker = null
+                scroller = null
+            }
+
+            private fun flingOrSettle(velocity: Float) {
+                if (disposed || closing) return
+                stopFling()
+                if (!velocity.isFinite() || abs(velocity) < minimumFlingVelocity ||
+                    velocity <= 0f && position <= 0f || velocity >= 0f && position >= lastPosition) {
+                    settle(settled)
+                    return
+                }
+                // Pixel units retain native density-aware friction and bounded velocity. No flywheel
+                // accumulation or overshoot: the finite list and its existing end cues stay authoritative.
+                // stopFling() forces finished before reuse, so the public constructor's flywheel cannot accumulate.
+                val motion = scroller ?: OverScroller(context).also { scroller = it }
+                val maximum = (lastPosition.toLong() * rowHeight).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                motion.fling(0, (position * rowHeight).roundToInt().coerceIn(0, maximum),
+                    0, velocity.coerceIn(-maximumFlingVelocity.toFloat(), maximumFlingVelocity.toFloat()).roundToInt(),
+                    0, 0, 0, maximum)
+                flinging = true
+                postOnAnimation(flingFrame)
+            }
+
+            private fun advanceFling() {
+                if (!flinging || disposed || closing) return
+                val motion = scroller ?: return
+                val generation = motionGeneration
+                if (motion.computeScrollOffset()) {
+                    val previous = settled
+                    position = (motion.currY.toFloat() / rowHeight).coerceIn(0f, lastPosition.toFloat())
+                    settled = position.roundToInt()
+                    updatePositions()
+                    if (settled != previous) publish(settled)
+                }
+                // Selection callbacks may close, settle, or establish a new touch/fling owner.
+                if (!flinging || disposed || closing || generation != motionGeneration) return
+                if (motion.isFinished) {
+                    stopFling()
+                    settle(settled)
+                } else postOnAnimation(flingFrame)
+            }
+
+            override fun onDetachedFromWindow() {
+                retireMotion()
+                stopAnimation()
+                super.onDetachedFromWindow()
+            }
+
+            override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+                super.onWindowFocusChanged(hasWindowFocus)
+                if (!hasWindowFocus) {
+                    cancelMotion()
+                    stopAnimation()
+                    if (closing) dispose()
+                } else if (!disposed && !closing && plan != null && pointer < 0 &&
+                    (position != settled.toFloat() || reveal != 1f)) {
+                    settle(settled)
+                }
+            }
+
+            override fun onCancelPendingInputEvents() {
+                endGesture()
+                super.onCancelPendingInputEvents()
+            }
             fun updatePositions() {
                 val layout = plan ?: return
                 updateMountedRows(layout.firstMounted(position), layout.lastMounted(position))
@@ -462,14 +610,18 @@ class NativeAnchoredDropdown(
                 row.layout(0, 0, rowWidth, rowHeight)
             }
             fun extents(): Pair<Float, Float> {
-                val p = plan ?: return anchorY.toFloat() to (anchorY + rowHeight).toFloat()
-                return anchorY - minOf(position, slotsAbove.toFloat()) * rowHeight * reveal to
-                    anchorY + rowHeight + minOf(lastPosition - position, slotsBelow.toFloat()) * rowHeight * reveal
+                return revealTop to revealBottom
             }
-            private fun updateRevealPath() {
-                rectangle.set(.5f, revealTop + .5f, width - .5f, revealBottom - .5f)
+            private fun customOutlineStroke(): Float? = outlineWidthDp?.let {
+                (it * density.density).coerceAtMost(minOf(width.toFloat(), revealBottom - revealTop).coerceAtLeast(0f) / 2f)
+            }
+
+            private fun updateRevealPath(stroke: Float? = customOutlineStroke()) {
+                val inset = stroke?.div(2f) ?: .5f
+                rectangle.set(inset, revealTop + inset, width - inset, revealBottom - inset)
                 for (corner in 0..3) {
-                    val rowsFromSlot = if (corner < 2) minOf(position, slotsAbove.toFloat()) else minOf(lastPosition - position, slotsBelow.toFloat())
+                    val geometry = checkNotNull(viewport)
+                    val rowsFromSlot = if (corner < 2) minOf(position, geometry.rowsAbove) else minOf(lastPosition - position, geometry.rowsBelow)
                     val fraction = rowsFromSlot.coerceIn(0f, 1f)
                     val blend = fraction * fraction * (3f - 2f * fraction) * reveal
                     val radius = radii[corner] + (style.cornerRadiusDp * density.density - radii[corner]) * blend
@@ -480,21 +632,55 @@ class NativeAnchoredDropdown(
 
             override fun draw(canvas: Canvas) {
                 if (plan == null) return
-                updateRevealPath()
+                val customStroke = customOutlineStroke()
+                updateRevealPath(customStroke)
                 val saved = canvas.save(); canvas.clipPath(path)
                 paint.style = Paint.Style.FILL; paint.color = palette.collapsed
                 canvas.drawPath(path, paint)
                 super.draw(canvas)
+                drawOverflowCues(canvas)
                 // The slot never moves. Its divider and outline share the existing group border role.
-                paint.style = Paint.Style.STROKE; paint.strokeWidth = density.density; paint.color = palette.divider
-                canvas.drawLine(0f, anchorY.toFloat(), width.toFloat(), anchorY.toFloat(), paint)
-                canvas.drawLine(0f, (anchorY + rowHeight).toFloat(), width.toFloat(), (anchorY + rowHeight).toFloat(), paint)
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = customStroke ?: density.density
+                paint.color = palette.divider
+                if (paint.strokeWidth > 0f) {
+                    canvas.drawLine(0f, anchorY.toFloat(), width.toFloat(), anchorY.toFloat(), paint)
+                    canvas.drawLine(0f, (anchorY + rowHeight).toFloat(), width.toFloat(), (anchorY + rowHeight).toFloat(), paint)
+                }
                 canvas.restoreToCount(saved)
-                canvas.drawPath(path, paint)
+                if (paint.strokeWidth > 0f) canvas.drawPath(path, paint)
                 if (collapseAfterDraw) {
                     collapseAfterDraw = false
                     postOnAnimation(startCollapse)
                 }
+            }
+
+            private fun drawOverflowCues(canvas: Canvas) {
+                val geometry = viewport ?: return
+                if (reveal <= 0f) return
+                if (geometry.overflowsAbove(position)) drawCue(canvas, revealTop, upward = true)
+                if (geometry.overflowsBelow(position, lastPosition)) drawCue(canvas, revealBottom, upward = false)
+            }
+
+            private fun drawCue(canvas: Canvas, edge: Float, upward: Boolean) {
+                val saved = canvas.save()
+                canvas.translate(0f, edge)
+                if (!upward) canvas.scale(1f, -1f)
+                cuePaint.style = Paint.Style.FILL
+                cuePaint.shader = cueFade
+                cuePaint.alpha = (255 * reveal).roundToInt()
+                canvas.drawRect(0f, 0f, width.toFloat(), cueHeight, cuePaint)
+                cuePaint.shader = null
+                cuePaint.color = palette.ink
+                cuePaint.alpha = (220 * reveal).roundToInt()
+                cuePaint.strokeWidth = 1.5f * density.density
+                cuePaint.strokeCap = Paint.Cap.ROUND
+                val center = width / 2f
+                val half = 3f * density.density
+                val y = 5f * density.density
+                canvas.drawLine(center - half, y + half, center, y, cuePaint)
+                canvas.drawLine(center, y, center + half, y + half, cuePaint)
+                canvas.restoreToCount(saved)
             }
             override fun drawChild(canvas: Canvas, child: View, drawingTime: Long): Boolean {
                 // The wheel's clip already hides these rows. Skip recording their contents until
@@ -528,16 +714,26 @@ class NativeAnchoredDropdown(
                 }
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
-                        val edges = extents()
-                        if (event.y < edges.first || event.y > edges.second) { cancelSelection(); return true }
+                        val wasFlinging = flinging
+                        cancelMotion()
+                        stopTap = wasFlinging
+                        // A closing gesture can reopen on drag/tap. Until then its terminal
+                        // animation must keep running, including after cancellation/pointer loss.
+                        if (!closing) stopAnimation()
+                        if (event.y < revealTop || event.y > revealBottom) { cancelSelection(); return true }
+                        if (!closing && reveal < 1f) animate(position, 1f, style.expandMillis, move = false) {}
                         gesturePosition = position
                         downRow = rowAt(event.y)
                         pointer = event.getPointerId(0); downX = event.x; downY = event.y; dragging = false
                         explicitTap = selectionPolicy == DropdownSelectionPolicy.EXPLICIT && event.x >= 0f && event.x < width
+                        val tracker = velocityTracker ?: VelocityTracker.obtain().also { velocityTracker = it }
+                        tracker.addMovement(event)
                     }
                     MotionEvent.ACTION_MOVE -> {
+                        if (pointer < 0) return true
                         val i = event.findPointerIndex(pointer)
                         if (i < 0) { endGesture(); return true }
+                        velocityTracker?.addMovement(event)
                         trackExplicitTap(event, i)
                         val delta = downY - event.getY(i)
                         if (!dragging && abs(delta) > slop) {
@@ -560,18 +756,36 @@ class NativeAnchoredDropdown(
                         trackExplicitTap(event, i)
                         val delta = downY - event.getY(i)
                         val moved = dragging || abs(delta) > slop
+                        val tracker = velocityTracker
+                        tracker?.addMovement(event)
+                        if (moved) tracker?.computeCurrentVelocity(1000, maximumFlingVelocity.toFloat())
+                        val velocity = if (moved) -(tracker?.getYVelocity(pointer) ?: 0f) else 0f
+                        val stoppedFling = stopTap
+                        stopTap = false
+                        pointer = -1
+                        tracker?.clear()
                         if (moved) {
-                            if (!dragging) gesturePosition = position
+                            if (!dragging) {
+                                gesturePosition = position
+                                closing = false
+                                // UP may be the first event beyond slop. Retire a preserved collapse
+                                // exactly as MOVE promotion does before giving position to a fling.
+                                animate(position, 1f, style.expandMillis, move = false) {}
+                            }
                             closing = false
                             position = (gesturePosition + delta / rowHeight).coerceIn(0f, lastPosition.toFloat())
                             settled = position.roundToInt()
+                            dragging = false
+                            val generation = motionGeneration
                             updatePositions()
                             publish(settled)
-                            dragging = false
-                            if (!disposed) settle(settled)
+                            if (!disposed && !closing && pointer < 0 && generation == motionGeneration) flingOrSettle(velocity)
                         }
-                        pointer = -1
                         if (!moved) {
+                            if (stoppedFling) {
+                                settle(settled)
+                                return true
+                            }
                             val x = event.getX(i)
                             val y = event.getY(i)
                             if (!insideReveal(x, y)) {
@@ -592,9 +806,15 @@ class NativeAnchoredDropdown(
                             }
                         }
                     }
-                    MotionEvent.ACTION_POINTER_DOWN -> explicitTap = false
+                    MotionEvent.ACTION_POINTER_DOWN -> {
+                        explicitTap = false
+                        if (pointer >= 0) velocityTracker?.addMovement(event)
+                    }
                     MotionEvent.ACTION_CANCEL -> endGesture()
-                    MotionEvent.ACTION_POINTER_UP -> if (event.getPointerId(event.actionIndex) == pointer) endGesture()
+                    MotionEvent.ACTION_POINTER_UP -> {
+                        if (event.getPointerId(event.actionIndex) == pointer) endGesture()
+                        else if (pointer >= 0) velocityTracker?.addMovement(event)
+                    }
                 }
                 return true
             }
@@ -608,8 +828,7 @@ class NativeAnchoredDropdown(
             }
 
             private fun endGesture() {
-                pointer = -1
-                dragging = false
+                cancelMotion()
                 if (closing && reveal == 0f) dispose() else settle(settled)
             }
         }

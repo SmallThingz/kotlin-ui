@@ -114,6 +114,54 @@ class ReverbAppChoiceIntegrationTest {
         }
     }
 
+    @Test fun throwingRetirementAdmissionStillDismissesAndUnregistersPicker() = withFixture { f ->
+        val picker = open(f, onSelect = { fail("Closed picker selected") })
+        main {
+            val failure = IllegalStateException("retirement admission")
+            val notifyFailure = IllegalStateException("retirement notification")
+            var retired = 0
+            val notify = picker.onRetired
+            picker.onRetired = { retired++; notify?.invoke(); throw notifyFailure }
+            f.root.probe = { throw failure }
+            try {
+                val actual = runCatching { picker.close() }.exceptionOrNull()
+                assertSame(failure, actual)
+                assertEquals(listOf(notifyFailure), actual?.suppressed?.toList())
+                assertFalse(picker.window.isShowing)
+                val observing = ReverbAppChoicePicker::class.java.getDeclaredField("observing").apply { isAccessible = true }
+                assertFalse(observing.getBoolean(picker))
+                assertNull(picker.onRetired)
+                assertNull(f.trigger.picker)
+                picker.close()
+                assertEquals(1, retired)
+            } finally { f.root.probe = null }
+            assertTrue(picker.rows.none { it.performClick() })
+        }
+    }
+
+    @Test fun throwingSelectionAdmissionKeepsItsFailureWhenRetirementAlsoThrows() = withFixture { f ->
+        val selectionFailure = IllegalStateException("selection admission")
+        val cleanupFailure = IllegalStateException("cleanup admission")
+        var selecting = false
+        val picker = open(f, canSelect = {
+            if (selecting) {
+                f.root.probe = { throw cleanupFailure }
+                throw selectionFailure
+            }
+            true
+        }, onSelect = { fail("Failed admission selected") })
+        main {
+            selecting = true
+            try {
+                val actual = runCatching { picker.rows.first().performClick() }.exceptionOrNull()
+                assertSame(selectionFailure, actual)
+                assertEquals(listOf(cleanupFailure), actual?.suppressed?.toList())
+                assertFalse(picker.window.isShowing)
+                assertNull(f.trigger.picker)
+            } finally { f.root.probe = null; picker.close() }
+        }
+    }
+
     @Test fun closedAncestorGateBlocksTriggerAndOpenPickerClickAccessibilityAndKeyInput() = withFixture { f ->
         main {
             f.trigger.row.isFocusableInTouchMode = true
@@ -259,7 +307,8 @@ class ReverbAppChoiceIntegrationTest {
 
     private class GateLayout(context: android.content.Context) : FrameLayout(context), NativeInputGate {
         var allowed = true
-        override val acceptsNativeInput get() = allowed
+        var probe: (() -> Unit)? = null
+        override val acceptsNativeInput: Boolean get() { probe?.invoke(); return allowed }
     }
     private class Fixture(val activity: NativeMenuAccessibilityTestActivity, val root: GateLayout,
         val theme: ReverbTheme) {

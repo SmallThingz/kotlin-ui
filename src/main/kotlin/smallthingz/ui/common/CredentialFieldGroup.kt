@@ -22,6 +22,7 @@ import smallthingz.ui.components.acceptsNativeInput
 import smallthingz.ui.reverb.ReverbEnvironment
 import smallthingz.ui.reverb.ReverbIcon
 import smallthingz.ui.reverb.ReverbStandardIconButtonView
+import smallthingz.ui.util.closePreservingPrimaryFailure
 
 enum class CredentialKeyboard { TEXT, URI, PASSWORD }
 
@@ -252,16 +253,25 @@ class CredentialFieldGroup<ID : Enum<ID>>(
         editCallback = null
         actionCallback = null
         actionStates = emptyMap()
-        dismissKeyboard()
+        // Host focus/text callbacks may throw or reenter close. Retirement is terminal,
+        // but every remaining field/action must still release its retained state.
+        var failure = closePreservingPrimaryFailure(null, ::dismissKeyboard)
         for (spec in fields) {
-            bindField(editors.getValue(spec.id), spec, CredentialFieldState(spec.id, "", enabled = false))
+            val field = editors.getValue(spec.id)
+            failure = closePreservingPrimaryFailure(failure) { field.setEditorEnabled(false) }
+            failure = closePreservingPrimaryFailure(failure) {
+                bindField(field, spec, CredentialFieldState(spec.id, "", enabled = false))
+            }
         }
         for ((action, button) in buttons) {
-            bindAction(action, button, null)
-            if (button is NativeMaterialButtonView) button.close()
-            if (button is ReverbStandardIconButtonView) button.cancelInput()
+            failure = closePreservingPrimaryFailure(failure) { bindAction(action, button, null) }
+            failure = closePreservingPrimaryFailure(failure) {
+                if (button is NativeMaterialButtonView) button.close()
+                if (button is ReverbStandardIconButtonView) button.cancelInput()
+            }
         }
-        view.visibility = View.GONE
+        failure = closePreservingPrimaryFailure(failure) { view.visibility = View.GONE }
+        failure?.let { throw it }
     }
 
     private fun dispatchAction(target: CredentialActionTarget<ID>) {

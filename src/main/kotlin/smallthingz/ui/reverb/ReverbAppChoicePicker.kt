@@ -16,6 +16,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.doOnLayout
 import smallthingz.ui.components.NativeInputGate
 import smallthingz.ui.components.acceptsNativeInput
+import smallthingz.ui.util.closePreservingPrimaryFailure
 import kotlin.math.roundToInt
 
 /**
@@ -135,7 +136,7 @@ class ReverbAppChoicePicker(
             choices.isEmpty()) { close(); return }
         // Admission can synchronously dispose the trigger or replace this presentation.
         shown = true
-        val allowed = try { admission?.invoke() == true } catch (failure: Throwable) { close(); throw failure }
+        val allowed = try { admission?.invoke() == true } catch (failure: Throwable) { closeAfterFailure(failure) }
         if (!allowed || ended || !anchorVisible() || !anchor.isEnabled || !anchor.acceptsNativeInput() ||
             !anchor.hasWindowFocus()) { close(); return }
         anchor.addOnAttachStateChangeListener(detach)
@@ -158,8 +159,7 @@ class ReverbAppChoicePicker(
         } catch (_: WindowManager.BadTokenException) {
             close()
         } catch (failure: Throwable) {
-            close()
-            throw failure
+            closeAfterFailure(failure)
         }
     }
 
@@ -221,7 +221,7 @@ class ReverbAppChoicePicker(
     private fun choose(id: String) {
         if (!ownsWindowInput() || choices.none { it.id == id && it.enabled }) return
         answering = true
-        val allowed = try { admission?.invoke() == true } catch (failure: Throwable) { close(); throw failure }
+        val allowed = try { admission?.invoke() == true } catch (failure: Throwable) { closeAfterFailure(failure) }
         // The admission callback may replace this picker, disable the trigger, or remove its anchor.
         answering = false
         if (ended) return
@@ -231,22 +231,32 @@ class ReverbAppChoicePicker(
     }
 
     override fun close() {
-        if (ended) return
-        finish()
-        window.dismiss()
+        // Logical retirement must not prevent window removal if a host callback throws.
+        val failure = closePreservingPrimaryFailure(null, ::finish)
+        closePreservingPrimaryFailure(failure, window::dismiss)?.let { throw it }
     }
+
+    private fun closeAfterFailure(failure: Throwable): Nothing =
+        throw checkNotNull(closePreservingPrimaryFailure(failure, ::close))
 
     private fun finish() {
         if (ended) return
         ended = true
         admission = null
         selection = null
-        rows.forEach { it.close() }
-        focusReturnPending = mounted && anchorVisible() && anchor.isEnabled && anchor.acceptsNativeInput()
-        if (focusReturnPending) restoreFocus() else stopObserving()
+        var failure: Throwable? = null
+        rows.forEach { failure = closePreservingPrimaryFailure(failure, it::close) }
+        failure = closePreservingPrimaryFailure(failure) {
+            focusReturnPending = mounted && anchorVisible() && anchor.isEnabled && anchor.acceptsNativeInput()
+            if (focusReturnPending) restoreFocus() else stopObserving()
+        }
+        if (failure != null) {
+            focusReturnPending = false
+            failure = closePreservingPrimaryFailure(failure, ::stopObserving)
+        }
         val retired = onRetired
         onRetired = null
-        retired?.invoke()
+        closePreservingPrimaryFailure(failure) { retired?.invoke() }?.let { throw it }
     }
 
     private fun restoreFocus() {

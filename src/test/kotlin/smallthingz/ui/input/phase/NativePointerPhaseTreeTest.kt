@@ -6,8 +6,111 @@ import smallthingz.ui.unit.Velocity
 import org.junit.Assert.*
 import org.junit.Test
 
-/** Proposed host tests, not added to source sets and not run. */
+/** Retained stream ownership, pass ordering and failure cleanup. */
 class NativePointerPhaseTreeTest {
+    @Test fun cancellationRevokesPathsBeforeReentrantCallbackAndKeepsNewStream() {
+        val tree = NativePointerPhaseTree()
+        val calls = mutableListOf<String>()
+        val fresh = Node("fresh", calls)
+        var cancelled = 0
+        val old = object : NativePhasePointerNode {
+            override val attached = true
+            override fun dispatch(event: NativeDragPointerEvent, pass: NativePointerPass) = Unit
+            override fun cancel() {
+                cancelled++
+                assertFalse("Old stream must be retired before calling its node", tree.hasPaths)
+                tree.cancel()
+                tree.add(2, listOf(fresh))
+            }
+        }
+        tree.add(1, listOf(old))
+        tree.cancel()
+        assertEquals(1, cancelled)
+        assertTrue(tree.hasPaths)
+        tree.dispatch { _, _ -> event(change(1, 0f, 0f, down = true, id = 2)) }
+        assertEquals(listOf("fresh:INITIAL", "fresh:MAIN", "fresh:FINAL"), calls)
+        tree.cancel()
+        assertFalse(tree.hasPaths)
+    }
+
+    @Test fun failingChildCancellationStillRetiresParentAndSiblingExactlyOnce() {
+        val tree = NativePointerPhaseTree()
+        val calls = mutableListOf<String>()
+        val childFailure = IllegalStateException("child")
+        val parentFailure = IllegalArgumentException("parent")
+        fun node(name: String, error: Throwable?) = object : NativePhasePointerNode {
+            override val attached = true
+            override fun dispatch(event: NativeDragPointerEvent, pass: NativePointerPass) = Unit
+            override fun cancel() { calls += name; if (error != null) throw error }
+        }
+        tree.add(1, listOf(node("parent", parentFailure), node("child", childFailure)))
+        tree.add(2, listOf(node("sibling", null)))
+        val thrown = runCatching { tree.cancel() }.exceptionOrNull()
+        assertSame(childFailure, thrown)
+        assertEquals(listOf(parentFailure), childFailure.suppressed.toList())
+        assertEquals(listOf("child", "parent", "sibling"), calls)
+        assertFalse(tree.hasPaths)
+        tree.cancel()
+        assertEquals(3, calls.size)
+    }
+
+    @Test fun pruningRetiresAllDetachedBranchesBeforeReentrantCancellation() {
+        val tree = NativePointerPhaseTree()
+        val calls = mutableListOf<String>()
+        fun node(name: String, reenter: Boolean) = object : NativePhasePointerNode {
+            override val attached = false
+            override fun dispatch(event: NativeDragPointerEvent, pass: NativePointerPass) = Unit
+            override fun cancel() {
+                calls += name
+                if (reenter) tree.cancel()
+            }
+        }
+        tree.add(1, listOf(node("first", true)))
+        tree.add(2, listOf(node("second", false)))
+        tree.pruneDetached()
+        assertEquals(listOf("first", "second"), calls)
+        assertFalse(tree.hasPaths)
+    }
+
+    @Test fun failedProjectionDoesNotRetainPreviouslyCachedEvent() {
+        val tree = NativePointerPhaseTree()
+        val calls = mutableListOf<String>()
+        val first = Node("first", calls)
+        tree.add(1, listOf(first, Node("second", calls)))
+        val failure = IllegalStateException("geometry unavailable")
+        assertSame(failure, runCatching {
+            tree.dispatch { node, _ ->
+                if (node !== first) throw failure
+                event(change(0, 0f, 0f, down = true))
+            }
+        }.exceptionOrNull())
+        // Observe retention directly: no dispatch happened, but the first branch was cached.
+        val roots = tree.javaClass.getDeclaredField("roots").run { isAccessible = true; get(tree) as List<*> }
+        val branch = roots.single()!!
+        assertNull(branch.javaClass.getDeclaredField("event").run { isAccessible = true; get(branch) })
+        assertTrue(calls.isEmpty())
+        tree.cancel()
+    }
+
+    @Test fun deferredCancelFailureDoesNotReplaceOriginalDispatchFailure() {
+        val tree = NativePointerPhaseTree()
+        val dispatchFailure = IllegalStateException("dispatch")
+        val cancelFailure = IllegalArgumentException("cancel")
+        tree.add(1, listOf(object : NativePhasePointerNode {
+            override val attached = true
+            override fun dispatch(event: NativeDragPointerEvent, pass: NativePointerPass) {
+                tree.cancel()
+                throw dispatchFailure
+            }
+            override fun cancel() { throw cancelFailure }
+        }))
+        assertSame(dispatchFailure, runCatching {
+            tree.dispatch { _, _ -> event(change(0, 0f, 0f, down = true)) }
+        }.exceptionOrNull())
+        assertEquals(listOf(cancelFailure), dispatchFailure.suppressed.toList())
+        assertFalse(tree.hasPaths)
+    }
+
     @Test
     fun initialMainFinalFollowSourceOrderWithCancellationDeferredUntilAfterAllPasses() {
         val calls = mutableListOf<String>()

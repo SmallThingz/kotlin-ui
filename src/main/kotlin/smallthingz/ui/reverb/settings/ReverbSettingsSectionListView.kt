@@ -20,8 +20,10 @@ enum class ReverbSettingsSectionKey(val sourceKey: String) {
     RECORDING("recording"), QUICK_TILES("quick-save-tiles"), STORAGE("storage"),
     AUTO_START("auto-start");
     companion object {
+        // Display order is independent of the enum ordinals used as stable IDs and view types.
+        private val displayOrder = listOf(BACKGROUND, THEME, RETENTION, RECORDING, AUTO_START, QUICK_TILES, STORAGE)
         fun visible(restricted: Boolean): List<ReverbSettingsSectionKey> =
-            if (restricted) entries else entries.drop(1)
+            if (restricted) displayOrder else displayOrder.drop(1)
         fun retentionIndex(restricted: Boolean) = if (restricted) 2 else 1
     }
 }

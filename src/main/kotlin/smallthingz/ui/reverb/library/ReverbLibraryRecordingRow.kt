@@ -9,6 +9,7 @@ import smallthingz.ui.reverb.ReverbTextSurface
 import smallthingz.ui.animation.AnimatedValue
 import smallthingz.ui.animation.view.ViewFrameLoop
 import smallthingz.ui.components.NativeGroupLayout
+import smallthingz.ui.components.NativeMenuOrigin
 import smallthingz.ui.components.NativeLeadingDisc
 import smallthingz.ui.components.NativeGroupEdges
 import smallthingz.ui.components.NativeRecordingRowPaint
@@ -61,6 +62,8 @@ data class LibraryRecordingRowActions(
     val activate: ((String) -> Unit)?,
     val longClick: ((String) -> Unit)?,
     val leadingLongClick: ((String) -> Unit)?,
+    /** Body menu origin in this row's coordinates; semantic/key invocation still uses longClick. */
+    val pointerLongClick: ((String, NativeMenuOrigin) -> Unit)? = null,
 )
 
 /**
@@ -287,6 +290,19 @@ class ReverbLibraryRecordingRow(
         return true
     }
 
+    private fun pointerLongClick(target: View, leading: Boolean, x: Float, y: Float) {
+        val current = row ?: return
+        if (!current.interactionsEnabled || column.headerActive || actions?.activate == null) return
+        val callback = actions?.pointerLongClick
+        // A dedicated leading action is selection, not the body context menu.
+        if (callback == null || (leading && actions?.leadingLongClick != null)) {
+            target.performLongClick()
+            return
+        }
+        val origin = NativeMenuOrigin.fromDescendant(this, target, x, y)
+        if (origin == null) target.performLongClick() else callback(current.recordingId, origin)
+    }
+
     private fun bindInputs() {
         val current = row
         val callbacks = actions
@@ -302,6 +318,8 @@ class ReverbLibraryRecordingRow(
                 enabled = true,
                 onClick = { target.performClick() },
                 onLongClick = if (long == null) null else { { target.performLongClick(); Unit } },
+                onPointerLongClick = if (long == null || callbacks?.pointerLongClick == null) null
+                    else { x, y -> pointerLongClick(target, leading, x, y) },
             ))
             controller.focusChanged(target.isFocused)
         }

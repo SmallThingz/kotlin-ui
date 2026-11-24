@@ -26,6 +26,8 @@ import androidx.core.graphics.ColorUtils
 import smallthingz.ui.animation.core.FloatSpringSpec
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.graphics.Color
+import smallthingz.ui.graphics.ViewGrain
+import smallthingz.ui.graphics.bindGrainLayer
 import smallthingz.ui.graphics.compositeOver
 import smallthingz.ui.graphics.toArgb
 import kotlin.math.ceil
@@ -51,6 +53,7 @@ class NativeMaterialSwitchView(
     initialEnabled: Boolean = true,
 ) : ViewGroup(context), Choreographer.FrameCallback {
     private val trackPaint = Paint(PAINT_FLAGS)
+    private var trackGrain: ViewGrain? = null
     private val thumbPaint = Paint(PAINT_FLAGS)
     private val borderPaint = Paint(PAINT_FLAGS).apply { style = Paint.Style.STROKE }
     private var boundPalette = palette
@@ -60,6 +63,8 @@ class NativeMaterialSwitchView(
     private var trackWidth = 0
     private var trackHeight = 0
     private var borderWidth = 0f
+    private var customOutlineWidthDp: Float? = null
+    private var customOutlineColor = 0
     private var sizeMotion: SwitchFloatMotion? = null
     private var offsetMotion: SwitchFloatMotion? = null
     private var framePosted = false
@@ -106,6 +111,18 @@ class NativeMaterialSwitchView(
         boundPalette = palette
         retargetColors()
         updateThumbProgressInk()
+        invalidate()
+    }
+
+    /** Apply texture to the track while keeping its thumb and outline solid. */
+    fun setTrackNoiseIntensity(intensity: Float) { trackGrain = bindGrainLayer(trackGrain, intensity) }
+
+    /** Style only the track outline, preserving thumb colors and checked-state transitions. */
+    fun setTrackOutline(widthDp: Float, color: Int) {
+        require(widthDp.isFinite() && widthDp >= 0f)
+        if (customOutlineWidthDp == widthDp && customOutlineColor == color) return
+        customOutlineWidthDp = widthDp
+        customOutlineColor = color
         invalidate()
     }
 
@@ -199,10 +216,9 @@ class NativeMaterialSwitchView(
         val radius = min(trackWidth, trackHeight) / 2f
         trackPaint.color = colorMotion?.color(0) ?: colors.track(isEnabled, checked)
         thumbPaint.color = colorMotion?.color(1) ?: colors.thumb(isEnabled, checked)
-        borderPaint.color = colorMotion?.color(2) ?: colors.border(isEnabled, checked)
-        borderPaint.strokeWidth = borderWidth
         canvas.drawRoundRect(originX, originY, originX + trackWidth, originY + trackHeight,
             radius, radius, trackPaint)
+        trackGrain?.draw(canvas, originX, originY, originX + trackWidth, originY + trackHeight, radius)
 
         // ThumbNode truncates its animated pixel size/offset; it does not round them or animate dp.
         val actualSize = size.value.toInt()
@@ -221,7 +237,16 @@ class NativeMaterialSwitchView(
             originX + thumbX + actualSize, originY + thumbY + actualSize, thumbRadius, thumbRadius, thumbPaint)
 
         // Modifier.border draws after background and children, including the thumb.
-        val inset = borderWidth / 2f
+        val overrideWidth = customOutlineWidthDp
+        val stroke = overrideWidth?.let { (it * resources.displayMetrics.density).coerceAtMost(radius) } ?: borderWidth
+        if (stroke <= 0f) return
+        val stateColor = colorMotion?.color(2) ?: colors.border(isEnabled, checked)
+        borderPaint.color = if (overrideWidth == null) stateColor else {
+            val alpha = (AndroidColor.alpha(stateColor) * AndroidColor.alpha(customOutlineColor) + 127) / 255
+            (customOutlineColor and 0xffffff) or (alpha shl 24)
+        }
+        borderPaint.strokeWidth = stroke
+        val inset = stroke / 2f
         val borderRadius = (radius - inset).coerceAtLeast(0f)
         canvas.drawRoundRect(originX + inset, originY + inset, originX + trackWidth - inset,
             originY + trackHeight - inset, borderRadius, borderRadius, borderPaint)

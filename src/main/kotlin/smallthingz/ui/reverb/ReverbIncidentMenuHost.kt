@@ -24,7 +24,7 @@ internal class ReverbIncidentMenuHost(
     }
     override fun show(request: IncidentCardMenuRequest) {
         requests[request.identity] = request
-        host.show(request.identity, request.anchor, actions(request))
+        host.show(request.identity, request.anchor, actions(request), origin = request.origin)
     }
     override fun update(request: IncidentCardMenuRequest) {
         requests[request.identity] = request

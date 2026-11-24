@@ -19,6 +19,8 @@ import android.view.View
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.view.ViewCompat
 import smallthingz.ui.animation.view.ViewColorTransition
+import smallthingz.ui.graphics.ViewGrain
+import smallthingz.ui.graphics.bindGrainLayer
 import smallthingz.ui.text.view.ParagraphView
 import smallthingz.ui.text.TextStyle
 import smallthingz.ui.text.font.FontFamily
@@ -52,6 +54,7 @@ class NativeDropdown<T>(
     private val foregroundColor: (ViewColorTransition, Int, Int) -> Int = { _, _, ink -> ink },
 ) : NativeClickableRow(context, inputRoot), AutoCloseable {
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private var grain: ViewGrain? = null
     private val divider = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         strokeWidth = 1f
         style = Paint.Style.STROKE
@@ -109,6 +112,9 @@ class NativeDropdown<T>(
     fun bindDescription(description: CharSequence?) {
         if (!closed) arrow.view.contentDescription = description
     }
+
+    /** Texture this row's fill behind the label, value and arrow. */
+    fun setNoiseIntensity(intensity: Float) { grain = bindGrainLayer(grain, intensity) }
 
     fun bind(next: NativeDropdownContent<T>, expanded: Boolean, palette: NativeDropdownColors) {
         bind(next, expanded, palette, present = next.options.size > 1)
@@ -201,6 +207,7 @@ class NativeDropdown<T>(
 
     override fun onDraw(canvas: Canvas) {
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), fill)
+        grain?.draw(canvas, 0f, 0f, width.toFloat(), height.toFloat())
         super.onDraw(canvas)
     }
     override fun draw(canvas: Canvas) {

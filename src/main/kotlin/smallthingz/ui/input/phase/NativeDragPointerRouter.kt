@@ -68,10 +68,12 @@ class NativeDragPointerRouter(
 
     /** ACTION_CANCEL/detach/disabled path; distinct from a normal velocity-bearing UP. */
     fun reset() {
+        val started = hasStarted
         moveToDown()
-        if (hasStarted) sink.cancel()
         velocity = null
         hasStarted = false
+        // Cancellation can reset again or synchronously admit a replacement gesture.
+        if (started) sink.cancel()
     }
 
     private fun down(event: NativeDragPointerEvent, pass: NativePointerPass) {
@@ -144,6 +146,10 @@ class NativeDragPointerRouter(
             val replacement = event.changes.firstOrNull { it.pressed }
             if (replacement != null) pointerId = replacement.id
             else {
+                // The final UP owns the terminal before invoking a synchronous host sink.
+                // Keep the reset tracker for reuse, but reset()/failure must not cancel this drag again.
+                moveToDown()
+                hasStarted = false
                 if (!change.consumed) {
                     val tracker = requireNotNull(velocity)
                     tracker.add(change)
@@ -151,7 +157,6 @@ class NativeDragPointerRouter(
                     tracker.reset()
                     sink.stop(result)
                 } else sink.cancel()
-                moveToDown()
             }
         } else if (change.consumed) {
             // Source leaves its state intact; a later dispatch/pickup owner decides the next cycle.

@@ -80,7 +80,11 @@ class DropdownGroup internal constructor(
         val labels = options.associateWith(content.optionLabel)
         val config = theme
         val dropdown = NativeAnchoredDropdown(anchor.context, host, config.appearance, config.colors,
-            config.density, config.fontResolver, palette = palette)
+            config.density, config.fontResolver,
+            palette = field.outlineColor?.let { palette.copy(divider = it) } ?: palette).also {
+            it.noiseIntensity = field.noiseIntensity
+            it.outlineWidthDp = field.outlineWidthDp
+        }
         val session = Session(field, dropdown, content.label, options, labels, content.selected)
         current = session
         try {
@@ -154,6 +158,12 @@ class DropdownField<T> internal constructor(
     private var expanded = false
     private var closed = false
     private var descriptionLocales: LocaleList? = null
+    internal var noiseIntensity = 0f
+        private set
+    internal var outlineWidthDp: Float? = null
+        private set
+    internal var outlineColor: Int? = null
+        private set
     private val arrow = createDropdownIcon(context, group.palette.muted)
     private val titleRole = NativeTypographyRole.BODY_SMALL
     private val valueRole = NativeTypographyRole.BODY_LARGE
@@ -193,6 +203,21 @@ class DropdownField<T> internal constructor(
     }
 
     internal fun select(value: T) = onSelected?.invoke(value)
+
+    /** Set the grain of the trigger and future popup rows. */
+    fun setNoiseIntensity(intensity: Float) {
+        if (closed) return
+        native.setNoiseIntensity(intensity)
+        noiseIntensity = intensity
+    }
+
+    /** Set the outline and slot divider for future openings of the dropdown. */
+    fun setPopupOutline(widthDp: Float, color: Int) {
+        require(widthDp.isFinite() && widthDp >= 0f)
+        if (closed) return
+        outlineWidthDp = widthDp
+        outlineColor = color
+    }
 
     internal fun setExpanded(value: Boolean) {
         expanded = value

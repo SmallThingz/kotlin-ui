@@ -67,6 +67,18 @@ class ReverbInlineRecordingRename(
     private var error: String? = null
     private var busy = false
     private var closed = false
+    private var inputActive = true
+    private var editingRequested = false
+    private var showImePosted = false
+    private val showIme = Runnable {
+        showImePosted = false
+        if (editingRequested && canStartEditing() && editor.isFocused) {
+            // Consume before crossing into IMM: a synchronous retirement cannot leave a retry.
+            editingRequested = false
+            context.getSystemService(InputMethodManager::class.java)
+                .showSoftInput(editor, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
     val editor = ReverbSingleLineInputView(context, environment, configuration())
     private val field: FrameLayout = object : FrameLayout(context), NativeAndroidInteropHost {
         override val nativeInteropRequests = NativeAndroidInteropRequests()
@@ -107,7 +119,10 @@ class ReverbInlineRecordingRename(
         addView(support, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(actions, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         support.accessibilityLiveRegion = ACCESSIBILITY_LIVE_REGION_POLITE
-        editor.onNativeFocusChanged = { retargetOutline() }
+        editor.onNativeFocusChanged = { focused ->
+            if (!focused) cancelEditingRequest()
+            retargetOutline()
+        }
         bind(environment, readName(), null, false)
     }
     private fun configuration() = NativeSingleLineInputConfiguration(recipe.textStyle,
@@ -124,7 +139,9 @@ class ReverbInlineRecordingRename(
         field.setPadding(edge, edge, edge, edge)
         field.minimumHeight = (recipe.minimumFieldHeightDp * value.textDensity.density).roundToInt()
         editor.bind(name, configuration(), value, readName, onNameChanged, { if (!this.busy) onSubmit() })
-        editor.isEnabled = !busy
+        if (busy) cancelEditingRequest()
+        editor.setInputActive(inputActive && !busy)
+        editor.isEnabled = inputActive && !busy
         support.setText(error.orEmpty())
         support.visibility = if (error == null) GONE else VISIBLE
         value.bindParagraphStyle(support, ReverbTextRole.BODY_SMALL, value.palette.error)
@@ -133,14 +150,67 @@ class ReverbInlineRecordingRename(
         retargetOutline()
         requestLayout()
     }
+    /** One explicit request survives an exiting menu's window focus, never a retired editor. */
     fun startEditing() {
-        if (closed || !isAttachedToWindow || busy || !editor.requestFocus()) return
-        editor.setSelection(editor.text.length)
-        editor.context.getSystemService(InputMethodManager::class.java).showSoftInput(editor, InputMethodManager.SHOW_IMPLICIT)
+        if (closed || !inputActive || busy) return
+        editingRequested = true
+        scheduleEditing()
     }
+
+    fun setInputActive(active: Boolean) {
+        if (closed || inputActive == active) return
+        inputActive = active
+        if (!active) cancelEditingRequest()
+        editor.setInputActive(active && !busy)
+        editor.isEnabled = active && !busy
+        // Block replacement focus before clearFocus can synchronously search this subtree.
+        editor.isFocusable = active
+        editor.isFocusableInTouchMode = active
+        if (!active) editor.clearFocus()
+    }
+
+    private fun canStartEditing() = !closed && inputActive && !busy && isAttachedToWindow &&
+        isShown && width > 0 && height > 0 && editor.isLaidOut && hasWindowFocus() && editor.isEnabled
+
+    private fun scheduleEditing() {
+        if (!editingRequested || showImePosted || !canStartEditing()) return
+        if (!editor.requestFocus() || !editingRequested || !canStartEditing()) return
+        editor.setSelection(editor.text.length)
+        // ViewRoot must establish the focused editor's connection before the one show request.
+        showImePosted = true
+        editor.post(showIme)
+    }
+
+    private fun cancelEditingRequest() {
+        editingRequested = false
+        showImePosted = false
+        editor.removeCallbacks(showIme)
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        super.onLayout(changed, left, top, right, bottom)
+        scheduleEditing()
+    }
+
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        if (hasWindowFocus) scheduleEditing()
+        else {
+            // Keep an unfulfilled explicit request while a closing action menu owns the window.
+            showImePosted = false
+            editor.removeCallbacks(showIme)
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        cancelEditingRequest()
+        super.onDetachedFromWindow()
+    }
+
     override fun close() {
         if (closed) return
         closed = true
+        cancelEditingRequest()
         val focused = editor.isFocused
         var failure = smallthingz.ui.util.closePreservingPrimaryFailure(null, editor::releaseCallbacks)
         if (focused) {

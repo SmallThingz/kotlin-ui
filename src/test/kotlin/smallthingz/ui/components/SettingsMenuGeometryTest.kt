@@ -26,4 +26,23 @@ class SettingsMenuGeometryTest {
         assertEquals(NativeMenuPosition(120,100,0f,0f),
             nativeMenuPosition(NativeMenuBounds(120,100,120,100),500,500,0,0,false,48))
     }
+
+    @Test fun pointerOriginUsesThePressPointForPlacementAndAnimationInBothDirections() {
+        val point = NativeMenuBounds(150, 200, 150, 200)
+        assertEquals(NativeMenuPosition(150,200,0f,0f),
+            nativeMenuPosition(point,400,600,120,180,false,48))
+        assertEquals(NativeMenuPosition(30,200,1f,0f),
+            nativeMenuPosition(point,400,600,120,180,true,48))
+    }
+
+    @Test fun pointerOriginFlipsAtBottomRightAndClampsAtTopOrOutsideViewport() {
+        assertEquals(NativeMenuPosition(270,360,1f,1f),
+            nativeMenuPosition(NativeMenuBounds(390,540,390,540),400,600,120,180,false,48))
+        assertEquals(NativeMenuPosition(270,372,1f,1f),
+            nativeMenuPosition(NativeMenuBounds(390,570,390,570),400,600,120,180,false,48))
+        assertEquals(NativeMenuPosition(8,48,0f,0f),
+            nativeMenuPosition(NativeMenuBounds(8,8,8,8),400,600,120,180,false,48))
+        assertEquals(NativeMenuPosition(0,48,0f,0f),
+            nativeMenuPosition(NativeMenuBounds(-50,-80,-50,-80),400,600,120,180,false,48))
+    }
 }

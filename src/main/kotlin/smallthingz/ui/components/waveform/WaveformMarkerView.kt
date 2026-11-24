@@ -73,6 +73,7 @@ class WaveformMarkerView(context: Context, private var density: Float) : ViewGro
     private class MarkerShape(context: Context) : View(context) {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
         private var colorMotion:ViewColorTransition?=null
+        private var targetColor = paint.color
         private var requestedRadius = 0f
         private fun radius() = min(requestedRadius, min(width, height) / 2f)
         init {
@@ -86,8 +87,10 @@ class WaveformMarkerView(context: Context, private var density: Float) : ViewGro
         }
         fun setShape(color: Int, radius: Float, shadow: Float) {
             val geometryChanged = requestedRadius != radius || elevation != shadow
-            val colorChanged = paint.color != color
+            // A reversal can request the still-painted start color before the first frame.
+            val colorChanged = targetColor != color
             if (!geometryChanged && !colorChanged) return
+            targetColor = color
             val motion=colorMotion ?: ViewColorTransition(this,intArrayOf(color),{
                 colorMotion?.let {paint.color=it.color(0);invalidate()}
             }).also {colorMotion=it;paint.color=color}

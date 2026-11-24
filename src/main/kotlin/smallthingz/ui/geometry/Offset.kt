@@ -115,7 +115,17 @@ value class Offset(val packedValue: Long) {
     fun getDistance(): Float {
         val x = unpackFloat1(packedValue)
         val y = unpackFloat2(packedValue)
-        return sqrt(x * x + y * y)
+        val squared = x * x + y * y
+        // Squaring can overflow or lose subnormal precision while the distance still fits.
+        // Keep ordinary Float rounding and nonfinite propagation on the existing path.
+        if ((squared < java.lang.Float.MIN_NORMAL || squared.isInfinite()) &&
+            (x != 0f || y != 0f) && x.isFinite() && y.isFinite()
+        ) {
+            val wideX = x.toDouble()
+            val wideY = y.toDouble()
+            return sqrt(wideX * wideX + wideY * wideY).toFloat()
+        }
+        return sqrt(squared)
     }
 
     /**

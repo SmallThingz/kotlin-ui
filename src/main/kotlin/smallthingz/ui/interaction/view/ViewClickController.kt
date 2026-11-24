@@ -44,6 +44,8 @@ data class NativeClickBinding(
     val onClick: () -> Unit,
     val onLongClick: (() -> Unit)? = null,
     val hapticFeedbackEnabled: Boolean = true,
+    /** Pointer-only override, using the admitted DOWN in host-local coordinates. Requires onLongClick. */
+    val onPointerLongClick: ((Float, Float) -> Unit)? = null,
 )
 
 /**
@@ -321,8 +323,10 @@ class ViewClickController(
         gesture.longTriggered = true
         environment.longPressOwnershipChanged(true)
         if (!owns(gesture)) return
-        val action = binding?.onLongClick ?: return
-        action()
+        val current = binding ?: return
+        val action = current.onLongClick ?: return
+        val pointerAction = current.onPointerLongClick
+        if (pointerAction != null) pointerAction(gesture.press.x, gesture.press.y) else action()
         // Source invokes pointer haptic after the callback; keyboard long click has no such haptic.
         // Read the current mutable flag exactly as CombinedClickable does after its callback.
         // Detach/disable does not add a new guard inside an already-executing source callback.
