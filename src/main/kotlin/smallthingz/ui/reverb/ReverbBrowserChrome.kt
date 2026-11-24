@@ -2,18 +2,25 @@ package smallthingz.ui.reverb
 
 import android.content.Context
 import android.graphics.drawable.Drawable
+import android.os.Bundle
+import android.text.InputFilter
+import android.text.Spanned
 import android.view.Gravity
 import android.view.View
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.TextView.BufferType
 import androidx.annotation.DrawableRes
 import androidx.core.view.ViewCompat
 import smallthingz.ui.components.NativeDeterminateLinearProgress
 import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.NativeTextField
+import smallthingz.ui.components.NativeTextFieldStyle
 import smallthingz.ui.components.NativeToolbarActionTone
 import smallthingz.ui.components.NativeToolbarBackground
 import smallthingz.ui.components.acceptsNativeInput
+import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.text.NativeTypographyRole
 import kotlin.math.roundToInt
 
@@ -85,9 +92,9 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
     val menuAction = ReverbBrowserChromeActionView(context, chromeTheme, menu, ::action)
     private val field = ReverbDesign.appearance.compactField.style
     // The surrounding compact surface owns the fill and leading action; retain the canonical editor metrics.
-    val addressEditor = NativeTextField(context, chromeTheme.palette.pageControls, field.copy(filled = false, startPaddingDp = 0f)).apply {
+    val addressEditor: NativeTextField = ReverbBrowserChromeAddressEditor(context, chromeTheme.palette.pageControls,
+        field.copy(filled = false, startPaddingDp = 0f)).apply {
         hint = addressHint
-        setSingleLine(true)
     }
     val pageHost = FrameLayout(context)
     val chromeToolbar: View = ReverbBrowserPanelSwipe(context, { dp(56).toFloat() },
@@ -166,4 +173,33 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
         addressEditor.setOnScrollChangeListener(null)
     }
     private fun dp(value: Int) = (value * chromeTheme.density.density).roundToInt()
+}
+
+/** Native single-line editing keeps its input budget; binding a committed URL or draft is lossless. */
+private class ReverbBrowserChromeAddressEditor(context: Context, palette: ControlPalette, style: NativeTextFieldStyle) :
+    NativeTextField(context, palette, style) {
+    private var settingText = 0
+    private var accessibilityInput = 0
+    init {
+        // TextView otherwise adds its own 5,000-character filter, including on setText(). A
+        // LengthFilter subclass also prevents later setSingleLine/inputType calls replacing it.
+        val userLimit = object : InputFilter.LengthFilter(5000) {
+            override fun filter(source: CharSequence, start: Int, end: Int, dest: Spanned,
+                dstart: Int, dend: Int): CharSequence? =
+                if (settingText > 0 && accessibilityInput == 0) null else super.filter(source, start, end, dest, dstart, dend)
+        }
+        filters = filters.filterNot { it is InputFilter.LengthFilter }.toTypedArray() + userLimit
+        setSingleLine(true)
+    }
+    override fun setText(text: CharSequence?, type: BufferType?) {
+        // TextView's constructor can call this override before this subclass is initialized.
+        settingText++
+        try { super.setText(text, type) } finally { settingText-- }
+    }
+    override fun performAccessibilityAction(action: Int, arguments: Bundle?): Boolean {
+        if (action != AccessibilityNodeInfo.ACTION_SET_TEXT) return super.performAccessibilityAction(action, arguments)
+        // Native ACTION_SET_TEXT uses setText too, but is user input rather than an owner bind.
+        accessibilityInput++
+        return try { super.performAccessibilityAction(action, arguments) } finally { accessibilityInput-- }
+    }
 }

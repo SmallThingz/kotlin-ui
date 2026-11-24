@@ -5,13 +5,16 @@ import android.app.Dialog
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Rect
+import android.os.Bundle
 import android.os.SystemClock
+import android.text.InputType
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import android.widget.ScrollView
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -33,7 +36,6 @@ class ReverbBrowserChromeIntegrationTest {
         else -> error("reverb_semantic_exclude_ime must be true or false")
     }
     private fun main(block: () -> Unit) = instrumentation.runOnMainSync(block)
-    private fun idle() = instrumentation.waitForIdleSync()
     private fun activity() = instrumentation.startActivitySync(Intent(instrumentation.context,
         NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     private class Gate(activity: Activity) : FrameLayout(activity), NativeInputGate {
@@ -59,13 +61,13 @@ class ReverbBrowserChromeIntegrationTest {
                         (if (bottom) Gravity.BOTTOM else Gravity.TOP) or Gravity.END))
                     activity.setContentView(host)
                 }
-                idle()
+                awaitReady(anchor)
                 main {
                     popup = ReverbBrowserChromePopup(anchor, ReverbDesign.theme(activity, false),
                         ReverbBrowserChromeMenuKind.NAVIGATION, content(), { true }, {}, {})
-                    assertTrue(popup.show())
+                    assertTrue("Popup show rejected: ${viewState(anchor)}", popup.show())
                 }
-                idle()
+                awaitPopup(requireNotNull(popup))
                 main {
                     val value = popup!!
                     assertEquals(bottom, value.window.isAboveAnchor)
@@ -73,7 +75,7 @@ class ReverbBrowserChromeIntegrationTest {
                     assertTrue(value.panel.pivotX in 0f..value.panel.width.toFloat())
                     value.close()
                 }
-                idle()
+                awaitReady(anchor)
             }
         } finally { main { popup?.close(); activity.finish() } }
     }
@@ -92,14 +94,14 @@ class ReverbBrowserChromeIntegrationTest {
                 gate.addView(anchor, FrameLayout.LayoutParams(100, 100))
                 activity.setContentView(gate)
             }
-            idle()
+            awaitReady(anchor)
             main {
                 popup = ReverbBrowserChromePopup(anchor, ReverbDesign.theme(activity, false),
                     ReverbBrowserChromeMenuKind.HISTORY, content(), { true }, { events.add(it) }, {})
                 installed = popup
                 assertTrue(popup.show())
             }
-            idle()
+            awaitPopup(popup)
             main {
                 val rows = popup.panel.descendants().filterIsInstance<ReverbBrowserPanelSettingRow>().toList()
                 val open = rows.single { it.titleView.text.toString() == "Open" }
@@ -120,25 +122,27 @@ class ReverbBrowserChromeIntegrationTest {
         var installed: AutoCloseable? = null
         val delivered = CountDownLatch(1)
         val events = mutableListOf<String>()
+        var retired = 0
         try {
             main {
                 anchor = View(activity)
                 activity.setContentView(FrameLayout(activity).apply { addView(anchor, FrameLayout.LayoutParams(100, 100)) })
             }
-            idle()
+            awaitReady(anchor)
             main {
                 popup = ReverbBrowserChromePopup(anchor, ReverbDesign.theme(activity, false),
                     ReverbBrowserChromeMenuKind.NAVIGATION, content(), { true }, {
                         assertFalse(popup.window.isShowing)
                         assertTrue(anchor.hasWindowFocus())
                         events.add(it); delivered.countDown()
-                    }, {})
+                    }, { retired++ })
                 installed = popup; assertTrue(popup.show())
             }
-            idle()
+            awaitPopup(popup)
             main {
                 val row = popup.panel.descendants().filterIsInstance<ReverbBrowserPanelSettingRow>().first()
                 val scroll = popup.panel.descendants().filterIsInstance<ScrollView>().single()
+                assertTrue("Gesture target must be laid out and admitted", ready(row) && row.isEnabled && row.acceptsNativeInput())
                 val rect = Rect(0, 0, row.width, row.height)
                 scroll.offsetDescendantRectToMyCoords(row, rect)
                 val now = SystemClock.uptimeMillis()
@@ -157,8 +161,12 @@ class ReverbBrowserChromeIntegrationTest {
                 assertTrue(events.isEmpty())
                 row.performClick(); row.performClick()
             }
-            assertTrue(delivered.await(5, TimeUnit.SECONDS))
-            main { assertEquals(listOf("open"), events) }
+            val completed = delivered.await(5, TimeUnit.SECONDS)
+            main {
+                assertTrue("Fresh action did not deliver: ${popupState(popup)}; anchor=${viewState(anchor)}; retired=$retired; events=$events", completed)
+                assertEquals(listOf("open"), events)
+                assertEquals(1, retired)
+            }
         } finally { main { installed?.close(); activity.finish() } }
     }
 
@@ -175,13 +183,13 @@ class ReverbBrowserChromeIntegrationTest {
                 anchor = View(activity)
                 activity.setContentView(FrameLayout(activity).apply { addView(anchor, FrameLayout.LayoutParams(100, 100)) })
             }
-            idle()
+            awaitReady(anchor)
             main {
                 popup = ReverbBrowserChromePopup(anchor, ReverbDesign.theme(activity, false),
                     ReverbBrowserChromeMenuKind.NAVIGATION, content(), { true }, { events.add(it) }, {})
                 installed = popup; assertTrue(popup.show())
             }
-            idle()
+            awaitPopup(popup)
             main {
                 targets = listOf(popup.panel.descendants().filterIsInstance<ReverbBrowserPanelSettingRow>().first(),
                     popup.panel.descendants().filterIsInstance<ReverbBrowserChromeActionView>().single().accessibilityAction)
@@ -193,15 +201,22 @@ class ReverbBrowserChromeIntegrationTest {
                     modal = Dialog(activity).apply { setContentView(FrameLayout(activity)) }
                     showFixture(requireNotNull(modal))
                 }
-                idle()
+                await("Covering dialog owns focus", { "${popupState(popup)}; dialog=${viewState(requireNotNull(modal?.window).decorView)}" }) {
+                    requireNotNull(modal?.window).decorView.hasWindowFocus() && !popup.panel.hasWindowFocus()
+                }
                 main { assertFalse(popup.panel.hasWindowFocus()); target.performClick(); modal?.dismiss() }
-                idle()
+                awaitPopup(popup)
                 main {
                     assertTrue(popup.panel.hasWindowFocus())
                     target.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
                     assertTrue(events.isEmpty())
                 }
             }
+            main { targets.first().performClick() }
+            await("Fresh action after focus return delivers", { "${popupState(popup)}; events=$events" }) {
+                events == listOf("open")
+            }
+            main { assertEquals(listOf("open"), events) }
         } finally { main { modal?.dismiss(); installed?.close(); activity.finish() } }
     }
 
@@ -270,7 +285,7 @@ class ReverbBrowserChromeIntegrationTest {
                 gate.addView(view, FrameLayout.LayoutParams(-1, -1))
                 activity.setContentView(gate)
             }
-            idle()
+            awaitReady(view)
             main {
                 val target = view.siteAction.accessibilityAction
                 target.performClick()
@@ -292,6 +307,77 @@ class ReverbBrowserChromeIntegrationTest {
                 assertEquals(listOf("site", "current"), events)
             }
         } finally { main { chrome?.close(); activity.finish() } }
+    }
+
+    @Test fun addressBindingIsLosslessWhileNativeUserInputRemainsBounded() {
+        val activity = activity()
+        var installed: ReverbBrowserChrome? = null
+        try {
+            lateinit var view: ReverbBrowserChrome
+            val action = ReverbBrowserChromeAction("site", "Site", ReverbBrowserChromeIcon.Shared(ReverbIcon.Browser))
+            main {
+                view = ReverbBrowserChrome(activity, ReverbDesign.theme(activity, false), "Address", action,
+                    action.copy(id = "tabs", label = "Tabs"), action.copy(id = "menu", label = "Menu"))
+                installed = view
+                activity.setContentView(view)
+            }
+            awaitReady(view)
+            main {
+                val editor = view.addressEditor
+                editor.setText("")
+                editor.editableText.append("u".repeat(6000))
+                assertEquals("Native user-edit limit remains in effect", 5000, editor.length())
+                val committed = "https://example.test/" + "path".repeat(4096)
+                editor.setText(committed)
+                assertEquals(committed, editor.text.toString())
+                editor.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                editor.setSingleLine(true)
+                assertEquals("URI/single-line metadata must not truncate a retained value", committed, editor.text.toString())
+                assertTrue(editor.requestFocus())
+                editor.setSelection(7, 19)
+                view.bindSiteAction(action, "Unverified")
+                assertEquals(committed, editor.text.toString())
+                assertTrue(editor.hasFocus())
+                assertEquals(7, editor.selectionStart); assertEquals(19, editor.selectionEnd)
+                editor.editableText.delete(editor.length() - 1, editor.length())
+                assertEquals("Deletion remains possible above the user-input limit", committed.dropLast(1), editor.text.toString())
+                editor.setText("")
+                editor.editableText.append("v".repeat(6000))
+                assertEquals("Binding must restore user-input admission", 5000, editor.length())
+                editor.setText("")
+                assertTrue(editor.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "a".repeat(6000))
+                }))
+                assertEquals("Accessibility replacement remains a bounded user edit", 5000, editor.length())
+            }
+        } finally { main { installed?.close(); activity.finish() } }
+    }
+
+    private fun ready(view: View) = view.isAttachedToWindow && view.isShown && view.windowVisibility == View.VISIBLE &&
+        view.isLaidOut && !view.isLayoutRequested && view.width > 0 && view.height > 0 && view.hasWindowFocus()
+
+    private fun viewState(view: View) = "attached=${view.isAttachedToWindow}, shown=${view.isShown}, " +
+        "windowVisibility=${view.windowVisibility}, laidOut=${view.isLaidOut}, layoutRequested=${view.isLayoutRequested}, " +
+        "size=${view.width}x${view.height}, focus=${view.hasWindowFocus()}, enabled=${view.isEnabled}"
+
+    private fun popupState(popup: ReverbBrowserChromePopup) =
+        "showing=${popup.window.isShowing}, above=${popup.window.isAboveAnchor}, panel=${viewState(popup.panel)}"
+
+    private fun awaitReady(view: View) = await("Attached owner is ready", { viewState(view) }) { ready(view) }
+    private fun awaitPopup(popup: ReverbBrowserChromePopup) = await("Popup is laid out and owns focus", { popupState(popup) }) {
+        popup.window.isShowing && ready(popup.panel)
+    }
+
+    private fun await(description: String, state: () -> String, condition: () -> Boolean) {
+        val deadline = SystemClock.uptimeMillis() + 5000
+        var lastState = "not sampled"
+        do {
+            var admitted = false
+            main { admitted = condition(); lastState = state() }
+            if (admitted) return
+            SystemClock.sleep(20)
+        } while (SystemClock.uptimeMillis() < deadline)
+        fail("$description: $lastState")
     }
 
     private fun showFixture(dialog: Dialog) {
