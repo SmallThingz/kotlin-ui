@@ -66,6 +66,7 @@ open class NativeSurface(context: Context, style: NativeSurfaceStyle) : FrameLay
     private val mask = GradientDrawable().apply { setColor(Color.WHITE) }
     private var grain: NoiseDrawable? = null
     private var grainSeed: Int? = null
+    private var grainIntensity = 1f
     private var ripple: RippleDrawable? = null
     private var appliedStyle: NativeSurfaceStyle? = null
     private var appliedDensity = Float.NaN
@@ -125,6 +126,7 @@ open class NativeSurface(context: Context, style: NativeSurfaceStyle) : FrameLay
             val content = if (style.noise) {
                 val noise = if (grainSeed == style.noiseSeed) grain else null
                 (noise ?: NoiseDrawable(seed = style.noiseSeed)).also {
+                    it.setNoiseIntensity(grainIntensity)
                     grain = it
                     grainSeed = style.noiseSeed
                 }
@@ -136,6 +138,14 @@ open class NativeSurface(context: Context, style: NativeSurfaceStyle) : FrameLay
         updateCorners()
         publishColors()
         invalidate()
+    }
+
+    /** Change an enabled grain layer's opacity without rebuilding the surface. */
+    fun setNoiseIntensity(intensity: Float) {
+        require(intensity in 0f..1f)
+        if (grainIntensity == intensity) return
+        grainIntensity = intensity
+        grain?.setNoiseIntensity(intensity)
     }
 
     private fun updateBorder() {

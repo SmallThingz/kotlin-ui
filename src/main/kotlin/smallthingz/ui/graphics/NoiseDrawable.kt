@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
 import androidx.annotation.ColorInt
+import kotlin.math.roundToInt
 
 /**
  * Native background fill and deterministic grain in component-local coordinates.
@@ -39,14 +40,16 @@ class NoiseDrawable(
 
     private fun grainSurfaceRange(color: Int): Long {
         if (color ushr 24 != 255) return 0L
-        if (seed == null) return smallthingz.ui.controls.textSurfaceRange(color)
+        val grainAlpha = if (seed == null) 0 else (17 * noisePaint.alpha + 254) / 255
+        if (grainAlpha == 0) return smallthingz.ui.controls.textSurfaceRange(color)
+        val fillAlpha = 255 - grainAlpha
         var darkest = 0xff000000.toInt()
         var lightest = 0xff000000.toInt()
         for (shift in 0..16 step 8) {
             val channel = color ushr shift and 255
             // Floor/ceiling enclose integer raster rounding and bilinear grain interpolation.
-            darkest = darkest or ((channel * 238 / 255) shl shift)
-            lightest = lightest or (((channel * 238 + 255 * 17 + 254) / 255) shl shift)
+            darkest = darkest or ((channel * fillAlpha / 255) shl shift)
+            lightest = lightest or (((channel * fillAlpha + 255 * grainAlpha + 254) / 255) shl shift)
         }
         return smallthingz.ui.controls.textSurfaceRange(darkest, lightest)
     }
@@ -73,6 +76,16 @@ class NoiseDrawable(
         invalidateSelf()
     }
 
+    /** Set grain opacity from 0 (only the fill) to 1 (original texture). */
+    fun setNoiseIntensity(intensity: Float) {
+        require(intensity in 0f..1f)
+        val alpha = (intensity * 255f).roundToInt()
+        if (noisePaint.alpha == alpha) return
+        noisePaint.alpha = alpha
+        textSurfaceRange = if (drawsBackground) grainSurfaceRange(backgroundPaint.color) else 0L
+        invalidateSelf()
+    }
+
     override fun draw(canvas: Canvas) {
         if (bounds.isEmpty || drawableAlpha == 0) return
         val checkpoint = canvas.save()
@@ -91,14 +104,21 @@ class NoiseDrawable(
                 canvas.saveLayer(0f, 0f, width, height, paint)
             }
             if (drawsBackground) canvas.drawRect(0f, 0f, width, height, backgroundPaint)
-            val currentSeed = seed
-            if (noisePaint.shader == null && currentSeed != null) noisePaint.shader = NoiseTexture.shader(currentSeed)
-            // First launch may draw before background generation finishes. Keep the exact base
-            // color, with no launch gate/fade; completion invalidates this drawable once.
-            if (noisePaint.shader != null) canvas.drawRect(0f, 0f, width, height, noisePaint)
+            drawGrain(canvas, 0f, 0f, width, height)
         } finally {
             canvas.restoreToCount(checkpoint)
         }
+    }
+
+    /** Paint just the shared grain over a shape already filled by its owner. */
+    internal fun drawGrain(canvas: Canvas, left: Float, top: Float, right: Float, bottom: Float, corner: Float = 0f) {
+        if (noisePaint.alpha == 0 || right <= left || bottom <= top) return
+        val currentSeed = seed ?: return
+        if (noisePaint.shader == null) noisePaint.shader = NoiseTexture.shader(currentSeed)
+        // Until generation completes, leave the owner's exact fill visible.
+        if (noisePaint.shader == null) return
+        if (corner > 0f) canvas.drawRoundRect(left, top, right, bottom, corner, corner, noisePaint)
+        else canvas.drawRect(left, top, right, bottom, noisePaint)
     }
 
     override fun setAlpha(alpha: Int) {

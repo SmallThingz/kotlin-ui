@@ -289,6 +289,50 @@ are `smallthingz.ui` in either build. The standalone project is `kotlin-ui`, wit
 Gradle group `smallthingz`.
 Consumers import the direct View DSL from `smallthingz.ui.dsl`.
 
+## Dark surfaces
+
+Choose neutral `GRAY`, darker `TINTED`, or black `AMOLED` surfaces through the
+window's existing appearance. The resolver keeps the base scheme's accents,
+content colors and light theme. Tint color and strength are configurable.
+AMOLED makes the main surface fills `#000000`. Call `setNoiseIntensity` on a
+`NoiseDrawable` or a `NativeSurface` with grain enabled to change grain opacity
+independently of the fill. `0f` draws only the base color and `1f` draws the
+full texture. Existing components default to full strength.
+
+```kotlin
+import smallthingz.ui.components.*
+
+val appearance = NativeUiAppearance.Default.copy(
+    colorScheme = NativeColorScheme.withDarkSurfaces(
+        NativeDarkSurfaces.TINTED, tint = 0xff6682dc.toInt(), tintStrength = 0.45f,
+    ),
+)
+```
+
+`NativeDarkSurfacePreset.Amoled` combines a black page and 25% foreground
+lightness with 100% page grain, 50% foreground grain, and a 1 dp outline at
+15% lightness (`#262626`). Use its resolver for the fills and its paint values
+with the surface and control recipes. The system Material accents carry through.
+
+```kotlin
+val preset = NativeDarkSurfacePreset.Amoled
+val appearance = NativeUiAppearance.Default.copy(colorScheme = preset.colorScheme())
+val colors = appearance.resolveColorScheme(context, darkTheme = true)
+page.background = appearance.backdrops.pageBackground(colors).apply {
+    setNoiseIntensity(preset.backgroundGrain)
+}
+val card = NativeSurface(context, NativeSurfaceStyle(colors.raised, noise = true,
+    outlineColor = preset.borderColor, outlineWidthDp = preset.borderWidthDp)).apply {
+    setNoiseIntensity(preset.foregroundGrain)
+}
+```
+
+Build the interactive comparison with `./gradlew :theme-demo:assembleDebug`.
+It starts on the AMOLED preset and also offers Tinted. A sample Reverb player
+and export form use native library controls. Use the sliders to adjust page and
+foreground lightness and grain independently. Width zero hides decorative
+outlines, and the active field still shows focus.
+
 ## Localized theme selector
 
 `smallthingz.ui.components.NativeThemeSelector` owns its Theme/Auto/Light/Dark

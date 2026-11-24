@@ -795,6 +795,7 @@ open class NativeSegmentedChoice(
     private val selectionIndicator = if (movingSelectionBackground && style.selectedFill)
         NativeSelectionIndicator(this, palette.selection) else null
     private var uniformSelectionForeground: NativeSelectionForeground? = null
+    internal fun setIndicatorNoiseIntensity(intensity: Float) { selectionIndicator?.setNoiseIntensity(intensity) }
     internal var capsuleColumns: Int? = null
     internal var preferredCellWidth = 0
         private set

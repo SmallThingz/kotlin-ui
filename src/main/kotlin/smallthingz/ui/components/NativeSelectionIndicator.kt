@@ -9,6 +9,8 @@ import android.view.View
 import smallthingz.ui.animation.ColorTransition
 import smallthingz.ui.animation.core.FastOutSlowInEasing
 import smallthingz.ui.animation.view.ViewColorTransition
+import smallthingz.ui.graphics.ViewGrain
+import smallthingz.ui.graphics.bindGrainLayer
 import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
 import kotlin.math.min
 
@@ -18,6 +20,7 @@ internal class NativeSelectionIndicator(
     initialColor: Int,
 ) : Choreographer.FrameCallback, View.OnAttachStateChangeListener, AutoCloseable {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var grain: ViewGrain? = null
     private val displayed = RectF()
     private val start = RectF()
     private val target = RectF()
@@ -38,6 +41,7 @@ internal class NativeSelectionIndicator(
     init { host.addOnAttachStateChangeListener(this) }
 
     fun bindColor(color: Int) { colors.retarget(color) }
+    fun setNoiseIntensity(intensity: Float) { grain = host.bindGrainLayer(grain, intensity) }
 
     fun retarget(left: Float, top: Float, right: Float, bottom: Float) {
         if (closed) return
@@ -73,6 +77,7 @@ internal class NativeSelectionIndicator(
         paint.color = colors.color(0)
         val corner = min(radius, min(displayed.width(), displayed.height()) / 2f)
         canvas.drawRoundRect(displayed, corner, corner, paint)
+        grain?.draw(canvas, displayed.left, displayed.top, displayed.right, displayed.bottom, corner)
     }
 
     override fun doFrame(frameTimeNanos: Long) {

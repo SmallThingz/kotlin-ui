@@ -1,2 +1,3 @@
 rootProject.name = 'kotlin-ui'
 include ':dropdown-demo'
+include ':theme-demo'

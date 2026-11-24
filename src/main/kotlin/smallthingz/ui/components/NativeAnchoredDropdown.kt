@@ -65,6 +65,8 @@ class NativeAnchoredDropdown(
     private val palette: NativeDropdownColors = NativeDropdownColors(colors.field, colors.field, colors.muted, colors.ink, colors.border),
 ) : AutoCloseable {
     private var dismissCurrent: (() -> Unit)? = null
+    internal var noiseIntensity = 0f
+    internal var outlineWidthDp: Float? = null
     private var sessionIdentity: Any? = null
     private val titleStyle = appearance.typography[NativeTypographyRole.BODY_SMALL]
     private val selectedStyle = appearance.typography[NativeTypographyRole.BODY_LARGE]
@@ -80,6 +82,7 @@ class NativeAnchoredDropdown(
             createDropdownIcon(context, palette.muted), palette, { null }, { _, _ -> }, activate,
         ).apply {
             if (wrapValue) wrapValues()
+            setNoiseIntensity(noiseIntensity)
             bindDescription(content.label)
             bind(content, false, palette, present = optionRow || content.options.size > 1)
         }
@@ -459,8 +462,13 @@ class NativeAnchoredDropdown(
                 return anchorY - minOf(position, slotsAbove.toFloat()) * rowHeight * reveal to
                     anchorY + rowHeight + minOf(lastPosition - position, slotsBelow.toFloat()) * rowHeight * reveal
             }
-            private fun updateRevealPath() {
-                rectangle.set(.5f, revealTop + .5f, width - .5f, revealBottom - .5f)
+            private fun customOutlineStroke(): Float? = outlineWidthDp?.let {
+                (it * density.density).coerceAtMost(minOf(width.toFloat(), revealBottom - revealTop).coerceAtLeast(0f) / 2f)
+            }
+
+            private fun updateRevealPath(stroke: Float? = customOutlineStroke()) {
+                val inset = stroke?.div(2f) ?: .5f
+                rectangle.set(inset, revealTop + inset, width - inset, revealBottom - inset)
                 for (corner in 0..3) {
                     val rowsFromSlot = if (corner < 2) minOf(position, slotsAbove.toFloat()) else minOf(lastPosition - position, slotsBelow.toFloat())
                     val fraction = rowsFromSlot.coerceIn(0f, 1f)
@@ -473,17 +481,22 @@ class NativeAnchoredDropdown(
 
             override fun draw(canvas: Canvas) {
                 if (plan == null) return
-                updateRevealPath()
+                val customStroke = customOutlineStroke()
+                updateRevealPath(customStroke)
                 val saved = canvas.save(); canvas.clipPath(path)
                 paint.style = Paint.Style.FILL; paint.color = palette.collapsed
                 canvas.drawPath(path, paint)
                 super.draw(canvas)
                 // The slot never moves. Its divider and outline share the existing group border role.
-                paint.style = Paint.Style.STROKE; paint.strokeWidth = density.density; paint.color = palette.divider
-                canvas.drawLine(0f, anchorY.toFloat(), width.toFloat(), anchorY.toFloat(), paint)
-                canvas.drawLine(0f, (anchorY + rowHeight).toFloat(), width.toFloat(), (anchorY + rowHeight).toFloat(), paint)
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = customStroke ?: density.density
+                paint.color = palette.divider
+                if (paint.strokeWidth > 0f) {
+                    canvas.drawLine(0f, anchorY.toFloat(), width.toFloat(), anchorY.toFloat(), paint)
+                    canvas.drawLine(0f, (anchorY + rowHeight).toFloat(), width.toFloat(), (anchorY + rowHeight).toFloat(), paint)
+                }
                 canvas.restoreToCount(saved)
-                canvas.drawPath(path, paint)
+                if (paint.strokeWidth > 0f) canvas.drawPath(path, paint)
                 if (collapseAfterDraw) {
                     collapseAfterDraw = false
                     postOnAnimation(startCollapse)
