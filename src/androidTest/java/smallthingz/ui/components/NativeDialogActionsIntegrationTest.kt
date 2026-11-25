@@ -2,6 +2,7 @@ package smallthingz.ui.components
 
 import android.content.res.Configuration
 import android.view.View
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -17,10 +18,21 @@ import kotlin.math.roundToInt
 @RunWith(AndroidJUnit4::class)
 class NativeDialogActionsIntegrationTest {
     @Test fun shortLabelsShareWidthAndLongLabelsGrow() = onMain {
-        withActions("Cancel", "Delete", 420, 1f) { row, first, second ->
+        withActions("OK", "OK", 420, 1f) { row, first, second ->
             assertEquals(LinearLayout.HORIZONTAL, row.orientation)
             assertEquals(first.button.measuredWidth, second.button.measuredWidth)
-            assertTrue(first.measuredWidth >= dp(first, 128))
+            // Compare the mounted standalone pair to the existing joined Trim recipe for the same label and glyph.
+            val density = Density(row.context)
+            val appearance = NativeUiAppearance.Default
+            val colors = appearance.resolveColorScheme(row.context, false)
+            val reference = NativeMaterialButtonView(row.context, appearance.buttons.trimActions.cancel,
+                density, createFontFamilyResolver(row.context), onClick = {})
+            try {
+                reference.setLeadingIcon(MaterialRoundedIconDrawable(MaterialRoundedIcon.Close, density.density, colors.ink))
+                reference.bind("OK", true, colors.buttonPalette)
+                reference.joinActionSurface()
+                assertEquals(reference.preferredWidth(false), first.button.measuredWidth)
+            } finally { reference.close() }
             assertTrue(first.measuredHeight >= dp(first, 48))
         }
         withActions("Cancel", "Replace installed plugin", 600, 1f) { _, first, second ->
@@ -30,16 +42,59 @@ class NativeDialogActionsIntegrationTest {
 
     @Test fun narrowAndLargeTextStackWithoutReducingPaddingOrTargets() = onMain {
         for (scale in listOf(1f, 2f)) for (rtl in listOf(false, true)) {
-            withActions("Cancel", "Delete", 240, scale, rtl) { row, first, second ->
+            withActions("Cancel", "Replace installed plugin", 136, scale, rtl) { row, first, second ->
                 assertEquals(LinearLayout.VERTICAL, row.orientation)
                 assertFalse(first.button.compactPadding)
                 assertFalse(second.button.compactPadding)
                 assertTrue(first.measuredWidth <= row.measuredWidth)
                 assertTrue(second.measuredWidth <= row.measuredWidth)
-                assertTrue(second.top >= first.bottom + dp(row, 8))
+                assertTrue(second.top >= first.bottom + dp(row, NativeScreenSpacing.CONTROL_GAP_DP))
                 assertTrue(first.measuredHeight >= dp(row, 48))
             }
         }
+    }
+
+    @Test fun standaloneFooterOwnsClearanceInActionSheet() = withSheetActivity { activity ->
+        val appearance = NativeUiAppearance.Default
+        val style = appearance.modals.actionSheetStyle(Density(activity), createFontFamilyResolver(activity),
+            appearance.resolveColorScheme(activity, false))
+        val sheet = NativeActionSheet(View(activity), style, "Delete", {})
+        try {
+            val surface = sheet.contentView as NativeSheetSurface
+            val body = FrameLayout(sheet.context).apply { minimumHeight = dp(surface, 32) }
+            val bounds = android.graphics.Rect()
+            fun gapBelow(view: View): Int {
+                view.getDrawingRect(bounds)
+                surface.offsetDescendantRectToMyCoords(view, bounds)
+                return surface.height - bounds.bottom
+            }
+            fun layout(inset: Int) {
+                surface.insets.update(0, inset)
+                surface.measure(View.MeasureSpec.makeMeasureSpec(dp(surface, 360), View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(dp(surface, 640), View.MeasureSpec.AT_MOST))
+                surface.layout(0, 0, surface.measuredWidth, surface.measuredHeight)
+            }
+            withPair(sheet.context, "Cancel", "Delete") { row, first, second ->
+                sheet.setContent(body, row, emptyList())
+                for (inset in listOf(0, dp(surface, 19))) {
+                    layout(inset)
+                    assertTrue(first.button.height > 0 && second.button.height > 0)
+                    assertEquals(inset, gapBelow(row))
+                    assertEquals(inset + dp(surface, 6), minOf(gapBelow(first.button), gapBelow(second.button)))
+                }
+            }
+            val ordinary = FrameLayout(sheet.context).apply { minimumHeight = dp(surface, 40) }
+            sheet.setContent(body, ordinary, emptyList())
+            layout(0)
+            assertEquals((style.recipe.bottomPaddingDp * style.textDensity.density).roundToInt(), gapBelow(ordinary))
+        } finally { sheet.dismiss() }
+    }
+
+    private fun withSheetActivity(check: (android.app.Activity) -> Unit) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(android.content.Intent(instrumentation.context,
+            NativeMenuAccessibilityTestActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        withRetiringTestActivity(activity) { onMain { check(activity) } }
     }
 
     @Test fun themeAwareSwitchKeepsTheSharedThinOutline() = onMain {
@@ -63,7 +118,27 @@ class NativeDialogActionsIntegrationTest {
     private fun withActions(firstLabel: String, secondLabel: String, widthDp: Int, fontScale: Float,
         rtl: Boolean = false, check: (NativeDialogActionLayout, NativeButtonTouchTarget, NativeButtonTouchTarget) -> Unit) {
         val base = InstrumentationRegistry.getInstrumentation().targetContext
-        val context = base.createConfigurationContext(Configuration(base.resources.configuration).apply { this.fontScale = fontScale })
+        val context = base.createConfigurationContext(Configuration(base.resources.configuration).apply { this.fontScale = fontScale; densityDpi = 200 })
+        withPair(context, firstLabel, secondLabel) { row, first, second ->
+            row.layoutDirection = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+            val host = FrameLayout(context)
+            val hostBottom = dp(host, 11)
+            host.setPaddingRelative(0, 0, 0, hostBottom)
+            host.addView(row, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+            host.measure(View.MeasureSpec.makeMeasureSpec(dp(row, widthDp), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+            host.layout(0, 0, host.measuredWidth, host.measuredHeight)
+            val paintedBottom = maxOf(first.top + first.button.bottom, second.top + second.button.bottom)
+            val clearance = (NativeMergedActionLayout.ACTION_FOOTER_BOTTOM_PADDING_DP *
+                context.resources.displayMetrics.density).roundToInt()
+            assertEquals(clearance, row.height - paintedBottom)
+            assertEquals(hostBottom, host.height - row.bottom)
+            check(row, first, second)
+        }
+    }
+
+    private fun withPair(context: android.content.Context, firstLabel: String, secondLabel: String,
+        check: (NativeDialogActionLayout, NativeButtonTouchTarget, NativeButtonTouchTarget) -> Unit) {
         val appearance = NativeUiAppearance.Default
         val colors = appearance.resolveColorScheme(context, false)
         val density = Density(context)
@@ -76,12 +151,7 @@ class NativeDialogActionsIntegrationTest {
         val first = button(firstLabel, appearance.buttons.text, MaterialRoundedIcon.Close)
         val second = button(secondLabel, appearance.buttons.destructive, MaterialRoundedIcon.Delete)
         try {
-            val row = NativeDialogActionLayout(first, second)
-            row.layoutDirection = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
-            row.measure(View.MeasureSpec.makeMeasureSpec(dp(row, widthDp), View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
-            row.layout(0, 0, row.measuredWidth, row.measuredHeight)
-            check(row, first, second)
+            check(NativeDialogActionLayout(first, second), first, second)
         } finally { first.button.close(); second.button.close() }
     }
 }

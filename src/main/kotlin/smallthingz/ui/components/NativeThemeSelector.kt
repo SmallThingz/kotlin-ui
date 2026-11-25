@@ -33,6 +33,7 @@ class NativeThemeSelector internal constructor(
     inputAllowed: () -> Boolean,
     segmented: NativeSegmentedStyle,
     onSelectionRequest: (NativeThemeMode) -> Boolean,
+    sectionInsetByHost: Boolean = false,
 ) : ViewGroup(context), NativeInputGate, AutoCloseable {
     constructor(
         context: Context,
@@ -51,7 +52,7 @@ class NativeThemeSelector internal constructor(
     private val capsule = NativeSegmentedControl(context, palette, segmented, density, inputAllowed, presentation)
     private val contentLayout = NativeLabeledSegmentedLayout(presentation.title, capsule)
     // The Settings factory owns an outer section gutter; custom presentations keep their layout.
-    private val horizontalInsetDp = if (presentation is SettingsThemePresentation)
+    private val horizontalInsetDp = if (presentation is SettingsThemePresentation && !sectionInsetByHost)
         DEFAULT_SETTINGS_SECTION_HORIZONTAL_INSET_DP else 0
     private var palette = palette
     private var titleColor = titleColor

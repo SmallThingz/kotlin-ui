@@ -6,6 +6,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import kotlin.math.roundToInt
+import smallthingz.ui.icons.MaterialRoundedIcon
+import smallthingz.ui.icons.MaterialRoundedIconDrawable
 import smallthingz.ui.common.SegmentOption
 import smallthingz.ui.reverb.settings.ReverbQuickTileEditor
 import smallthingz.ui.reverb.settings.ReverbCalibrationGraph
@@ -773,7 +775,8 @@ class NativeMergedActionLayoutIntegrationTest {
                     assertEquals(expected.disabledPaint, recipe.disabledPaint)
                     val glyph = NativeMaterialButtonView::class.java.getDeclaredField("icon")
                         .apply { isAccessible = true }.get(button)
-                    assertNotNull("Both permission decisions have a semantic icon", glyph)
+                    assertEquals(if (index == 0) MaterialRoundedIcon.Check else MaterialRoundedIcon.Close,
+                        (glyph as MaterialRoundedIconDrawable).icon)
                     assertFalse(button.performClick())
                 }
                 for ((width, height) in listOf(180 to 140, 360 to 700)) {
