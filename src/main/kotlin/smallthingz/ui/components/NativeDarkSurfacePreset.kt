@@ -3,7 +3,7 @@ package smallthingz.ui.components
 import androidx.annotation.ColorInt
 import kotlin.math.roundToInt
 
-/** Dark fills, grain opacity, and neutral outline paint for an app's surface controls. */
+/** Dark fills, grain intensity, and neutral outline paint for an app's surface controls. */
 data class NativeDarkSurfacePreset(
     val style: NativeDarkSurfaces,
     val backgroundLightness: Float,

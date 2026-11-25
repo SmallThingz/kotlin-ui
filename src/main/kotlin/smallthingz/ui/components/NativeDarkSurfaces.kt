@@ -12,7 +12,7 @@ private const val MAX_DARK_SURFACE_LEVEL = 72f
 internal const val DEFAULT_AMOLED_BACKGROUND_LEVEL = 0
 internal const val DEFAULT_AMOLED_BACKGROUND_LIGHTNESS = DEFAULT_AMOLED_BACKGROUND_LEVEL / MAX_DARK_SURFACE_LEVEL
 
-/** Wrap a resolver to customize its dark surfaces while preserving its light scheme. */
+/** Customize dark fills while keeping the base resolver's light scheme and surface paint policy. */
 fun NativeColorSchemeResolver.withDarkSurfaces(
     style: NativeDarkSurfaces,
     @ColorInt tint: Int? = null,
@@ -27,7 +27,11 @@ fun NativeColorSchemeResolver.withDarkSurfaces(
     }
 }
 
-/** Replace the dark surface roles, with separate 0–1 lightness for pages and raised surfaces. */
+/**
+ * Replace the dark surface roles, with separate 0–1 lightness for pages and raised surfaces.
+ * Omitted AMOLED page lightness uses the library backdrop. Omitted raised lightness gives black.
+ * For the full default appearance, use [NativeDarkSurfacePreset.Amoled].
+ */
 fun NativeColorScheme.withDarkSurfaces(
     style: NativeDarkSurfaces,
     @ColorInt tint: Int = primary,
@@ -51,7 +55,7 @@ fun NativeColorScheme.withDarkSurfaces(
         ?: when (style) {
             NativeDarkSurfaces.GRAY -> 27
             NativeDarkSurfaces.TINTED -> 23
-            NativeDarkSurfaces.AMOLED -> 0
+            NativeDarkSurfaces.AMOLED -> DEFAULT_AMOLED_BACKGROUND_LEVEL
         }
     val gray = style == NativeDarkSurfaces.GRAY
     // Scale the foreground roles together so changing lightness preserves their relative depth.

@@ -195,10 +195,19 @@ class MainActivity : Activity() {
         return preferences.getInt(keyFor(setting), initial).coerceIn(0, setting.maximum)
     }
 
-    private fun palette() = baseColors.withDarkSurfaces(mode,
-        tintStrength = amount(Adjustment.TINT) / 100f,
-        backgroundLightness = amount(Adjustment.BACKGROUND_LIGHTNESS) / 100f,
-        foregroundLightness = amount(Adjustment.FOREGROUND_LIGHTNESS) / 100f)
+    private fun palette(): NativeColorScheme {
+        if (mode == NativeDarkSurfaces.AMOLED) {
+            val customizedLightness = Adjustment.entries.any { setting ->
+                setting.amoledInitial != null &&
+                    (preferences.contains(keyFor(setting)) || amount(setting) != setting.amoledInitial)
+            }
+            if (!customizedLightness) return baseColors
+        }
+        return baseColors.withDarkSurfaces(mode,
+            tintStrength = amount(Adjustment.TINT) / 100f,
+            backgroundLightness = amount(Adjustment.BACKGROUND_LIGHTNESS) / 100f,
+            foregroundLightness = amount(Adjustment.FOREGROUND_LIGHTNESS) / 100f)
+    }
 
     private fun bindTheme() {
         val colors = palette()
