@@ -61,16 +61,25 @@ internal class JoinedGroupShape {
             border.lineTo(right - radius, top)
             arc.set(right - 2f * radius, top, right, top + 2f * radius)
             border.arcTo(arc, 270f, 90f, false)
+        } else if (edges.squareTop) {
+            // Traverse the left side into this square corner so its stroke has a real join.
+            // Two butt-capped segments meeting here would leave a missing outer corner pixel.
+            border.moveTo(left, if (edges.last) bottom - radius else if (edges.squareBottom) bottom else height)
+            border.lineTo(left, top)
+            border.lineTo(right, top)
         } else border.moveTo(right, 0f)
-        border.lineTo(right, if (edges.last) bottom - radius else height)
+        border.lineTo(right, if (edges.last) bottom - radius else if (edges.squareBottom) bottom else height)
         if (edges.last) {
             arc.set(right - 2f * radius, bottom - 2f * radius, right, bottom)
             border.arcTo(arc, 0f, 90f, false)
             border.lineTo(left + radius, bottom)
             arc.set(left, bottom - 2f * radius, left + 2f * radius, bottom)
             border.arcTo(arc, 90f, 90f, false)
-        } else border.moveTo(left, height)
-        border.lineTo(left, if (edges.first) top + radius else 0f)
+        } else if (edges.squareBottom) border.lineTo(left, bottom)
+        else border.moveTo(left, height)
+        if (!edges.first && edges.squareTop) {
+            if (edges.last || edges.squareBottom) border.close()
+        } else border.lineTo(left, if (edges.first) top + radius else 0f)
     }
 
     fun copyFillPath(destination: Path) { destination.set(fill) }
@@ -85,7 +94,7 @@ internal class JoinedGroupShape {
         paint.color = borderColor
         paint.strokeWidth = density
         canvas.drawPath(border, paint)
-        if (!edges.first) {
+        if (!edges.first && !edges.squareTop) {
             paint.color = separatorColor
             paint.strokeWidth = 1f
             canvas.drawLine(0f, 0.5f, width, 0.5f, paint)

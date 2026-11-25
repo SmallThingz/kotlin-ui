@@ -40,7 +40,7 @@ data class NativeAnchoredMenuRecipe(
         require(windowShadowInsetDp.isFinite() && windowShadowInsetDp >= 0f)
     }
 
-    fun surfaceColor(palette: NativeColorScheme): Int = palette.raised
+    fun surfaceColor(palette: NativeColorScheme): Int = raisedModalColor(palette.raised, palette)
 
     /** Creates a surface around an unattached child. The caller owns window size and placement. */
     fun createPanel(content: View, density: Density, palette: NativeColorScheme): NativeAnchoredMenuPanel =

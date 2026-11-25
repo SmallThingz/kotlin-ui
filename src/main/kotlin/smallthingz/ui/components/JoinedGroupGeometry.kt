@@ -1,7 +1,12 @@
 package smallthingz.ui.components
 
-/** Visible edges of a joined vertical group; a singleton is both first and last. */
-data class NativeGroupEdges(val first: Boolean, val last: Boolean)
+/** Rounded outer edges, with optional solid square caps at a break inside the group. */
+data class NativeGroupEdges(
+    val first: Boolean,
+    val last: Boolean,
+    val squareTop: Boolean = false,
+    val squareBottom: Boolean = false,
+)
 
 /** Joined rows retain independently constructed fill radii and raw-dp outlines. */
 internal data class JoinedGroupGeometry(

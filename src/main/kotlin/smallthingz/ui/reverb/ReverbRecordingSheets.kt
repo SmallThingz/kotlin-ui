@@ -18,7 +18,7 @@ class ReverbRecordingInfoSheet(
     private val actions = ReverbSheetActions(anchor.context, dialog.contentContext, environment, listOf(closeButton))
     private var closed = false
 
-    init { dialog.setContent(body, actions, listOf(actions.hitLayout, body.hitLayout)) }
+    init { dialog.setContent(body, actions, listOf(actions.hitLayout, body.hitLayout), scrollable = true) }
 
     fun show() = dialog.show()
 

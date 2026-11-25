@@ -32,7 +32,7 @@ open class NativeProgressActionView(
     private val progressSurface:Boolean=false,
     samplingLabel: () -> String = { "" },
     action:()->Unit,
-):ViewGroup(context),AutoCloseable {
+):ViewGroup(context),NativeMergedActionChild,AutoCloseable {
     private var environment=environment
     private val visual=CalibrationActionSurface(context,environment,inputRoot,leadingIcon,progressSurface,samplingLabel,action)
     private val sizingLabel=if(stableLabels.isEmpty())null else ParagraphView(context,environment.appearance.typography.buttonLabelStyle,
@@ -46,6 +46,10 @@ open class NativeProgressActionView(
         environment=next;visual.bind(text,enabled,next)
     }
     fun bindProgress(progress:Float?,running:Boolean) = visual.bindProgress(progress,running)
+
+    override val actionMinimumWidthPx: Int get() = max(visual.actionMinimumWidthPx,
+        (environment.appearance.calibration.actionMinTargetDp * environment.textDensity.density).roundToInt())
+    override fun joinActionSurface() = visual.joinActionSurface()
 
     /** Adds instructions to the button's accessibility label without adding visible text. */
     internal fun setActionDescription(description: String?) { visual.contentDescription = description }
@@ -120,6 +124,9 @@ private class CalibrationActionSurface(
 
     private fun bindColors(text: String, enabled: Boolean) {
         val palette = environment.palette
+        // This action uses the raw-color overload, so it must forward the window's surface policy.
+        // Transparent actions reveal their containing group's grain; progress fills paint their own.
+        setSurfacePreset(palette.surfacePreset)
         val ink = when {
             progressSurface && (enabled || running) -> palette.ink
             enabled -> palette.primary

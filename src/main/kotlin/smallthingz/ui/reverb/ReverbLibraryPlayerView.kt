@@ -232,7 +232,7 @@ private class PlayerColumn(context: Context, private var environment: ReverbEnvi
         val bounded = MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED
         val maxHeight = MeasureSpec.getSize(heightMeasureSpec)
         val fineSeekStyle = environment.appearance.springFineSeek
-        var used = 0
+        var used = if (buttons != null) dp(layoutStyle.trimActionsBottomPaddingDp) else 0
         for (i in 0 until childCount) {
             val child = getChildAt(i)
             used += gapBefore(child)
@@ -274,7 +274,8 @@ private class PlayerColumn(context: Context, private var environment: ReverbEnvi
     }
 
     private fun gapBefore(child: View): Int = when {
-        child === times || child === buttons -> dp(layoutStyle.controlGapDp)
+        child === times -> dp(layoutStyle.controlGapDp)
+        child === buttons -> dp(layoutStyle.trimActionsTopGapDp)
         child === error -> dp(layoutStyle.errorGapDp)
         else -> 0
     }

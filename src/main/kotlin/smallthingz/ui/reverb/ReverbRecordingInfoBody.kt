@@ -118,12 +118,18 @@ internal class ReverbRecordingInfoBody(
     }
     override fun onMeasure(w: Int, h: Int) {
         val width = MeasureSpec.getSize(w)
+        val bounded = MeasureSpec.getMode(h) != MeasureSpec.UNSPECIFIED
         val maxHeight = MeasureSpec.getSize(h)
-        // Sequential unweighted Column: filename,14dp Spacer, then fillMaxWidth verticalScroll.
-        name.measure(infoAtMost(width), infoAtMost(maxHeight))
-        val gap = minOf(dp(14f), (maxHeight - name.measuredHeight).coerceAtLeast(0))
+        // A scrolling sheet measures its whole body naturally, including the filename and metadata.
+        name.measure(infoAtMost(width), if (bounded) infoAtMost(maxHeight) else h)
+        val gap = if (bounded) minOf(dp(14f), (maxHeight - name.measuredHeight).coerceAtLeast(0)) else dp(14f)
         viewportTop = name.measuredHeight + gap
-        viewport.measure(infoExact(width), infoAtMost((maxHeight - viewportTop).coerceAtLeast(0)))
+        val viewportHeight = if (bounded) infoAtMost((maxHeight - viewportTop).coerceAtLeast(0)) else {
+            rows.measure(infoExact(width), h)
+            // The inner viewport requires a finite height; the outer sheet owns scrolling here.
+            infoExact(rows.measuredHeight)
+        }
+        viewport.measure(infoExact(width), viewportHeight)
         setMeasuredDimension(resolveSize(width,w), resolveSize(viewportTop + viewport.measuredHeight,h))
     }
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {

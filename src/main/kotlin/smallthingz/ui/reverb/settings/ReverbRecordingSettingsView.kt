@@ -17,16 +17,28 @@ import kotlin.math.roundToInt
 /** Copy and conditional warning for the Recording section of Settings. */
 data class ReverbRecordingPresentation(val title: String, val compressionWarning: String?)
 
-/** Recording settings owns one continuous group for choices and the three feature sections. */
+/** Recording settings owns one continuous group, ending with notification save then auto-start. */
 class ReverbRecordingSettingsView(
     context: Context,
     private val choices: ReverbAudioChoices<*, *, *, *>,
     compression: View,
     silenceDetection: View,
     saveNotification: View,
+    autoStart: View?,
     initial: ReverbRecordingPresentation,
     private var theme: ReverbTheme,
 ) : ViewGroup(context) {
+    /** Compatibility for callers that still own auto-start outside this group. */
+    constructor(
+        context: Context,
+        choices: ReverbAudioChoices<*, *, *, *>,
+        compression: View,
+        silenceDetection: View,
+        saveNotification: View,
+        initial: ReverbRecordingPresentation,
+        theme: ReverbTheme,
+    ) : this(context, choices, compression, silenceDetection, saveNotification, null, initial, theme)
+
     private val appearance = ReverbDesign.appearance
     private val geometry = appearance.settingsSelectors.recordingSection
     private val title = ParagraphView(context, appearance.settingsSelectors.sectionTitle,
@@ -49,6 +61,7 @@ class ReverbRecordingSettingsView(
             addRow(warning, groupedRow(false))
             addRow(silenceDetection, groupedRow(true))
             addRow(saveNotification, groupedRow(true))
+            autoStart?.let { addRow(it, groupedRow(true)) }
         }
         bind(initial, theme)
     }

@@ -27,7 +27,7 @@ internal class ReverbIncidentClearSheet(
         { host.accessibility.sourceNode(body) }) { host.accessibility.sourceNode(body).present }
     private var closed = false
 
-    init { dialog.setContent(body, actions, listOf(actions.hitLayout, host.hit(body, emptyList()))) }
+    init { dialog.setContent(body, actions, listOf(actions.hitLayout, host.hit(body, emptyList())), scrollable = true) }
 
     fun show() = dialog.show()
 

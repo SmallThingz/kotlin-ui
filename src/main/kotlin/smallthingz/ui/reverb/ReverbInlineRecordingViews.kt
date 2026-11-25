@@ -8,6 +8,10 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import kotlinx.coroutines.CoroutineScope
+import smallthingz.ui.components.NativeMaterialButtonView
+import smallthingz.ui.components.NativeButtonInputPolicy
+import smallthingz.ui.components.NativeMergedActionLayout
+import smallthingz.ui.components.forMergedActions
 import smallthingz.ui.input.NativeAndroidInteropHost
 import smallthingz.ui.input.NativeAndroidInteropRequests
 import kotlin.math.roundToInt
@@ -91,16 +95,17 @@ class ReverbInlineRecordingRename(
             outline.draw(canvas, width, height)
         }
     }
+    /** Include the painted outline when a parent reveals this editor above the keyboard. */
+    val outlinedField: View get() = this.field
     private val outline: smallthingz.ui.components.NativeOutlinedFieldOutline = recipe.createOutline(field, scope, environment.textDensity.density, environment.palette.outline)
     private val support = environment.paragraph(context, "", ReverbTextRole.BODY_SMALL, environment.palette.error)
-    private val cancel = ReverbLibraryTextAction(context, environment, inputRoot)
-    private val confirm = ReverbLibraryTextAction(context, environment, inputRoot)
-    private val actions = LinearLayout(context).apply {
-        orientation = HORIZONTAL
-        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-        addView(cancel, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-        addView(confirm, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-    }
+    private val actionRecipe = environment.appearance.buttons.text.forMergedActions()
+    private val actionInput = NativeButtonInputPolicy(inputRoot = { inputRoot })
+    private val cancel = NativeMaterialButtonView(context, actionRecipe, environment.textDensity,
+        environment.sharedFontResolver, actionInput, onCancel)
+    private val confirm = NativeMaterialButtonView(context, actionRecipe, environment.textDensity,
+        environment.sharedFontResolver, actionInput, onSubmit)
+    private val actions = NativeMergedActionLayout(context, listOf(cancel, confirm), environment.palette)
     init {
         orientation = VERTICAL
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -145,8 +150,11 @@ class ReverbInlineRecordingRename(
         support.setText(error.orEmpty())
         support.visibility = if (error == null) GONE else VISIBLE
         value.bindParagraphStyle(support, ReverbTextRole.BODY_SMALL, value.palette.error)
-        cancel.bind(value, cancelLabel, enabled = !busy, onClick = onCancel)
-        confirm.bind(value, confirmLabel, enabled = !busy && name.isNotBlank(), onClick = onSubmit)
+        actions.bindPalette(value.palette)
+        cancel.bindTypography(value.textDensity, value.sharedFontResolver)
+        confirm.bindTypography(value.textDensity, value.sharedFontResolver)
+        cancel.bind(cancelLabel, !busy, value.palette.buttonPalette, onClick = onCancel)
+        confirm.bind(confirmLabel, !busy && name.isNotBlank(), value.palette.buttonPalette, onClick = onSubmit)
         retargetOutline()
         requestLayout()
     }
@@ -219,6 +227,8 @@ class ReverbInlineRecordingRename(
             }
             failure = smallthingz.ui.util.closePreservingPrimaryFailure(failure, editor::clearFocus)
         }
+        failure = smallthingz.ui.util.closePreservingPrimaryFailure(failure, cancel::close)
+        failure = smallthingz.ui.util.closePreservingPrimaryFailure(failure, confirm::close)
         smallthingz.ui.util.closePreservingPrimaryFailure(failure, outline::close)?.let { throw it }
     }
 }
