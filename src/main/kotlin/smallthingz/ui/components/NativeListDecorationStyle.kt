@@ -35,6 +35,8 @@ data class NativeRecordingPlayerLayout(
     val headingBottomGapDp: Float = 5f,
     val headingGlyphDp: Float = 17f,
     val headingGlyphGapDp: Float = 7f,
+    val trimActionsTopGapDp: Float = 0f,
+    val trimActionsBottomPaddingDp: Float = 6f,
 )
 
 data class NativeAlertCardStyle(

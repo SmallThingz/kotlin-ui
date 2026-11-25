@@ -84,7 +84,7 @@ data class NativeFloatingPanelRecipe(
     val error: NativeFloatingErrorStyle = NativeFloatingErrorStyle(),
 ) {
     fun surfaceColor(palette: NativeColorScheme): Int =
-        modalTonalColor(palette.surfaceContainerHigh, palette, surfaceElevationDp)
+        raisedModalColor(modalTonalColor(palette.surfaceContainerHigh, palette, surfaceElevationDp), palette)
 
     internal fun cornerRadiusPx(density: Float, width: Int, height: Int): Float =
         min(cornerRadiusDp * density, min(width / 2f, height.toFloat()))
@@ -104,7 +104,7 @@ data class NativeFloatingLinkStyle(
     val minimumHeightDp: Float = 48f,
 ) {
     fun fill(palette: NativeColorScheme): Int =
-        modalTonalColor(palette.surfaceContainerHighest, palette, elevationDp)
+        raisedModalColor(modalTonalColor(palette.surfaceContainerHighest, palette, elevationDp), palette)
 
     // This is a surface role, even when its numeric value aliases an accent/container role.
     fun content(palette: NativeColorScheme): Int = palette.onSurface
@@ -129,3 +129,9 @@ private fun modalTonalColor(color: Int, palette: NativeColorScheme, elevationDp:
     val alpha = ((4.5f * ln(elevationDp + 1f)) + 2f) / 100f
     return Color(palette.surfaceTint).copy(alpha = alpha).compositeOver(Color(palette.surface)).toArgb()
 }
+
+/** A small neutral lift for floating foregrounds; page blacks and Material accents stay owned by the palette. */
+internal fun raisedModalColor(color: Int, palette: NativeColorScheme): Int =
+    if (palette.surfacePreset?.style == NativeDarkSurfaces.AMOLED)
+        Color.White.copy(alpha = .04f).compositeOver(Color(color)).toArgb()
+    else color

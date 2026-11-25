@@ -119,10 +119,7 @@ class ReverbActionMenuHost(
                     action.onClick()
                 }
             })
-        }, palette.menuColors(), when (kind) {
-            ReverbActionMenuKind.RECORDINGS -> palette.raised
-            ReverbActionMenuKind.INCIDENTS -> palette.surfaceContainerHigh
-        })
+        }, palette.menuColors())
     }
 
     /** Source expanded=false keeps ScrollState/menuCreated until its row is actually disposed. */

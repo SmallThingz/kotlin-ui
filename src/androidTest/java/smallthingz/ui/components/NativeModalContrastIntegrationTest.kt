@@ -16,6 +16,7 @@ import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.reverb.ReverbAboutContentView
 import smallthingz.ui.reverb.ReverbAboutDetails
 import smallthingz.ui.reverb.ReverbDesign
+import smallthingz.ui.reverb.menuColors
 import smallthingz.ui.reverb.reverbActionSheetStyle
 import smallthingz.ui.scroll.NativeVerticalScrollState
 import smallthingz.ui.text.TextStyle
@@ -37,21 +38,22 @@ class NativeModalContrastIntegrationTest {
             override fun create(context: android.content.Context, icon: Int, color: Int) = View(context)
             override fun bind(view: View, icon: Int, color: Int) = Unit
         }
+        val initial = palette(true).menuColors()
         val menu = NativeMenuContent(context, Density(1f), TextStyle(fontSize = 24.sp),
-            createFontFamilyResolver(context), NativeMenuColors(Color.WHITE, Color.WHITE, Color.BLACK,
-                Color.BLACK, Color.BLACK), NativeAnchoredMenuRecipe(), icons, NativeVerticalScrollState(),
+            createFontFamilyResolver(context), initial, NativeAnchoredMenuRecipe(), icons, NativeVerticalScrollState(),
             runtime.frames, runtime.scope, { false })
         try {
-            assertEquals(grainRange(Color.WHITE, 0f), menu.paintedTextSurface)
+            assertEquals(grainRange(initial.raised, .5f), menu.paintedTextSurface)
             for (dark in listOf(true, false, true, false)) {
                 val palette = palette(dark)
                 val intensity = palette.surfacePreset?.foregroundGrain ?: 0f
-                val colors = NativeMenuColors(palette.raised, palette.raised, palette.ink,
-                    palette.muted, palette.primary, intensity)
+                val colors = palette.menuColors()
+                if (dark) assertTrue(colors.raised > palette.raised)
+                else assertEquals(palette.raised, colors.raised)
                 // A stale/equal ink target must still be corrected against the current paint.
                 menu.bindActions(listOf(NativeMenuAction("Copy", 0, palette.raised, palette.ink) {}), colors)
                 val label = descendants(menu).filterIsInstance<ParagraphView>().single()
-                assertEquals(grainRange(palette.raised, intensity), menu.paintedTextSurface)
+                assertEquals(grainRange(colors.raised, intensity), menu.paintedTextSurface)
                 assertEquals(menu.paintedTextSurface, label.paintedTextSurface!!.asLong)
                 assertInk(label, textSurfaceForeground(menu.paintedTextSurface, palette.raised))
                 menu.bindGrain(intensity)
@@ -72,8 +74,10 @@ class NativeModalContrastIntegrationTest {
                 val next = theme(dark)
                 if (index != 0) about.bind(next, details)
                 val panel = descendants(about).filterIsInstance<NativeFloatingPanelSurface>().single()
-                assertEquals(grainRange(ReverbDesign.modalSurface(next.palette),
-                    next.palette.surfacePreset?.foregroundGrain ?: 1f), panel.paintedTextSurface)
+                val panelFill = ReverbDesign.appearance.modals.floating.copy(surfaceElevationDp = 0f)
+                    .surfaceColor(next.palette.copy(surfaceContainerHigh = ReverbDesign.modalSurface(next.palette)))
+                assertEquals(grainRange(panelFill,
+                    next.palette.surfacePreset?.foregroundGrain ?: 0f), panel.paintedTextSurface)
                 val repository = descendants(about).filterIsInstance<NativeGroupLayout>().first()
                 assertEquals(grainRange(ReverbDesign.modalLinkSurface(next.palette),
                     next.palette.surfacePreset?.foregroundGrain ?: 0f), repository.paintedTextSurface)

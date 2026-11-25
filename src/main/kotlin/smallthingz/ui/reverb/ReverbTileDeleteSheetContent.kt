@@ -2,8 +2,10 @@ package smallthingz.ui.reverb
 
 import android.content.Context
 import android.view.View
-import smallthingz.ui.components.NativeProgressActionView
-import smallthingz.ui.components.NativeTrailingActionPair
+import smallthingz.ui.components.NativeMaterialButtonView
+import smallthingz.ui.components.NativeButtonInputPolicy
+import smallthingz.ui.components.NativeMergedActionLayout
+import smallthingz.ui.components.forMergedActions
 import smallthingz.ui.text.view.ParagraphView
 import smallthingz.ui.util.closePreservingPrimaryFailure
 
@@ -20,24 +22,25 @@ class ReverbTileDeleteSheetContent(
 ) : AutoCloseable {
     val body = ParagraphView(context, environment.appearance.typography.defaultTextStyle, environment.textDensity,
         environment.sharedFontResolver, environment.palette.onSurface).also { it.setText(message) }
-    private val cancel = NativeProgressActionView(context, environment, inputRoot, action = onCancel)
-    private val confirm = NativeProgressActionView(context, environment, inputRoot, action = onConfirm)
-    private var canCancel = false
-    private var canConfirm = false
+    private val recipe = environment.appearance.buttons.text.forMergedActions()
+    private val input = NativeButtonInputPolicy(inputRoot = inputRoot)
+    private val cancel = NativeMaterialButtonView(context, recipe, environment.textDensity,
+        environment.sharedFontResolver, input, onCancel)
+    private val confirm = NativeMaterialButtonView(context, recipe, environment.textDensity,
+        environment.sharedFontResolver, input, onConfirm)
     private var closed = false
-    val actions = NativeTrailingActionPair(context, cancel, confirm) {
-        bind(environment, canCancel, canConfirm)
-    }
+    val actions = NativeMergedActionLayout(context, listOf(cancel, confirm), environment.palette)
 
     fun bind(next: ReverbEnvironment, canCancel: Boolean, canConfirm: Boolean) {
         if (closed) return
         environment = next
-        this.canCancel = canCancel
-        this.canConfirm = canConfirm
         body.setTypography(next.appearance.typography.defaultTextStyle, next.textDensity, next.sharedFontResolver)
         body.animateTextColor(next.palette.onSurface)
-        cancel.bind(cancelLabel, canCancel, next)
-        confirm.bind(deleteLabel, canConfirm, next)
+        actions.bindPalette(next.palette)
+        cancel.bindTypography(next.textDensity, next.sharedFontResolver)
+        confirm.bindTypography(next.textDensity, next.sharedFontResolver)
+        cancel.bind(cancelLabel, canCancel, next.palette.buttonPalette)
+        confirm.bind(deleteLabel, canConfirm, next.palette.buttonPalette)
         actions.requestLayout()
     }
 

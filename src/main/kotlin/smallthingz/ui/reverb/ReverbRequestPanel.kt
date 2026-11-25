@@ -37,7 +37,7 @@ class ReverbRequestPanel(
     private fun text(value:String,role:NativeTypographyRole,muted:Boolean=false)=NativeText(
         context,theme.palette.pageControls,ReverbDesign.appearance.typography.nativeTextStyle(role),if(muted)NativeTextRole.MUTED else NativeTextRole.CONTENT).apply {text=value}
     private fun button(label:String,primary:Boolean,action:()->Unit)=NativeMaterialButtonView(
-        context,if(primary)ReverbDesign.appearance.buttons.filled else ReverbDesign.appearance.buttons.text,
+        context,(if(primary)ReverbDesign.appearance.buttons.filled else ReverbDesign.appearance.buttons.text).forMergedActions(),
         theme.density,theme.fontResolver,onClick=action).apply {
         bind(label,true,theme.palette.buttonPalette,onClick=action)
         filterTouchesWhenObscured=true
@@ -53,9 +53,8 @@ class ReverbRequestPanel(
             LinearLayout.LayoutParams(-1,-2).apply {topMargin=dp(recipe.headingGapDp)})
         addView(text(message,recipe.summaryRole),LinearLayout.LayoutParams(-1,-2).apply {topMargin=dp(recipe.headingGapDp)})
         addView(text(hint,recipe.detailRole,true),LinearLayout.LayoutParams(-1,-2).apply {topMargin=dp(recipe.summaryGapDp)})
-        // Each action keeps a full minimum target and can wrap independently at narrow widths.
-        addView(NativeButtonTouchTarget(dismiss),LinearLayout.LayoutParams(-1,-2).apply {topMargin=dp(recipe.headingGapDp)})
-        confirm?.let {addView(NativeButtonTouchTarget(it),LinearLayout.LayoutParams(-1,-2))}
+        addView(NativeMergedActionLayout(context, listOfNotNull(dismiss, confirm), theme.palette),
+            LinearLayout.LayoutParams(-1,-2).apply {topMargin=dp(recipe.headingGapDp)})
     }
     val view:View=object:NativeFloatingPanelSurface(context,theme.density.density,recipe,theme.palette) {
         init {setPanelViewport(ScrollView(context).apply {addView(body)})}

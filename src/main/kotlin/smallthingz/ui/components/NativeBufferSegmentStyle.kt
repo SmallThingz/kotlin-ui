@@ -16,11 +16,13 @@ data class NativeBufferSegmentStyle(
     val selectedDisabledInkAlpha: Float = .62f,
     val idleDisabledInkAlpha: Float = .30f,
     val preferredWidthDp: Int = 112,
+    val inactiveRecordingFillAlpha: Float = .12f,
 ) {
     init {
         require(cornerRadiusDp.isFinite() && cornerRadiusDp >= 0f)
         require(horizontalPaddingDp >= 0 && verticalPaddingDp >= 0 && glyphSizeDp >= 0 && glyphGapDp >= 0 &&
             preferredWidthDp >= 0)
+        require(inactiveRecordingFillAlpha in 0f..1f)
         require(selectedFillAlpha in 0f..1f && selectedDisabledInkAlpha in 0f..1f && idleDisabledInkAlpha in 0f..1f)
     }
 
@@ -30,6 +32,7 @@ data class NativeBufferSegmentStyle(
         selected && recording -> palette.primary
         filled && selected -> palette.tertiary
         selected -> srgbColorWithAlpha(palette.primaryContainer, selectedFillAlpha)
+        recording -> srgbColorWithAlpha(palette.primary, inactiveRecordingFillAlpha)
         else -> Color.TRANSPARENT
     }
 

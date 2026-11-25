@@ -4,6 +4,7 @@ import android.content.Context
 import android.view.View
 import android.view.ViewGroup
 import smallthingz.ui.common.SegmentOption
+import smallthingz.ui.components.NativeMergedActionLayout
 import smallthingz.ui.components.atMost
 import smallthingz.ui.components.bindStatus
 import smallthingz.ui.components.exact
@@ -40,8 +41,7 @@ open class ReverbQuickTileEditor<T : Any>(
     private val cancel = ReverbSettingsActionView(context, environment, inputRoot, action = onCancel)
     private val save = ReverbSettingsActionView(context, environment, inputRoot, action = onSave)
     private var wheelView: View? = null
-    private var footerStacked = false
-    private var footerHeight = 0
+    private val footer = NativeMergedActionLayout(context, listOf(cancel, save), environment.palette)
     private val recipe get() = environment.appearance.quickTiles
 
     init {
@@ -50,8 +50,7 @@ open class ReverbQuickTileEditor<T : Any>(
         addView(loading)
         addView(warning)
         addView(message)
-        addView(cancel)
-        addView(save)
+        addView(footer)
         loading.visibility = GONE
         warning.visibility = GONE
         message.visibility = GONE
@@ -84,6 +83,7 @@ open class ReverbQuickTileEditor<T : Any>(
         bindStatus(loading, loadingText, next)
         bindStatus(warning, warningText, next)
         bindStatus(message, messageText, next)
+        footer.bindPalette(next.palette)
         cancel.bind(cancelText, cancelEnabled, next)
         save.bind(saveText, saveEnabled, next)
         if (densityChanged) requestLayout()
@@ -95,13 +95,9 @@ open class ReverbQuickTileEditor<T : Any>(
         val gap = dp(recipe.editorGapDp)
         val inner = (width - 2 * inset).coerceAtLeast(0)
         selector.view.measure(exact(inner), unspecified())
-        cancel.measure(atMost(inner), unspecified())
-        save.measure(atMost(inner), unspecified())
-        footerStacked = cancel.measuredWidth + gap + save.measuredWidth > inner
-        footerHeight = if (footerStacked) cancel.measuredHeight + gap + save.measuredHeight
-            else maxOf(cancel.measuredHeight, save.measuredHeight)
-        var height = 2 * inset + selector.view.measuredHeight + gap + footerHeight
-        for (index in 1 until childCount - 2) {
+        footer.measure(exact(inner), unspecified())
+        var height = 2 * inset + selector.view.measuredHeight + gap + footer.measuredHeight
+        for (index in 1 until childCount - 1) {
             val child = getChildAt(index)
             if (child.visibility == GONE) continue
             if (child === wheelView) {
@@ -119,22 +115,14 @@ open class ReverbQuickTileEditor<T : Any>(
         var y = inset
         place(selector.view, inset, y)
         y += selector.view.measuredHeight
-        for (index in 1 until childCount - 2) {
+        for (index in 1 until childCount - 1) {
             val child = getChildAt(index)
             if (child.visibility == GONE) continue
             y += gap
             place(child, inset, y)
             y += child.measuredHeight
         }
-        val footerTop = height - inset - footerHeight
-        val saveStart = width - inset - save.measuredWidth
-        if (footerStacked) {
-            place(cancel, width - inset - cancel.measuredWidth, footerTop)
-            place(save, saveStart, footerTop + cancel.measuredHeight + gap)
-        } else {
-            place(cancel, saveStart - gap - cancel.measuredWidth, footerTop + (footerHeight - cancel.measuredHeight) / 2)
-            place(save, saveStart, footerTop + (footerHeight - save.measuredHeight) / 2)
-        }
+        place(footer, inset, height - inset - footer.measuredHeight)
     }
 
     private fun place(child: View, start: Int, top: Int) {

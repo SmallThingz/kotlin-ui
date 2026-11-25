@@ -256,15 +256,13 @@ class ReverbIncidentsContentView(
         updateSelection()
     }
 
-    /** Snapshot-only, additive selection. A day's heading never limits error membership. */
+    /** Snapshot-only, additive selection of the topic on the heading's displayed date. */
     private fun selectErrorOccurrences(epochDay: Long, groupKey: String): Boolean {
         if (!history.canMutate) return false
         // An animating-out heading cannot act for a group that survives only on another day.
-        if (history.days.none { day -> day.epochDay == epochDay && day.groups.any {
-                it.key == groupKey && it.occurrences.isNotEmpty()
-            } }) return false
+        val day = history.days.firstOrNull { it.epochDay == epochDay } ?: return false
         var found = false
-        for (day in history.days) for (group in day.groups) {
+        for (group in day.groups) {
             if (group.key != groupKey) continue
             for (requested in group.occurrences) {
                 val current = currentOccurrence(requested) ?: continue
@@ -740,14 +738,16 @@ private class IncidentsAdapter(
                 add(Item(dayKey, ids[dayKey] ?: nextId++, heading = day.label))
                 day.groups.forEachIndexed { groupIndex, group ->
                     if (group.occurrences.isEmpty()) return@forEachIndexed
-                    // A day is one joined surface, including every message and occurrence.
+                    // Topics have square, closed edges at their gaps; only the day's outside ends round.
                     val heading = HeadingKey(day.epochDay, group.key)
                     add(Item(heading, ids[heading] ?: nextId++, heading = group.message,
-                        edges = NativeGroupEdges(first = groupIndex == firstGroup, last = false)))
+                        edges = NativeGroupEdges(first = groupIndex == firstGroup, last = false,
+                            squareTop = groupIndex != firstGroup)))
                     group.occurrences.forEachIndexed { index, row ->
                         add(Item(row.key, ids[row.key] ?: nextId++, row = row,
                             edges = NativeGroupEdges(first = false,
-                                last = groupIndex == lastGroup && index == group.occurrences.lastIndex)))
+                                last = groupIndex == lastGroup && index == group.occurrences.lastIndex,
+                                squareBottom = groupIndex != lastGroup && index == group.occurrences.lastIndex)))
                     }
                 }
             }
@@ -812,7 +812,9 @@ private class IncidentsAdapter(
         appearance = value
         notifyItemRangeChanged(0, itemCount)
     }
-    fun joinsNext(position: Int): Boolean = items.getOrNull(position)?.edges?.last == false
+    fun joinsNext(position: Int): Boolean = items.getOrNull(position)?.edges?.let {
+        !it.last && !it.squareBottom
+    } == true
 
     override fun getItemCount() = items.size
     override fun getItemId(position: Int) = items[position].id

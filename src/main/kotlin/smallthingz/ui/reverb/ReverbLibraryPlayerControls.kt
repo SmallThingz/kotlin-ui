@@ -1,6 +1,6 @@
 package smallthingz.ui.reverb
 
-import smallthingz.ui.components.NativeGroupLayout
+import smallthingz.ui.components.NativeMergedActionLayout
 import smallthingz.ui.components.NativeButtonInputPolicy
 import smallthingz.ui.components.NativeMaterialButtonView
 import smallthingz.ui.util.closePreservingPrimaryFailure
@@ -10,7 +10,6 @@ import kotlinx.coroutines.CoroutineScope
 import android.graphics.Canvas
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.components.NativeCircularProgress
-import android.widget.LinearLayout
 import android.view.View
 import android.view.ViewGroup
 import smallthingz.ui.common.formatRangeTimeInput
@@ -86,17 +85,12 @@ class PlayerTrimButtons(
         environment.textDensity, environment.sharedFontResolver, input, cancelClick)
     private val save = NativeMaterialButtonView(context, recipes.save.button,
         environment.textDensity, environment.sharedFontResolver, input, saveClick)
-    private val cancelLayout = NativeGroupLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT)
-    private val saveLayout = NativeGroupLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT)
-    private val group = NativeGroupLayout(context, recipes.cornerRadiusDp, LinearLayout.HORIZONTAL)
+    private val group = NativeMergedActionLayout(context, listOf(cancel, save), environment.palette, recipes.cornerRadiusDp)
 
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         clipChildren = false
-        group.addRow(cancel, cancelLayout)
-        group.addRow(save, saveLayout)
         addView(group)
-        recipes.bindSurface(group, environment.palette)
     }
 
     fun bind(value: ReverbEnvironment, state: LibraryPlayerUiState, actions: LibraryPlayerActions) {
@@ -120,7 +114,7 @@ class PlayerTrimButtons(
             environment = value
             cancel.bindTypography(value.textDensity, value.sharedFontResolver)
             save.bindTypography(value.textDensity, value.sharedFontResolver)
-            recipes.bindSurface(group, value.palette)
+            group.bindPalette(value.palette)
         }
         val density = value.textDensity.density
         if (glyphDensity != density) {
@@ -149,44 +143,8 @@ class PlayerTrimButtons(
     }
 
     override fun onMeasure(w: Int, h: Int) {
-        val width = MeasureSpec.getSize(w)
-        val minimum = dp(max(cancel.minimumTouchTargetDp, save.minimumTouchTargetDp))
-        val cancelPreferred = cancel.preferredWidth(compact = false)
-        val savePreferred = save.preferredWidth(compact = false)
-        val boundedHeight = MeasureSpec.getMode(h) != MeasureSpec.UNSPECIFIED
-        val maxHeight = MeasureSpec.getSize(h)
-        val stacked = width < 2 * minimum || (cancelPreferred + savePreferred > width &&
-            (!boundedHeight || maxHeight >= 2 * minimum))
-        val groupWidth: Int
-        if (stacked) {
-            group.setRowOrientation(LinearLayout.VERTICAL)
-            groupWidth = min(width, max(cancelPreferred, savePreferred))
-            val childHeight = if (boundedHeight) libraryPlayerControlsAtMost(maxHeight / 2) else h
-            val childWidth = libraryPlayerControlsExact(groupWidth)
-            cancel.measure(childWidth, childHeight)
-            save.measure(childWidth, childHeight)
-            setChildLayout(cancel, cancelLayout, groupWidth, cancel.measuredHeight)
-            setChildLayout(save, saveLayout, groupWidth, save.measuredHeight, dividerTop = true)
-        } else {
-            group.setRowOrientation(LinearLayout.HORIZONTAL)
-            groupWidth = min(width, cancelPreferred + savePreferred)
-            val cancelWidth = cancelPreferred.coerceIn(minimum, groupWidth - minimum)
-            setChildLayout(cancel, cancelLayout, cancelWidth, LayoutParams.MATCH_PARENT)
-            setChildLayout(save, saveLayout, groupWidth - cancelWidth, LayoutParams.MATCH_PARENT, dividerStart = true)
-        }
-        group.measure(libraryPlayerControlsExact(groupWidth), h.toAtMost())
-        setMeasuredDimension(width, resolveSize(group.measuredHeight, h))
-    }
-
-    private fun setChildLayout(child: View, params: NativeGroupLayout.LayoutParams, width: Int,
-                               height: Int, dividerTop: Boolean = false, dividerStart: Boolean = false) {
-        if (params.width == width && params.height == height && params.dividerTop == dividerTop &&
-            params.dividerStart == dividerStart) return
-        params.width = width
-        params.height = height
-        params.dividerTop = dividerTop
-        params.dividerStart = dividerStart
-        child.layoutParams = params
+        group.measure(w, h.toAtMost())
+        setMeasuredDimension(group.measuredWidth, resolveSize(group.measuredHeight, h))
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {

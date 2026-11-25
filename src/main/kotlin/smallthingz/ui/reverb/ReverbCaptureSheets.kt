@@ -23,7 +23,7 @@ class ReverbTextSheet(
     private val actions = ReverbSheetActions(anchor.context, dialog.contentContext, environment, buttons(dialog.contentContext))
     private var closed = false
     init {
-        dialog.setContent(body, actions, listOf(actions.hitLayout))
+        dialog.setContent(body, actions, listOf(actions.hitLayout), scrollable = true)
     }
     fun show() = dialog.show()
     fun bind(title: String, message: String, next: ReverbTheme, onDismiss: () -> Unit) {
@@ -78,7 +78,7 @@ class ReverbClearProgressSheet(
     private var closed = false
     init {
         dialog.setDismissalAdmission { false }
-        dialog.setContent(body, actions, listOf(actions.hitLayout))
+        dialog.setContent(body, actions, listOf(actions.hitLayout), scrollable = true)
         bind(initial, environment)
     }
     fun show() = dialog.show()
