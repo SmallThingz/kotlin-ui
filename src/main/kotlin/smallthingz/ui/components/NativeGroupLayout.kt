@@ -53,8 +53,9 @@ class NativeGroupLayout(
     private var grainIntensity = 0f
     private var textSurfaceRange = smallthingz.ui.graphics.noiseSurfaceRange(fillPaint.color, 0)
     private val borderBounds = RectF()
-    private var outlineWidthDp = 1f
-    private var geometry = roundedGroupGeometry(0f, 0f, resources.displayMetrics.density, cornerRadiusDp)
+    private var outlineWidthDp = NativeDefaultColorScheme.THIN_OUTLINE_WIDTH_DP
+    private var geometry = roundedGroupGeometry(0f, 0f, resources.displayMetrics.density, cornerRadiusDp,
+        outlineWidthDp = NativeDefaultColorScheme.THIN_OUTLINE_WIDTH_DP)
     private val content = ClippedGroupContent(context)
     private var joinedEdges: NativeGroupEdges? = null
     private var joinedShape: JoinedGroupShape? = null
@@ -197,7 +198,7 @@ class NativeGroupLayout(
     }
 
     internal fun setSurfacePreset(preset: NativeSurfacePreset?) {
-        val width = preset?.borderWidthDp ?: 1f
+        val width = preset?.borderWidthDp ?: NativeDefaultColorScheme.THIN_OUTLINE_WIDTH_DP
         val intensity = preset?.foregroundGrain ?: 0f
         val widthChanged = outlineWidthDp != width
         val grainChanged = grainIntensity != intensity

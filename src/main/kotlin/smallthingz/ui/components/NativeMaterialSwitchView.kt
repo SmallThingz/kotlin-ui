@@ -183,7 +183,7 @@ class NativeMaterialSwitchView(
         val density = resources.displayMetrics.density
         trackWidth = (52f * density).roundToInt()
         trackHeight = (32f * density).roundToInt()
-        borderWidth = min(DEFAULT_OUTLINE_WIDTH_DP * density, min(trackWidth, trackHeight) / 2f)
+        borderWidth = min(NativeDefaultColorScheme.THIN_OUTLINE_WIDTH_DP * density, min(trackWidth, trackHeight) / 2f)
         setMeasuredDimension(
             resolveSize(trackWidth, widthMeasureSpec),
             resolveSize(trackHeight, heightMeasureSpec),
@@ -331,8 +331,6 @@ class NativeMaterialSwitchView(
     }
 
     private companion object {
-        // Shared thin geometry for palettes without an explicit surface-preset outline.
-        const val DEFAULT_OUTLINE_WIDTH_DP = 1f
         const val PAINT_FLAGS = Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG
     }
 }
