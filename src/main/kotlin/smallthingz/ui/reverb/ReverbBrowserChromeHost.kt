@@ -1,11 +1,11 @@
 package smallthingz.ui.reverb
 
 import android.content.Context
-import android.graphics.Color
 import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.ScrollView
 import smallthingz.ui.components.NativeButtonTouchTarget
+import smallthingz.ui.components.NativeForeground
 import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.NativeMaterialButtonView
 import kotlin.math.roundToInt
@@ -13,11 +13,14 @@ import kotlin.math.roundToInt
 /** Main controls become a bounded browser disclosure without changing their retained content. */
 class ReverbBrowserChromeControlsScroll(context: Context, private val theme: ReverbTheme) : ScrollView(context) {
     private var disclosure = false
+    private val disclosureBackground by lazy(LazyThreadSafetyMode.NONE) {
+        NativeForeground.foregroundBackground(theme.palette.pageControls, theme.palette.surface)
+    }
     fun showBrowserDisclosure(show: Boolean) {
         if (disclosure == show) return
         disclosure = show
         layoutParams = FrameLayout.LayoutParams(-1, if (show) -2 else -1)
-        setBackgroundColor(if (show) theme.palette.surface else Color.TRANSPARENT)
+        background = if (show) disclosureBackground else null
         isClickable = show
     }
     override fun onMeasure(w: Int, h: Int) {
