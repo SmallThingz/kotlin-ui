@@ -65,7 +65,8 @@ class GalleryNavigationBar(
     init {
         require(destinations.isNotEmpty())
         setBackgroundColor(palette.surface)
-        addView(viewport, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        addView(viewport, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT,
+            Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         tabs.onSelectionRequest = onSelectionRequest
         bind(selectedId, palette)
     }
@@ -90,7 +91,11 @@ class GalleryNavigationBar(
         viewportWidth = minOf(width, (600f * resources.displayMetrics.density).roundToInt())
         viewport.measure(MeasureSpec.makeMeasureSpec(viewportWidth, MeasureSpec.EXACTLY),
             getChildMeasureSpec(heightMeasureSpec, 0, LayoutParams.WRAP_CONTENT))
-        setMeasuredDimension(resolveSize(width, widthMeasureSpec), resolveSize(viewport.measuredHeight, heightMeasureSpec))
+        // A gesture-hidden device can report no bottom system inset. Keep the selection
+        // indicator inside the visual dock without shrinking a height-constrained row.
+        val bottomClearance = (8f * resources.displayMetrics.density).roundToInt()
+        setMeasuredDimension(resolveSize(width, widthMeasureSpec),
+            resolveSize(viewport.measuredHeight + bottomClearance, heightMeasureSpec))
     }
 
     private fun minimumRowWidth(): Int {
