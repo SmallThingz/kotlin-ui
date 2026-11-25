@@ -10,8 +10,14 @@ import smallthingz.ui.R
  * after configuration or system-color changes; only the immutable recipes are shared.
  */
 object NativeDefaultColorScheme : NativeColorSchemeResolver {
+    /** Default neutral outline width for the shared surface controls. */
+    @field:JvmSynthetic
+    internal const val THIN_OUTLINE_WIDTH_DP = 1f
+
     private val darkColors = NativeDarkSurfacePreset.Amoled.colorScheme()
-    private val lightGrain = NativeGrainPreset(backgroundGrain = 1f, foregroundGrain = .5f)
+    private val lightGrain = with(NativeDarkSurfacePreset.Amoled) {
+        NativeGrainPreset(backgroundGrain, foregroundGrain)
+    }
 
     override fun resolve(darkTheme: Boolean, sdkInt: Int, readColor: (Int) -> Int): NativeColorScheme =
         if (darkTheme) darkColors.resolve(true, sdkInt, readColor)

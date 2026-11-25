@@ -150,7 +150,7 @@ class NativeSegmentedControl private constructor(
             val preset = palette.surfacePreset
             applyNoiseIntensity(noiseIntensityOverride ?: preset?.foregroundGrain ?: 0f)
             (presentation as? DefaultSegmentedPresentation)?.setOutlineWidth(
-                outlineWidthOverride ?: preset?.borderWidthDp ?: 1f)
+                outlineWidthOverride ?: preset?.borderWidthDp ?: NativeDefaultColorScheme.THIN_OUTLINE_WIDTH_DP)
         }
         if (boundOptions != options) {
             boundOptions = options.toList()
@@ -221,7 +221,8 @@ internal class DefaultSegmentedPresentation(
     palette: ControlPalette,
     private val radiusDp: Float,
 ) : NativeSegmentedPresentation {
-    private var paint = NativeSurfaceStyle(palette.surface, cornerRadiusDp = radiusDp, outlineColor = palette.outline)
+    private var paint = NativeSurfaceStyle(palette.surface, cornerRadiusDp = radiusDp, outlineColor = palette.outline,
+        outlineWidthDp = NativeDefaultColorScheme.THIN_OUTLINE_WIDTH_DP)
     override val surface = NativeSurface(context, paint)
     override fun bindSurface(palette: ControlPalette) {
         paint = paint.copy(fillColor = palette.surface, outlineColor = palette.outline)
