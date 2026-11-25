@@ -1,0 +1,57 @@
+{
+  "base": "93bea5f2c412aadb600b06f97063a70dc39367d6",
+  "source_branch": "codex/outline-coherence-20261125",
+  "production": {
+    "path": "/dev/shm/codex-outline-coherence-20261125/worktree/src/main/kotlin/smallthingz/ui/components/NativeMaterialButtonView.kt",
+    "bytes": 21049,
+    "sha256": "fab0ce61e97f3be95abfabf543db7a8400b1b58749daa92cb7a65c99b8bdacac"
+  },
+  "android_test": {
+    "path": "/dev/shm/codex-outline-coherence-20261125/worktree/src/androidTest/java/smallthingz/ui/components/NativeButtonOutlineLayoutIntegrationTest.kt",
+    "bytes": 14495,
+    "sha256": "c8d6e0483cac452b6a4266ccd27d7c3790a6ed05b4520fa2007f7c150ce2fd80"
+  },
+  "host_runner": {
+    "path": "/dev/shm/codex-outline-coherence-20261125/worktree/scripts/test_button_outline_coherence_host.py",
+    "bytes": 15721,
+    "sha256": "a7ed973f27dd1476476f8d76ed2a6592744f4a6e1f6955b8d11a34950291533c"
+  },
+  "compile_runner": {
+    "path": "/dev/shm/codex-outline-coherence-20261125/worktree/scripts/compile_button_outline_focus_host.py",
+    "bytes": 2960,
+    "sha256": "92614d38c04b04aa847f5209ae37874798ba9624d81ab1401d071ad4d7e3b735"
+  },
+  "original_review": {
+    "path": "/dev/shm/control-outline-review-planck-20261125/final-review.json",
+    "bytes": 4360,
+    "sha256": "651eac97c0cb5c8153dff24a1e5f9a261ca323a9bc7784c5db5a6d3248f58b62"
+  },
+  "android_view_source": {
+    "path": "/dev/shm/control-outline-review-planck-20261125/View.android16.java",
+    "bytes": 1418192,
+    "sha256": "ceb24df845d5304ba82422d828f0bd3af8f9da93c33ce898935850df875c7ac2"
+  },
+  "android_view_url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/android16-release/core/java/android/view/View.java",
+  "android_view_lines": {
+    "setOutlineProvider": 20357,
+    "invalidateOutline": 20380,
+    "rebuildOutline": 20396
+  },
+  "host_result": {
+    "path": "/dev/shm/codex-outline-coherence-20261125/host-01/result.json",
+    "bytes": 18726,
+    "sha256": "2b078f256e280c817e3ef1f02d7f44aa7d20781f01a55e569bcb9852c53addbf"
+  },
+  "compile_result": {
+    "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/result.json",
+    "bytes": 32594,
+    "sha256": "3af7c4d2a27c7d6489bf350322df4a9c1019dd5b68c220ad5cff041c67d0fb0f"
+  },
+  "old_32_assertions_6_mutants_repeated": false,
+  "android_runtime": "NOT_RUN",
+  "published": false,
+  "integrated": false,
+  "device_actions": false,
+  "gradle_or_apk_build": false,
+  "performance_claim": false
+}

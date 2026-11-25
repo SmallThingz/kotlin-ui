@@ -1,0 +1,60 @@
+{
+  "status": "CHANGES_NEEDED_CACHE_COHERENCE",
+  "code_commit": "93bea5f2c412aadb600b06f97063a70dc39367d6",
+  "evidence_commit": "1d316d12928bc016a5ca80dbe68cf59d1bf4cb90",
+  "parent": "7e4b0c382d255d4251e60c81306c35a2eeb1977d",
+  "supersedes": {
+    "path": "/dev/shm/control-outline-review-planck-20261125/review.json",
+    "sha256": "ef483bb515b2eadab763dcf6d813793d5952a3e1e7ba1065c925aea945514c28",
+    "status": "PROVISIONAL_SUPERSEDED_BY_CONCRETE_SOURCE_FINDING"
+  },
+  "retained_verification": {
+    "checks": 158,
+    "host_assertions_passed": 32,
+    "mutants_compiled_and_rejected": 6,
+    "android_methods_compiled_not_run": 3,
+    "rerun": false
+  },
+  "findings": [
+    {
+      "priority": "P2",
+      "title": "Last-layout key can match while the currently delivered owned outline differs",
+      "path": "src/main/kotlin/smallthingz/ui/components/NativeMaterialButtonView.kt",
+      "line": 201,
+      "mechanism": "The two OutlineGeometry records are updated only by invalidateLayoutOutline. Public invalidateOutline, provider replacement, attachment and framework rebuild paths do not invalidate or update the last-layout key. Geometry may change and return to the key between layouts while the delivered outline remains intermediate.",
+      "source_only_counterexample": [
+        "Use non-filled NativeMaterialButtonView with radiusDp8, fixed width320/height96, stable Density1. Both owned keys and content outline are radius8 after layout.",
+        "Call bindTypography with stable Density2; parent density becomes2. Before layout, call getChildAt(0).invalidateOutline(). Android rebuildOutline invokes the same owned shape and installs radius16.",
+        "Call bindTypography with stable Density1 before layout. The stored last-layout key remains density1/radius8 throughout.",
+        "At the next same-size layout, candidate content helper returns on old key equality, leaving the delivered radius16 outline. The predecessor always invalidates content and installs radius8. Content clipToOutline is true, so this is an actual outline/clip-state difference."
+      ],
+      "why_existing_controls_miss": "The host View double increments a call counter and never stores the delivered outline. Mounted tests calibrate explicit invalidation at the same density and cover density changes across layouts, not A->B-refresh->A before a layout.",
+      "exception_corollary": [
+        "After an owned key is valid, set content to a custom provider and return to owned without an intervening layout.",
+        "If the owned setter refresh throws (for example a recoverable Density getter failure), Android has already assigned the owned provider but has not replaced the custom RenderNode outline.",
+        "Once reads recover, a same-key layout can skip and preserve the custom outline. The retained first-invalidation failure test starts with valid=false and does not cover this external failure."
+      ],
+      "suggested_direction": "Ensure cache validity reflects actual owned-provider refreshes outside the layout helper, or constrain/remove suppression where this cannot be guaranteed. Add a focused delivered-outline state case to the owner suite; no reviewer suite rerun requested."
+    }
+  ],
+  "otherwise_verified": [
+    "Provider identity check uses referential equality. Custom/null layout branches clear only their target key and retain original invalidation.",
+    "Separate button/content records, width/height/effective density/radius keys and nonfinite bypass are present.",
+    "Helper clears valid before its own invalidation and commits only after return, so its own thrown invalidation is not cached.",
+    "All production bytes outside helper/state and two callsite substitutions match parent. Child/role layouts and input.measured are unchanged."
+  ],
+  "primary_source": {
+    "url": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/android16-release/core/java/android/view/View.java",
+    "sha256": "ceb24df845d5304ba82422d828f0bd3af8f9da93c33ce898935850df875c7ac2",
+    "setOutlineProvider_line": 20357,
+    "invalidateOutline_line": 20380,
+    "rebuildOutline_line": 20396,
+    "attachment_line": 22549,
+    "sizeChange_line": 25866
+  },
+  "no_tests_rerun": true,
+  "no_target_import": true,
+  "owner_sources_modified": false,
+  "device_actions": false,
+  "no_performance_claim": true
+}

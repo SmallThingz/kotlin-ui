@@ -1,0 +1,279 @@
+{
+  "state": "terminal",
+  "base": "93bea5f2c412aadb600b06f97063a70dc39367d6",
+  "source": {
+    "path": "/dev/shm/codex-outline-coherence-20261125/worktree/src/main/kotlin/smallthingz/ui/components/NativeMaterialButtonView.kt",
+    "bytes": 21049,
+    "sha256": "fab0ce61e97f3be95abfabf543db7a8400b1b58749daa92cb7a65c99b8bdacac"
+  },
+  "runner": {
+    "path": "/dev/shm/codex-outline-coherence-20261125/worktree/scripts/test_button_outline_coherence_host.py",
+    "bytes": 15721,
+    "sha256": "a7ed973f27dd1476476f8d76ed2a6592744f4a6e1f6955b8d11a34950291533c"
+  },
+  "production_delta_only_callback_invalidation": true,
+  "tools_origin": {
+    "path": "/dev/shm/kotlin-ui-owned-outline-halley-20261125/.tmp/outline-layout-review/compile-02/result.json",
+    "bytes": 33069,
+    "sha256": "19a85cd5fbb48c98c7d036771c4eb1aee1827bcc5a3411a0a8044fdab03b26ae"
+  },
+  "java": {
+    "path": "/workspace/android-toolchain/jdk/bin/java",
+    "sha256": "75fc4bd3b528a2058a94fa2249a620c73c0717d652e9a072be1e13ba2fcc10dc",
+    "bytes": 12328
+  },
+  "compiler_inputs": {
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.4.21/3cd9c37c505fb9879e03ebeaf91d9c9500ab6eca/kotlin-compiler-embeddable-2.4.21.jar": "ef19419c765e7ac8404465fa026ca8fc4dbb8a822de0fc79aa53c8dce29f1d02",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-build-tools-api/2.4.21/f5fd68c20ba38519b91ab2411b004a1730453d6f/kotlin-build-tools-api-2.4.21.jar": "c5cd6a49bd072b529ae10809111c16a7aa0f92147e95d288354017fd65799461",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar": "bd8250210584cb659847dce9cda660f8e9906e5def7fbebcea93dc6dcb6a88a3",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-script-runtime/2.4.21/abc7ff9f7e229cb6bdfadad81e93c871e6cdde41/kotlin-script-runtime-2.4.21.jar": "a658cf5902a1525a06c264a5e42b437e97a6679ddeef8ca641246f270cf6a013",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-reflect/1.6.10/1cbe9c92c12a94eea200d23c2bbaedaf3daf5132/kotlin-reflect-1.6.10.jar": "3277ac102ae17aad10a55abec75ff5696c8d109790396434b496e75087854203",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-daemon-embeddable/2.4.21/5d9b0394b3ff65cd3dd33c6c31a2956b1d59885a/kotlin-daemon-embeddable-2.4.21.jar": "7b3ef24674e5bcffcadfc4e43202ea314194939ecbcdd90a4770b2f1b04e0d07",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.8.0/ac1dc37a30a93150b704022f8d895ee1bd3a36b3/kotlinx-coroutines-core-jvm-1.8.0.jar": "9860906a1937490bf5f3b06d2f0e10ef451e65b95b269f22daf68a3d1f5065c5",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/23.0.0/8cc20c07506ec18e0834947b84a864bfc094484e/annotations-23.0.0.jar": "7b0f19724082cbfcbc66e5abea2b9bc92cf08a1ea11e191933ed43801eb3cd05"
+  },
+  "stdlib": {
+    "path": "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+    "bytes": 1853315,
+    "sha256": "bd8250210584cb659847dce9cda660f8e9906e5def7fbebcea93dc6dcb6a88a3"
+  },
+  "results": [
+    {
+      "name": "candidate",
+      "fixture": {
+        "path": "/dev/shm/codex-outline-coherence-20261125/host-01/candidate/OutlineCoherenceControls.kt",
+        "bytes": 11640,
+        "sha256": "fed72dd5ff399ad2762b8caa915d414b358625b5ced3a7c1bf8c68604c1ba5a0"
+      },
+      "compile_exit": 0,
+      "compile_argv": [
+        "/workspace/android-toolchain/jdk/bin/java",
+        "-XX:-UsePerfData",
+        "-Xmx512m",
+        "-Djava.io.tmpdir=/dev/shm/codex-outline-coherence-20261125/host-01/candidate/scratch",
+        "-cp",
+        "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.4.21/3cd9c37c505fb9879e03ebeaf91d9c9500ab6eca/kotlin-compiler-embeddable-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-build-tools-api/2.4.21/f5fd68c20ba38519b91ab2411b004a1730453d6f/kotlin-build-tools-api-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-script-runtime/2.4.21/abc7ff9f7e229cb6bdfadad81e93c871e6cdde41/kotlin-script-runtime-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-reflect/1.6.10/1cbe9c92c12a94eea200d23c2bbaedaf3daf5132/kotlin-reflect-1.6.10.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-daemon-embeddable/2.4.21/5d9b0394b3ff65cd3dd33c6c31a2956b1d59885a/kotlin-daemon-embeddable-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.8.0/ac1dc37a30a93150b704022f8d895ee1bd3a36b3/kotlinx-coroutines-core-jvm-1.8.0.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/23.0.0/8cc20c07506ec18e0834947b84a864bfc094484e/annotations-23.0.0.jar",
+        "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
+        "-no-stdlib",
+        "-no-reflect",
+        "-jvm-target",
+        "17",
+        "-classpath",
+        "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+        "-d",
+        "/dev/shm/codex-outline-coherence-20261125/host-01/candidate/classes",
+        "/dev/shm/codex-outline-coherence-20261125/host-01/candidate/OutlineCoherenceControls.kt"
+      ],
+      "run_exit": 0,
+      "run_argv": [
+        "/workspace/android-toolchain/jdk/bin/java",
+        "-XX:-UsePerfData",
+        "-Djava.io.tmpdir=/dev/shm/codex-outline-coherence-20261125/host-01/candidate/scratch",
+        "-cp",
+        "/dev/shm/codex-outline-coherence-20261125/host-01/candidate/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+        "OutlineCoherenceControlsKt"
+      ],
+      "cases": [
+        "PASS density ABA delivered outline button",
+        "PASS failed custom to owned delivered outline button",
+        "PASS external refresh dirties only target button",
+        "PASS direct sample cannot relabel delivered intermediate button",
+        "PASS custom null identity fallback button",
+        "PASS density ABA delivered outline content",
+        "PASS failed custom to owned delivered outline content",
+        "PASS external refresh dirties only target content",
+        "PASS direct sample cannot relabel delivered intermediate content",
+        "PASS custom null identity fallback content",
+        "PASS stable geometry retains child role and input work",
+        "PASS nonfinite density and radius never cache",
+        "PASS layout failure before callback cannot commit key",
+        "PASS external failure after callback cannot retain key",
+        "PASS attachment framework rebuild clears old key",
+        "RESULT cases=15 assertions=70 failures=0"
+      ],
+      "matched": true,
+      "logs": [
+        {
+          "path": "/dev/shm/codex-outline-coherence-20261125/host-01/candidate/compile.stdout",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "/dev/shm/codex-outline-coherence-20261125/host-01/candidate/compile.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "/dev/shm/codex-outline-coherence-20261125/host-01/candidate/run.stdout",
+          "bytes": 805,
+          "sha256": "ff9c796461778a2a3b100fe82d7cf60d5134bbc6d52051da54b9051b67d9cbd0"
+        },
+        {
+          "path": "/dev/shm/codex-outline-coherence-20261125/host-01/candidate/run.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "name": "parent",
+      "fixture": {
+        "path": "/dev/shm/codex-outline-coherence-20261125/host-01/parent/OutlineCoherenceControls.kt",
+        "bytes": 11244,
+        "sha256": "af3abf81db208c0edaf52b2006ba4d7febb9e2dd9c74ad54c8ef558b3ff3485f"
+      },
+      "compile_exit": 0,
+      "compile_argv": [
+        "/workspace/android-toolchain/jdk/bin/java",
+        "-XX:-UsePerfData",
+        "-Xmx512m",
+        "-Djava.io.tmpdir=/dev/shm/codex-outline-coherence-20261125/host-01/parent/scratch",
+        "-cp",
+        "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.4.21/3cd9c37c505fb9879e03ebeaf91d9c9500ab6eca/kotlin-compiler-embeddable-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-build-tools-api/2.4.21/f5fd68c20ba38519b91ab2411b004a1730453d6f/kotlin-build-tools-api-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-script-runtime/2.4.21/abc7ff9f7e229cb6bdfadad81e93c871e6cdde41/kotlin-script-runtime-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-reflect/1.6.10/1cbe9c92c12a94eea200d23c2bbaedaf3daf5132/kotlin-reflect-1.6.10.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-daemon-embeddable/2.4.21/5d9b0394b3ff65cd3dd33c6c31a2956b1d59885a/kotlin-daemon-embeddable-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.8.0/ac1dc37a30a93150b704022f8d895ee1bd3a36b3/kotlinx-coroutines-core-jvm-1.8.0.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/23.0.0/8cc20c07506ec18e0834947b84a864bfc094484e/annotations-23.0.0.jar",
+        "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
+        "-no-stdlib",
+        "-no-reflect",
+        "-jvm-target",
+        "17",
+        "-classpath",
+        "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+        "-d",
+        "/dev/shm/codex-outline-coherence-20261125/host-01/parent/classes",
+        "/dev/shm/codex-outline-coherence-20261125/host-01/parent/OutlineCoherenceControls.kt"
+      ],
+      "run_exit": 1,
+      "run_argv": [
+        "/workspace/android-toolchain/jdk/bin/java",
+        "-XX:-UsePerfData",
+        "-Djava.io.tmpdir=/dev/shm/codex-outline-coherence-20261125/host-01/parent/scratch",
+        "-cp",
+        "/dev/shm/codex-outline-coherence-20261125/host-01/parent/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+        "OutlineCoherenceControlsKt"
+      ],
+      "cases": [
+        "FAIL density ABA delivered outline button: returned delivered: 16.0 != 8.0",
+        "FAIL failed custom to owned delivered outline button: recovered owned delivered: 3.0 != 8.0",
+        "FAIL external refresh dirties only target button: one target refresh: (3, 2) != (4, 2)",
+        "FAIL direct sample cannot relabel delivered intermediate button: layout delivers current geometry: 16.0 != 8.0",
+        "PASS custom null identity fallback button",
+        "FAIL density ABA delivered outline content: returned delivered: 16.0 != 8.0",
+        "FAIL failed custom to owned delivered outline content: recovered owned delivered: 3.0 != 8.0",
+        "FAIL external refresh dirties only target content: one target refresh: (2, 3) != (2, 4)",
+        "FAIL direct sample cannot relabel delivered intermediate content: layout delivers current geometry: 16.0 != 8.0",
+        "PASS custom null identity fallback content",
+        "PASS stable geometry retains child role and input work",
+        "PASS nonfinite density and radius never cache",
+        "PASS layout failure before callback cannot commit key",
+        "FAIL external failure after callback cannot retain key: recovery: 3.0 != 8.0",
+        "FAIL attachment framework rebuild clears old key: layout restores: 16.0 != 8.0",
+        "RESULT cases=15 assertions=66 failures=10"
+      ],
+      "matched": true,
+      "logs": [
+        {
+          "path": "/dev/shm/codex-outline-coherence-20261125/host-01/parent/compile.stdout",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "/dev/shm/codex-outline-coherence-20261125/host-01/parent/compile.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "/dev/shm/codex-outline-coherence-20261125/host-01/parent/run.stdout",
+          "bytes": 1172,
+          "sha256": "8537fcbb1226eb12c0a5c3420e86534bb467acb0eef561bab5f2fdef3a8fb2a5"
+        },
+        {
+          "path": "/dev/shm/codex-outline-coherence-20261125/host-01/parent/run.stderr",
+          "bytes": 210,
+          "sha256": "d690cce84e4442d3edd0f30b08be8607492b65924661e7c859fe6098f9c6b559"
+        }
+      ]
+    },
+    {
+      "name": "clear_after_callback_mutant",
+      "fixture": {
+        "path": "/dev/shm/codex-outline-coherence-20261125/host-01/clear_after_callback_mutant/OutlineCoherenceControls.kt",
+        "bytes": 11640,
+        "sha256": "d9d73af81ee798e1f5713cc904fd327a7e37d9bb0367df1c0d0848b80e31a481"
+      },
+      "compile_exit": 0,
+      "compile_argv": [
+        "/workspace/android-toolchain/jdk/bin/java",
+        "-XX:-UsePerfData",
+        "-Xmx512m",
+        "-Djava.io.tmpdir=/dev/shm/codex-outline-coherence-20261125/host-01/clear_after_callback_mutant/scratch",
+        "-cp",
+        "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.4.21/3cd9c37c505fb9879e03ebeaf91d9c9500ab6eca/kotlin-compiler-embeddable-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-build-tools-api/2.4.21/f5fd68c20ba38519b91ab2411b004a1730453d6f/kotlin-build-tools-api-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-script-runtime/2.4.21/abc7ff9f7e229cb6bdfadad81e93c871e6cdde41/kotlin-script-runtime-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-reflect/1.6.10/1cbe9c92c12a94eea200d23c2bbaedaf3daf5132/kotlin-reflect-1.6.10.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-daemon-embeddable/2.4.21/5d9b0394b3ff65cd3dd33c6c31a2956b1d59885a/kotlin-daemon-embeddable-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.8.0/ac1dc37a30a93150b704022f8d895ee1bd3a36b3/kotlinx-coroutines-core-jvm-1.8.0.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/23.0.0/8cc20c07506ec18e0834947b84a864bfc094484e/annotations-23.0.0.jar",
+        "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
+        "-no-stdlib",
+        "-no-reflect",
+        "-jvm-target",
+        "17",
+        "-classpath",
+        "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+        "-d",
+        "/dev/shm/codex-outline-coherence-20261125/host-01/clear_after_callback_mutant/classes",
+        "/dev/shm/codex-outline-coherence-20261125/host-01/clear_after_callback_mutant/OutlineCoherenceControls.kt"
+      ],
+      "run_exit": 1,
+      "run_argv": [
+        "/workspace/android-toolchain/jdk/bin/java",
+        "-XX:-UsePerfData",
+        "-Djava.io.tmpdir=/dev/shm/codex-outline-coherence-20261125/host-01/clear_after_callback_mutant/scratch",
+        "-cp",
+        "/dev/shm/codex-outline-coherence-20261125/host-01/clear_after_callback_mutant/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+        "OutlineCoherenceControlsKt"
+      ],
+      "cases": [
+        "PASS density ABA delivered outline button",
+        "FAIL failed custom to owned delivered outline button: recovered owned delivered: 3.0 != 8.0",
+        "PASS external refresh dirties only target button",
+        "PASS direct sample cannot relabel delivered intermediate button",
+        "PASS custom null identity fallback button",
+        "PASS density ABA delivered outline content",
+        "FAIL failed custom to owned delivered outline content: recovered owned delivered: 3.0 != 8.0",
+        "PASS external refresh dirties only target content",
+        "PASS direct sample cannot relabel delivered intermediate content",
+        "PASS custom null identity fallback content",
+        "PASS stable geometry retains child role and input work",
+        "PASS nonfinite density and radius never cache",
+        "PASS layout failure before callback cannot commit key",
+        "PASS external failure after callback cannot retain key",
+        "PASS attachment framework rebuild clears old key",
+        "RESULT cases=15 assertions=70 failures=2"
+      ],
+      "matched": true,
+      "logs": [
+        {
+          "path": "/dev/shm/codex-outline-coherence-20261125/host-01/clear_after_callback_mutant/compile.stdout",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "/dev/shm/codex-outline-coherence-20261125/host-01/clear_after_callback_mutant/compile.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "/dev/shm/codex-outline-coherence-20261125/host-01/clear_after_callback_mutant/run.stdout",
+          "bytes": 883,
+          "sha256": "0929edc23280c847833fd2ae479618aae230d84ca58e726118e1960f4d307dec"
+        },
+        {
+          "path": "/dev/shm/codex-outline-coherence-20261125/host-01/clear_after_callback_mutant/run.stderr",
+          "bytes": 209,
+          "sha256": "a266f60d7a4db91ce05aa5a184d01b74bd42bdcf05574fa9ce8596fbfefc4070"
+        }
+      ]
+    }
+  ],
+  "device_actions": false,
+  "android_execution": false,
+  "apk_build": false,
+  "timeout": null,
+  "status": "PASS",
+  "source_unchanged": true
+}
