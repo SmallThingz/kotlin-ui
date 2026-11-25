@@ -12,9 +12,9 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView.BufferType
 import androidx.annotation.DrawableRes
+import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import smallthingz.ui.components.NativeDeterminateLinearProgress
-import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.NativeTextField
 import smallthingz.ui.components.NativeTextFieldStyle
 import smallthingz.ui.components.NativeToolbarActionTone
@@ -101,9 +101,9 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
     val tabsAction = ReverbBrowserChromeActionView(context, chromeTheme, tabs, ::action, ::admitsChromeAction)
     val menuAction = ReverbBrowserChromeActionView(context, chromeTheme, menu, ::action, ::admitsChromeAction)
     private val field = ReverbDesign.appearance.compactField.style
-    // The surrounding compact surface owns the fill and leading action; retain the canonical editor metrics.
+    // The native editor owns its field surface and focus outline, independently of toolbar actions.
     val addressEditor: NativeTextField = ReverbBrowserChromeAddressEditor(context, chromeTheme.palette.pageControls,
-        field.copy(filled = false, startPaddingDp = 0f)).apply {
+        field.copy(outlined = true)).apply {
         hint = addressHint
     }
     val pageHost = FrameLayout(context)
@@ -117,13 +117,8 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
             NativeToolbarBackground(this, recipe, recipe.backgroundColor(chromeTheme.palette)) { ReverbTextSurface.invalidate(this) }
             val inset = (recipe.centeredPaddingDp * chromeTheme.density.density).roundToInt()
             setPaddingRelative(inset, 0, inset, 0)
-            addView(NativeGroupLayout(context, field.radiusDp).apply {
-                setRowOrientation(HORIZONTAL)
-                setSurfacePreset(chromeTheme.palette.surfacePreset)
-                setPaletteImmediately(chromeTheme.palette.raised, android.graphics.Color.TRANSPARENT)
-                addRow(siteAction, NativeGroupLayout.LayoutParams(-2, -2))
-                addRow(addressEditor, NativeGroupLayout.LayoutParams(0, -2, 1f))
-            }, LayoutParams(0, -2, 1f).apply { marginEnd = dp(2) })
+            addView(siteAction)
+            addView(addressEditor, LayoutParams(0, -2, 1f).apply { marginEnd = dp(2) })
             addView(tabsAction)
             addView(menuAction, LayoutParams(-2, -2).apply { marginStart = dp(2) })
         }, FrameLayout.LayoutParams(-1, -2))
@@ -170,6 +165,14 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
         if (panelClosed) return
         status.setText(message)
         status.visibility = if (visible && message.isNotEmpty()) VISIBLE else GONE
+    }
+    /** Insets remaining after the outer frame and any panel-owned bottom action dock. */
+    fun applyContentSafeInsets(insets: Insets) {
+        if (panelClosed) return
+        if (paddingLeft != insets.left || paddingTop != insets.top ||
+            paddingRight != insets.right || paddingBottom != insets.bottom) {
+            setPadding(insets.left, insets.top, insets.right, insets.bottom)
+        }
     }
     /** Renderer and shared panels are semantic content slots, not caller-configurable geometry. */
     fun attachRenderer(renderer: View) { pageHost.addView(renderer, FrameLayout.LayoutParams(-1, -1)) }
