@@ -73,7 +73,7 @@ class ReverbClearProgressSheet(
     private val dialog = createReverbActionSheet(anchor, environment, initial.title) {}
     private val body = CaptureClearProgressBody(dialog.contentContext, environment, initial)
     private val cancel = ReverbSheetButton(anchor.context, dialog.contentContext, environment, false,
-        initial.cancelLabel, onCancel)
+        initial.cancelLabel, onCancel, leadingIcon = ReverbIcon.Close)
     private val actions = ReverbSheetActions(anchor.context, dialog.contentContext, environment, listOf(cancel))
     private var closed = false
     init {

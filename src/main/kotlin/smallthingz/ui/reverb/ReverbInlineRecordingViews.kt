@@ -69,6 +69,7 @@ class ReverbInlineRecordingRename(
 ) : LinearLayout(context), AutoCloseable {
     private val recipe = environment.appearance.outlinedField
     private var error: String? = null
+    private var actionIconDensity = 0f
     private var busy = false
     private var closed = false
     private var inputActive = true
@@ -140,7 +141,11 @@ class ReverbInlineRecordingRename(
         if (closed) return
         environment = value; this.error = error; this.busy = busy
         val edge = (recipe.paddingDp * value.textDensity.density).roundToInt()
-        setPadding(edge, edge, edge, 0)
+        val spacing = value.appearance.modals.sheet
+        setPadding(edge, (spacing.topPaddingDp * value.textDensity.density).roundToInt(), edge, 0)
+        // The field keeps its own internal insets; the surrounding editor shares sheet spacing.
+        (actions.layoutParams as LayoutParams).topMargin =
+            (spacing.actionsGapDp * value.textDensity.density).roundToInt()
         field.setPadding(edge, edge, edge, edge)
         field.minimumHeight = (recipe.minimumFieldHeightDp * value.textDensity.density).roundToInt()
         editor.bind(name, configuration(), value, readName, onNameChanged, { if (!this.busy) onSubmit() })
@@ -152,6 +157,12 @@ class ReverbInlineRecordingRename(
         value.bindParagraphStyle(support, ReverbTextRole.BODY_SMALL, value.palette.error)
         actions.bindPalette(value.palette)
         actions.asActionFooter(density = value.textDensity.density)
+        val density = value.textDensity.density
+        if (density != actionIconDensity) {
+            cancel.setLeadingIcon(ReverbIconDrawable(ReverbIcon.Close, density, value.palette.primary))
+            confirm.setLeadingIcon(ReverbIconDrawable(ReverbIcon.Check, density, value.palette.primary))
+            actionIconDensity = density
+        }
         cancel.bindTypography(value.textDensity, value.sharedFontResolver)
         confirm.bindTypography(value.textDensity, value.sharedFontResolver)
         cancel.bind(cancelLabel, !busy, value.palette.buttonPalette, onClick = onCancel)

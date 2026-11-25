@@ -88,6 +88,8 @@ open class NativeMaterialButtonView private constructor(
 
     val minimumTouchTargetDp: Int get() = recipe?.minimumTouchTargetDp ?: DEFAULT_MINIMUM_TOUCH_TARGET_DP
     private var joinedSurface = false
+    private val joinedLabelGeometry get() = joinedSurface && style.showLabel
+    private val assignedGeometry get() = style.assignedSize && !joinedLabelGeometry
     private var action = onClick
     private var closed = false
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -130,8 +132,8 @@ open class NativeMaterialButtonView private constructor(
             val vertical = dp(style.verticalPaddingDp)
             val width = MeasureSpec.getSize(w)
             val height = MeasureSpec.getSize(h)
-            val bounded = style.assignedSize || MeasureSpec.getMode(h) != MeasureSpec.UNSPECIFIED
-            val widthBounded = style.assignedSize || MeasureSpec.getMode(w) != MeasureSpec.UNSPECIFIED
+            val bounded = assignedGeometry || MeasureSpec.getMode(h) != MeasureSpec.UNSPECIFIED
+            val widthBounded = assignedGeometry || MeasureSpec.getMode(w) != MeasureSpec.UNSPECIFIED
             val innerWidth = if (widthBounded) (width - 2 * horizontal).coerceAtLeast(0) else Int.MAX_VALUE
             val innerHeight = if (bounded) (height - 2 * vertical).coerceAtLeast(0) else Int.MAX_VALUE
             val leadingSize = leadingSize()
@@ -142,8 +144,8 @@ open class NativeMaterialButtonView private constructor(
             if (style.showLabel) label.measure(if (widthBounded) atMost(innerWidth - iconWidth - iconGap) else w,
                 if (bounded) atMost(innerHeight) else h)
             setMeasuredDimension(
-                if (style.assignedSize) width else resolveSize(contentWidth(horizontal, iconWidth, iconGap, label.measuredWidth), w),
-                if (style.assignedSize) height else resolveSize(max(minimumHeightPx(), 2 * vertical + max(iconHeight, label.measuredHeight)), h),
+                if (assignedGeometry) width else resolveSize(contentWidth(horizontal, iconWidth, iconGap, label.measuredWidth), w),
+                if (assignedGeometry) height else resolveSize(max(minimumHeightPx(), 2 * vertical + max(iconHeight, label.measuredHeight)), h),
             )
         }
         override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
@@ -247,7 +249,7 @@ open class NativeMaterialButtonView private constructor(
         inputReady = true
     }
 
-    override val actionMinimumWidthPx: Int get() = dp(minimumTouchTargetDp)
+    override val actionMinimumWidthPx: Int get() = if (joinedLabelGeometry) minimumWidthPx() else dp(minimumTouchTargetDp)
 
     override fun joinActionSurface() {
         if (joinedSurface) return
@@ -402,7 +404,7 @@ open class NativeMaterialButtonView private constructor(
     private fun leadingGap(): Int = if (hasLeading && style.showLabel) dp(style.iconGapDp) else 0
     private fun contentWidth(padding: Int, leadingWidth: Int, gap: Int, labelWidth: Int): Int {
         val width = 2 * padding + leadingWidth + gap + labelWidth
-        return if (style.assignedSize) width else max(dp(style.minimumWidthDp), width)
+        return if (assignedGeometry) width else max(minimumWidthPx(), width)
     }
     fun intrinsicHeight(width: Int): Int {
         // Match content.onMeasure's available label width before an owner fixes the height.
@@ -417,9 +419,12 @@ open class NativeMaterialButtonView private constructor(
         return max(minimumHeightPx(), max(leadingSize(), labelHeight) + 2 * dp(style.verticalPaddingDp))
     }
 
-    private val layoutDensity get() = if (style.assignedSize) resources.displayMetrics.density else density.density
+    private val layoutDensity get() = if (assignedGeometry) resources.displayMetrics.density else density.density
     private fun dp(value: Int) = (value * layoutDensity).roundToInt()
-    private fun padding(compact: Boolean) = dp(if (compact && filled) 12 else style.horizontalPaddingDp)
+    private fun minimumWidthPx() = dp(if (joinedLabelGeometry)
+        max(joinedActionSurface.minimumWidthDp, minimumTouchTargetDp) else style.minimumWidthDp)
+    private fun padding(compact: Boolean) = dp(if (joinedLabelGeometry) joinedActionSurface.horizontalPaddingDp
+        else if (compact && filled) 12 else style.horizontalPaddingDp)
     private fun horizontalPadding() = padding(compactPadding)
     private fun minimumHeightPx() = dp(if (joinedSurface) max(style.minimumHeightDp, minimumTouchTargetDp)
         else style.minimumHeightDp)

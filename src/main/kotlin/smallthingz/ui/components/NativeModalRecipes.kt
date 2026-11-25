@@ -63,7 +63,8 @@ data class NativeActionSheetRecipe(
     val horizontalPaddingDp: Float = 24f,
     val bottomPaddingDp: Float = 24f,
     val bodyGapDp: Float = 12f,
-    val actionsGapDp: Float = 20f,
+    /** Default clearance above actions matches the shared footer's visual bottom space. */
+    val actionsGapDp: Float = NativeMergedActionLayout.ACTION_FOOTER_BOTTOM_PADDING_DP,
     val maxWidthDp: Float = 640f,
     val shadowDp: Float = 8f,
     val scrimAlpha: Float = .32f,
@@ -72,8 +73,8 @@ data class NativeActionSheetRecipe(
     val tooltipRole: NativeTypographyRole = NativeTypographyRole.BODY_SMALL,
     val handleHeightDp: Float = 2f,
     val handleVerticalPaddingDp: Float = 16f,
-    /** Space above the sheet content header. */
-    val topPaddingDp: Float = 0f,
+    /** Content clearance after the handle; also the outer top inset for an inline editor. */
+    val topPaddingDp: Float = NativeMergedActionLayout.ACTION_FOOTER_BOTTOM_PADDING_DP,
     val grainIntensity: Float = 1f,
 ) {
     /** Shared sheet fill; preserve opacity while lowering only the surface RGB. */
