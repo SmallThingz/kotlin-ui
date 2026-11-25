@@ -175,7 +175,7 @@ data class NativeSettingsSelectorStyle(
 }
 
 data class NativeRetentionSectionLayout(
-    val sideInsetDp: Int = 16,
+    val sideInsetDp: Int = DEFAULT_SETTINGS_SECTION_HORIZONTAL_INSET_DP,
     val inlineGapDp: Int = 0,
     val stackedGapDp: Int = 8,
     val preferredInlineWidthDp: Int = 126,
@@ -184,7 +184,7 @@ data class NativeRetentionSectionLayout(
 )
 
 data class NativeRecordingSectionLayout(
-    val sideInsetDp: Int = 16,
+    val sideInsetDp: Int = DEFAULT_SETTINGS_SECTION_HORIZONTAL_INSET_DP,
     val titleTopInsetDp: Int = 12,
     val bodyGapDp: Int = 12,
     val warningHorizontalInsetDp: Int = 14,

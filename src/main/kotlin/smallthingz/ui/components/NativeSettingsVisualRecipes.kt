@@ -33,10 +33,13 @@ data class NativeCalibrationRecipe(
     }
 }
 
+/** Default outer gutter of a Settings section; row/editor/loading padding has separate roles. */
+internal const val DEFAULT_SETTINGS_SECTION_HORIZONTAL_INSET_DP = 16
+
 /** Appearance of a grouped tile list and its inline creation editor. */
 data class NativeQuickTilesRecipe(
     val surfaceRadiusDp: Float = 20f,
-    val sectionHorizontalInsetDp: Int = 16,
+    val sectionHorizontalInsetDp: Int = DEFAULT_SETTINGS_SECTION_HORIZONTAL_INSET_DP,
     val sectionVerticalInsetDp: Int = 12,
     val sectionGapDp: Int = 8,
     val rowStartInsetDp: Int = 16,
