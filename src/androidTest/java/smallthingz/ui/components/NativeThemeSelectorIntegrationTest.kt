@@ -140,7 +140,6 @@ class NativeThemeSelectorIntegrationTest {
             context, palette, NativeThemeMode.DARK, density, resolver,
         ) { error("Reflow must not request a selection") }
         try {
-            selector.layoutDirection = View.LAYOUT_DIRECTION_RTL
             val title = selector.getChildAt(0)
             val capsule = selector.getChildAt(1)
             val row = requireNotNull(choices(selector))
@@ -154,21 +153,32 @@ class NativeThemeSelectorIntegrationTest {
                     View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
                 selector.layout(0, 0, selector.measuredWidth, selector.measuredHeight)
             }
-            layout(168)
-            assertTrue(capsule.top >= title.bottom)
-            assertTrue(options.map { it.top }.distinct().size > 1)
-            for (option in options) {
-                val textLayout = requireNotNull(option.layout)
-                assertTrue(option.width > 0 && option.height > 0)
-                assertEquals(option.text.length, textLayout.getLineEnd(textLayout.lineCount - 1))
-                assertEquals(0, (0 until textLayout.lineCount).sumOf(textLayout::getEllipsisCount))
-                assertTrue(textLayout.height <= option.height - option.compoundPaddingTop - option.compoundPaddingBottom)
+            for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
+                selector.layoutDirection = direction
+                layout(168)
+                val inset = (16 * density.density).roundToInt()
+                assertEquals(inset, if (direction == View.LAYOUT_DIRECTION_RTL) selector.width - title.right else title.left)
+                assertEquals(inset, capsule.left)
+                assertEquals(selector.width - inset, capsule.right)
+                assertTrue(capsule.top >= title.bottom)
+                assertTrue(options.map { it.top }.distinct().size > 1)
+                for (option in options) {
+                    val textLayout = requireNotNull(option.layout)
+                    assertTrue(option.width > 0 && option.height > 0)
+                    val bounds = Rect(0, 0, option.width, option.height)
+                    selector.offsetDescendantRectToMyCoords(option, bounds)
+                    assertTrue(bounds.left >= inset && bounds.right <= selector.width - inset)
+                    assertTrue(bounds.top >= capsule.top && bounds.bottom <= capsule.bottom)
+                    assertEquals(option.text.length, textLayout.getLineEnd(textLayout.lineCount - 1))
+                    assertEquals(0, (0 until textLayout.lineCount).sumOf(textLayout::getEllipsisCount))
+                    assertTrue(textLayout.height <= option.height - option.compoundPaddingTop - option.compoundPaddingBottom)
+                }
+                layout(600)
+                assertTrue(capsule.top < title.bottom)
+                NativeThemeMode.entries.forEachIndexed { index, mode -> assertSame(options[index], row.choiceView(mode.name)) }
+                assertEquals(NativeThemeMode.DARK.name, row.selectedId)
+                assertTrue(options.last().isChecked)
             }
-            layout(600)
-            assertTrue(capsule.top < title.bottom)
-            NativeThemeMode.entries.forEachIndexed { index, mode -> assertSame(options[index], row.choiceView(mode.name)) }
-            assertEquals(NativeThemeMode.DARK.name, row.selectedId)
-            assertTrue(options.last().isChecked)
         } finally { selector.close() }
     }
 

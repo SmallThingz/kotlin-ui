@@ -50,6 +50,9 @@ class NativeThemeSelector internal constructor(
     private var onSelectionRequest: ((NativeThemeMode) -> Boolean)? = onSelectionRequest
     private val capsule = NativeSegmentedControl(context, palette, segmented, density, inputAllowed, presentation)
     private val contentLayout = NativeLabeledSegmentedLayout(presentation.title, capsule)
+    // The Settings factory owns an outer section gutter; custom presentations keep their layout.
+    private val horizontalInsetDp = if (presentation is SettingsThemePresentation)
+        DEFAULT_SETTINGS_SECTION_HORIZONTAL_INSET_DP else 0
     private var palette = palette
     private var titleColor = titleColor
     private var selected = selected
@@ -115,14 +118,14 @@ class NativeThemeSelector internal constructor(
 
     override fun onMeasure(w: Int, h: Int) {
         val width = if (MeasureSpec.getMode(w) == MeasureSpec.UNSPECIFIED)
-            contentLayout.preferredWidth(dp(16)) else MeasureSpec.getSize(w)
-        val available = width.coerceAtLeast(0)
+            contentLayout.preferredWidth(dp(16)) + 2 * dp(horizontalInsetDp) else MeasureSpec.getSize(w)
+        val available = (width - 2 * horizontalInset(width)).coerceAtLeast(0)
         contentLayout.measure(available, inlineGap = dp(16), stackedGap = dp(8))
         setMeasuredDimension(resolveSize(width, w), resolveSize(2 * dp(12) + contentLayout.measuredHeight + dp(12), h))
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        contentLayout.layout(width, 0, dp(12), layoutDirection == LAYOUT_DIRECTION_RTL)
+        contentLayout.layout(width, horizontalInset(width), dp(12), layoutDirection == LAYOUT_DIRECTION_RTL)
     }
 
     override fun close() {
@@ -131,6 +134,8 @@ class NativeThemeSelector internal constructor(
         onSelectionRequest = null
         capsule.close()
     }
+
+    private fun horizontalInset(width: Int) = dp(horizontalInsetDp).coerceAtMost(width.coerceAtLeast(0) / 2)
 
     private fun dp(value: Int) = (value * density).roundToInt()
 }
