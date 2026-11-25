@@ -25,6 +25,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.accessibility.AccessibilityNodeInfo
+import smallthingz.ui.input.DEFAULT_MINIMUM_TOUCH_TARGET_DP
 import smallthingz.ui.input.phase.NativeClickPhaseEndpoint
 import smallthingz.ui.input.phase.NativeClickPhaseHost
 import smallthingz.ui.input.phase.ViewClickPhaseEndpoint
@@ -53,7 +54,7 @@ open class NativeStandardIconButtonView(
         visual, initialContentColor, { readCachedAnimatorDurationScale(context) })
     private val controller = ViewClickController(visual, object : NativeClickEnvironment {
         override val nativeInputRoot: View? get() = inputRoot()
-        override val minimumTouchWidthPx get() = 48f * density
+        override val minimumTouchWidthPx get() = minimumTouchTargetPx
         override val minimumTouchHeightPx get() = minimumTouchWidthPx
         override fun admitDown(event: MotionEvent): Boolean {
             val w = visual.width.toFloat(); val h = visual.height.toFloat()
@@ -111,11 +112,11 @@ open class NativeStandardIconButtonView(
     }
 
     fun cancelInput() = controller.cancel()
-    val minimumTouchTargetPx get() = 48f * density
+    val minimumTouchTargetPx get() = DEFAULT_MINIMUM_TOUCH_TARGET_DP * density
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val d = density
-        val outer = (48f * d).roundToInt()
+        val outer = (DEFAULT_MINIMUM_TOUCH_TARGET_DP * d).roundToInt()
         // Released explicit Modifier.size(50.dp), used by Range Close, constrains M3's
         // later default40dp action to50. Other callers retain the default40dp visual.
         // A smaller actual parent bound still constrains both axes independently.

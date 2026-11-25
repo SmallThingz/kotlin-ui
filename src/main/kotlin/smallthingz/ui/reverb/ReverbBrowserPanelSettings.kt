@@ -186,7 +186,8 @@ open class ReverbBrowserPanelSettings(context: Context, private val theme: Rever
         val heading = theme.paragraph(context, title, theme.appearance.toolbars.centeredTitleRole).apply {
             ViewCompat.setAccessibilityHeading(this, true)
         }
-        addView(ReverbTitledTopBarLayout(context, theme.density.density, theme.palette, back, heading, draftActions),
+        addView(ReverbTitledTopBarLayout(context, theme.density.density, theme.palette, back, heading, draftActions,
+            style = theme.appearance.toolbars),
             LayoutParams(-1, -2))
         addView(feedback, LayoutParams(-1, -2))
         addView(ScrollView(context).apply { isFillViewport = true; addView(groups, FrameLayout.LayoutParams(-1, -2)) },

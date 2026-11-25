@@ -23,6 +23,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.accessibility.AccessibilityNodeInfo
+import smallthingz.ui.input.DEFAULT_MINIMUM_TOUCH_TARGET_DP
 import smallthingz.ui.input.phase.NativeClickPhaseHost
 import smallthingz.ui.input.phase.NativeClickPhaseNode
 import smallthingz.ui.input.phase.NativeDragPointerChange
@@ -42,14 +43,15 @@ class NativeSheetDragHandle(
     private val dismissSheet:()->Unit,
 ):ViewGroup(context),NativeClickPhaseHost,AutoCloseable {
     private val identity=Any()
+    private val minimumTouchTargetPx get() = DEFAULT_MINIMUM_TOUCH_TARGET_DP * style.textDensity.density
     internal val verticalTouchInsetPx: Int get() =
-        kotlin.math.ceil(max(0f, 48f * style.textDensity.density - measuredHeight) * .5f).toInt()
+        kotlin.math.ceil(max(0f, minimumTouchTargetPx - measuredHeight) * .5f).toInt()
     internal val mark=HandleMark(context,style)
     private val indication=RowIndication.install(mark,style.palette.onSurface,
         { readCachedAnimatorDurationScale(context) })
     private val controller=ViewClickController(this,object:NativeClickEnvironment {
         override val nativeInputRoot get()=inputRoot()
-        override val minimumTouchWidthPx get()=48f*style.textDensity.density
+        override val minimumTouchWidthPx get()=minimumTouchTargetPx
         override val minimumTouchHeightPx get()=minimumTouchWidthPx
         override fun admitDown(event:MotionEvent):Boolean {
             val finger=event.getToolType(0)==MotionEvent.TOOL_TYPE_FINGER

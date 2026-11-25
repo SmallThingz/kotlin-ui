@@ -10,6 +10,7 @@ import smallthingz.ui.scroll.NativeVerticalScrollSource
 import android.view.View
 import smallthingz.ui.geometry.Offset
 import smallthingz.ui.geometry.Size
+import smallthingz.ui.input.DEFAULT_MINIMUM_TOUCH_TARGET_DP
 import smallthingz.ui.input.pointer.PointerType
 import smallthingz.ui.unit.Velocity
 import smallthingz.ui.input.phase.NativeDragPointerChange
@@ -136,7 +137,7 @@ internal class NativeSheetScrimTapNode(
         } else if (waiting && !ignoreFinalDown && event.changes.any { it.consumed }) waiting = false
     }
     private fun outside(change: NativeDragPointerChange): Boolean {
-        val min = 48f * density()
+        val min = DEFAULT_MINIMUM_TOUCH_TARGET_DP * density()
         val x = if (change.type == PointerType.Touch) max(0f, min-view.width)*.5f else 0f
         val y = if (change.type == PointerType.Touch) max(0f, min-view.height)*.5f else 0f
         return change.position.x < -x || change.position.x > view.width+x ||

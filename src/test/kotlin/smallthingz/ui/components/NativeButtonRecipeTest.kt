@@ -65,13 +65,18 @@ class NativeButtonRecipeTest {
 
     @Test fun customPresetDerivesVariantsFromItsChosenRecipesAndTypography() {
         val label = recipes.text.labelStyle.copy(fontSize = 18.sp)
-        val filled = recipes.filled.copy(surface = recipes.filled.surface.copy(horizontalPaddingDp = 26))
+        val filled = recipes.filled.copy(
+            surface = recipes.filled.surface.copy(horizontalPaddingDp = 26),
+            minimumTouchTargetDp = 56,
+        )
         val icon = recipes.raisedIcon.copy(surface = recipes.raisedIcon.surface.copy(verticalPaddingDp = 2))
         val preset = NativeButtonRecipes(labelStyle = label, filled = filled, raisedIcon = icon)
         assertSame(filled, preset.filled)
         assertSame(filled.labelStyle, preset.footerContinue.labelStyle)
         assertEquals(26, preset.destructive.surface.horizontalPaddingDp)
         assertEquals(26, preset.footerContinue.surface.horizontalPaddingDp)
+        assertEquals(56, preset.footerContinue.minimumTouchTargetDp)
+        assertEquals(56, preset.destructive.minimumTouchTargetDp)
         assertSame(label, preset.text.labelStyle)
         assertSame(label, preset.footerBack.labelStyle)
         assertSame(label, preset.neutralText.labelStyle)

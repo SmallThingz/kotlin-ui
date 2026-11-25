@@ -17,6 +17,7 @@ import smallthingz.ui.dsl.nativeView
 import smallthingz.ui.geometry.Offset
 import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.animation.view.ViewColorTransition
+import smallthingz.ui.input.DEFAULT_MINIMUM_TOUCH_TARGET_DP
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -278,7 +279,7 @@ internal class NativeSheetContent(
     private var topBody=0
     private var topActions=0
     private val density get()=style.textDensity.density
-    val minimumTouchTargetPx:Float get()=48f*density
+    val minimumTouchTargetPx:Float get()=DEFAULT_MINIMUM_TOUCH_TARGET_DP * density
     init {
         clipChildren=false;clipToPadding=false;importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO
         addView(header)

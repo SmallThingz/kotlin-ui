@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import smallthingz.ui.components.NativeCenteredTopBarLayout
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeToolbarBackground
+import smallthingz.ui.components.NativeToolbarStyle
 import smallthingz.ui.components.NativeTopBarInsets
 
 /** A centered title between the same compact action slots used by the brand toolbar. */
@@ -18,10 +19,22 @@ open class ReverbTitledTopBarLayout(
     navigation: View,
     title: View,
     action: View,
+    private val style: NativeToolbarStyle,
     onPaintChanged: (View) -> Unit = ReverbTextSurface::invalidate,
 ) : ViewGroup(context) {
-    private val style = ReverbDesign.appearance.toolbars
-    private val chrome = NativeToolbarBackground(this, style, style.backgroundColor(initialPalette)) {
+    /** Preserve the original constructor and its shared default recipe. */
+    constructor(
+        context: Context,
+        density: Float,
+        initialPalette: NativeColorScheme,
+        navigation: View,
+        title: View,
+        action: View,
+        onPaintChanged: (View) -> Unit = ReverbTextSurface::invalidate,
+    ) : this(context, density, initialPalette, navigation, title, action,
+        ReverbDesign.appearance.toolbars, onPaintChanged)
+
+    private val chrome = NativeToolbarBackground(this, style, initialPalette) {
         onPaintChanged(this)
     }
     private var insets = NativeTopBarInsets(0, 0, 0)
@@ -37,7 +50,7 @@ open class ReverbTitledTopBarLayout(
     }
 
     fun bindTitledToolbar(density: Float, palette: NativeColorScheme) {
-        chrome.bind(style, style.backgroundColor(palette))
+        chrome.bind(style, palette)
         contentClipView.bindStyle(density, style)
     }
 

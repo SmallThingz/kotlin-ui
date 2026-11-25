@@ -9,6 +9,7 @@ import android.widget.ImageView
 import smallthingz.ui.common.mergedButtonGroup
 import smallthingz.ui.components.NativeUiAppearance
 import smallthingz.ui.controls.ControlPalette
+import smallthingz.ui.input.DEFAULT_MINIMUM_TOUCH_TARGET_DP
 import kotlin.math.roundToInt
 
 /**
@@ -70,9 +71,10 @@ class AllDocHomeTopBar(
 
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-        addView(licenses, LayoutParams(dp(48), dp(48), Gravity.START or Gravity.CENTER_VERTICAL))
-        addView(identity, LayoutParams(dp(56), dp(48), Gravity.CENTER))
-        addView(trailing, LayoutParams(2 * dp(48), dp(48), Gravity.END or Gravity.CENTER_VERTICAL))
+        val target = dp(DEFAULT_MINIMUM_TOUCH_TARGET_DP)
+        addView(licenses, LayoutParams(target, target, Gravity.START or Gravity.CENTER_VERTICAL))
+        addView(identity, LayoutParams(dp(56), target, Gravity.CENTER))
+        addView(trailing, LayoutParams(2 * target, target, Gravity.END or Gravity.CENTER_VERTICAL))
         bindPalette(initialPalette)
     }
 
@@ -93,7 +95,7 @@ class AllDocHomeTopBar(
     fun requiresStackedLayout(availableContentWidth: Int): Boolean = availableContentWidth < dp(248)
 
     fun bindLayout(compact: Boolean, stacked: Boolean) {
-        val target = dp(48)
+        val target = dp(DEFAULT_MINIMUM_TOUCH_TARGET_DP)
         val innerHeight = maxOf(headerMinimumHeight(compact, stacked) - 2 * headerVerticalPadding(compact, stacked),
             if (stacked) target * 2 else target)
         if (minimumHeight != innerHeight) minimumHeight = innerHeight

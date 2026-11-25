@@ -15,9 +15,12 @@ import smallthingz.ui.graphics.noiseSurfaceRange
 import smallthingz.ui.reverb.ReverbBrowserChrome
 import smallthingz.ui.reverb.ReverbBrowserChromeAction
 import smallthingz.ui.reverb.ReverbBrowserChromeIcon
+import smallthingz.ui.reverb.ReverbBrowserPanelSettings
+import smallthingz.ui.reverb.ReverbBrowserPanelTabs
 import smallthingz.ui.reverb.ReverbDesign
 import smallthingz.ui.reverb.ReverbIcon
 import smallthingz.ui.reverb.ReverbTheme
+import smallthingz.ui.reverb.ReverbTitledTopBarLayout
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
 import kotlin.math.roundToInt
@@ -104,6 +107,67 @@ class NativeToolbarPaletteIntegrationTest {
             // Sample the drawable's grain against an opaque probe to isolate the configured opacity.
             assertEquals(noiseSurfaceRange(fill, (.75f * 128).roundToInt()), statusBackground.surfaceRange(fill))
         } finally { chrome.close() }
+    }
+
+    @Test fun titledToolbarRetainsSelectedGeometryAndPaletteOnRebindAndLegacyDefaults() = main {
+        val context = instrumentation.targetContext
+        val style = ReverbDesign.appearance.toolbars.copy(compactHeightDp = 82f)
+        val navigation = View(context)
+        val title = View(context)
+        val action = View(context)
+        var notifications = 0
+        val toolbar = ReverbTitledTopBarLayout(context, 1f, palette(.25f), navigation, title, action,
+            style = style) { notifications++ }
+        val drawable = toolbar.background as NoiseDrawable
+        assertToolbarHeight(toolbar, 82)
+        assertEquals(noiseSurfaceRange(fill, 64), drawable.paintedTextSurface)
+        assertEquals(0, notifications)
+
+        toolbar.bindTitledToolbar(1f, palette(0f))
+        assertSame(drawable, toolbar.background)
+        assertSame(navigation, toolbar.contentClipView.navigationView)
+        assertSame(title, toolbar.contentClipView.titleView)
+        assertSame(action, toolbar.contentClipView.actionView)
+        assertToolbarHeight(toolbar, 82)
+        assertEquals(noiseSurfaceRange(fill, 0), drawable.paintedTextSurface)
+        assertEquals(1, notifications)
+        assertFlat(drawable)
+
+        // Both original constructor forms retain the shared default recipe.
+        val legacy = ReverbTitledTopBarLayout(context, 1f, palette(null), View(context), View(context), View(context))
+        val legacyCallback = ReverbTitledTopBarLayout(context, 1f, palette(null), View(context), View(context), View(context)) {}
+        for (bar in listOf(legacy, legacyCallback)) {
+            assertToolbarHeight(bar, ReverbDesign.appearance.toolbars.compactHeightPx(1f))
+            assertEquals(noiseSurfaceRange(fill, 255), (bar.background as NoiseDrawable).paintedTextSurface)
+        }
+    }
+
+    @Test fun browserPanelTitlesForwardSelectedHeightGrainAndNullSeed() = main {
+        val context = instrumentation.targetContext
+        val base = ReverbDesign.appearance
+        for ((intensity, seed) in listOf(.25f to NoiseDrawable.SEED_TOP_BAR, 1f to null)) {
+            val appearance = base.copy(toolbars = base.toolbars.copy(compactHeightDp = 82f, grainSeed = seed))
+            val theme = ReverbTheme(Density(1f), createFontFamilyResolver(context), palette(intensity), appearance)
+            val settings = ReverbBrowserPanelSettings(context, theme, "Settings", "Back", "Undo", "Apply")
+            try {
+                val tabs = ReverbBrowserPanelTabs<String>(context, theme, "Tabs", "Back", "New")
+                try {
+                    for (panel in listOf(settings, tabs)) {
+                        val toolbar = panel.getChildAt(0) as ReverbTitledTopBarLayout
+                        assertToolbarHeight(toolbar, 82)
+                        val drawable = toolbar.background as NoiseDrawable
+                        assertEquals(noiseSurfaceRange(fill, if (seed == null) 0 else 64), drawable.paintedTextSurface)
+                        if (seed == null) assertFlat(drawable)
+                    }
+                } finally { tabs.close() }
+            } finally { settings.close() }
+        }
+    }
+
+    private fun assertToolbarHeight(toolbar: ReverbTitledTopBarLayout, expected: Int) {
+        toolbar.measure(View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+        assertEquals(expected, toolbar.measuredHeight)
     }
 
     private fun palette(intensity: Float?) = NativeColorScheme.fallback(false).copy(surface = fill,

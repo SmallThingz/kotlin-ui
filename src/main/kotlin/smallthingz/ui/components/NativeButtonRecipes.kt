@@ -1,6 +1,7 @@
 package smallthingz.ui.components
 
 import android.graphics.Color
+import smallthingz.ui.input.DEFAULT_MINIMUM_TOUCH_TARGET_DP
 import smallthingz.ui.text.NativeTypography
 import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.text.TextStyle
@@ -60,7 +61,7 @@ data class NativeButtonRecipe(
     val quietPaint: NativeButtonPaint? = null,
     val elevated: Boolean = false,
     val labelStyle: TextStyle = NativeTypography.Default.buttonLabelStyle,
-    val minimumTouchTargetDp: Int = 48,
+    val minimumTouchTargetDp: Int = DEFAULT_MINIMUM_TOUCH_TARGET_DP,
     val surroundingSurface: NativeButtonColorRole = NativeButtonColorRole.TRANSPARENT,
     val disabledSurroundingSurface: NativeButtonColorRole? = null,
     val busyPaint: NativeButtonPaint? = null,

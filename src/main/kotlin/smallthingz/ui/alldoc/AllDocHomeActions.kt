@@ -12,6 +12,7 @@ import smallthingz.ui.components.NativeButtonRecipe
 import smallthingz.ui.components.NativeUiAppearance
 import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.components.NativeForegroundGrain
+import smallthingz.ui.input.DEFAULT_MINIMUM_TOUCH_TARGET_DP
 import smallthingz.ui.interaction.view.isNativeClickActivationKey
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
@@ -24,7 +25,10 @@ class AllDocHomeActions(private val context: Context, appearance: NativeUiAppear
     private val resolver = createFontFamilyResolver(context)
     private val buttons = appearance.buttons
     private val retryRecipe = buttons.neutralText.copy(
-        surface = buttons.neutralText.surface.copy(minimumWidthDp = 48, minimumHeightDp = 48),
+        surface = buttons.neutralText.surface.copy(
+            minimumWidthDp = DEFAULT_MINIMUM_TOUCH_TARGET_DP,
+            minimumHeightDp = DEFAULT_MINIMUM_TOUCH_TARGET_DP,
+        ),
     )
     private val headerRecipe = buttons.raisedIcon.copy(
         // Preserve AllDoc's existing targets and joined-action shape.

@@ -22,6 +22,7 @@ import androidx.core.graphics.ColorUtils
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.common.nativeSurfaceInputAllowed
 import smallthingz.ui.geometry.roundedGroupContains
+import smallthingz.ui.input.DEFAULT_MINIMUM_TOUCH_TARGET_DP
 import smallthingz.ui.input.phase.NativeClickPhaseHost
 import smallthingz.ui.input.phase.NativePointerLayerShape
 import smallthingz.ui.interaction.view.isNativeClickActivationKey
@@ -85,7 +86,7 @@ open class NativeMaterialButtonView private constructor(
         onClick: () -> Unit,
     ) : this(context, recipe.elevated, recipe.labelStyle, density, resolver, recipe.surface, inputPolicy, onClick, recipe)
 
-    val minimumTouchTargetDp: Int get() = recipe?.minimumTouchTargetDp ?: 48
+    val minimumTouchTargetDp: Int get() = recipe?.minimumTouchTargetDp ?: DEFAULT_MINIMUM_TOUCH_TARGET_DP
     private var joinedSurface = false
     private var action = onClick
     private var closed = false

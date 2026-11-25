@@ -8,6 +8,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
+import smallthingz.ui.input.DEFAULT_MINIMUM_TOUCH_TARGET_DP
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
 import kotlin.math.abs
@@ -30,7 +31,7 @@ fun createNativeDialogDragHandle(
 
         init {
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-            minimumWidth = (48f * density.density).roundToInt()
+            minimumWidth = (DEFAULT_MINIMUM_TOUCH_TARGET_DP * density.density).roundToInt()
             addView(
                 NativeSheetDragHandle(context, style, { this }, runtime, onDismiss, onDismiss),
                 LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.CENTER),

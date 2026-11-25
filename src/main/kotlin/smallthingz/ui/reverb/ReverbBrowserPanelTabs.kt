@@ -80,7 +80,8 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         background = theme.appearance.backdrops.pageBackground(theme.palette)
         ViewCompat.setAccessibilityPaneTitle(this, title)
         ViewCompat.setAccessibilityHeading(heading, true)
-        addView(ReverbTitledTopBarLayout(context, theme.density.density, theme.palette, back, heading, Space(context)),
+        addView(ReverbTitledTopBarLayout(context, theme.density.density, theme.palette, back, heading, Space(context),
+            style = theme.appearance.toolbars),
             LayoutParams(-1, -2))
         addView(scroll, LayoutParams(-1, 0, 1f))
         addView(footer, LayoutParams(-1, -2))

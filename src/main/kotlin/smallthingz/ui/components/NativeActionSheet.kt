@@ -46,6 +46,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.findViewTreeSavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import smallthingz.ui.input.DEFAULT_MINIMUM_TOUCH_TARGET_DP
 import smallthingz.ui.input.phase.NativeClickPhaseNode
 import smallthingz.ui.input.phase.NativeDragPointerChange
 import smallthingz.ui.input.phase.NativeDragPointerEvent
@@ -574,7 +575,10 @@ class NativeActionSheetContentContext internal constructor(
     internal fun updateStyle(next:NativeActionSheetStyle) {style=next}
     fun hit(view:View,nodes:List<NativeViewPhasePointerNode>,
         children:()->List<NativeViewPointerHitLayout> = {emptyList()},
-        minimumTouchTarget:Size=Size(48f*style.textDensity.density,48f*style.textDensity.density),
+        minimumTouchTarget:Size=Size(
+            DEFAULT_MINIMUM_TOUCH_TARGET_DP * style.textDensity.density,
+            DEFAULT_MINIMUM_TOUCH_TARGET_DP * style.textDensity.density,
+        ),
         clip:(Offset)->Boolean={true},
     ):NativeViewPointerHitLayout=NativeRetainedViewHitLayout(view,pointer.geometry,
         NativeMinimumTouchTarget {minimumTouchTarget},nodes,children,clip)
@@ -765,7 +769,10 @@ internal class SheetPointerOwner(private val density:Float):AutoCloseable {
     fun bind(root:SheetRoot,surface:NativeSheetSurface,scrim:SheetScrim,handle:NativeSheetDragHandle,
         app:NativeSheetContent,drag:NativeModalDragNode) {
         this.root=root
-        val minimum=NativeMinimumTouchTarget {Size(48f*density,48f*density)}
+        val minimum = NativeMinimumTouchTarget {
+            val target = DEFAULT_MINIMUM_TOUCH_TARGET_DP * density
+            Size(target, target)
+        }
         val closeHit = app.close?.visual?.let { close ->
             NativeRetainedViewHitLayout(close,geometry,minimum,
                 listOf(NativeClickPhaseNode(close,close.nativeClickEndpoint,drag::interested)),clip={p->
