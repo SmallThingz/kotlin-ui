@@ -590,10 +590,13 @@ class NativeAnchoredDropdown(
                 super.onInitializeAccessibilityNodeInfo(info)
                 info.className = "android.widget.NumberPicker"
                 info.isScrollable = !closing && !disposed && lastPosition > 0
+                info.isDismissable = !closing && !disposed
+                if (!closing && !disposed) info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_DISMISS)
                 if (!closing && !disposed && settled < lastPosition) info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)
                 if (!closing && !disposed && settled > 0) info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD)
             }
             override fun performAccessibilityAction(action: Int, args: android.os.Bundle?): Boolean = when (action) {
+                AccessibilityNodeInfo.ACTION_DISMISS -> if (!closing && !disposed) { cancelSelection(); true } else false
                 AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> if (!closing && !disposed && settled < lastPosition) { settle(settled + 1); true } else false
                 AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> if (!closing && !disposed && settled > 0) { settle(settled - 1); true } else false
                 else -> super.performAccessibilityAction(action, args)
