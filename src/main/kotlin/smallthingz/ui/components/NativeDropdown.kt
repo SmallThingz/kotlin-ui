@@ -116,6 +116,13 @@ class NativeDropdown<T>(
     /** Texture this row's fill behind the label, value and arrow. */
     fun setNoiseIntensity(intensity: Float) { grain = bindGrainLayer(grain, intensity) }
 
+    /** Resolve trigger paint and grain from the same shared color scheme. */
+    fun bind(next: NativeDropdownContent<T>, expanded: Boolean, scheme: NativeColorScheme) {
+        if (closed) return
+        setNoiseIntensity(scheme.surfacePreset?.foregroundGrain ?: 0f)
+        bind(next, expanded, NativeDropdownColors(scheme.field, scheme.raised, scheme.muted, scheme.ink, scheme.border))
+    }
+
     fun bind(next: NativeDropdownContent<T>, expanded: Boolean, palette: NativeDropdownColors) {
         bind(next, expanded, palette, present = next.options.size > 1)
     }
