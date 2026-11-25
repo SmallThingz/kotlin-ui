@@ -16,11 +16,14 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeMenuAccessibilityTestActivity
+import smallthingz.ui.components.NativeText
 import smallthingz.ui.components.NativeTextStyle
 import smallthingz.ui.components.withRetiringTestActivity
+import kotlin.math.ceil
 
 /**
  * Detached filename geometry and accessibility nodes in an owned test Activity.
+ * New extension-wrap cases remain runtime-unselected; source presence does not grant execution.
  */
 @RunWith(AndroidJUnit4::class)
 class ZfmFilenameTextIntegrationTest {
@@ -55,7 +58,7 @@ class ZfmFilenameTextIntegrationTest {
         val ellipsisCounts: List<Int>,
     )
 
-    private fun measure(label: ZfmFilenameText, width: Int): Frame {
+    private fun measure(label: NativeText, width: Int): Frame {
         // Exercise the component's onMeasure rather than View.measure's unchanged-spec shortcut.
         label.forceLayout()
         label.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
@@ -224,6 +227,168 @@ class ZfmFilenameTextIntegrationTest {
         val view = label(context(2f), NativeTextStyle(22f), name)
         assertEquals(name, measure(view, 120).text)
         assertTrue(checkNotNull(view.layout).getEllipsisCount(1) > 0)
+    }
+
+    private fun ordinaryLabel(context: Context, style: NativeTextStyle, name: String) =
+        NativeText(context, ZfmTheme.resolve(context, dark = false).palette, style).apply {
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT)
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            text = name
+        }
+
+    private fun naturalExtensionSplitWidth(raw: NativeText, name: String): Int {
+        // Find the regression's precondition using ordinary Android layout, not the fitter.
+        // Search only the small width interval between the stem and the complete filename.
+        measure(raw, 4096)
+        val extension = name.lastIndexOf('.')
+        val first = ceil(Layout.getDesiredWidth(name.substring(0, extension), raw.paint)).toInt().coerceAtLeast(1)
+        val last = ceil(Layout.getDesiredWidth(name, raw.paint)).toInt()
+        return (first..last).firstOrNull { width ->
+            measure(raw, width)
+            val layout = checkNotNull(raw.layout)
+            layout.lineCount == 2 && layout.getEllipsisCount(0) == 0 &&
+                layout.getEllipsisCount(1) == 0 && layout.getLineEnd(0) > extension &&
+                layout.getLineEnd(0) < name.length
+        } ?: error("Ordinary TextView did not expose the extension-split precondition")
+    }
+
+    private fun assertAtomicExtension(view: ZfmFilenameText, name: String) {
+        val layout = checkNotNull(view.layout)
+        val display = view.text.toString()
+        assertEquals(2, layout.lineCount)
+        assertEquals(listOf(0, 0), (0..1).map { layout.getEllipsisCount(it) })
+        assertTrue("The entire terminal extension belongs to line two",
+            display.lastIndexOf('.') >= layout.getLineStart(1))
+        assertTrue(display.endsWith(name.substring(name.lastIndexOf('.'))))
+        // These fixture names contain no bidi marks/newlines before display fitting.
+        assertEquals("Natural wrapping must retain every original filename character", name,
+            display.filterNot { it == '\n' || it == '\u200e' || it == '\u200f' })
+        for (line in 0..1) {
+            assertTrue("Both filename lines fit the content width",
+                layout.getLineMax(line) <= layout.ellipsizedWidth)
+        }
+    }
+
+    @Test fun atomicExtensionWrapWithWatcherBeforeBindMatchesFreshFit() = main {
+        val context = context(1f)
+        val style = NativeTextStyle(16f, lineHeightSp = 24f, weight = 500)
+        val name = "turnbull-heal-preview-861084e2_edited_3.jpg"
+        val width = naturalExtensionSplitWidth(ordinaryLabel(context, style, name), name)
+        val view = label(context, style, "")
+        var changes = 0
+        val watcher = object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { changes++ }
+            override fun afterTextChanged(s: Editable?) = Unit
+        }
+        view.addTextChangedListener(watcher)
+        try {
+            view.bindName(name, directory = false)
+            val fitted = measure(view, width)
+            assertTrue("Watcher was present during binding/fitting", changes > 0)
+            assertTrue("Exercise TextView's watched-text layout", view.layout is android.text.DynamicLayout)
+            assertAtomicExtension(view, name)
+            assertEquals("Watched and ordinary filename fitting agree",
+                measure(label(context, style, name), width), fitted)
+            changes = 0
+            repeat(3) { assertEquals(fitted, measure(view, width)) }
+            assertEquals("Watched atomic fitting settles without more text writes", 0, changes)
+        } finally { view.removeTextChangedListener(watcher) }
+    }
+
+    @Test fun recentJpgKeepsExtensionTogetherAcrossStableMeasuresWidthAndRebind() = main {
+        val name = "turnbull-heal-preview-861084e2_edited_3.jpg"
+        val style = NativeTextStyle(16f, lineHeightSp = 24f, weight = 500)
+        for (font in listOf(1f, 2f)) {
+            val context = context(font)
+            val raw = ordinaryLabel(context, style, name)
+            val width = naturalExtensionSplitWidth(raw, name)
+            val view = label(context, style, name)
+            val fitted = measure(view, width)
+            assertAtomicExtension(view, name)
+            var changes = 0
+            val watcher = object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { changes++ }
+                override fun afterTextChanged(s: Editable?) = Unit
+            }
+            view.addTextChangedListener(watcher)
+            try {
+                repeat(3) { assertEquals(fitted, measure(view, width)) }
+                assertEquals("Atomic wrapping must not rewrite text on stable measurement", 0, changes)
+            } finally { view.removeTextChangedListener(watcher) }
+
+            val wide = ceil(Layout.getDesiredWidth(name, raw.paint)).toInt() + 16
+            assertEquals(measure(ordinaryLabel(context, style, name), wide), measure(view, wide))
+            assertEquals("A fitting name stays on one line", 1, checkNotNull(view.layout).lineCount)
+            assertEquals(fitted, measure(view, width))
+            assertEquals(measure(label(context, style, name), width), measure(view, width))
+            view.bindName(name, directory = true)
+            assertTrue(view.isLayoutRequested)
+            assertEquals("The same basename as a directory uses ordinary wrapping",
+                measure(raw, width), measure(view, width))
+            view.bindName(name, directory = false)
+            assertEquals(fitted, measure(view, width))
+            view.bindName("a.jpg", directory = false)
+            assertEquals(measure(ordinaryLabel(context, style, "a.jpg"), width), measure(view, width))
+        }
+    }
+
+    @Test fun naturalExtensionWrapPreservesMixedRtlParagraphDirection() = main {
+        val context = context(1f)
+        val style = NativeTextStyle(16f)
+        val name = "אבגדה".repeat(4) + "_photo.jpg"
+        val raw = ordinaryLabel(context, style, name).apply {
+            textDirection = View.TEXT_DIRECTION_FIRST_STRONG
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        val width = naturalExtensionSplitWidth(raw, name)
+        val view = label(context, style, name).apply {
+            textDirection = View.TEXT_DIRECTION_FIRST_STRONG
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        measure(view, width)
+        assertAtomicExtension(view, name)
+        for (line in 0..1) {
+            assertEquals(Layout.DIR_RIGHT_TO_LEFT, checkNotNull(view.layout).getParagraphDirection(line))
+        }
+    }
+
+    @Test fun naturalExtensionWrapExclusionsRetainOrdinaryRendering() = main {
+        val context = context(1f)
+        val style = NativeTextStyle(16f)
+        val base = "turnbull-heal-preview-861084e2_edited_3.jpg"
+        val excluded = listOf(".$base") +
+            (('\u202a'..'\u202e') + ('\u2066'..'\u2069')).map { "photo${it}_preview_edited_3.jpg" }
+        for (name in excluded) {
+            val raw = ordinaryLabel(context, style, name)
+            val width = naturalExtensionSplitWidth(raw, name)
+            assertEquals("Excluded filename must retain native text and geometry",
+                measure(raw, width), measure(label(context, style, name), width))
+        }
+        // These names have no eligible terminal extension, or contain explicit separators.
+        for (name in listOf("long_filename_without_extension_".repeat(2), "$base.",
+            "photo\npreview.jpg", "photo\rpreview.jpg", "photo\u2028preview.jpg", "photo\u2029preview.jpg")) {
+            assertEquals(measure(ordinaryLabel(context, style, name), 240),
+                measure(label(context, style, name), 240))
+        }
+    }
+
+    @Test fun naturalWrapWithOversizedExtensionFallsBackWithoutDroppingCharacters() = main {
+        val context = context(1f)
+        val style = NativeTextStyle(16f)
+        val name = "a." + "abcdefghij".repeat(4)
+        val raw = ordinaryLabel(context, style, name)
+        measure(raw, 4096)
+        val width = ceil(Layout.getDesiredWidth(name, raw.paint) * .7f).toInt()
+        val expected = measure(raw, width)
+        val rawLayout = checkNotNull(raw.layout)
+        assertEquals("Precondition: ordinary text fits two lines without ellipsis", listOf(0, 0), expected.ellipsisCounts)
+        assertTrue(rawLayout.getLineEnd(0) > name.lastIndexOf('.'))
+        assertTrue(Layout.getDesiredWidth(name.substring(name.lastIndexOf('.')), raw.paint) > width)
+        assertEquals(expected, measure(label(context, style, name), width))
     }
 
     @Test fun attachedFilenameKeepsFullAccessibleNameAndHostDescription() = withWindow { activity, root ->
