@@ -5,6 +5,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.graphics.drawable.ColorDrawable
 import smallthingz.ui.animation.view.ViewColorTransition
+import smallthingz.ui.scroll.NativeSourceRecyclerView
 
 /**
  * The three released MainScreen Library Boxes, with the same transform/alpha ordering.
@@ -28,10 +29,14 @@ class ReverbLibraryRevealLayer(
     }
     private val backgroundPanel = View(context)
     private val noise = initialEnvironment.appearance.backdrops.pageBackground(initialEnvironment.palette)
+    private var scrollIndicatorViewport: NativeSourceRecyclerView? = null
     private val scrimPaint = ColorDrawable(initialEnvironment.appearance.backdrops.panelScrimColor(initialEnvironment.palette))
     private val paletteMotion:ViewColorTransition by lazy {ViewColorTransition(this,
         intArrayOf(initialEnvironment.palette.surface,scrimPaint.color),{
-            noise.setBackgroundColor(paletteMotion.color(0));scrimPaint.color=paletteMotion.color(1)
+            val fill = paletteMotion.color(0)
+            noise.setBackgroundColor(fill)
+            scrimPaint.color = paletteMotion.color(1)
+            publishScrollIndicatorUnderlay(fill)
         })}
 
     init {
@@ -49,12 +54,26 @@ class ReverbLibraryRevealLayer(
         translated.addView(content)
     }
 
+    fun bindScrollIndicatorViewport(view: NativeSourceRecyclerView) {
+        scrollIndicatorViewport = view
+    }
+
+    private fun publishScrollIndicatorUnderlay(fill: Int) {
+        scrollIndicatorViewport?.bindScrollIndicatorTransitionUnderlay(
+            if (fill == environment.palette.surface) 0L else noise.paintedTextSurface)
+    }
+
     fun bind(environment: ReverbEnvironment, statusTop: Int, progress: Float, visible: Boolean) {
         if (this.environment !== environment) {
             this.environment = environment
+            val palette = environment.palette
             val backdrop = environment.appearance.backdrops
             noise.setGrainSeed(backdrop.pageGrainSeed)
-            paletteMotion.retarget(environment.palette.surface, backdrop.panelScrimColor(environment.palette))
+            noise.setNoiseIntensity(palette.surfacePreset?.backgroundGrain ?: 1f)
+            val motion = paletteMotion
+            motion.retarget(palette.surface, backdrop.panelScrimColor(palette))
+            // An unchanged, settled color target can skip the motion's paint callback.
+            publishScrollIndicatorUnderlay(motion.color(0))
         }
         val nextContentTop = statusTop + environment.appearance.toolbars.compactHeightPx(environment.textDensity.density)
         if (this.statusTop != statusTop || contentTop != nextContentTop) {

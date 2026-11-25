@@ -67,6 +67,9 @@ open class NativeBackdropBinding(
 
     init { view.background = drawable }
 
+    internal fun transitionUnderlay(targetColor: Int): Long =
+        if (published == targetColor) 0L else drawable.paintedTextSurface
+
     fun bind(grainSeed: Int?, color: Int, intensity: Float = 1f) {
         require(intensity in 0f..1f)
         if (grainIntensity != intensity) {

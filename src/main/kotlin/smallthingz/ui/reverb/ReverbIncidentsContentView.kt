@@ -78,7 +78,7 @@ class ReverbIncidentsContentView(
     private val savedPosition: NativeIncidentsSavedPosition = NativeIncidentsSavedPosition(),
 ) : ViewGroup(context) {
     private var appearance = incidentAppearance(initialTheme)
-    private val backdrop = appearance.backdrops.attachPage(this, appearance.card.palette)
+    private val backdrop = appearance.backdrops.attachPage(this, appearance.card.palette, ::bindScrollIndicatorUnderlay)
     private var theme = initialTheme
     private var history = ReverbIncidentHistory()
     private var selecting = false
@@ -125,6 +125,7 @@ class ReverbIncidentsContentView(
         clipToPadding = false
         isVerticalScrollBarEnabled = false
         isHorizontalScrollBarEnabled = false
+        bindScrollIndicator(initialTheme.appearance.scrollIndicator, initialTheme.palette.muted)
         addOnChildAttachStateChangeListener(object : RecyclerView.OnChildAttachStateChangeListener {
             override fun onChildViewAttachedToWindow(view: View) = accessibilityMembershipChanged()
             override fun onChildViewDetachedFromWindow(view: View) = accessibilityMembershipChanged()
@@ -350,13 +351,19 @@ class ReverbIncidentsContentView(
         val value = incidentAppearance(theme)
         appearance = value
         value.backdrops.bindPage(backdrop, value.card.palette)
+        bindScrollIndicatorUnderlay()
         menus.bindPalette(theme.palette)
+        list.bindScrollIndicator(theme.appearance.scrollIndicator, theme.palette.muted)
         bindHeader()
         clearSheet?.bindTheme(theme)
         empty.setAppearance(value)
         adapter.setAppearance(value.card)
         updateListPadding()
         requestLayout()
+    }
+
+    private fun bindScrollIndicatorUnderlay() {
+        list.bindScrollIndicatorTransitionUnderlay(backdrop.transitionUnderlay(theme.palette.surface))
     }
 
     private fun dp(value: Float) = (value * appearance.card.density.density).roundToInt()

@@ -22,6 +22,8 @@ private const val sourceOutlineGutterDp = 30f
 
 /** Actual RV virtualization; native pointer dispatch does not run RV's alternate drag/fling path. */
 class NativeSourceRecyclerView(context: Context) : RecyclerView(context) {
+    private var scrollIndicator: NativeScrollIndicator? = null
+    private var requestedWillNotDraw = willNotDraw()
     var sourceOverscroll: NativeVerticalOverscroll? = null
     var sourceAccessibilityNode: (() -> NativeSourceAccessibilityNode)? = null
     var sourceAccessibilityChildren: (() -> List<View>)? = null
@@ -60,6 +62,29 @@ class NativeSourceRecyclerView(context: Context) : RecyclerView(context) {
 
     private fun sourceOutlineGutter(density: Float) = (sourceOutlineGutterDp * density).roundToInt()
 
+    /** Binds a passive vertical thumb. A null style removes it. */
+    fun bindScrollIndicator(style: NativeScrollIndicatorStyle?, color: Int) {
+        val indicator = scrollIndicator
+        when {
+            style == null -> {
+                if (indicator == null) return
+                scrollIndicator = null
+                super.setWillNotDraw(requestedWillNotDraw)
+            }
+            indicator == null -> {
+                scrollIndicator = NativeScrollIndicator(style, color)
+                super.setWillNotDraw(false)
+            }
+            !indicator.bind(style, color) -> return
+        }
+        invalidate()
+    }
+
+    /** Accepts the current painted page range during an existing theme transition. */
+    internal fun bindScrollIndicatorTransitionUnderlay(surface: Long) {
+        if (scrollIndicator?.bindTransitionUnderlay(surface) == true) invalidate()
+    }
+
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
         val manager = layoutManager
         if (isEnabled && !isLayoutSuppressed && manager != null &&
@@ -78,7 +103,15 @@ class NativeSourceRecyclerView(context: Context) : RecyclerView(context) {
     override fun draw(canvas: Canvas) {
         val edge = sourceOverscroll
         if (edge == null) super.draw(canvas) else edge.draw(canvas) { super.draw(it) }
+        scrollIndicator?.draw(canvas, this)
     }
+
+    override fun setWillNotDraw(willNotDraw: Boolean) {
+        // RecyclerView can request draw suppression again when its last decoration is removed.
+        requestedWillNotDraw = willNotDraw
+        super.setWillNotDraw(willNotDraw && scrollIndicator == null)
+    }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         sourceOverscroll?.measured(w, h)
