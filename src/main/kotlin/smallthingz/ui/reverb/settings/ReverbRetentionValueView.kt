@@ -59,14 +59,22 @@ open class ReverbRetentionValueView(
     }
 
     fun bind(mode: ReverbRetentionMode, estimateText: String, next: ReverbEnvironment) {
-        val typographyChanged = environment !== next
+        val environmentChanged = environment !== next
+        val previousTypography = environment.appearance.readoutTypography
+        val nextTypography = next.appearance.readoutTypography
+        // Match ParagraphView's cache boundary, including Density/resolver identity. A new
+        // palette still rebinds all ink, but cannot by itself change the readout geometry.
+        val geometryChanged = environment.textDensity !== next.textDensity ||
+            environment.sharedFontResolver !== next.sharedFontResolver ||
+            !previousTypography.retentionLabel.hasSameLayoutAffectingAttributes(nextTypography.retentionLabel) ||
+            !previousTypography.retentionEstimate.hasSameLayoutAffectingAttributes(nextTypography.retentionEstimate)
         val modeChanged = time != (mode == ReverbRetentionMode.TIME)
         environment = next
         time = mode == ReverbRetentionMode.TIME
         unit.visibility = if (time) GONE else VISIBLE
         estimate.setText(estimateText)
-        if (typographyChanged) bindTypography()
-        if (typographyChanged || modeChanged) requestLayout()
+        if (environmentChanged) bindTypography()
+        if (geometryChanged || modeChanged) requestLayout()
     }
 
     internal fun setNumericOffset(offset: Float) {
