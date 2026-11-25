@@ -1,6 +1,8 @@
 package smallthingz.ui.gallery
 
 import android.content.Context
+import smallthingz.ui.components.NativeChoiceColor
+import smallthingz.ui.components.NativeTextRole
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeTextStyle
 import smallthingz.ui.components.nativeTextStyle
@@ -21,6 +23,16 @@ object GalleryDesign {
         NativeTypographyRole.TITLE_MEDIUM to appearance.settingsSelectors.sectionTitle,
     )).nativeTextStyle(NativeTypographyRole.TITLE_MEDIUM)
     val settingsChoiceStyle = appearance.settingsSelectors.segmented.choiceStyle
+    // Keep Gallery's existing full-height choice targets while sharing the complete selector.
+    val settingsSelectorStyle = appearance.settingsSelectors.let { settings ->
+        settings.copy(segmented = settings.segmented.copy(
+            choiceStyle = settings.segmented.choiceStyle.copy(
+                minHeightDp = maxOf(settings.segmented.choiceStyle.minHeightDp,
+                    appearance.toolbars.action.minimumTargetDp),
+                focusedSelectedOutline = NativeChoiceColor(NativeTextRole.ON_ACCENT),
+            ),
+        ))
+    }
     val settingsGroup = appearance.groupSurfaces.settingsGroup
 
     /** Keep the shared modal treatment; Settings has no separate bottom action row. */

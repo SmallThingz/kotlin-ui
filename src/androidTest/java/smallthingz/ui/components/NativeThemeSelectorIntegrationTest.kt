@@ -87,6 +87,9 @@ class NativeThemeSelectorIntegrationTest {
         NativeThemeMode.entries.forEach { selected ->
             selector.bind(selected, reboundPalette, density, resolver)
             assertSame(title, selector.getChildAt(0))
+            val titleNode = title.createAccessibilityNodeInfo()
+            try { assertTrue("Rebound Theme title remains an accessibility heading", titleNode.isHeading) }
+            finally { titleNode.recycle() }
             assertSame(surface, capsule.getChildAt(0))
             NativeThemeMode.entries.forEachIndexed { index, mode ->
                 assertSame(children[index], row.choiceView(mode.name))
