@@ -530,6 +530,11 @@ class NativeChip(
         checkNotNull(foregroundContentBounds).set(x, y, x + contentWidth, y + contentHeight)
     }
 
+    override fun onTextChanged(text: CharSequence?, start: Int, lengthBefore: Int, lengthAfter: Int) {
+        super.onTextChanged(text, start, lengthBefore, lengthAfter)
+        requestComponentLineHeightLayout()
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         refreshConfiguration()
         typography?.apply(paintSelected)

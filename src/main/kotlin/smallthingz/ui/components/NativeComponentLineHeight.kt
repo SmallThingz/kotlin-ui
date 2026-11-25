@@ -39,6 +39,13 @@ internal fun TextView.applyComponentLineHeight(heightPx: Float?, style: LineHeig
     refreshComponentLineHeight()
 }
 
+/** Constructor-safe: a replacement buffer needs a measure even if native text heights match. */
+internal fun TextView.requestComponentLineHeightLayout() {
+    // The tag is installed only while this opt-in binding is active and cleared before release.
+    // Do not mutate spans from a text callback; measurement owns their reconciliation.
+    if (getTag(R.id.native_component_line_height_state) is ComponentLineHeightState) requestLayout()
+}
+
 /** Called immediately before the owning native TextView's measure pass. */
 internal fun TextView.refreshComponentLineHeight() {
     val state = getTag(R.id.native_component_line_height_state) as? ComponentLineHeightState ?: return
