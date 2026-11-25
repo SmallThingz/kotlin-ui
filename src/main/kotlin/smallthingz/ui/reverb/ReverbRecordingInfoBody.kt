@@ -31,7 +31,7 @@ internal class ReverbRecordingInfoBody(
     private val name = environment.paragraph(context, displayName, NativeTypographyRole.TITLE_MEDIUM)
     private val rows = InfoRows(context, environment)
     val viewport = NativeVerticalViewport(context, NativeVerticalScrollState(), environment.density,
-        host.runtime.frames, host.runtime.scope, host.nestedScroll)
+        host.runtime.frames, host.runtime.scope, host.nestedScroll, glowColor = environment.palette.muted)
     private val scroll = NativeVerticalPhaseBinding(viewport,
         { android.view.ViewConfiguration.get(context).scaledTouchSlop.toFloat() },
         { android.view.ViewConfiguration.get(context).scaledMaximumFlingVelocity.toFloat() },
@@ -112,6 +112,7 @@ internal class ReverbRecordingInfoBody(
         if(closed || environment===next)return
         val densityChanged=environment.density!=next.density
         environment=next
+        viewport.setGlowColor(next.palette.muted)
         next.bindParagraph(name, NativeTypographyRole.TITLE_MEDIUM)
         rows.bindEnvironment(next)
         if(densityChanged)requestLayout()

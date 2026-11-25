@@ -29,6 +29,8 @@ class NativeAxisOverscrollTest {
         var finishes = 0
         var releases = 0
         var dimensions = 0 to 0
+        var colorWrites = 0
+        override fun setColor(color: Int) { colorWrites++; super.setColor(color) }
         override fun getDistance() = stretch
         override fun isFinished() = stretch == 0f && pulls.isEmpty()
         override fun setSize(width: Int, height: Int) { dimensions = width to height }
@@ -59,6 +61,83 @@ class NativeAxisOverscrollTest {
 
     private fun install(owner: NativeAxisOverscroll, name: String, edge: Edge) {
         NativeAxisOverscroll::class.java.getDeclaredField(name).apply { isAccessible = true }.set(owner, edge)
+    }
+
+    private fun installedEdge(owner: NativeAxisOverscroll, name: String): EdgeEffect? =
+        NativeAxisOverscroll::class.java.getDeclaredField(name).apply { isAccessible = true }.get(owner) as EdgeEffect?
+
+    @Test fun recolorRetainsEdgesAndPhysicsAndDuplicateColorIsNoOp() = main {
+        val initialColor = 0xff666666.toInt()
+        for (axis in NativeOverscrollAxis.entries) {
+            var invalidations = 0
+            val owner = NativeAxisOverscroll(context, Density(1f), initialColor, axis) { invalidations++ }
+            val edges = listOf("near", "far", "nearNegation", "farNegation").associateWith {
+                Edge(context).apply { color = initialColor; stretch = .125f }
+            }
+            try {
+                edges.forEach { (name, edge) -> install(owner, name, edge) }
+                owner.measured(200, 100)
+                owner.scroll(0f, NativeOverscrollSource.SIDE_EFFECT) { 0f }
+                edges.values.forEach { it.onAbsorb(73) }
+                fun physics(edge: Edge) = listOf(edge.pulls.toList(), edge.absorbs.toList(),
+                    edge.finishes, edge.releases, edge.stretch, edge.dimensions, edge.drawnOrigins.toList())
+                val snapshots = edges.mapValues { physics(it.value) }
+                val writes = edges.mapValues { it.value.colorWrites }
+                val inProgress = owner.isInProgress
+                val invalidationsBefore = invalidations
+                owner.setGlowColor(initialColor)
+                assertEquals(invalidationsBefore, invalidations)
+                edges.forEach { (name, edge) -> assertEquals(writes.getValue(name), edge.colorWrites) }
+                for ((index, color) in listOf(0xff49454f.toInt(), 0xffcac4d0.toInt(), 0xff49454f.toInt()).withIndex()) {
+                    owner.setGlowColor(color)
+                    assertEquals(invalidationsBefore + index + 1, invalidations)
+                    edges.forEach { (name, edge) ->
+                        assertSame(edge, installedEdge(owner, name))
+                        assertEquals(color, edge.color)
+                        assertEquals(writes.getValue(name) + index + 1, edge.colorWrites)
+                        assertEquals(snapshots.getValue(name), physics(edge))
+                    }
+                    assertEquals(inProgress, owner.isInProgress)
+                    owner.setGlowColor(color)
+                    assertEquals("Identical tint must not schedule another draw", invalidationsBefore + index + 1, invalidations)
+                    edges.forEach { (name, edge) ->
+                        assertSame(edge, installedEdge(owner, name))
+                        assertEquals(writes.getValue(name) + index + 1, edge.colorWrites)
+                        assertEquals(snapshots.getValue(name), physics(edge))
+                    }
+                }
+            } finally { owner.dispose() }
+        }
+    }
+
+    @Test fun recolorBeforeAndBetweenLazyEdgesUsesLatestColorWithoutCreatingEdges() = main {
+        val light = 0xff49454f.toInt()
+        val dark = 0xffcac4d0.toInt()
+        for (axis in NativeOverscrollAxis.entries) {
+            val owner = effect(axis)
+            try {
+                owner.measured(200, 100)
+                owner.setGlowColor(light)
+                for (name in listOf("near", "far", "nearNegation", "farNegation")) {
+                    assertNull("Recolor must not allocate $name", installedEdge(owner, name))
+                }
+                owner.scroll(10f, NativeOverscrollSource.USER_INPUT) { 0f }
+                val near = checkNotNull(installedEdge(owner, "near"))
+                assertEquals(light, near.color)
+                assertNull(installedEdge(owner, "far"))
+                owner.setGlowColor(dark)
+                assertSame(near, installedEdge(owner, "near"))
+                assertEquals(dark, near.color)
+                assertNull(installedEdge(owner, "far"))
+                // Finish only in the test so opposite input creates far instead of destretching near.
+                near.finish()
+                owner.scroll(-10f, NativeOverscrollSource.USER_INPUT) { 0f }
+                assertEquals(dark, checkNotNull(installedEdge(owner, "far")).color)
+                assertSame(near, installedEdge(owner, "near"))
+                assertNull(installedEdge(owner, "nearNegation"))
+                assertNull(installedEdge(owner, "farNegation"))
+            } finally { owner.dispose() }
+        }
     }
 
     @Test fun zeroBoundsThresholdAndSourceAdmissionKeepConsumptionIndependentOfPulls() = main {

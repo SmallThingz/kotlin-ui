@@ -131,6 +131,11 @@ class NativeVerticalViewport(
         if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
     }
 
+    /** Recolor the retained effect without changing the viewport or scroll owner. */
+    internal fun setGlowColor(color: Int) {
+        overscroll.setGlowColor(color)
+    }
+
     fun setContent(content: View) {
         if (childCount == 1 && getChildAt(0) === content) return
         removeAllViews()

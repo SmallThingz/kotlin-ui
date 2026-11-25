@@ -242,7 +242,7 @@ private class AboutSurface(context: Context, appearance: AboutContentAppearance,
             override fun postScroll(consumedY: Float, availableY: Float, source: NativeVerticalScrollSource) = 0f
             override suspend fun preFling(availableY: Float) = 0f
             override suspend fun postFling(consumedY: Float, availableY: Float) = 0f
-        })
+        }, glowColor = appearance.palette.muted)
     init { setPanelViewport(viewport) }
     fun setContent(view: View) {
         viewport.setContent(view)
@@ -251,6 +251,7 @@ private class AboutSurface(context: Context, appearance: AboutContentAppearance,
     fun setStatusInsets(value: Insets) = setContentInsets(value.left, value.top, value.right, value.bottom)
     fun setAppearance(value: AboutContentAppearance) {
         bindSurface(value.density.density, value.panel, value.panelPalette)
+        viewport.setGlowColor(value.palette.muted)
         requestLayout()
     }
 }

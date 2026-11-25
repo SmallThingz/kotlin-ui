@@ -73,7 +73,8 @@ open class ReverbLibraryStatusView(
             if (next == LibraryBodyMode.EMPTY) {
                 val scroll = NativeVerticalScrollState(restoredScrollPosition ?: 0)
                 emptyScrollState = scroll
-                viewport = NativeVerticalViewport(context, scroll, environment.textDensity, frames, parentScope, nested).also {
+                viewport = NativeVerticalViewport(context, scroll, environment.textDensity, frames, parentScope, nested,
+                    glowColor = environment.palette.muted).also {
                     it.setContent(column)
                     addView(it)
                 }
@@ -97,11 +98,12 @@ open class ReverbLibraryStatusView(
         if (densityChanged && oldViewport != null && state != null && column != null) {
             oldViewport.removeView(column)
             removeView(oldViewport)
-            viewport = NativeVerticalViewport(context, state, next.textDensity, frames, parentScope, nested).also {
+            viewport = NativeVerticalViewport(context, state, next.textDensity, frames, parentScope, nested,
+                glowColor = next.palette.muted).also {
                 it.setContent(column)
                 addView(it)
             }
-        }
+        } else oldViewport?.setGlowColor(next.palette.muted)
         requestLayout()
     }
 

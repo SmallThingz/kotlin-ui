@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EdgeEffect
 import android.widget.FrameLayout
 import androidx.core.graphics.ColorUtils
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -24,7 +25,10 @@ import smallthingz.ui.reverb.ReverbDesign
 import smallthingz.ui.reverb.ReverbTheme
 import smallthingz.ui.reverb.menuColors
 import smallthingz.ui.reverb.reverbActionSheetStyle
+import smallthingz.ui.scroll.NativeAxisOverscroll
+import smallthingz.ui.scroll.NativeOverscrollSource
 import smallthingz.ui.scroll.NativeVerticalScrollState
+import smallthingz.ui.scroll.NativeVerticalViewport
 import smallthingz.ui.text.TextStyle
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.text.view.ParagraphView
@@ -49,6 +53,28 @@ class NativeModalContrastIntegrationTest {
             createFontFamilyResolver(context), initial, NativeAnchoredMenuRecipe(), icons, NativeVerticalScrollState(),
             runtime.frames, runtime.scope, { false })
         try {
+            val viewport = menu.viewport
+            val exactWidth = View.MeasureSpec.makeMeasureSpec(200, View.MeasureSpec.EXACTLY)
+            val exactHeight = View.MeasureSpec.makeMeasureSpec(100, View.MeasureSpec.EXACTLY)
+            viewport.measure(exactWidth, exactHeight)
+            viewport.layout(0, 0, 200, 100)
+            val bitmap = Bitmap.createBitmap(200, 100, Bitmap.Config.ARGB_8888)
+            try { viewport.draw(Canvas(bitmap)) }
+            finally { bitmap.recycle() }
+
+            // Inspect the actual edge created by the viewport's normal overscroll owner.
+            val ownerField = NativeVerticalViewport::class.java.getDeclaredField("overscroll").apply { isAccessible = true }
+            val owner = ownerField.get(viewport) as NativeAxisOverscroll
+            val nearField = NativeAxisOverscroll::class.java.getDeclaredField("near").apply { isAccessible = true }
+            owner.scroll(10f, NativeOverscrollSource.USER_INPUT) { 0f }
+            val edge = nearField.get(owner) as EdgeEffect
+            fun assertRetainedGlow(color: Int) {
+                assertSame(viewport, descendants(menu).filterIsInstance<NativeVerticalViewport>().single())
+                assertSame(owner, ownerField.get(viewport))
+                assertSame(edge, nearField.get(owner))
+                assertEquals(color, edge.color)
+            }
+            assertRetainedGlow(initial.muted)
             assertEquals(grainRange(initial.raised, .5f), menu.paintedTextSurface)
             for (dark in listOf(true, false, true, false)) {
                 val palette = palette(dark)
@@ -58,6 +84,7 @@ class NativeModalContrastIntegrationTest {
                 else assertEquals(palette.raised, colors.raised)
                 // A stale/equal ink target must still be corrected against the current paint.
                 menu.bindActions(listOf(NativeMenuAction("Copy", 0, palette.raised, palette.ink) {}), colors)
+                assertRetainedGlow(colors.muted)
                 val label = descendants(menu).filterIsInstance<ParagraphView>().single()
                 assertEquals(grainRange(colors.raised, intensity), menu.paintedTextSurface)
                 assertEquals(menu.paintedTextSurface, label.paintedTextSurface!!.asLong)
@@ -65,6 +92,9 @@ class NativeModalContrastIntegrationTest {
                 menu.bindGrain(intensity)
                 assertFalse("An unchanged grain bind must not dirty settled text", label.isDirty)
             }
+            val choiceColors = palette(true).menuColors()
+            menu.bind(NativeMenuChoices("One", listOf("One", "Two")) { it }, choiceColors) {}
+            assertRetainedGlow(choiceColors.muted)
         } finally { menu.close(); runtime.close() }
     }
 

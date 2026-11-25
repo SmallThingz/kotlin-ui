@@ -40,7 +40,8 @@ open class ReverbOnboardingPageLayout(
 ) : FrameLayout(context) {
     protected var onToggleOneShot: () -> Unit = {}
     protected var onToggleLooping: () -> Unit = {}
-    protected val viewport = NativeVerticalViewport(context, scrollState, density, scrollFrames, scrollScope, scrollNested)
+    protected val viewport = NativeVerticalViewport(context, scrollState, density, scrollFrames, scrollScope, scrollNested,
+        glowColor = initialPalette.muted)
     val sourceVerticalViewport: NativeVerticalViewport get() = viewport
     private val column = OnboardingPageColumn(context)
     private val headerIcon = ReverbGlyphView(context, when (page) {
@@ -124,6 +125,7 @@ open class ReverbOnboardingPageLayout(
         compressionAvailable: Boolean,
         silenceValid: Boolean,
     ): Boolean {
+        viewport.setGlowColor(palette.muted)
         headerIcon.bind(when (page) {
             0 -> ReverbIcon.BackgroundWarning
             1 -> ReverbIcon.OneShot
