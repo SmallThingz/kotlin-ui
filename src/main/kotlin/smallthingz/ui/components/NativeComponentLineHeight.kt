@@ -10,6 +10,7 @@ import android.text.Spanned
 import android.text.TextWatcher
 import android.text.style.LineHeightSpan
 import android.text.style.MetricAffectingSpan
+import android.text.style.UpdateLayout
 import android.widget.TextView
 import smallthingz.ui.R
 import smallthingz.ui.text.NativeLineHeightSpan
@@ -180,7 +181,7 @@ private interface ComponentLineHeightMetadata {
 /** Editable builders skip NoCopySpan; component admission also cleans SpannableString copies. */
 private class OwnedLineHeightSpan(override val owner: ComponentLineHeightState,
     heightPx: Float, endIndex: Int, style: LineHeightStyle) :
-    LineHeightSpan, NoCopySpan, ComponentLineHeightMetadata {
+    LineHeightSpan, UpdateLayout, NoCopySpan, ComponentLineHeightMetadata {
     private val delegate = NativeLineHeightSpan(heightPx, endIndex, style)
     override fun chooseHeight(text: CharSequence, start: Int, end: Int,
         spanstartv: Int, v: Int, fm: Paint.FontMetricsInt) =
