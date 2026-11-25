@@ -3,6 +3,7 @@ package smallthingz.ui.components
 import android.content.Intent
 import android.view.View
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -13,7 +14,12 @@ import smallthingz.ui.input.phase.NativeDragPointerEvent
 import smallthingz.ui.input.phase.NativePointerPass
 import smallthingz.ui.reverb.*
 import smallthingz.ui.text.font.createFontFamilyResolver
+import smallthingz.ui.text.view.NativePlainTextViewGeometry
+import smallthingz.ui.text.view.NativeTextSemanticsClip
+import smallthingz.ui.text.view.NativeTextSemanticsClipPolicy
 import smallthingz.ui.unit.Density
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /** Actual-view geometry/state checks, including one attached action-admission fixture. */
 @RunWith(AndroidJUnit4::class)
@@ -179,38 +185,66 @@ class NativeMergedActionLayoutIntegrationTest {
         lateinit var rename: ReverbInlineRecordingRename
         lateinit var runtime: NativeModalWindowRuntime
         lateinit var env: ReverbEnvironment
+        lateinit var root: FrameLayout
+        var layoutListener: View.OnLayoutChangeListener? = null
+        val layoutReady = CountDownLatch(1)
         var cancelled = 0
         var saved = 0
         try {
             instrumentation.runOnMainSync {
                 runtime = NativeModalWindowRuntime(activity)
                 env = ReverbEnvironment(activity, false)
-                val root = FrameLayout(activity)
+                root = FrameLayout(activity)
                 rename = ReverbInlineRecordingRename(activity, env, runtime.scope, root, "Name", "Cancel", "Save",
                     { "Recording" }, {}, { cancelled++ }, { saved++ })
                 root.addView(rename, FrameLayout.LayoutParams(-1, -2))
+                layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                    val buttons = descendants(rename).filterIsInstance<NativeMaterialButtonView>()
+                    if (buttons.size == 2 && buttons.all {
+                            it.isAttachedToWindow && it.isShown && it.isLaidOut && it.width > 0 && it.height > 0
+                        }) layoutReady.countDown()
+                }.also(root::addOnLayoutChangeListener)
                 activity.setContentView(root)
             }
+            assertTrue("Attached rename actions must complete their real layout", layoutReady.await(5, TimeUnit.SECONDS))
             instrumentation.waitForIdleSync()
             instrumentation.runOnMainSync {
                 val buttons = descendants(rename).filterIsInstance<NativeMaterialButtonView>()
                 assertEquals(2, buttons.size)
-                for (button in buttons) {
-                    val node = checkNotNull(button.createAccessibilityNodeInfo())
-                    try { assertTrue(node.isClickable) } finally { node.recycle() }
+                val geometry = NativePlainTextViewGeometry(root,
+                    NativeTextSemanticsClipPolicy { NativeTextSemanticsClip.Unclipped })
+                // The app's page owner supplies this geometry for actions with a source-owned inputRoot.
+                buttons[0].mergedRowAccessibility.bindGeometry(geometry) {
+                    buttons[0].isAttachedToWindow && buttons[0].isShown
+                }.use {
+                    buttons[1].mergedRowAccessibility.bindGeometry(geometry) {
+                        buttons[1].isAttachedToWindow && buttons[1].isShown
+                    }.use {
+                        val nodes = ArrayList<AccessibilityNodeInfo>(2)
+                        try {
+                            for (button in buttons) {
+                                val node = checkNotNull(button.createAccessibilityNodeInfo())
+                                nodes.add(node)
+                                assertTrue(node.isClickable)
+                                assertTrue(node.isVisibleToUser)
+                            }
+                            assertNotEquals("Cancel and Save retain distinct semantic nodes", nodes[0], nodes[1])
+                            assertTrue(buttons[0].performClick())
+                            assertTrue(buttons[1].performClick())
+                            assertEquals(1, cancelled)
+                            assertEquals(1, saved)
+                            rename.bind(env, "Recording", null, true)
+                            assertFalse(buttons[0].performClick())
+                            assertFalse(buttons[1].performClick())
+                            assertEquals(1, cancelled)
+                            assertEquals(1, saved)
+                        } finally { nodes.forEach { it.recycle() } }
+                    }
                 }
-                assertTrue(buttons[0].performClick())
-                assertTrue(buttons[1].performClick())
-                assertEquals(1, cancelled)
-                assertEquals(1, saved)
-                rename.bind(env, "Recording", null, true)
-                assertFalse(buttons[0].performClick())
-                assertFalse(buttons[1].performClick())
-                assertEquals(1, cancelled)
-                assertEquals(1, saved)
             }
         } finally {
             instrumentation.runOnMainSync {
+                layoutListener?.let(root::removeOnLayoutChangeListener)
                 try { rename.close(); runtime.close() } finally { activity.finish() }
             }
         }
