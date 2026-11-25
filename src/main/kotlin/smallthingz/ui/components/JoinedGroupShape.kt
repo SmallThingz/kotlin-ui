@@ -20,6 +20,7 @@ internal class JoinedGroupShape {
         private set
     private var edges = NativeGroupEdges(true, true)
     private var cornersFit = true
+    private var borderIsFill = false
     private val bounds = RectF()
     private val fill = Path()
     private val border = Path()
@@ -80,6 +81,17 @@ internal class JoinedGroupShape {
         if (!edges.first && edges.squareTop) {
             if (edges.last || edges.squareBottom) border.close()
         } else border.lineTo(left, if (edges.first) top + radius else 0f)
+        borderIsFill = (!edges.first && edges.squareTop) || (!edges.last && edges.squareBottom)
+        if (borderIsFill) {
+            // Thin antialiased strokes can blend the two legs of a square join separately.
+            // Cache their filled outline at geometry changes so the corner stays solid, with
+            // no extra draw or per-frame path work. Reuse the pointer-intersection scratch.
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = density
+            paint.getFillPath(border, intersection)
+            border.set(intersection)
+            intersection.rewind()
+        }
     }
 
     fun copyFillPath(destination: Path) { destination.set(fill) }
@@ -93,10 +105,12 @@ internal class JoinedGroupShape {
     fun drawBorder(canvas: Canvas, borderColor: Int, separatorColor: Int) {
         paint.color = borderColor
         paint.strokeWidth = density
+        paint.style = if (borderIsFill) Paint.Style.FILL else Paint.Style.STROKE
         canvas.drawPath(border, paint)
         if (!edges.first && !edges.squareTop) {
             paint.color = separatorColor
             paint.strokeWidth = 1f
+            paint.style = Paint.Style.STROKE
             canvas.drawLine(0f, 0.5f, width, 0.5f, paint)
         }
     }

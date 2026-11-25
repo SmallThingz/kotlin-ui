@@ -20,7 +20,7 @@ class JoinedGroupShapeIntegrationTest {
             // Reuse a previously capped renderer: ordinary recording rows must regain the old outline.
             shape.update(WIDTH.toFloat(), HEIGHT.toFloat(), density.toFloat(),
                 NativeGroupEdges(false, false, squareTop = true, squareBottom = true))
-            render(shape, density, edges) { bitmap ->
+            render(shape, density.toFloat(), edges) { bitmap ->
                 for (y in 0 until density) {
                     assertEquals("Default top first=$first density=$density y=$y",
                         if (first) Color.WHITE else if (y == 0) Color.RED else Color.TRANSPARENT,
@@ -39,16 +39,16 @@ class JoinedGroupShapeIntegrationTest {
 
     @Test fun squareCapsAreContinuousAcrossTheFullWidthIncludingBothCornerJoins() {
         val shape = JoinedGroupShape()
-        for (density in listOf(1, 2, 3)) for ((top, bottom) in listOf(true to false, false to true, true to true)) {
+        for (density in listOf(1f, 1.25f, 2f, 2.625f, 3f)) for ((top, bottom) in listOf(true to false, false to true, true to true)) {
             render(shape, density, NativeGroupEdges(false, false, squareTop = top, squareBottom = bottom)) { bitmap ->
-                for (y in 0 until density) for (x in 0 until WIDTH) {
+                for (y in 0 until density.toInt()) for (x in 0 until WIDTH) {
                     if (top) assertEquals("Solid square top density=$density at ($x,$y)",
                         Color.WHITE, bitmap.getPixel(x, y))
                     if (bottom) assertEquals("Solid square bottom density=$density at ($x,$y)",
                         Color.WHITE, bitmap.getPixel(x, HEIGHT - 1 - y))
                 }
                 // Side strokes stay joined to the caps rather than stopping at the new gap boundary.
-                for (y in density until HEIGHT - density) {
+                for (y in density.toInt() until HEIGHT - density.toInt()) {
                     assertEquals(Color.WHITE, bitmap.getPixel(0, y))
                     assertEquals(Color.WHITE, bitmap.getPixel(WIDTH - 1, y))
                 }
@@ -60,13 +60,13 @@ class JoinedGroupShapeIntegrationTest {
 
     @Test fun squareGapCapPreservesTheOppositeRoundedExternalEdge() {
         val shape = JoinedGroupShape()
-        render(shape, 3, NativeGroupEdges(true, false, squareBottom = true)) { bitmap ->
+        render(shape, 3f, NativeGroupEdges(true, false, squareBottom = true)) { bitmap ->
             assertEquals(Color.TRANSPARENT, bitmap.getPixel(0, 0))
             assertEquals(Color.TRANSPARENT, bitmap.getPixel(WIDTH - 1, 0))
             assertEquals(Color.WHITE, bitmap.getPixel(WIDTH / 2, 0))
             for (x in 0 until WIDTH) assertEquals(Color.WHITE, bitmap.getPixel(x, HEIGHT - 1))
         }
-        render(shape, 3, NativeGroupEdges(false, true, squareTop = true)) { bitmap ->
+        render(shape, 3f, NativeGroupEdges(false, true, squareTop = true)) { bitmap ->
             for (x in 0 until WIDTH) assertEquals(Color.WHITE, bitmap.getPixel(x, 0))
             assertEquals(Color.TRANSPARENT, bitmap.getPixel(0, HEIGHT - 1))
             assertEquals(Color.TRANSPARENT, bitmap.getPixel(WIDTH - 1, HEIGHT - 1))
@@ -74,8 +74,8 @@ class JoinedGroupShapeIntegrationTest {
         }
     }
 
-    private fun render(shape: JoinedGroupShape, density: Int, edges: NativeGroupEdges, check: (Bitmap) -> Unit) {
-        shape.update(WIDTH.toFloat(), HEIGHT.toFloat(), density.toFloat(), edges)
+    private fun render(shape: JoinedGroupShape, density: Float, edges: NativeGroupEdges, check: (Bitmap) -> Unit) {
+        shape.update(WIDTH.toFloat(), HEIGHT.toFloat(), density, edges)
         val bitmap = Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888)
         try {
             shape.drawBorder(Canvas(bitmap), Color.WHITE, Color.RED)
