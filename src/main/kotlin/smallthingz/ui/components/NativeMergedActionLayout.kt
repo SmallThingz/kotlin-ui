@@ -10,6 +10,11 @@ import kotlin.math.roundToInt
 import smallthingz.ui.common.mergedButtonGroup
 import smallthingz.ui.input.phase.NativePointerLayerShape
 
+/** A sheet omits its recipe's bottom padding when its actions own the visual footer clearance. */
+internal interface NativeActionFooter {
+    val isActionFooter: Boolean
+}
+
 /** Opt-in geometry only: the action retains its recipe, callbacks and accessibility node. */
 interface NativeMergedActionChild {
     val actionMinimumWidthPx: Int
@@ -28,7 +33,7 @@ open class NativeMergedActionLayout(
     palette: NativeColorScheme,
     cornerRadiusDp: Float,
     private val fillAvailableWidth: Boolean,
-) : ViewGroup(context), NativePointerLayerShape {
+) : ViewGroup(context), NativePointerLayerShape, NativeActionFooter {
     /** Retain compact trailing groups for existing callers. */
     constructor(context: Context, actions: List<View>, palette: NativeColorScheme,
         cornerRadiusDp: Float = 14f,
@@ -39,7 +44,7 @@ open class NativeMergedActionLayout(
         const val ACTION_FOOTER_BOTTOM_PADDING_DP = 6f
     }
 
-    var isActionFooter: Boolean = false
+    final override var isActionFooter: Boolean = false
         private set
 
     /** Fixed visual spacing for Cancel/confirm; ordinary merged/icon groups stay unchanged. */

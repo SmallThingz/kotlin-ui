@@ -9,7 +9,9 @@ import kotlin.math.roundToInt
 class NativeDialogActionLayout(
     private val cancel: NativeButtonTouchTarget,
     private val confirm: NativeButtonTouchTarget,
-) : LinearLayout(cancel.context) {
+) : LinearLayout(cancel.context), NativeActionFooter {
+    override val isActionFooter: Boolean get() = true
+
     init {
         gravity = Gravity.END or Gravity.CENTER_VERTICAL
         isBaselineAligned = false
