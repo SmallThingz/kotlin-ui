@@ -4,6 +4,9 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
+import android.text.Spanned
+import android.text.style.LineHeightSpan
+import android.text.style.MetricAffectingSpan
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
@@ -12,6 +15,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import smallthingz.ui.components.NativeChip
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -33,6 +37,105 @@ class GalleryViewerActionsIntegrationTest {
             "${action.compoundPaddingRight},${action.compoundPaddingBottom} " +
             "layoutRequested=${row.isLayoutRequested}/${content.isLayoutRequested}/${action.isLayoutRequested}",
             text.height <= action.height - action.compoundPaddingTop - action.compoundPaddingBottom)
+        val available = action.width - action.compoundPaddingLeft - action.compoundPaddingRight
+        for (line in 0 until text.lineCount) {
+            val start = text.getLineStart(line)
+            val end = text.getLineEnd(line)
+            val visibleEnd = text.getLineVisibleEnd(line)
+            val lineText = action.text.subSequence(start, end).toString()
+                .replace(" ", "\\u0020").replace("\n", "\\n").replace("\t", "\\t")
+            // getLineWidth includes the separator space retained at a legal wrap.
+            // getLineMax measures the visible line, including punctuation, without that space.
+            val visibleMax = text.getLineMax(line)
+            val left = text.getLineLeft(line)
+            val right = text.getLineRight(line)
+            assertTrue("Visible line must fit: $scenario label=${action.text} line=$line " +
+                "text=\"$lineText\" start=$start end=$end visibleEnd=$visibleEnd " +
+                "width=${text.getLineWidth(line)} visibleMax=$visibleMax left=$left right=$right " +
+                "available=$available layoutWidth=${text.width} actionWidth=${action.width} " +
+                "padding=${action.compoundPaddingLeft},${action.compoundPaddingRight} " +
+                "font=${action.resources.configuration.fontScale} locale=${action.textLocale} " +
+                "direction=${row.layoutDirection} paragraphDirection=${text.getParagraphDirection(line)}",
+                visibleMax <= available + .5f && left >= -.5f && right <= available + .5f)
+        }
+    }
+
+    private fun labelMetricInputs(action: TextView): Map<String, Any?> {
+        val fm = action.paint.fontMetricsInt
+        return mapOf(
+            "text" to action.text.toString(), "textSize" to action.textSize, "typeface" to action.typeface,
+            "textScaleX" to action.textScaleX, "textSkewX" to action.paint.textSkewX,
+            "letterSpacing" to action.letterSpacing, "paintFlags" to action.paint.flags,
+            "locale" to action.textLocales.toLanguageTags(), "includeFontPadding" to action.includeFontPadding,
+            "spacing" to listOf(action.lineSpacingExtra, action.lineSpacingMultiplier),
+            "fontMetrics" to listOf(fm.top, fm.ascent, fm.descent, fm.bottom, fm.leading),
+            "padding" to listOf(action.paddingLeft, action.paddingTop, action.paddingRight, action.paddingBottom),
+            "compoundPadding" to listOf(action.compoundPaddingLeft, action.compoundPaddingTop,
+                action.compoundPaddingRight, action.compoundPaddingBottom),
+            "drawableGap" to action.compoundDrawablePadding,
+            "drawables" to action.compoundDrawablesRelative.map { it?.bounds?.let { r -> listOf(r.width(), r.height()) } },
+            "minimumHeight" to action.minimumHeight, "minHeight" to action.minHeight,
+            "gravity" to action.gravity, "textDirection" to action.textDirection)
+    }
+
+    private fun labelLayoutMetrics(action: TextView): String {
+        val layout = checkNotNull(action.layout)
+        val spans = (action.text as? Spanned)?.let { text ->
+            text.getSpans(0, text.length, Any::class.java)
+                .filter { it is LineHeightSpan || it is MetricAffectingSpan }
+                .map { "${it.javaClass.simpleName}:${text.getSpanStart(it)}..${text.getSpanEnd(it)} flags=${text.getSpanFlags(it)}" }
+        }
+        val lines = (0 until layout.lineCount).map { line ->
+            "${layout.getLineStart(line)}..${layout.getLineEnd(line)} " +
+                "top=${layout.getLineTop(line)} bottom=${layout.getLineBottom(line)} " +
+                "baseline=${layout.getLineBaseline(line)} ascent=${layout.getLineAscent(line)} descent=${layout.getLineDescent(line)} " +
+                "visibleMax=${layout.getLineMax(line)} left=${layout.getLineLeft(line)} right=${layout.getLineRight(line)}"
+        }
+        return "inputs=${labelMetricInputs(action)} view=${action.width}x${action.height} " +
+            "layout=${layout.javaClass.simpleName}:${layout.width}x${layout.height} " +
+            "layoutPadding=${layout.topPadding},${layout.bottomPadding} viewBaseline=${action.baseline} " +
+            "layoutPaintSize=${layout.paint.textSize} spans=$spans lines=$lines"
+    }
+
+    private fun assertRestoredHeightMatchesFresh(row: GalleryViewerActions, actions: List<NativeChip>, scenario: String) {
+        val fresh = GalleryViewerActions(row.context, GalleryDesign.palette(row.context, true).pageControls).apply {
+            layoutDirection = row.layoutDirection
+        }
+        val freshActions = actions.map { action ->
+            fresh.addAction(ColorDrawable(Color.WHITE), action.text.toString(), action.isSelected, action.isEnabled) {
+                throw AssertionError("Fresh geometry comparison must not activate an action")
+            }.apply { textLocale = action.textLocale }
+        }
+        try {
+            fresh.measure(View.MeasureSpec.makeMeasureSpec(row.width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+            fresh.layout(0, 0, fresh.measuredWidth, fresh.measuredHeight)
+            val detail = "$scenario font=${row.resources.configuration.fontScale} direction=${row.layoutDirection} " +
+                "width=${row.width} freshRow=${fresh.height} restoredRow=${row.height} " +
+                "freshActions=${freshActions.map { it.height }} restoredActions=${actions.map { it.height }} " +
+                actions.indices.joinToString("\n") { index ->
+                    "action[$index] fresh={${labelLayoutMetrics(freshActions[index])}} restored={${labelLayoutMetrics(actions[index])}}"
+                }
+            // Establish actual fit on BOTH paths before testing exact height parity.
+            // A height-only mismatch must not obscure clipped restored text.
+            actions.forEach { assertLabelFits(row, it, "restored $detail") }
+            freshActions.forEach { assertLabelFits(fresh, it, "fresh $detail") }
+            actions.forEachIndexed { index, action ->
+                assertEquals("Same slot width is required for height comparison: $detail", freshActions[index].width, action.width)
+                assertEquals("Same font and padding are required for height comparison: $detail",
+                    labelMetricInputs(freshActions[index]), labelMetricInputs(action))
+                val freshText = checkNotNull(freshActions[index].layout)
+                val restoredText = checkNotNull(action.layout)
+                assertEquals("Same visible line widths are required for height comparison: $detail",
+                    (0 until freshText.lineCount).map { freshText.getLineMax(it) },
+                    (0 until restoredText.lineCount).map { restoredText.getLineMax(it) })
+            }
+            assertEquals("Restored labelled row must match fresh height after both fit: $detail", fresh.height, row.height)
+            assertEquals("Restored content must match fresh height: $detail", fresh.getChildAt(0).height, row.getChildAt(0).height)
+            actions.forEachIndexed { index, action ->
+                assertEquals("Restored ${action.text} must match fresh height: $detail", freshActions[index].height, action.height)
+            }
+        } finally { freshActions.forEach { it.close() } }
     }
 
     private fun focusLaidOutDetachedAction(action: View) {
@@ -66,10 +169,11 @@ class GalleryViewerActionsIntegrationTest {
                 }
                 for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
                     row.layoutDirection = direction
-                    for (compact in listOf(false, true, false)) {
+                    for ((phase, compact) in listOf(false, true, false).withIndex()) {
                         row.setCompact(compact)
                         for (width in listOf(320, 480, 144, 320)) {
                             layout(width)
+                            if (phase == 2) assertRestoredHeightMatchesFresh(row, actions, "after compact widthDp=$width")
                             assertEquals(dp(width), row.width)
                             assertTrue(row.getChildAt(0).width >= maxOf(dp(width), 4 * dp(48)))
                             if (compact) assertEquals(maxOf(dp(width), 4 * dp(48)), row.getChildAt(0).width)
@@ -84,7 +188,7 @@ class GalleryViewerActionsIntegrationTest {
                                 assertEquals("An unbroken action name must not split", 1, textLayout.lineCount)
                                 assertEquals(action.text.length, textLayout.getLineEnd(textLayout.lineCount - 1))
                                 for (line in 0 until textLayout.lineCount) assertEquals(0, textLayout.getEllipsisCount(line))
-                                assertLabelFits(row, action, "compact=$compact widthDp=$width")
+                                assertLabelFits(row, action, "phase=$phase compact=$compact widthDp=$width")
                             }
                             assertFalse(actions[2].isEnabled)
                             assertTrue(actions[2].isSelected)
@@ -129,12 +233,13 @@ class GalleryViewerActionsIntegrationTest {
                         View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
                     row.layout(0, 0, row.measuredWidth, row.measuredHeight)
                     focusLaidOutDetachedAction(more)
-                    for (compact in listOf(false, true, false)) {
+                    for ((phase, compact) in listOf(false, true, false).withIndex()) {
                         row.setCompact(compact)
                         for (width in listOf(384, 240, 800, 384)) {
                             row.measure(View.MeasureSpec.makeMeasureSpec(dp(width), View.MeasureSpec.EXACTLY),
                                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
                             row.layout(0, 0, row.measuredWidth, row.measuredHeight)
+                            if (phase == 2) assertRestoredHeightMatchesFresh(row, actions, "after compact widthDp=$width")
                             val content = row.getChildAt(0) as ViewGroup
                             assertEquals(parents, actions.map { it.parent })
                             assertEquals(ids, actions.map { it.id })
@@ -152,16 +257,16 @@ class GalleryViewerActionsIntegrationTest {
                                 } finally { node.recycle() }
                                 if (compact) {
                                     assertEquals("", action.text.toString())
-                                    assertEquals(dp(48), action.height)
+                                    assertEquals("Compact ${names[index]} height: font=$font direction=$direction " +
+                                        "widthDp=$width row=${row.height} content=${content.height} " +
+                                        "action=${action.height} measured=${action.measuredHeight}", dp(48), action.height)
                                 } else {
                                     val text = checkNotNull(action.layout)
                                     assertEquals(names[index], action.text.toString())
                                     assertEquals("$font/$width: ${names[index]} split inside a word", 1, text.lineCount)
                                     assertEquals(0, text.getEllipsisCount(0))
                                     assertEquals(action.text.length, text.getLineEnd(0))
-                                    assertTrue(text.getLineWidth(0) <= action.width -
-                                        action.compoundPaddingLeft - action.compoundPaddingRight + .5f)
-                                    assertLabelFits(row, action, "compact=$compact widthDp=$width")
+                                    assertLabelFits(row, action, "phase=$phase compact=$compact widthDp=$width")
                                 }
                             }
                             assertTrue(actions[2].isSelected)
@@ -281,7 +386,6 @@ class GalleryViewerActionsIntegrationTest {
                         words.forEachIndexed { line, word ->
                             assertEquals(word, save.text.subSequence(text.getLineStart(line), text.getLineEnd(line)).toString().trim())
                             assertEquals(0, text.getEllipsisCount(line))
-                            assertTrue(text.getLineWidth(line) <= save.width - save.compoundPaddingLeft - save.compoundPaddingRight + .5f)
                         }
                         assertLabelFits(row, save, "compact=false widthPx=$viewport locale=$locale")
                         actions.forEachIndexed { index, action ->

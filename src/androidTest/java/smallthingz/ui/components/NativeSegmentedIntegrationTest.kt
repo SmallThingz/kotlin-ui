@@ -415,6 +415,68 @@ class NativeSegmentedIntegrationTest {
         chip.close()
     }
 
+    @Test fun retainedTextReplacementReflowsOwnedLineHeightAtUnchangedWidth() = main {
+        val base = InstrumentationRegistry.getInstrumentation().targetContext
+        val context = base.createConfigurationContext(Configuration(base.resources.configuration).apply { fontScale = 1f })
+        val density = context.resources.displayMetrics.density
+        val width = (240 * density).roundToInt()
+        val expectedLineHeight = kotlin.math.ceil(80f * density).toInt()
+        val style = NativeChoiceStyle(textStyle = NativeTextStyle(
+            sizeSp = 14f, lineHeightSp = 80f, includeFontPadding = false,
+            lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)))
+        fun chip() = NativeChip(context, palette, style).apply {
+            layoutParams = FrameLayout.LayoutParams(width, ViewGroup.LayoutParams.WRAP_CONTENT)
+            maxLines = Int.MAX_VALUE
+            ellipsize = null
+            bind("Choice", false)
+        }
+        fun measure(chip: NativeChip) {
+            chip.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+            chip.layout(0, 0, chip.measuredWidth, chip.measuredHeight)
+        }
+        fun assertLabel(chip: NativeChip) {
+            assertEquals(width, chip.width)
+            assertEquals("Choice", chip.text.toString())
+            val text = checkNotNull(chip.layout)
+            assertTrue("Exercise retained spannable layout", text is android.text.DynamicLayout)
+            assertEquals(1, text.lineCount)
+            assertEquals(chip.text.length, text.getLineEnd(0))
+            assertEquals(0, text.getEllipsisCount(0))
+            assertEquals("Requested leading must survive text replacement", expectedLineHeight, text.height)
+            assertTrue(text.height > chip.paint.fontMetricsInt.descent - chip.paint.fontMetricsInt.ascent)
+            assertTrue(text.height <= chip.height - chip.compoundPaddingTop - chip.compoundPaddingBottom)
+            assertTrue(text.getLineMax(0) <= chip.width - chip.compoundPaddingLeft - chip.compoundPaddingRight + .5f)
+            val buffer = chip.text as Spanned
+            val spans = buffer.getSpans(0, buffer.length, LineHeightSpan::class.java)
+            assertEquals("Exactly one owned line-height span", 1, spans.size)
+            assertEquals(0, buffer.getSpanStart(spans.single()))
+            assertEquals(buffer.length, buffer.getSpanEnd(spans.single()))
+        }
+        val retained = chip()
+        val fresh = chip()
+        try {
+            measure(fresh); measure(retained)
+            assertLabel(fresh); assertLabel(retained)
+            repeat(2) {
+                // Keep width and typography unchanged: setText may construct a layout
+                // before measurement installs the successor buffer's owned span.
+                retained.text = ""
+                measure(retained)
+                retained.text = "Choice"
+                measure(retained)
+                assertLabel(retained)
+                val actual = checkNotNull(retained.layout)
+                val expected = checkNotNull(fresh.layout)
+                assertEquals(expected.height, actual.height)
+                assertEquals(expected.getLineAscent(0), actual.getLineAscent(0))
+                assertEquals(expected.getLineDescent(0), actual.getLineDescent(0))
+                assertEquals(fresh.baseline, retained.baseline)
+                assertEquals(fresh.height, retained.height)
+            }
+        } finally { retained.close(); fresh.close() }
+    }
+
     @Test fun defaultSelectedPaintContrastsAndExplicitOverrideAndUnchangedDrawableSurvive() = main {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         for (selection in listOf(palette.accent, 0xffdbe5ff.toInt())) {
