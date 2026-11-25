@@ -87,6 +87,7 @@ class ZfmTheme private constructor(private val theme: ReverbTheme) {
     /** The button must have been constructed with a NativeButtonRecipe. */
     fun bindButton(button: NativeMaterialButtonView, label: String = button.label.getText(),
                    enabled: Boolean = button.isEnabled) {
+        button.bindTypography(density, fontResolver)
         button.bind(label, enabled, buttonPalette)
     }
 
