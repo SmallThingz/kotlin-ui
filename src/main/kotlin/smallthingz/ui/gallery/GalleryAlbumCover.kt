@@ -26,6 +26,16 @@ import kotlin.math.roundToInt
  */
 class GalleryAlbumCover(context: Context, colors: NativeColorScheme, private val heightBudget: () -> Int?) :
     NativeSurface(context, NativeSurfaceStyle(colors.surfaceContainerHigh)) {
+    /** Prefer a 16:9 cover in a readable single-column grid. A compact height budget
+     * still takes precedence; the natural landscape height retains both title lines
+     * and grows to fit the measured caption and minimum touch target. */
+    var singleColumnLandscape: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            requestLayout()
+        }
+
     val image = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
     val placeholder = ImageView(context)
     val title = NativeText(context, colors.pageControls, GalleryDesign.textStyle(NativeTypographyRole.TITLE_MEDIUM)).apply {
@@ -94,15 +104,22 @@ class GalleryAlbumCover(context: Context, colors: NativeColorScheme, private val
         val width = MeasureSpec.makeMeasureSpec(side, MeasureSpec.EXACTLY)
         val budget = heightBudget()
         // GridLayoutManager can remeasure a row to match its tallest cover.
-        val matchedRow = budget != null && MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY
-        val desired = if (matchedRow) MeasureSpec.getSize(heightMeasureSpec) else minOf(side, budget ?: side)
-        val titleLines = if (desired < side) 1 else 2
+        val landscape = singleColumnLandscape && budget == null
+        val matchedRow = (budget != null || landscape) &&
+            MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY
+        val desired = when {
+            matchedRow -> MeasureSpec.getSize(heightMeasureSpec)
+            landscape -> (side * 9f / 16f).roundToInt()
+            else -> minOf(side, budget ?: side)
+        }
+        val titleLines = if (!landscape && desired < side) 1 else 2
         if (title.maxLines != titleLines) title.maxLines = titleLines
         caption.measure(width, MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
         var coverHeight = desired
-        if (desired < side) {
+        if (!matchedRow) {
             val minimum = maxOf(minimumTargetHeight, caption.measuredHeight)
-            if (!matchedRow && desired < minimum) coverHeight = side
+            if (landscape) coverHeight = maxOf(desired, minimum)
+            else if (desired < side && desired < minimum) coverHeight = side
         }
         val bandHeight = caption.measuredHeight.coerceAtMost(coverHeight)
         val shadeHeight = maxOf(coverHeight / 2, bandHeight + dp(24)).coerceAtMost(coverHeight)
