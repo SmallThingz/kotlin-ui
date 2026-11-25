@@ -7,6 +7,7 @@ import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import smallthingz.ui.components.blob.NativeAudioBlobAppearance
 import smallthingz.ui.controls.ControlPalette
+import smallthingz.ui.scroll.NativeScrollIndicatorStyle
 import smallthingz.ui.text.NativeReadoutTypography
 import smallthingz.ui.text.NativeTypography
 import smallthingz.ui.text.NativeTypographyRole
@@ -47,6 +48,7 @@ class NativeUiAppearance(
     val captureControls: NativeCaptureControlsStyle = NativeCaptureControlsStyle.Default,
     compactField: NativeCompactFieldRecipe? = null,
     val anchoredDropdown: NativeAnchoredDropdownStyle = NativeAnchoredDropdownStyle(),
+    val scrollIndicator: NativeScrollIndicatorStyle = NativeScrollIndicatorStyle.Default,
 ) {
     private val settingsSelectorsOverride = settingsSelectors
     private val buttonsOverride = buttons
@@ -94,6 +96,7 @@ class NativeUiAppearance(
         captureControls: NativeCaptureControlsStyle = this.captureControls,
         compactField: NativeCompactFieldRecipe? = compactFieldOverride,
         anchoredDropdown: NativeAnchoredDropdownStyle = this.anchoredDropdown,
+        scrollIndicator: NativeScrollIndicatorStyle = this.scrollIndicator,
     ): NativeUiAppearance = NativeUiAppearance(
         colorScheme = colorScheme,
         typography = typography,
@@ -122,6 +125,7 @@ class NativeUiAppearance(
         captureControls = captureControls,
         compactField = compactField,
         anchoredDropdown = anchoredDropdown,
+        scrollIndicator = scrollIndicator,
     )
 
     fun resolveColorScheme(context: Context, darkTheme: Boolean): NativeColorScheme =
