@@ -316,7 +316,7 @@ internal class NativeSheetContent(
         val inner=max(0,width-pad*2)
         val bounded=MeasureSpec.getMode(heightMeasureSpec)!=MeasureSpec.UNSPECIFIED
         val maximum=if(bounded)MeasureSpec.getSize(heightMeasureSpec)else Int.MAX_VALUE
-        val bottom = if ((actions as? NativeMergedActionLayout)?.isActionFooter == true) 0
+        val bottom = if ((actions as? NativeActionFooter)?.isActionFooter == true) 0
             else min((style.recipe.bottomPaddingDp*density).roundToInt(),maximum)
         val available = max(0, maximum - bottom)
         topHeader = (style.recipe.topPaddingDp * density).roundToInt().coerceIn(0, available)

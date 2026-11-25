@@ -74,6 +74,22 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
         }
     }
 
+    @Test fun accessibilityDismissClosesWithoutSelecting() {
+        for (policy in DropdownSelectionPolicy.values()) scenario(policy) { f ->
+            main {
+                val node = f.wheel.createAccessibilityNodeInfo()
+                assertTrue(node.isDismissable)
+                assertTrue(node.actionList.contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_DISMISS))
+                assertTrue(f.wheel.performAccessibilityAction(AccessibilityNodeInfo.ACTION_DISMISS, null))
+            }
+            await("Accessibility dismiss did not retire the popup") { !f.wheel.isAttachedToWindow }
+            main {
+                assertTrue(f.selections.isEmpty())
+                assertFalse(f.wheel.performAccessibilityAction(AccessibilityNodeInfo.ACTION_DISMISS, null))
+            }
+        }
+    }
+
     @Test fun explicitFlingAndStopTouchDoNotCommitButNextTapCommitsPaintedRow() =
         scenario(DropdownSelectionPolicy.EXPLICIT) { f ->
             var released = 0f
