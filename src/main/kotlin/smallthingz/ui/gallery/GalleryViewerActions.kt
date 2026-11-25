@@ -11,16 +11,54 @@ import smallthingz.ui.components.NativeChoiceStyle
 import smallthingz.ui.components.NativeTextRole
 import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.text.NativeTypographyRole
+import java.text.BreakIterator
+import java.util.Locale
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 /** One retained, equal-slot primary action row for both photos and videos.
- * Only viewports narrower than the combined touch targets scroll horizontally.
+ * Narrow viewports scroll instead of splitting a labelled action's unbroken words.
  */
 class GalleryViewerActions(context: Context, private val palette: ControlPalette) : HorizontalScrollView(context) {
-    private val labels = mutableListOf<Pair<NativeChip, String>>()
+    private class ActionLabel(val view: NativeChip, val label: String) {
+        private var locale: Locale? = null
+        private var words = emptyList<String>()
+
+        fun minimumWidth(): Int {
+            val currentLocale = view.textLocale
+            if (locale != currentLocale) {
+                // Cache legal line-break segments, including locale-specific punctuation
+                // rules. Measurement only refreshes their advances, never tokenizes again.
+                val breaks = BreakIterator.getLineInstance(currentLocale)
+                breaks.setText(label)
+                val segments = mutableListOf<String>()
+                var start = breaks.first()
+                var end = breaks.next()
+                while (end != BreakIterator.DONE) {
+                    var contentEnd = end
+                    while (contentEnd > start && Character.isWhitespace(label[contentEnd - 1])) contentEnd--
+                    if (contentEnd > start) segments += label.substring(start, contentEnd)
+                    start = end
+                    end = breaks.next()
+                }
+                words = segments
+                locale = currentLocale
+            }
+            var advance = 0f
+            for (word in words) advance = maxOf(advance, view.paint.measureText(word))
+            val iconWidth = view.compoundDrawablesRelative[1]?.bounds?.width() ?: 0
+            return maxOf(iconWidth, ceil(advance).toInt()) + view.compoundPaddingLeft + view.compoundPaddingRight
+        }
+    }
+
+    private val labels = mutableListOf<ActionLabel>()
     private var compact = false
     private var availableWidth = 0
-    val minimumRowWidth: Int get() = labels.size * dp(48)
+    val minimumRowWidth: Int get() {
+        var cell = dp(48)
+        if (!compact) for (action in labels) cell = maxOf(cell, action.minimumWidth())
+        return labels.size * cell
+    }
     private val row = object : LinearLayout(context) {
         init {
             orientation = HORIZONTAL
@@ -31,8 +69,15 @@ class GalleryViewerActions(context: Context, private val palette: ControlPalette
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
             // HorizontalScrollView measures its child with an unbounded width; restore our
             // equal-slot bound here instead of letting natural label widths grow the row.
-            super.onMeasure(MeasureSpec.makeMeasureSpec(maxOf(availableWidth, minimumRowWidth), MeasureSpec.EXACTLY),
-                if (compact) MeasureSpec.makeMeasureSpec(dp(48), MeasureSpec.EXACTLY) else heightMeasureSpec)
+            val height = if (compact) MeasureSpec.makeMeasureSpec(dp(48), MeasureSpec.EXACTLY) else heightMeasureSpec
+            val width = maxOf(availableWidth, minimumRowWidth)
+            super.onMeasure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), height)
+            // NativeChip refreshes typography during measurement. Reconcile a changed
+            // font/configuration before publishing widths derived from its old paint.
+            val refreshed = maxOf(availableWidth, minimumRowWidth)
+            if (refreshed != width) {
+                super.onMeasure(MeasureSpec.makeMeasureSpec(refreshed, MeasureSpec.EXACTLY), height)
+            }
         }
     }
 
@@ -62,7 +107,7 @@ class GalleryViewerActions(context: Context, private val palette: ControlPalette
             contentDescription = label
             tooltipText = label
             onActivationRequest = { if (isEnabled && isShown) onActivate() else false }
-            labels += this to label
+            labels += ActionLabel(this, label)
             row.addView(this, LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
         }
     }
@@ -71,9 +116,9 @@ class GalleryViewerActions(context: Context, private val palette: ControlPalette
     fun setCompact(value: Boolean) {
         if (compact == value) return
         compact = value
-        labels.forEach { (view, label) ->
-            view.text = if (value) "" else label
-            view.gravity = if (value) Gravity.CENTER else Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        labels.forEach { action ->
+            action.view.text = if (value) "" else action.label
+            action.view.gravity = if (value) Gravity.CENTER else Gravity.TOP or Gravity.CENTER_HORIZONTAL
         }
         requestLayout()
     }
