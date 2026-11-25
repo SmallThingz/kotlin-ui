@@ -4,6 +4,9 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
+import android.text.Spanned
+import android.text.style.LineHeightSpan
+import android.text.style.MetricAffectingSpan
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
@@ -57,6 +60,43 @@ class GalleryViewerActionsIntegrationTest {
         }
     }
 
+    private fun labelMetricInputs(action: TextView): Map<String, Any?> {
+        val fm = action.paint.fontMetricsInt
+        return mapOf(
+            "text" to action.text.toString(), "textSize" to action.textSize, "typeface" to action.typeface,
+            "textScaleX" to action.textScaleX, "textSkewX" to action.paint.textSkewX,
+            "letterSpacing" to action.letterSpacing, "paintFlags" to action.paint.flags,
+            "locale" to action.textLocales.toLanguageTags(), "includeFontPadding" to action.includeFontPadding,
+            "spacing" to listOf(action.lineSpacingExtra, action.lineSpacingMultiplier),
+            "fontMetrics" to listOf(fm.top, fm.ascent, fm.descent, fm.bottom, fm.leading),
+            "padding" to listOf(action.paddingLeft, action.paddingTop, action.paddingRight, action.paddingBottom),
+            "compoundPadding" to listOf(action.compoundPaddingLeft, action.compoundPaddingTop,
+                action.compoundPaddingRight, action.compoundPaddingBottom),
+            "drawableGap" to action.compoundDrawablePadding,
+            "drawables" to action.compoundDrawablesRelative.map { it?.bounds?.let { r -> listOf(r.width(), r.height()) } },
+            "minimumHeight" to action.minimumHeight, "minHeight" to action.minHeight,
+            "gravity" to action.gravity, "textDirection" to action.textDirection)
+    }
+
+    private fun labelLayoutMetrics(action: TextView): String {
+        val layout = checkNotNull(action.layout)
+        val spans = (action.text as? Spanned)?.let { text ->
+            text.getSpans(0, text.length, Any::class.java)
+                .filter { it is LineHeightSpan || it is MetricAffectingSpan }
+                .map { "${it.javaClass.simpleName}:${text.getSpanStart(it)}..${text.getSpanEnd(it)} flags=${text.getSpanFlags(it)}" }
+        }
+        val lines = (0 until layout.lineCount).map { line ->
+            "${layout.getLineStart(line)}..${layout.getLineEnd(line)} " +
+                "top=${layout.getLineTop(line)} bottom=${layout.getLineBottom(line)} " +
+                "baseline=${layout.getLineBaseline(line)} ascent=${layout.getLineAscent(line)} descent=${layout.getLineDescent(line)} " +
+                "visibleMax=${layout.getLineMax(line)} left=${layout.getLineLeft(line)} right=${layout.getLineRight(line)}"
+        }
+        return "inputs=${labelMetricInputs(action)} view=${action.width}x${action.height} " +
+            "layout=${layout.javaClass.simpleName}:${layout.width}x${layout.height} " +
+            "layoutPadding=${layout.topPadding},${layout.bottomPadding} viewBaseline=${action.baseline} " +
+            "layoutPaintSize=${layout.paint.textSize} spans=$spans lines=$lines"
+    }
+
     private fun assertRestoredHeightMatchesFresh(row: GalleryViewerActions, actions: List<NativeChip>, scenario: String) {
         val fresh = GalleryViewerActions(row.context, GalleryDesign.palette(row.context, true).pageControls).apply {
             layoutDirection = row.layoutDirection
@@ -70,14 +110,29 @@ class GalleryViewerActionsIntegrationTest {
             fresh.measure(View.MeasureSpec.makeMeasureSpec(row.width, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
             fresh.layout(0, 0, fresh.measuredWidth, fresh.measuredHeight)
-            freshActions.forEach { assertLabelFits(fresh, it, "fresh $scenario") }
             val detail = "$scenario font=${row.resources.configuration.fontScale} direction=${row.layoutDirection} " +
                 "width=${row.width} freshRow=${fresh.height} restoredRow=${row.height} " +
-                "freshActions=${freshActions.map { it.height }} restoredActions=${actions.map { it.height }}"
-            assertEquals("Restored labelled row must match fresh height: $detail", fresh.height, row.height)
-            assertEquals("Restored content must match fresh height: $detail", fresh.getChildAt(0).height, row.getChildAt(0).height)
+                "freshActions=${freshActions.map { it.height }} restoredActions=${actions.map { it.height }} " +
+                actions.indices.joinToString("\n") { index ->
+                    "action[$index] fresh={${labelLayoutMetrics(freshActions[index])}} restored={${labelLayoutMetrics(actions[index])}}"
+                }
+            // Establish actual fit on BOTH paths before testing exact height parity.
+            // A height-only mismatch must not obscure clipped restored text.
+            actions.forEach { assertLabelFits(row, it, "restored $detail") }
+            freshActions.forEach { assertLabelFits(fresh, it, "fresh $detail") }
             actions.forEachIndexed { index, action ->
                 assertEquals("Same slot width is required for height comparison: $detail", freshActions[index].width, action.width)
+                assertEquals("Same font and padding are required for height comparison: $detail",
+                    labelMetricInputs(freshActions[index]), labelMetricInputs(action))
+                val freshText = checkNotNull(freshActions[index].layout)
+                val restoredText = checkNotNull(action.layout)
+                assertEquals("Same visible line widths are required for height comparison: $detail",
+                    (0 until freshText.lineCount).map { freshText.getLineMax(it) },
+                    (0 until restoredText.lineCount).map { restoredText.getLineMax(it) })
+            }
+            assertEquals("Restored labelled row must match fresh height after both fit: $detail", fresh.height, row.height)
+            assertEquals("Restored content must match fresh height: $detail", fresh.getChildAt(0).height, row.getChildAt(0).height)
+            actions.forEachIndexed { index, action ->
                 assertEquals("Restored ${action.text} must match fresh height: $detail", freshActions[index].height, action.height)
             }
         } finally { freshActions.forEach { it.close() } }
