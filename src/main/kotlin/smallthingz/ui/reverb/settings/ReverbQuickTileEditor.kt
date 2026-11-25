@@ -41,7 +41,7 @@ open class ReverbQuickTileEditor<T : Any>(
     private val cancel = ReverbSettingsActionView(context, environment, inputRoot, action = onCancel)
     private val save = ReverbSettingsActionView(context, environment, inputRoot, action = onSave)
     private var wheelView: View? = null
-    private val footer = NativeMergedActionLayout(context, listOf(cancel, save), environment.palette)
+    private val footer = NativeMergedActionLayout(context, listOf(cancel, save), environment.palette).asActionFooter(density = environment.textDensity.density)
     private val recipe get() = environment.appearance.quickTiles
 
     init {
@@ -84,6 +84,7 @@ open class ReverbQuickTileEditor<T : Any>(
         bindStatus(warning, warningText, next)
         bindStatus(message, messageText, next)
         footer.bindPalette(next.palette)
+        footer.asActionFooter(density = next.textDensity.density)
         cancel.bind(cancelText, cancelEnabled, next)
         save.bind(saveText, saveEnabled, next)
         if (densityChanged) requestLayout()
@@ -96,7 +97,7 @@ open class ReverbQuickTileEditor<T : Any>(
         val inner = (width - 2 * inset).coerceAtLeast(0)
         selector.view.measure(exact(inner), unspecified())
         footer.measure(exact(inner), unspecified())
-        var height = 2 * inset + selector.view.measuredHeight + gap + footer.measuredHeight
+        var height = inset + selector.view.measuredHeight + gap + footer.measuredHeight
         for (index in 1 until childCount - 1) {
             val child = getChildAt(index)
             if (child.visibility == GONE) continue
@@ -122,7 +123,7 @@ open class ReverbQuickTileEditor<T : Any>(
             place(child, inset, y)
             y += child.measuredHeight
         }
-        place(footer, inset, height - inset - footer.measuredHeight)
+        place(footer, inset, height - footer.measuredHeight)
     }
 
     private fun place(child: View, start: Int, top: Int) {

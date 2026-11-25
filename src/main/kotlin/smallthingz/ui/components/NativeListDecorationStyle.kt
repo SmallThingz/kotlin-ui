@@ -36,7 +36,8 @@ data class NativeRecordingPlayerLayout(
     val headingGlyphDp: Float = 17f,
     val headingGlyphGapDp: Float = 7f,
     val trimActionsTopGapDp: Float = 0f,
-    val trimActionsBottomPaddingDp: Float = 6f,
+    @Deprecated("Unused: Cancel/confirm footers always use the shared fixed 6dp spacing")
+    val trimActionsBottomPaddingDp: Float = NativeMergedActionLayout.ACTION_FOOTER_BOTTOM_PADDING_DP,
 )
 
 data class NativeAlertCardStyle(

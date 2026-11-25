@@ -1,6 +1,13 @@
 package smallthingz.ui.components
 
 import android.content.Intent
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import kotlin.math.roundToInt
+import smallthingz.ui.common.SegmentOption
+import smallthingz.ui.reverb.settings.ReverbQuickTileEditor
 import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
@@ -94,8 +101,13 @@ class NativeMergedActionLayoutIntegrationTest {
         } finally { buttons.forEach { it.close() } }
     }
 
+    @Suppress("DEPRECATION")
     @Test fun actualInlineRenameAndTrimShareGroupAndTrimReservesBottomSpace() = instrumentation.runOnMainSync {
-        val env = environment()
+        val base = environment()
+        // Legacy per-instance spacing cannot override the fixed shared footer policy.
+        val env = ReverbEnvironment.withTestAppearance(base.textDensity, base.sharedFontResolver, base.palette,
+            base.appearance.copy(listDecorations = base.appearance.listDecorations.copy(
+                recordingPlayer = base.appearance.listDecorations.recordingPlayer.copy(trimActionsBottomPaddingDp = 31f))))
         val runtime = NativeModalWindowRuntime(context)
         val root = FrameLayout(context)
         val rename = ReverbInlineRecordingRename(context, env, runtime.scope, root, "Name", "Cancel", "Save",
@@ -131,7 +143,14 @@ class NativeMergedActionLayoutIntegrationTest {
                 val trim = descendants(player).filterIsInstance<PlayerTrimButtons>().single()
                 assertEquals(1, descendants(trim).filterIsInstance<NativeMergedActionLayout>().size)
                 val column = trim.parent as ViewGroup
-                assertEquals(6, column.height - trim.bottom)
+                assertEquals(0, column.height - trim.bottom)
+                val trimFooter = descendants(trim).filterIsInstance<NativeMergedActionLayout>().single()
+                val renameFooter = descendants(rename).filterIsInstance<NativeMergedActionLayout>().single()
+                for (footer in listOf(trimFooter, renameFooter)) {
+                    assertTrue(footer.isActionFooter)
+                    assertEquals(6, footer.height - footer.actionSurface.bottom)
+                }
+                assertEquals(0, rename.height - renameFooter.bottom)
                 assertEquals(0, trim.top - fine.bottom)
                 descendants(trim).filterIsInstance<NativeMaterialButtonView>().forEach { assertTrue(it.height >= 48) }
             }
@@ -163,6 +182,8 @@ class NativeMergedActionLayoutIntegrationTest {
             assertTrue(actions is NativeMergedActionLayout)
             val row = actions as ReverbSheetActions
             measure(row, 160)
+            assertTrue(row.isActionFooter)
+            assertEquals(6, row.height - row.actionSurface.bottom)
             assertEquals(2, row.buttons.size)
             val views = row.buttons.map { it.accessibilitySemanticView }
             assertNotSame(views[0], views[1])
@@ -173,6 +194,8 @@ class NativeMergedActionLayoutIntegrationTest {
             assertTrue(views[0].isEnabled)
             tile.bind(env, canCancel = true, canConfirm = false)
             measure(tile.actions, 160)
+            assertTrue(tile.actions.isActionFooter)
+            assertEquals(6, tile.actions.height - tile.actions.actionSurface.bottom)
             assertEquals(2, descendants(tile.actions).filterIsInstance<NativeMaterialButtonView>().size)
             assertTrue(descendants(tile.actions).filterIsInstance<NativeMaterialButtonView>()[0].isEnabled)
             assertFalse(descendants(tile.actions).filterIsInstance<NativeMaterialButtonView>()[1].isEnabled)
@@ -248,6 +271,191 @@ class NativeMergedActionLayoutIntegrationTest {
                 try { rename.close(); runtime.close() } finally { activity.finish() }
             }
         }
+    }
+
+    @Test fun fixedFooterSpacingClipsPaintAndLeavesGenericGroupsUnchanged() = instrumentation.runOnMainSync {
+        val env = environment()
+        fun group() = NativeMergedActionLayout(context,
+            listOf(FooterAction(context), FooterAction(context)), env.palette)
+        val ordinary = group()
+        measure(ordinary, 300)
+        assertFalse(ordinary.isActionFooter)
+        assertEquals(0, ordinary.paddingBottom)
+        assertEquals(ordinary.actionSurface.height, ordinary.height)
+        val footer = group().asActionFooter()
+        measure(footer, 300)
+        assertEquals((6f * context.resources.displayMetrics.density).roundToInt(), footer.paddingBottom)
+        val surface = footer.actionSurface
+        for (density in listOf(1f, 1.25f, 2f)) {
+            footer.asActionFooter(density)
+            val gap = (6f * density).roundToInt()
+            for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
+                footer.layoutDirection = direction
+                assertEquals("RTL must actually resolve", direction, footer.layoutDirection)
+                for (width in listOf(100, 300)) {
+                    measure(footer, width)
+                    assertSame(surface, footer.actionSurface)
+                    assertEquals(gap, footer.height - surface.bottom)
+                    assertFalse(footer.containsPointerLayer(width / 2f, footer.height - 1f))
+                }
+            }
+            // A hard height limit clips natural targets and cannot paint/hit the reserved strip.
+            for (height in listOf(4, 30, 100)) {
+                footer.measure(View.MeasureSpec.makeMeasureSpec(100, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+                footer.layout(0, 0, footer.measuredWidth, footer.measuredHeight)
+                assertEquals(height, footer.height)
+                assertTrue(descendants(surface).filterIsInstance<FooterAction>().all { it.height >= 48 })
+                val bitmap = Bitmap.createBitmap(footer.width, footer.height, Bitmap.Config.ARGB_8888)
+                try {
+                    footer.draw(Canvas(bitmap))
+                    for (y in (height - gap).coerceAtLeast(0) until height) {
+                        assertEquals("Footer strip is outside the painted surface", 0, Color.alpha(bitmap.getPixel(50, y)))
+                        assertFalse(footer.containsPointerLayer(50f, y.toFloat()))
+                    }
+                    if (height > gap) assertTrue(Color.alpha(bitmap.getPixel(50, (height - gap) / 2)) > 0)
+                } finally { bitmap.recycle() }
+            }
+        }
+        measure(ordinary, 300)
+        assertEquals(0, ordinary.height - ordinary.actionSurface.bottom)
+    }
+
+    @Test fun sheetFooterOwnsVisualGapAndHostInsetsStaySeparate() = instrumentation.runOnMainSync {
+        val env = environment()
+        val style = env.appearance.modals.actionSheetStyle(env.textDensity, env.sharedFontResolver, env.palette)
+        for (isFooter in listOf(false, true)) {
+            val actions = NativeMergedActionLayout(context,
+                listOf(FooterAction(context), FooterAction(context)), env.palette)
+            if (isFooter) actions.asActionFooter(1f)
+            val content = NativeSheetContent(context, style, "Confirm", { null }, null, {})
+            content.setContent(FooterAction(context), actions)
+            measure(content, 300)
+            assertEquals(if (isFooter) 0 else style.recipe.bottomPaddingDp.roundToInt(), content.height - actions.bottom)
+            assertEquals(if (isFooter) 6 else 0, actions.height - actions.actionSurface.bottom)
+        }
+        for (inset in listOf(0, 24)) {
+            val footer = NativeMergedActionLayout(context,
+                listOf(FooterAction(context), FooterAction(context)), env.palette).asActionFooter(1f)
+            val host = FrameLayout(context).apply {
+                setPadding(0, 0, 0, inset)
+                addView(footer, FrameLayout.LayoutParams(-1, -2))
+            }
+            measure(host, 300)
+            assertEquals(inset, host.paddingBottom)
+            assertEquals(inset + 6, host.height - footer.top - footer.actionSurface.bottom)
+        }
+    }
+
+    @Test fun quickTileAddAndSaveUseFixedFooterWithoutLegacyBottomInset() = instrumentation.runOnMainSync {
+        val env = environment()
+        val root = FrameLayout(context)
+        val options = listOf(SegmentOption("one", "One"), SegmentOption("two", "Two"))
+        var callbacks = 0
+        val editor = object : ReverbQuickTileEditor<String>(context, env, options, "one", { root },
+            { callbacks++; true }, { callbacks++ }, { callbacks++ }) {
+            fun bindLabel(label: String) = bindInlineLayout(env, options, "one", true,
+                null, null, null, "Cancel", true, label, true)
+        }
+        try {
+            val footer = descendants(editor).filterIsInstance<NativeMergedActionLayout>().single()
+            for (label in listOf("Add", "Save")) {
+                editor.bindLabel(label)
+                for (width in listOf(220, 700)) {
+                    measure(editor, width)
+                    assertSame(footer, descendants(editor).filterIsInstance<NativeMergedActionLayout>().single())
+                    assertTrue(footer.isActionFooter)
+                    assertEquals(0, editor.height - footer.bottom)
+                    assertEquals(6, footer.height - footer.actionSurface.bottom)
+                    assertEquals(2, descendants(footer).filterIsInstance<NativeMaterialButtonView>().size)
+                }
+            }
+            assertEquals(0, callbacks)
+        } finally { editor.close() }
+    }
+
+    @Test fun permissionAllowDenyUsesFixedFooterAndRetainsConsentState() {
+        val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
+            NativeLargeFontPermissionActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        withRetiringTestActivity(activity) {
+            instrumentation.runOnMainSync { assertPermissionFooter(activity) }
+        }
+    }
+
+    private fun assertPermissionFooter(activity: android.app.Activity) {
+        assertEquals(1.8f, activity.resources.configuration.fontScale, .001f)
+        val density = activity.resources.displayMetrics.density
+        fun dp(value: Int) = (value * density).roundToInt()
+        val allowLabel = "Zugriff auf die ausgewählten Inhalte erlauben"
+        val denyLabel = "Zugriff auf die ausgewählten Inhalte verweigern"
+        for (dark in listOf(false, true)) {
+            var callbacks = 0
+            val editor = android.widget.EditText(activity).apply { setText("retained"); setSelection(3) }
+            val prompt = NativePermissionDialog(activity, NativeColorScheme.fallback(dark), null, "Lesegerät",
+                "Zugriff auf die ausgewählten Inhalte zulassen?", denyLabel, allowLabel, editor,
+                onDeny = { callbacks++ }, onAllow = { callbacks++ }, onCancel = { callbacks++ })
+            var failure: Throwable? = null
+            try {
+                // Construct real dialog content, but never show/admit a consent window in this geometry test.
+                val dialog = NativePermissionDialog::class.java.getDeclaredField("dialog")
+                    .apply { isAccessible = true }.get(prompt) as android.app.Dialog
+                val surface = dialog.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
+                val footer = descendants(surface).filterIsInstance<NativeMergedActionLayout>().single()
+                val viewport = descendants(surface).filterIsInstance<android.widget.ScrollView>().last()
+                val panel = viewport.parent as View
+                val buttons = descendants(footer).filterIsInstance<NativeMaterialButtonView>()
+                assertEquals(listOf(allowLabel, denyLabel), buttons.map { it.label.getText() })
+                assertNotSame(buttons[0].mergedRowAccessibility.roleView, buttons[1].mergedRowAccessibility.roleView)
+                assertTrue(footer.isActionFooter)
+                for (button in buttons) {
+                    val recipe = NativeMaterialButtonView::class.java.getDeclaredField("recipe")
+                        .apply { isAccessible = true }.get(button) as NativeButtonRecipe
+                    assertEquals(NativeUiAppearance.Default.buttons.tonal.enabledPaint, recipe.enabledPaint)
+                    assertEquals(NativeUiAppearance.Default.buttons.tonal.disabledPaint, recipe.disabledPaint)
+                    assertFalse(button.performClick())
+                }
+                for ((width, height) in listOf(180 to 140, 360 to 700)) {
+                    viewport.scrollTo(0, 0)
+                    measure(surface, dp(width), dp(height))
+                    assertTrue(surface.height <= dp(height))
+                    assertTrue(viewport.height > 0)
+                    assertEquals(0, panel.height - viewport.bottom)
+                    assertEquals(dp(6), footer.height - footer.actionSurface.bottom)
+                    for (button in buttons) {
+                        assertTrue(button.width >= dp(48))
+                        assertTrue(button.height >= dp(56))
+                        val paragraph = checkNotNull(button.label.currentParagraph)
+                        assertFalse(paragraph.didExceedMaxLines)
+                        assertEquals(button.label.getText().length, paragraph.getLineEnd(paragraph.lineCount - 1))
+                        assertTrue(paragraph.height <= button.label.height + 1f)
+                    }
+                    viewport.scrollTo(0, viewport.getChildAt(0).height)
+                    assertFalse(viewport.canScrollVertically(1))
+                    assertSame(viewport.getChildAt(0), footer.parent)
+                    val paintedBottom = viewport.getChildAt(0).top + footer.top + footer.actionSurface.bottom - viewport.scrollY
+                    assertEquals("Only the fixed gap remains at the scrolled end", dp(6), viewport.height - paintedBottom)
+                }
+                prompt.setAllowEnabled(false)
+                prompt.setBusy(true)
+                assertFalse(buttons[0].isEnabled || buttons[1].isEnabled)
+                prompt.setBusy(false)
+                assertFalse(buttons[0].isEnabled)
+                assertTrue(buttons[1].isEnabled)
+                assertEquals("retained", editor.text.toString())
+                assertEquals(3, editor.selectionStart)
+                assertEquals(0, callbacks)
+            } catch (error: Throwable) { failure = error }
+            finally { failure = smallthingz.ui.util.closePreservingPrimaryFailure(failure, prompt::dismiss) }
+            failure?.let { throw it }
+            assertEquals(0, callbacks)
+        }
+    }
+
+    private class FooterAction(context: Context) : View(context), NativeMergedActionChild {
+        override val actionMinimumWidthPx = 48
+        override fun joinActionSurface() = Unit
+        override fun onMeasure(w: Int, h: Int) { setMeasuredDimension(resolveSize(90, w), resolveSize(48, h)) }
+        override fun onDraw(canvas: Canvas) { canvas.drawColor(Color.RED) }
     }
 
     private fun measure(view: View, width: Int, height: Int? = null) {

@@ -232,7 +232,7 @@ private class PlayerColumn(context: Context, private var environment: ReverbEnvi
         val bounded = MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED
         val maxHeight = MeasureSpec.getSize(heightMeasureSpec)
         val fineSeekStyle = environment.appearance.springFineSeek
-        var used = if (buttons != null) dp(layoutStyle.trimActionsBottomPaddingDp) else 0
+        var used = 0 // The trim action footer owns its visual bottom space.
         for (i in 0 until childCount) {
             val child = getChildAt(i)
             used += gapBefore(child)

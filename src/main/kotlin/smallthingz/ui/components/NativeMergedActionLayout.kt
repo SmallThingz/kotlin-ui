@@ -1,6 +1,7 @@
 package smallthingz.ui.components
 
 import android.content.Context
+import android.content.res.Configuration
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
@@ -33,6 +34,34 @@ open class NativeMergedActionLayout(
         cornerRadiusDp: Float = 14f,
     ) : this(context, actions, palette, cornerRadiusDp, false)
 
+    companion object {
+        /** Visual space below a Cancel/confirm footer, excluding all host/window insets. */
+        const val ACTION_FOOTER_BOTTOM_PADDING_DP = 6f
+    }
+
+    var isActionFooter: Boolean = false
+        private set
+
+    /** Fixed visual spacing for Cancel/confirm; ordinary merged/icon groups stay unchanged. */
+    fun asActionFooter(): NativeMergedActionLayout = asActionFooter(resources.displayMetrics.density)
+
+    /** Use the same display density as the library's retained controls; never font scale. */
+    internal fun asActionFooter(density: Float): NativeMergedActionLayout {
+        require(density.isFinite() && density > 0f)
+        if (!isActionFooter) {
+            isActionFooter = true
+            requestLayout()
+        }
+        val pixels = (ACTION_FOOTER_BOTTOM_PADDING_DP * density).roundToInt()
+        if (paddingBottom != pixels) setPadding(paddingLeft, paddingTop, paddingRight, pixels)
+        return this
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (isActionFooter) asActionFooter()
+    }
+
     private val surface = mergedButtonGroup(context, cornerRadiusDp, actions.onEach {
         (it as? NativeMergedActionChild)?.joinActionSurface()
     })
@@ -54,7 +83,7 @@ open class NativeMergedActionLayout(
     }
 
     override fun containsPointerLayer(x: Float, y: Float): Boolean =
-        x >= 0f && y >= 0f && x < width && y < height &&
+        x >= 0f && y >= 0f && x < width && y < height - paddingBottom &&
             surface.containsVisualPoint(x - surface.left, y - surface.top)
 
     fun bindPalette(palette: NativeColorScheme) {
@@ -66,7 +95,7 @@ open class NativeMergedActionLayout(
         val boundedWidth = MeasureSpec.getMode(w) != MeasureSpec.UNSPECIFIED
         val width = MeasureSpec.getSize(w)
         val boundedHeight = MeasureSpec.getMode(h) != MeasureSpec.UNSPECIFIED
-        val heightLimit = MeasureSpec.getSize(h)
+        val heightLimit = (MeasureSpec.getSize(h) - paddingBottom).coerceAtLeast(0)
         var totalWidth = 0
         var minimumWidth = 0
         var widest = 0
@@ -148,12 +177,13 @@ open class NativeMergedActionLayout(
         }
         surface.measure(exact(groupWidth), unspecified())
         setMeasuredDimension(resolveSize(if (boundedWidth) width else groupWidth, w),
-            resolveSize(surface.measuredHeight, h))
+            resolveSize(surface.measuredHeight + paddingBottom, h))
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         val x = if (layoutDirection == LAYOUT_DIRECTION_RTL) 0 else width - surface.measuredWidth
-        val y = ((height - surface.measuredHeight) / 2).coerceAtLeast(0)
+        val available = height - paddingBottom - surface.measuredHeight
+        val y = (if (isActionFooter) available else available / 2).coerceAtLeast(0)
         surface.layout(x, y, x + surface.measuredWidth, y + surface.measuredHeight)
     }
 }

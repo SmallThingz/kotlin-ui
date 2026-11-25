@@ -47,13 +47,15 @@ class ReverbRequestPanel(
     private val body=LinearLayout(context).apply {
         orientation=LinearLayout.VERTICAL
         setPaddingRelative(dp(recipe.horizontalPaddingDp),dp(recipe.topPaddingDp),
-            dp(recipe.horizontalPaddingDp),dp(recipe.bottomPaddingDp))
+            dp(recipe.horizontalPaddingDp),if (confirm == null) dp(recipe.bottomPaddingDp) else 0)
         addView(text(appName,recipe.titleRole,true))
         addView(text(title,recipe.headlineRole).apply {isAccessibilityHeading=true},
             LinearLayout.LayoutParams(-1,-2).apply {topMargin=dp(recipe.headingGapDp)})
         addView(text(message,recipe.summaryRole),LinearLayout.LayoutParams(-1,-2).apply {topMargin=dp(recipe.headingGapDp)})
         addView(text(hint,recipe.detailRole,true),LinearLayout.LayoutParams(-1,-2).apply {topMargin=dp(recipe.summaryGapDp)})
-        addView(NativeMergedActionLayout(context, listOfNotNull(dismiss, confirm), theme.palette),
+        addView(NativeMergedActionLayout(context, listOfNotNull(dismiss, confirm), theme.palette).apply {
+            if (confirm != null) asActionFooter(density = theme.density.density)
+        },
             LinearLayout.LayoutParams(-1,-2).apply {topMargin=dp(recipe.headingGapDp)})
     }
     val view:View=object:NativeFloatingPanelSurface(context,theme.density.density,recipe,theme.palette) {

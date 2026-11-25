@@ -86,6 +86,7 @@ class PlayerTrimButtons(
     private val save = NativeMaterialButtonView(context, recipes.save.button,
         environment.textDensity, environment.sharedFontResolver, input, saveClick)
     private val group = NativeMergedActionLayout(context, listOf(cancel, save), environment.palette, recipes.cornerRadiusDp)
+        .asActionFooter(density = environment.textDensity.density)
 
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -115,6 +116,7 @@ class PlayerTrimButtons(
             cancel.bindTypography(value.textDensity, value.sharedFontResolver)
             save.bindTypography(value.textDensity, value.sharedFontResolver)
             group.bindPalette(value.palette)
+            group.asActionFooter(density = value.textDensity.density)
         }
         val density = value.textDensity.density
         if (glyphDensity != density) {
