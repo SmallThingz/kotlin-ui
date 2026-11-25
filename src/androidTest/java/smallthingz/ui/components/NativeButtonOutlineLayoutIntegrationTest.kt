@@ -180,7 +180,8 @@ class NativeButtonOutlineLayoutIntegrationTest {
                 } else {
                     assertTrue(glyph.bounds.right < f.button.label.left)
                 }
-                val role = checkNotNull(f.button.getChildAt(1).createAccessibilityNodeInfo())
+                // Standalone accessibility publishes the role on the public button node.
+                val role = checkNotNull(f.button.createAccessibilityNodeInfo())
                 try { assertEquals("android.widget.Button", role.className.toString()) }
                 finally { role.recycle() }
                 f.button.isFocusableInTouchMode = true
