@@ -5,6 +5,7 @@ import smallthingz.ui.components.NativeChoiceColor
 import smallthingz.ui.components.NativeTextRole
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeTextStyle
+import smallthingz.ui.components.NativeMaterialButtonStyle
 import smallthingz.ui.components.nativeTextStyle
 import smallthingz.ui.reverb.ReverbDesign
 import smallthingz.ui.reverb.reverbActionSheetStyle
@@ -18,6 +19,19 @@ object GalleryDesign {
     val appearance = ReverbDesign.appearance
 
     val actionTextStyle = appearance.typography[NativeTypographyRole.LABEL_LARGE]
+    val libraryHeadingTextStyle = appearance.typography[NativeTypographyRole.TITLE_MEDIUM]
+    val libraryHeadingButtonStyle = NativeMaterialButtonStyle(
+        horizontalPaddingDp = appearance.toolbars.centeredPaddingDp.toInt(),
+        verticalPaddingDp = 2, minimumWidthDp = 48, minimumHeightDp = 48,
+        iconSizeDp = appearance.toolbars.leadingTitleGlyphDp.toInt(),
+        iconGapDp = appearance.toolbars.leadingTitleGapDp.toInt(),
+    )
+    val libraryActionButtonStyle = NativeMaterialButtonStyle(
+        horizontalPaddingDp = 0, verticalPaddingDp = 0,
+        minimumWidthDp = 48, minimumHeightDp = 48,
+        iconSizeDp = appearance.toolbars.action.glyphDp.toInt(),
+        radiusDp = appearance.toolbars.action.radiusDp, showLabel = false,
+    )
     val dialogChoiceTextStyle = appearance.typography[appearance.modals.floating.titleRole]
     val settingsTitleTextStyle = NativeTypography(mapOf(
         NativeTypographyRole.TITLE_MEDIUM to appearance.settingsSelectors.sectionTitle,
