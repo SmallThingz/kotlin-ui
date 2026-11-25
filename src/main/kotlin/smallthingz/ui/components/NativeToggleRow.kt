@@ -1,6 +1,7 @@
 package smallthingz.ui.components
 
 import android.content.Context
+import android.content.res.Configuration
 import android.view.View
 import android.widget.TextView
 import androidx.core.view.ViewCompat
@@ -11,16 +12,27 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /** Compact toggle with an optional description inside the same actionable and accessible row. */
-open class NativeToggleRow(
+open class NativeToggleRow internal constructor(
     context: Context,
     private val title: View,
     private val description: View?,
     private val switch: NativeMaterialSwitchView,
-    inputRoot: (() -> View?)? = null,
+    inputRoot: (() -> View?)?,
+    private val geometry: Geometry,
     private var onChanged: ((Boolean) -> Unit)?,
 ) : NativeControlRow(context, NativeMergedRowRole.SWITCH, inputRoot ?: { null }), AutoCloseable {
+    constructor(context: Context, title: View, description: View?, switch: NativeMaterialSwitchView,
+        inputRoot: (() -> View?)? = null, onChanged: ((Boolean) -> Unit)?,
+    ) : this(context, title, description, switch, inputRoot, Geometry.DEFAULT, onChanged)
+
+    internal enum class Geometry(val minHeightDp: Int, val horizontalInsetDp: Int, val verticalInsetDp: Int) {
+        DEFAULT(64, 14, 8),
+        COMPACT(48, 12, 4),
+    }
+
     private val text = listOfNotNull(title, description)
     private var density = resources.displayMetrics.density
+    private var horizontalInset = 0
     private var textHeight = 0
     private var textWidth = 0
     private var gap = 0
@@ -85,27 +97,49 @@ open class NativeToggleRow(
         switch.setState(checked, enabled)
     }
 
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (geometry == Geometry.COMPACT) {
+            density = resources.displayMetrics.density
+            requestLayout()
+        }
+    }
+
     override fun onMeasure(widthSpec: Int, heightSpec: Int) {
+        val compact = geometry == Geometry.COMPACT
         val width = MeasureSpec.getSize(widthSpec)
-        val inner = (width - 2 * dp(14)).coerceAtLeast(0)
+        val bounded = !compact || MeasureSpec.getMode(widthSpec) != MeasureSpec.UNSPECIFIED
+        horizontalInset = dp(geometry.horizontalInsetDp)
+        if (compact && bounded) horizontalInset = min(horizontalInset, width / 2)
+        val inner = (width - 2 * horizontalInset).coerceAtLeast(0)
         val unspecified = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
-        switch.measure(MeasureSpec.makeMeasureSpec(inner, MeasureSpec.AT_MOST), unspecified)
-        gap = min(dp(12), (inner - switch.measuredWidth).coerceAtLeast(0))
-        val available = (inner - switch.measuredWidth - gap).coerceAtLeast(0)
+        switch.measure(if (bounded) MeasureSpec.makeMeasureSpec(inner, MeasureSpec.AT_MOST) else unspecified,
+            unspecified)
+        val remaining = if (bounded) (inner - switch.measuredWidth).coerceAtLeast(0) else Int.MAX_VALUE
+        // When the action is narrow, let the label wrap before the gap consumes its entire width.
+        gap = min(dp(12), if (compact) remaining / 2 else remaining)
+        val available = remaining - gap
         leadingWidth = leadingIcon?.let {
             val size = min(dp(24), available)
             val spec = MeasureSpec.makeMeasureSpec(size, MeasureSpec.EXACTLY)
             it.measure(spec, spec)
             min(available, size + dp(12))
         } ?: 0
-        textWidth = available - leadingWidth
-        val textSpec = MeasureSpec.makeMeasureSpec(textWidth, MeasureSpec.EXACTLY)
+        val textLimit = available - leadingWidth
+        val textSpec = when {
+            !bounded -> unspecified
+            compact -> MeasureSpec.makeMeasureSpec(textLimit, MeasureSpec.AT_MOST)
+            else -> MeasureSpec.makeMeasureSpec(textLimit, MeasureSpec.EXACTLY)
+        }
         title.measure(textSpec, unspecified)
         val visibleDescription = description?.takeIf { it.visibility != GONE }
         visibleDescription?.measure(textSpec, unspecified)
         textHeight = title.measuredHeight + (visibleDescription?.let { dp(2) + it.measuredHeight } ?: 0)
-        val height = max(dp(64), 2 * dp(8) + max(textHeight, switch.measuredHeight))
-        setMeasuredDimension(resolveSize(width, widthSpec), resolveSize(height, heightSpec))
+        textWidth = if (compact) max(title.measuredWidth, visibleDescription?.measuredWidth ?: 0) else textLimit
+        val desiredWidth = if (compact) 2 * horizontalInset + leadingWidth + textWidth + gap + switch.measuredWidth
+            else width
+        val height = max(dp(geometry.minHeightDp), 2 * dp(geometry.verticalInsetDp) + max(textHeight, switch.measuredHeight))
+        setMeasuredDimension(resolveSize(desiredWidth, widthSpec), resolveSize(height, heightSpec))
         measureRowRole(measuredWidth, measuredHeight)
     }
 
@@ -114,11 +148,11 @@ open class NativeToggleRow(
             val x = if (layoutDirection == LAYOUT_DIRECTION_RTL) width - start - child.measuredWidth else start
             child.layout(x, y, x + child.measuredWidth, y + child.measuredHeight)
         }
-        val inset = dp(8)
+        val inset = dp(geometry.verticalInsetDp)
         fun center(childHeight: Int) = inset + ((height - 2 * inset - childHeight) / 2f).roundToInt()
         val textY = center(textHeight)
-        leadingIcon?.let { place(it, dp(14), center(it.measuredHeight)) }
-        val textStart = dp(14) + leadingWidth
+        leadingIcon?.let { place(it, horizontalInset, center(it.measuredHeight)) }
+        val textStart = horizontalInset + leadingWidth
         place(title, textStart, textY)
         description?.takeIf { it.visibility != GONE }?.let { place(it, textStart, textY + title.measuredHeight + dp(2)) }
         place(switch, textStart + textWidth + gap, center(switch.measuredHeight))
