@@ -219,7 +219,9 @@ internal class SettingsThemePresentation(
     titlePaintedSurface: ((View) -> Long)?,
 ) : NativeThemePresentation,
     NativeSegmentedPresentation by GroupedSegmentedPresentation(context, style.segmented.surfaceRadiusDp, onPaintedSurfaceChanged) {
-    override val title = ParagraphView(context, style.sectionTitle, textDensity, fontResolver, palette.content)
+    override val title = ParagraphView(context, style.sectionTitle, textDensity, fontResolver, palette.content).apply {
+        isAccessibilityHeading = true
+    }
 
     init {
         if (titlePaintedSurface != null) title.paintedTextSurface = LongSupplier { titlePaintedSurface(title) }
