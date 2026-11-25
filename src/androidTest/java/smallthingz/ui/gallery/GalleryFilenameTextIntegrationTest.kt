@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Rect
 import android.icu.text.BreakIterator
 import android.os.Build
 import android.text.Layout
@@ -65,13 +66,24 @@ class GalleryFilenameTextIntegrationTest {
 
     private fun diagnostics(view: NativeText): String {
         val layout = checkNotNull(view.layout)
-        return "font=${view.resources.configuration.fontScale} size=${view.textSize} " +
+        val value = view.text.toString()
+        val ink = Rect()
+        val bounds = if (Build.VERSION.SDK_INT >= 35)
+            "${view.useBoundsForWidth}/${layout.useBoundsForWidth}" else "unavailable"
+        return "sdk=${Build.VERSION.SDK_INT} target=${view.context.applicationInfo.targetSdkVersion} " +
+            "break=${view.breakStrategy} hyphen=${view.hyphenationFrequency} bounds(view/layout)=$bounds " +
+            "tracking=${view.letterSpacing} font=${view.resources.configuration.fontScale} size=${view.textSize} " +
             "view=${view.width}x${view.height} layout=${layout.width}x${layout.height} " +
             "padding=${view.compoundPaddingLeft},${view.compoundPaddingTop}," +
             "${view.compoundPaddingRight},${view.compoundPaddingBottom} " +
             (0 until layout.lineCount).joinToString { line ->
-                "$line:${layout.getLineStart(line)}..${layout.getLineEnd(line)} " +
-                    "visible=${layout.getLineMax(line)} text=${view.text.subSequence(layout.getLineStart(line), layout.getLineEnd(line))}"
+                val start = layout.getLineStart(line)
+                val end = layout.getLineEnd(line)
+                view.paint.getTextBounds(value, start, end, ink)
+                "$line:$start..$end visible=${layout.getLineMax(line)} " +
+                    "advance=${view.paint.measureText(value, start, end)} rawInk=$ink " +
+                    "left=${layout.getLineLeft(line)} right=${layout.getLineRight(line)} " +
+                    "text=${value.substring(start, end)}"
             }
     }
 

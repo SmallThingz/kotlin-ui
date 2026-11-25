@@ -3,6 +3,7 @@ package smallthingz.ui.gallery
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.text.Layout
 import android.text.Spannable
 import android.text.Spanned
 import android.text.TextUtils
@@ -39,6 +40,8 @@ class GalleryFilenameText(
         setSingleLine(false)
         ellipsize = null
         setTextIsSelectable(true)
+        // Filenames use local native wrapping, including the overwide-suffix fallback.
+        breakStrategy = Layout.BREAK_STRATEGY_SIMPLE
     }
 
     fun bindName(name: String) {
