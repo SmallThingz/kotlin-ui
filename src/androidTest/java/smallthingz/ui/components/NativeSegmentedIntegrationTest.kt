@@ -14,6 +14,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.TextView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
@@ -435,6 +436,12 @@ class NativeSegmentedIntegrationTest {
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
             chip.layout(0, 0, chip.measuredWidth, chip.measuredHeight)
         }
+        fun diagnostic(chip: NativeChip): String {
+            val buffer = chip.text as? Spanned
+            val spans = buffer?.getSpans(0, buffer.length, LineHeightSpan::class.java)?.size ?: 0
+            return "requested=${chip.isLayoutRequested} spans=$spans textHeight=${chip.layout?.height} viewHeight=${chip.height}"
+        }
+        var transition = "initial"
         fun assertLabel(chip: NativeChip) {
             assertEquals(width, chip.width)
             assertEquals("Choice", chip.text.toString())
@@ -443,7 +450,8 @@ class NativeSegmentedIntegrationTest {
             assertEquals(1, text.lineCount)
             assertEquals(chip.text.length, text.getLineEnd(0))
             assertEquals(0, text.getEllipsisCount(0))
-            assertEquals("Requested leading must survive text replacement", expectedLineHeight, text.height)
+            assertEquals("Requested leading must survive text replacement: $transition afterMeasure=${diagnostic(chip)}",
+                expectedLineHeight, text.height)
             assertTrue(text.height > chip.paint.fontMetricsInt.descent - chip.paint.fontMetricsInt.ascent)
             assertTrue(text.height <= chip.height - chip.compoundPaddingTop - chip.compoundPaddingBottom)
             assertTrue(text.getLineMax(0) <= chip.width - chip.compoundPaddingLeft - chip.compoundPaddingRight + .5f)
@@ -463,7 +471,9 @@ class NativeSegmentedIntegrationTest {
                 // before measurement installs the successor buffer's owned span.
                 retained.text = ""
                 measure(retained)
+                val before = diagnostic(retained)
                 retained.text = "Choice"
+                transition = "beforeAssign=[$before] afterAssign=[${diagnostic(retained)}]"
                 measure(retained)
                 assertLabel(retained)
                 val actual = checkNotNull(retained.layout)
@@ -475,6 +485,86 @@ class NativeSegmentedIntegrationTest {
                 assertEquals(fresh.height, retained.height)
             }
         } finally { retained.close(); fresh.close() }
+    }
+
+    @Test fun nativeTextReplacementReflowsOwnedLineHeightAtUnchangedWidth() = main {
+        assertRetainedOwnerLineHeight { context, style -> NativeText(context, palette, style) }
+    }
+
+    @Test fun nativeTextFieldReplacementReflowsOwnedLineHeightAtUnchangedWidth() = main {
+        assertRetainedOwnerLineHeight { context, style ->
+            NativeTextField(context, palette, NativeTextFieldStyle(textStyle = style)).apply { setSingleLine(false) }
+        }
+    }
+
+    private fun assertRetainedOwnerLineHeight(factory: (android.content.Context, NativeTextStyle) -> TextView) {
+        val base = InstrumentationRegistry.getInstrumentation().targetContext
+        val context = base.createConfigurationContext(Configuration(base.resources.configuration).apply { fontScale = 1f })
+        val density = context.resources.displayMetrics.density
+        val width = (240 * density).roundToInt()
+        val expectedHeight = kotlin.math.ceil(80f * density).toInt()
+        val style = NativeTextStyle(sizeSp = 14f, lineHeightSp = 80f, includeFontPadding = false,
+            lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None))
+        fun create() = factory(context, style).apply {
+            layoutParams = FrameLayout.LayoutParams(width, ViewGroup.LayoutParams.WRAP_CONTENT)
+            maxLines = Int.MAX_VALUE
+            ellipsize = null
+            setText("Choice")
+        }
+        fun measure(view: TextView) {
+            view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+            view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+        }
+        fun diagnostic(view: TextView): String {
+            val buffer = view.text as? Spanned
+            val spans = buffer?.getSpans(0, buffer.length, LineHeightSpan::class.java)?.size ?: 0
+            return "requested=${view.isLayoutRequested} spans=$spans textHeight=${view.layout?.height} viewHeight=${view.height}"
+        }
+        fun assertLabel(view: TextView, detail: String) {
+            assertEquals(width, view.width)
+            assertEquals("Choice", view.text.toString())
+            val layout = checkNotNull(view.layout)
+            assertTrue(layout is android.text.DynamicLayout)
+            assertEquals(1, layout.lineCount)
+            assertEquals(view.text.length, layout.getLineEnd(0))
+            assertEquals(0, layout.getEllipsisCount(0))
+            assertEquals("${view.javaClass.simpleName}: $detail afterMeasure=[${diagnostic(view)}]", expectedHeight, layout.height)
+            assertTrue(layout.height <= view.height - view.compoundPaddingTop - view.compoundPaddingBottom)
+            assertTrue(layout.getLineMax(0) <= view.width - view.compoundPaddingLeft - view.compoundPaddingRight + .5f)
+            val buffer = view.text as Spanned
+            val span = buffer.getSpans(0, buffer.length, LineHeightSpan::class.java)
+            assertEquals(1, span.size)
+            assertEquals(0, buffer.getSpanStart(span.single()))
+            assertEquals(buffer.length, buffer.getSpanEnd(span.single()))
+        }
+        val fresh = create()
+        val retained = create()
+        measure(fresh); measure(retained)
+        assertLabel(fresh, "fresh"); assertLabel(retained, "initial")
+        repeat(2) {
+            retained.setText("")
+            measure(retained)
+            val before = diagnostic(retained)
+            retained.setText("Choice")
+            val detail = "beforeAssign=[$before] afterAssign=[${diagnostic(retained)}]"
+            assertTrue("Styled text replacement must schedule measurement: $detail", retained.isLayoutRequested)
+            val editable = (retained as? NativeTextField)?.text
+            (retained as? NativeTextField)?.setSelection(2)
+            measure(retained)
+            assertLabel(retained, detail)
+            val expected = checkNotNull(fresh.layout)
+            val actual = checkNotNull(retained.layout)
+            assertEquals(expected.getLineAscent(0), actual.getLineAscent(0))
+            assertEquals(expected.getLineDescent(0), actual.getLineDescent(0))
+            assertEquals(fresh.baseline, retained.baseline)
+            assertEquals(fresh.height, retained.height)
+            if (retained is NativeTextField) {
+                assertSame("Measurement must preserve the current Editable", editable, retained.text)
+                assertEquals(2, retained.selectionStart)
+                assertEquals(2, retained.selectionEnd)
+            }
+        }
     }
 
     @Test fun defaultSelectedPaintContrastsAndExplicitOverrideAndUnchangedDrawableSurvive() = main {

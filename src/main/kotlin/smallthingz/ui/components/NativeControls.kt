@@ -207,6 +207,10 @@ open class NativeText(
         super.onConfigurationChanged(newConfig)
         refreshMetrics(force = true)
     }
+    override fun onTextChanged(text: CharSequence?, start: Int, lengthBefore: Int, lengthAfter: Int) {
+        super.onTextChanged(text, start, lengthBefore, lengthAfter)
+        requestComponentLineHeightLayout()
+    }
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         refreshMetrics()
         refreshComponentLineHeight()
@@ -426,6 +430,10 @@ open class NativeTextField(
         super.onConfigurationChanged(newConfig)
         refreshMetrics(force = true)
         placeholderRenderer?.onConfigurationChanged(newConfig)
+    }
+    override fun onTextChanged(text: CharSequence?, start: Int, lengthBefore: Int, lengthAfter: Int) {
+        super.onTextChanged(text, start, lengthBefore, lengthAfter)
+        requestComponentLineHeightLayout()
     }
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         refreshMetrics()
