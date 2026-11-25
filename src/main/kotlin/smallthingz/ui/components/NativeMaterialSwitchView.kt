@@ -30,7 +30,6 @@ import smallthingz.ui.graphics.ViewGrain
 import smallthingz.ui.graphics.bindGrainLayer
 import smallthingz.ui.graphics.compositeOver
 import smallthingz.ui.graphics.toArgb
-import kotlin.math.ceil
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -180,7 +179,7 @@ class NativeMaterialSwitchView(
         val density = resources.displayMetrics.density
         trackWidth = (52f * density).roundToInt()
         trackHeight = (32f * density).roundToInt()
-        borderWidth = min(ceil(2f * density), ceil(min(trackWidth, trackHeight) / 2f))
+        borderWidth = min(DEFAULT_OUTLINE_WIDTH_DP * density, min(trackWidth, trackHeight) / 2f)
         setMeasuredDimension(
             resolveSize(trackWidth, widthMeasureSpec),
             resolveSize(trackHeight, heightMeasureSpec),
@@ -328,6 +327,8 @@ class NativeMaterialSwitchView(
     }
 
     private companion object {
+        // Shared thin geometry for palettes without an explicit surface-preset outline.
+        const val DEFAULT_OUTLINE_WIDTH_DP = 1f
         const val PAINT_FLAGS = Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG
     }
 }

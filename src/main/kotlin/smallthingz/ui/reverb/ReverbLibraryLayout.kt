@@ -9,7 +9,10 @@ data class ReverbLibraryInsets(val left: Int = 0, val right: Int = 0, val bottom
 
 /** Library viewport geometry, overlay slots and gesture distances. */
 object ReverbLibraryLayout {
+    /** Legacy factory default retained for callers without a window palette. */
     val overscrollGlowColor: Int get() = 0xff666666.toInt()
+
+    fun overscrollGlowColor(palette: ReverbPalette): Int = palette.muted
 
     fun headerHeightPx(density: Float) = ReverbDesign.appearance.toolbars.compactHeightPx(density)
     fun horizontalOverflowPx(density: Float) = px(30, density)

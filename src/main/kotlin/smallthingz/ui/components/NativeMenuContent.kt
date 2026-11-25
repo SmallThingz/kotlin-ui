@@ -68,6 +68,7 @@ internal class NativeMenuContent<I>(
             override suspend fun preFling(availableY: Float) = 0f
             override suspend fun postFling(consumedY: Float, availableY: Float) = 0f
         },
+        glowColor = palette.muted,
     )
 
     init {
@@ -78,6 +79,7 @@ internal class NativeMenuContent<I>(
 
     fun <T> bind(content: NativeMenuChoices<T>, palette: NativeMenuColors, select: (T) -> Unit) {
         bindFill(palette.raised)
+        viewport.setGlowColor(palette.muted)
         bindGrain(palette.grainIntensity)
         column.bind(content, palette, select)
         requestLayout()
@@ -87,6 +89,7 @@ internal class NativeMenuContent<I>(
     /** Released Incidents/Library use default12dp horizontal/zero vertical item padding. */
     fun bindActions(actions: List<NativeMenuAction<I>>, palette: NativeMenuColors, background: Int = palette.surfaceContainerHigh) {
         bindFill(background)
+        viewport.setGlowColor(palette.muted)
         bindGrain(palette.grainIntensity)
         column.bindActions(actions, palette)
         requestLayout()

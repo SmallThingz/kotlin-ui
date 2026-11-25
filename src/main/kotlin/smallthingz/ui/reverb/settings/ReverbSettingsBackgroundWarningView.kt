@@ -4,6 +4,7 @@ import android.content.Context
 import android.view.View
 import android.view.ViewGroup
 import smallthingz.ui.R
+import smallthingz.ui.components.DEFAULT_SETTINGS_SECTION_HORIZONTAL_INSET_DP
 import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.exact
 import smallthingz.ui.components.unspecified
@@ -84,12 +85,12 @@ class ReverbSettingsBackgroundWarningView(
 
     override fun onMeasure(w: Int, h: Int) {
         val width = MeasureSpec.getSize(w)
-        group.measure(exact((width - 2 * dp(16)).coerceAtLeast(0)), unspecified())
+        group.measure(exact((width - 2 * dp(DEFAULT_SETTINGS_SECTION_HORIZONTAL_INSET_DP)).coerceAtLeast(0)), unspecified())
         setMeasuredDimension(resolveSize(width, w), resolveSize(group.measuredHeight + 2 * dp(12), h))
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        group.layout(dp(16), dp(12), width - dp(16), dp(12) + group.measuredHeight)
+        group.layout(dp(DEFAULT_SETTINGS_SECTION_HORIZONTAL_INSET_DP), dp(12), width - dp(DEFAULT_SETTINGS_SECTION_HORIZONTAL_INSET_DP), dp(12) + group.measuredHeight)
     }
 
     override fun close() {

@@ -15,6 +15,7 @@ import smallthingz.ui.geometry.Size
 import smallthingz.ui.geometry.roundedGroupContains
 import smallthingz.ui.reverb.ReverbAppFeedbackHostView
 import smallthingz.ui.reverb.ReverbEnvironment
+import smallthingz.ui.reverb.ReverbPalette
 import smallthingz.ui.reverb.ReverbTextRole
 import smallthingz.ui.runtime.MonotonicFrameClock
 import smallthingz.ui.text.view.NativePlainTextViewGeometry
@@ -53,7 +54,10 @@ class ReverbOnboardingScreenLayout(private val density: Density) {
     companion object {
         private const val FEEDBACK_HORIZONTAL_DP = 18
         private const val FEEDBACK_BOTTOM_DP = 84
+        /** Legacy factory default retained for callers without a window palette. */
         val overscrollColor: Int = 0xff666666.toInt()
+
+        fun overscrollColor(palette: ReverbPalette): Int = palette.muted
 
         fun createPageArea(context: Context): FrameLayout = FrameLayout(context).apply {
             clipChildren = false

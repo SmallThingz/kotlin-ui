@@ -40,15 +40,16 @@ import kotlin.math.roundToInt
  * belongs to the caller. Each instance handles exactly one axis; it never consumes both axes.
  *
  * Caller supplies the released LocalOverscrollFactory color (Android default 0xff666666) and
- * its actual Density. Recreate on density/factory changes, matching factory identity.
+ * its actual Density. Recreate on density/axis changes; color can rebind without retiring motion.
  */
 open class NativeAxisOverscroll(
     private val context: Context,
     private val density: Density,
-    private val glowColor: Int,
+    glowColor: Int,
     private val axis: NativeOverscrollAxis,
     private val invalidate: () -> Unit,
 ) {
+    private var currentGlowColor = glowColor
     private var width = 0
     private var height = 0
     private var pointerId = -1
@@ -59,6 +60,14 @@ open class NativeAxisOverscroll(
     private var nearNegation: EdgeEffect? = null
     private var farNegation: EdgeEffect? = null
     private var stretchRenderer: NativeAxisStretchRenderer? = null
+
+    /** Palette-only update: retain every edge and its pull/fling state. */
+    fun setGlowColor(color: Int) {
+        if (currentGlowColor == color) return
+        currentGlowColor = color
+        forEachEffect(includeNegation = true) { it.color = color }
+        invalidate()
+    }
 
     /** Source uses distance, not isFinished: legacy glow is not reported as an active stretch. */
     val isInProgress get() = near.stretched || far.stretched
@@ -213,7 +222,7 @@ open class NativeAxisOverscroll(
     }
 
     private fun newEdge(): EdgeEffect = NativeEdgeEffectCompat.create(context).apply {
-        color = glowColor
+        color = currentGlowColor
         if (width != 0 || height != 0) setSize(crossExtent, mainExtent)
     }
     private fun nearEffect() = near ?: newEdge().also { near = it }

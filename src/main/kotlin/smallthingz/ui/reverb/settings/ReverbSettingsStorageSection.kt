@@ -1,5 +1,6 @@
 package smallthingz.ui.reverb.settings
 
+import smallthingz.ui.components.DEFAULT_SETTINGS_SECTION_HORIZONTAL_INSET_DP
 import smallthingz.ui.components.NativeGroupLayout
 import android.content.Context
 import android.view.View
@@ -113,7 +114,7 @@ class ReverbSettingsStorageSection(
 
     override fun onMeasure(w: Int, h: Int) {
         val width = MeasureSpec.getSize(w)
-        val inner = (width - 2 * dp(16)).coerceAtLeast(0)
+        val inner = (width - 2 * dp(DEFAULT_SETTINGS_SECTION_HORIZONTAL_INSET_DP)).coerceAtLeast(0)
         title.measure(atMost(inner), unspecified())
         surface.measure(exact(inner), unspecified())
         setMeasuredDimension(
@@ -123,10 +124,10 @@ class ReverbSettingsStorageSection(
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        val titleX = if (layoutDirection == LAYOUT_DIRECTION_RTL) width - dp(16) - title.measuredWidth else dp(16)
+        val titleX = if (layoutDirection == LAYOUT_DIRECTION_RTL) width - dp(DEFAULT_SETTINGS_SECTION_HORIZONTAL_INSET_DP) - title.measuredWidth else dp(DEFAULT_SETTINGS_SECTION_HORIZONTAL_INSET_DP)
         title.layout(titleX, dp(12), titleX + title.measuredWidth, dp(12) + title.measuredHeight)
         val top = 2 * dp(12) + title.measuredHeight + dp(4)
-        surface.layout(dp(16), top, width - dp(16), top + surface.measuredHeight)
+        surface.layout(dp(DEFAULT_SETTINGS_SECTION_HORIZONTAL_INSET_DP), top, width - dp(DEFAULT_SETTINGS_SECTION_HORIZONTAL_INSET_DP), top + surface.measuredHeight)
     }
 
     override fun close() {

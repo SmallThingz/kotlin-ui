@@ -181,6 +181,7 @@ class NativeActionSheet(
         this.statusBarProtection?.updateInsets(it)
         root.insets(it)
     }
+    private var contentViewport: NativeVerticalViewport? = null
     private var contentScroll:NativeVerticalPhaseBinding?=null
     private var contentScrollAccessibility:AutoCloseable?=null
     private val lifecycleObserver=LifecycleEventObserver {_,event->
@@ -252,10 +253,11 @@ class NativeActionSheet(
         appContent.setContent(body,actions)
         if(scrollable && contentScroll==null) {
             val viewport=NativeVerticalViewport(context,NativeVerticalScrollState(),style.textDensity,
-                runtime.frames,runtime.scope,nested)
+                runtime.frames,runtime.scope,nested,glowColor=style.palette.onSurfaceVariant)
             val binding=NativeVerticalPhaseBinding(viewport,
                 {android.view.ViewConfiguration.get(context).scaledTouchSlop.toFloat()},
                 {android.view.ViewConfiguration.get(context).scaledMaximumFlingVelocity.toFloat()},dragNode::interested)
+            contentViewport = viewport
             contentScroll=binding
             surface.column.wrapContent(viewport)
             viewport.sourceAccessibilityNode={accessibility.sourceNode(viewport)}
@@ -279,6 +281,7 @@ class NativeActionSheet(
         if(disposed||style==next)return
         style=next
         contentContext.updateStyle(next)
+        contentViewport?.setGlowColor(next.palette.onSurfaceVariant)
         surface.updateStyle(next)
         appContent.updateStyle(next)
         handle.updateStyle(next)
@@ -543,6 +546,7 @@ class NativeActionSheet(
         release {back.remove()}
         release {insets.close()}
         release {pointer.close()}
+        contentViewport = null
         release {contentScroll?.close()}
         release {contentScrollAccessibility?.close()}
         release {dragChannel.close()}
