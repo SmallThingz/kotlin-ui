@@ -53,11 +53,6 @@ class ZfmFilenameText(
         fittedLayout = null
     }
 
-    override fun onRtlPropertiesChanged(layoutDirection: Int) {
-        super.onRtlPropertiesChanged(layoutDirection)
-        fittedLayout = null
-    }
-
     override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
         super.onInitializeAccessibilityNodeInfo(info)
         if (info.contentDescription == null && !TextUtils.equals(text, name)) {
@@ -66,8 +61,9 @@ class ZfmFilenameText(
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        // NativeText refreshes typography before TextView measures. Its overflowing layout
-        // changes when text metrics change. Hold it weakly to avoid keeping retired layouts.
+        // NativeText refreshes typography before TextView measures. TextView replaces the
+        // layout when the text direction actually changes. Unresolved inherited direction
+        // can dispatch repeated RTL callbacks without replacing the layout.
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
         val measured = layout ?: return
         if (fittedLayout?.get() === measured && fittedWidthSpec == widthMeasureSpec &&
