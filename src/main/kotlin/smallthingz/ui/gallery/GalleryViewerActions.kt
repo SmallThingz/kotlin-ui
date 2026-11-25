@@ -119,13 +119,21 @@ class GalleryViewerActions(context: Context, private val palette: ControlPalette
         labels.forEach { action ->
             action.view.text = if (value) "" else action.label
             action.view.gravity = if (value) Gravity.CENTER else Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            // MATCH_PARENT text can invalidate paint without requesting a new natural
+            // height. Compact also bypasses TextView measurement for its icon-only chip.
+            action.view.forceLayout()
         }
+        row.requestLayout()
         requestLayout()
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         availableWidth = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED) minimumRowWidth
             else (MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight).coerceAtLeast(0)
+        // The child's unbounded specs do not fully describe our availableWidth/compact
+        // inputs. Discard cached row dimensions before LinearLayout measures its equal
+        // slots and recomputes their natural labelled height (or exact 48dp compact row).
+        row.forceLayout()
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
 
