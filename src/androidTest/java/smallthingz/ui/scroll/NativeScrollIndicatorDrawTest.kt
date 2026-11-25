@@ -97,6 +97,8 @@ class NativeScrollIndicatorDrawTest {
                 val root = LinearLayout(activity).apply {
                     orientation = LinearLayout.VERTICAL
                     descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                    // Match the Library/Incidents host policy for explicit palette colors.
+                    if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
                     setBackgroundColor(Color.WHITE)
                 }
                 host = root
@@ -114,6 +116,9 @@ class NativeScrollIndicatorDrawTest {
             assertTrue("Hardware fixture did not lay out", laidOut.await(5, TimeUnit.SECONDS))
 
             main {
+                if (Build.VERSION.SDK_INT >= 29) {
+                    assertFalse("Fixture root must preserve explicit ARGB colors", requireNotNull(host).isForceDarkAllowed)
+                }
                 for (list in listOf(bound, control)) {
                     assertTrue(list.isAttachedToWindow && list.isHardwareAccelerated)
                     assertTrue(list.canScrollVertically(1))
@@ -196,6 +201,7 @@ class NativeScrollIndicatorDrawTest {
                 }
                 "themeForceDarkAllowed=$themeAllowed " +
                     "viewForceDarkAllowed=${bound.isForceDarkAllowed}/${control.isForceDarkAllowed} " +
+                    "parentForceDarkAllowed=${(bound.parent as View).isForceDarkAllowed} " +
                     "decorForceDarkAllowed=${window.decorView.isForceDarkAllowed}"
             } else "forceDarkAllowed=unavailable(api<29)"
             windowState = "source=$source boundOrigin=${boundLocation.contentToString()} " +
