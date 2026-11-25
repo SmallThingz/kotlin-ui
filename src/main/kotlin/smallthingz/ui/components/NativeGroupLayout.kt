@@ -49,6 +49,7 @@ class NativeGroupLayout(
     private val bounds = RectF()
     private val grainClip = Path()
     private var grain: ViewGrain? = null
+    private var grainInvalidationOwner: View? = null
     private var grainIntensity = 0f
     private var textSurfaceRange = smallthingz.ui.graphics.noiseSurfaceRange(fillPaint.color, 0)
     private val borderBounds = RectF()
@@ -188,11 +189,17 @@ class NativeGroupLayout(
         applyPalette(field,border)
     }
 
+    /** A paint-only group must invalidate its attached drawing owner when texture becomes ready. */
+    internal fun setGrainInvalidationOwner(owner: View) {
+        check(grain == null) { "Set the drawing owner before binding grain" }
+        grainInvalidationOwner = owner
+    }
+
     internal fun setSurfacePreset(preset: NativeSurfacePreset?) {
         val intensity = preset?.foregroundGrain ?: 0f
         if (grainIntensity == intensity) return
         grainIntensity = intensity
-        grain = bindGrainLayer(grain, intensity)
+        grain = (grainInvalidationOwner ?: this).bindGrainLayer(grain, intensity)
         updateTextSurface()
         paintedSurfaceChanged()
         invalidate()
