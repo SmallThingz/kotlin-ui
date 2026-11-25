@@ -91,3 +91,34 @@ class ReverbPermissionNoticeStateTest {
         ReverbPermissionNoticeState().bind(listOf(item(kinds[0], false), item(kinds[0], true)), true)
     }
 }
+
+class ReverbPermissionNoticeHeightTest {
+    @Test fun shortFloatingWindowReservesSpaceForContentAndDock() {
+        // 421dp host minus a 58dp header: the total notice, including insets, caps at 168dp.
+        assertEquals(168, permissionNoticeHeightBudget(421 - 58, 168))
+        // A shorter available slot never lets summary + details consume the whole remainder.
+        assertEquals(90, permissionNoticeHeightBudget(180, 168))
+    }
+
+    @Test fun zeroTinyAndUnboundedParentsRemainBounded() {
+        assertEquals(0, permissionNoticeHeightBudget(0, 168))
+        assertEquals(0, permissionNoticeHeightBudget(1, 168))
+        assertEquals(1, permissionNoticeHeightBudget(2, 168))
+        assertEquals(168, permissionNoticeHeightBudget(null, 168))
+        assertEquals(168, permissionNoticeHeightBudget(Int.MAX_VALUE, 168))
+    }
+
+    @Test fun budgetNeverExceedsHalfParentAtAnyDensity() {
+        for (maximum in listOf(168, 336, 487, 672)) for (offered in 0..1600) {
+            val budget = permissionNoticeHeightBudget(offered, maximum)
+            assertTrue(budget >= 0)
+            assertTrue(budget <= maximum)
+            assertTrue(budget * 2 <= offered)
+            // The physical top/bottom insets shrink too when less than 24dp is available.
+            val inset = minOf(maximum / 14, budget / 2)
+            val group = budget - 2 * inset
+            assertTrue(group >= 0)
+            assertTrue(inset + group <= budget)
+        }
+    }
+}
