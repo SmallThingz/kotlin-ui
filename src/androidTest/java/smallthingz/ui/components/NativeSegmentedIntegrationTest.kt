@@ -1,9 +1,11 @@
 package smallthingz.ui.components
 
+import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Rect
+import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import kotlin.math.pow
 import android.text.Spanned
@@ -22,6 +24,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.controls.ControlStyle
+import smallthingz.ui.controls.StateColorSurface
 import kotlin.math.roundToInt
 
 /** Real Android View tests on the physical device; no window/focus or rendered-pixel claim. */
@@ -30,6 +33,49 @@ class NativeSegmentedIntegrationTest {
     private val palette = ControlPalette(-1, -1, 0xff202020.toInt(), 0xff606060.toInt(),
         0xff3458a0.toInt(), -1, 0xff3458a0.toInt(), 0xffaaaaaa.toInt())
     private fun main(action: () -> Unit) = InstrumentationRegistry.getInstrumentation().runOnMainSync(action)
+
+    @Test fun tintInstallationKeepsTheLiveRippleContentAndMaskWithTheirOwner() {
+        var result: Result<Unit>? = null
+        main { result = runCatching {
+            val context = InstrumentationRegistry.getInstrumentation().targetContext
+            val color = ColorStateList.valueOf(0xff347abb.toInt())
+            fun create(owner: View) = StateColorSurface(owner, color, color, color, color, 4f, 1f,
+                animateState = false, publishInk = { _, _, _ -> })
+            val view = View(context)
+            val otherView = View(context)
+            val first = create(view)
+            val other = create(otherView)
+            try {
+                val ripple = first.background
+                val content = ripple.getDrawable(0)
+                val mask = ripple.findDrawableByLayerId(android.R.id.mask) as GradientDrawable
+                val otherMask = other.background.findDrawableByLayerId(android.R.id.mask) as GradientDrawable
+                assertNotSame(content, other.background.getDrawable(0))
+                assertNotSame(mask, otherMask)
+                // Null still records an explicit tint in framework View, like NativeChip.paintPalette.
+                view.backgroundTintList = null
+                view.background = ripple
+                otherView.background = other.background
+                assertSame(ripple, view.background)
+                assertSame(view, ripple.callback)
+                assertSame(ripple, content.callback)
+                assertSame(ripple, ripple.mutate())
+                assertSame(content, ripple.getDrawable(0))
+                assertSame(mask, ripple.findDrawableByLayerId(android.R.id.mask))
+                assertNull(ripple.constantState)
+                first.bind(color, color, color, color, 13f, 1f)
+                assertEquals(13f, mask.cornerRadius, 0f)
+                assertEquals(4f, otherMask.cornerRadius, 0f)
+                assertSame(otherView, other.background.callback)
+            } finally {
+                view.background = null
+                otherView.background = null
+                first.close()
+                other.close()
+            }
+        } }
+        checkNotNull(result).getOrThrow()
+    }
 
     @Test fun compactRowKeepsExactHeightEqualWidthsRtlAndRetainedSelectionNodes() = main {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

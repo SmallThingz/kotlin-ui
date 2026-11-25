@@ -97,8 +97,15 @@ class StateColorSurface(
         @Suppress("DEPRECATION") override fun getOpacity()=PixelFormat.TRANSLUCENT
     }
     private val motion=ViewColorTransition(view,colors(view.drawableState),{publish()})
-    val background = RippleDrawable(ColorStateList.valueOf(motion.color(3)), surface,
-        GradientDrawable().apply { setColor(-1); cornerRadius = radiusPx })
+    // Both children belong to this View. The content reads its live animation, so it cannot
+    // be cloned for another owner. A framework background tint may call mutate on installation.
+    val background: RippleDrawable = object : RippleDrawable(
+        ColorStateList.valueOf(motion.color(3)), surface,
+        GradientDrawable().apply { setColor(-1); cornerRadius = radiusPx },
+    ) {
+        override fun getConstantState(): Drawable.ConstantState? = null
+        override fun mutate(): Drawable = this
+    }
     private var publishedRippleColor = motion.color(3)
     internal val animatedRippleColor: Int get() = motion.color(3)
     internal fun foregroundOnSurface(preferred: Int, alternate: Int): Int =
@@ -121,7 +128,6 @@ class StateColorSurface(
         secondaryInks=secondaryInk;accentInks=accentInk;underlayColor=underlay
         if (radius != radiusPx) {
             radius = radiusPx
-            // Applying a View background tint can mutate the ripple and clone its mask.
             (background.findDrawableByLayerId(android.R.id.mask) as? GradientDrawable)?.cornerRadius = radiusPx
             view.invalidateOutline()
         }
