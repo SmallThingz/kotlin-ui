@@ -1,6 +1,7 @@
 package smallthingz.ui.components
 
 import android.app.Activity
+import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -10,6 +11,7 @@ import android.graphics.Color
 import android.graphics.Outline
 import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
+import android.os.Bundle
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
@@ -18,6 +20,8 @@ import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
@@ -279,29 +283,113 @@ class NativeButtonOutlineLayoutIntegrationTest {
 
     private fun withButton(fontScale: Float = 1f, direction: Int = View.LAYOUT_DIRECTION_LTR, assertions: (Fixture) -> Unit) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
-            NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as Activity
+        val case = "fontScale=$fontScale direction=${if (direction == View.LAYOUT_DIRECTION_RTL) "RTL" else "LTR"}"
+        val activity = try {
+            instrumentation.startActivitySync(Intent(instrumentation.context,
+                NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as Activity
+        } catch (failure: Throwable) {
+            throw AssertionError("$case phase=launch", failure)
+        }
+        val layoutReady = CountDownLatch(1)
+        val destroyed = CountDownLatch(1)
         var fixture: Fixture? = null
+        var root: FrameLayout? = null
+        var layoutListener: View.OnLayoutChangeListener? = null
+        var registered = false
+        var phase = "mount"
+        var primaryFailure: Throwable? = null
+        // Read only on main; retain real state rather than guessing which loop iteration failed.
+        fun state(): String {
+            val f = fixture
+            return "$case phase=$phase uptime=${SystemClock.uptimeMillis()} " +
+                "activity=${System.identityHashCode(activity)} task=${activity.taskId} " +
+                "finishing=${activity.isFinishing} destroyed=${activity.isDestroyed} windowFocus=${activity.hasWindowFocus()} " +
+                "buttonAttached=${f?.button?.isAttachedToWindow} contentAttached=${f?.content?.isAttachedToWindow} " +
+                "buttonLaidOut=${f?.button?.isLaidOut} contentLaidOut=${f?.content?.isLaidOut} " +
+                "buttonShown=${f?.button?.isShown} windowVisibility=${f?.button?.windowVisibility} " +
+                "buttonSize=${f?.button?.width}x${f?.button?.height} contentSize=${f?.content?.width}x${f?.content?.height}"
+        }
+        fun snapshot(): String {
+            var value = "$case phase=$phase"
+            try { instrumentation.runOnMainSync { value = state() } }
+            catch (failure: Throwable) { value += " diagnosticFailure=${failure.javaClass.name}" }
+            return value
+        }
+        val lifecycle = object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityDestroyed(value: Activity) { if (value === activity) destroyed.countDown() }
+            override fun onActivityCreated(value: Activity, saved: Bundle?) = Unit
+            override fun onActivityStarted(value: Activity) = Unit
+            override fun onActivityResumed(value: Activity) = Unit
+            override fun onActivityPaused(value: Activity) = Unit
+            override fun onActivityStopped(value: Activity) = Unit
+            override fun onActivitySaveInstanceState(value: Activity, saved: Bundle) = Unit
+        }
         try {
             instrumentation.runOnMainSync {
+                activity.application.registerActivityLifecycleCallbacks(lifecycle)
+                registered = true
+                assertFalse("Host already finishing/destroyed: ${state()}", activity.isFinishing || activity.isDestroyed)
                 val context = activity.createConfigurationContext(Configuration(activity.resources.configuration).apply {
                     densityDpi = 160
                     this.fontScale = fontScale
                 })
-                fixture = Fixture(context, fontScale, direction)
-                activity.setContentView(FrameLayout(activity).apply {
-                    addView(fixture!!.button, FrameLayout.LayoutParams(420, 140))
-                })
+                val f = Fixture(context, fontScale, direction).also { fixture = it }
+                val container = FrameLayout(activity).also { root = it }
+                container.addView(f.button, FrameLayout.LayoutParams(420, 140))
+                layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                    if (!activity.isFinishing && !activity.isDestroyed &&
+                        f.button.isAttachedToWindow && f.content.isAttachedToWindow &&
+                        f.button.isShown && f.content.isShown &&
+                        f.button.isLaidOut && f.content.isLaidOut &&
+                        f.button.width > 0 && f.button.height > 0 && f.content.width > 0 && f.content.height > 0)
+                        layoutReady.countDown()
+                }.also(container::addOnLayoutChangeListener)
+                activity.setContentView(container)
             }
+            phase = "await-layout"
+            assertTrue("$case: attached visible fixture layout did not arrive", layoutReady.await(5, TimeUnit.SECONDS))
             instrumentation.waitForIdleSync()
+            phase = "assertions"
             instrumentation.runOnMainSync {
                 val f = checkNotNull(fixture)
-                assertTrue(f.button.isAttachedToWindow && f.content.isAttachedToWindow)
+                assertFalse("Host retired after layout: ${state()}", activity.isFinishing || activity.isDestroyed)
+                assertTrue(state(), f.button.isAttachedToWindow && f.content.isAttachedToWindow)
                 assertions(f)
             }
+        } catch (failure: Throwable) {
+            val contextual = AssertionError(snapshot(), failure)
+            primaryFailure = contextual
+            throw contextual
         } finally {
-            instrumentation.runOnMainSync {
-                try { fixture?.button?.close() } finally { activity.finish() }
+            phase = "cleanup"
+            var cleanupFailure: Throwable? = null
+            fun retain(failure: Throwable) {
+                val previous = cleanupFailure
+                if (previous == null) cleanupFailure = failure else if (previous !== failure) previous.addSuppressed(failure)
+            }
+            try {
+                instrumentation.runOnMainSync {
+                    try { layoutListener?.let { root?.removeOnLayoutChangeListener(it) } } catch (failure: Throwable) { retain(failure) }
+                    try { fixture?.button?.close() } catch (failure: Throwable) { retain(failure) }
+                    try {
+                        if (activity.isDestroyed) destroyed.countDown()
+                        else if (!activity.isFinishing) activity.finish()
+                    } catch (failure: Throwable) { retain(failure) }
+                }
+                assertTrue("$case: owned Activity destruction did not complete", destroyed.await(5, TimeUnit.SECONDS))
+                instrumentation.runOnMainSync { assertTrue("$case: Activity not destroyed after callback", activity.isDestroyed) }
+            } catch (failure: Throwable) { retain(failure) }
+            finally {
+                try {
+                    instrumentation.runOnMainSync {
+                        if (registered) activity.application.unregisterActivityLifecycleCallbacks(lifecycle)
+                    }
+                } catch (failure: Throwable) { retain(failure) }
+            }
+            cleanupFailure?.let { failure ->
+                val primary = primaryFailure
+                if (primary != null) primary.addSuppressed(failure)
+                else throw AssertionError(snapshot(), failure)
             }
         }
     }
