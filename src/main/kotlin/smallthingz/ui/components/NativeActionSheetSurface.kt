@@ -82,7 +82,7 @@ internal class NativeSheetSurface(
     }
     fun updateStyle(next:NativeActionSheetStyle) {
         if (style == next) return
-        style=next;painted.updateStyle(next)
+        style=next;painted.updateStyle(next);column.updatePinnedStyle(next)
     }
     fun applyMotion(offset:Float,minimumAnchor:Float,progress:Float) {
         val value=nativeSheetPredictiveTransform(width.toFloat(),height.toFloat(),offset,
@@ -223,11 +223,39 @@ internal class NativeSheetSurface(
             getChildAt(0).let {it.layout(0,contentTop,it.measuredWidth,contentTop+it.measuredHeight)}
         }
     }
-    internal class SheetColumn(context:Context,val handle:NativeSheetDragHandle,var content:View,
+    internal class SheetColumn(context:Context,val handle:NativeSheetDragHandle,
+        private val appContent: NativeSheetContent,
         private val contentBackground: android.graphics.drawable.Drawable?,
         private val entryEdge: NativeDialogEdge,
     ):ViewGroup(context) {
         private val handleAtBottom = entryEdge == NativeDialogEdge.TOP
+        var content: View = appContent
+            private set
+        private var pinnedActions: NativeSheetPinnedActions? = null
+        private var actionsInViewport = false
+        var onActionsInViewportChanged: ((Boolean) -> Unit)? = null
+        fun setPinnedActions(actions: View, style: NativeActionSheetStyle) {
+            val footer = pinnedActions ?: NativeSheetPinnedActions(context, style).also {
+                pinnedActions = it
+                addView(it, if (handleAtBottom) indexOfChild(handle) else childCount)
+            }
+            footer.setContent(actions)
+        }
+        fun updatePinnedStyle(style: NativeActionSheetStyle) { pinnedActions?.updateStyle(style) }
+        private fun placeActions(footer: NativeSheetPinnedActions, inViewport: Boolean) {
+            if (actionsInViewport == inViewport) return
+            val focusedAction = footer.findFocus()
+            if (inViewport) {
+                removeView(footer)
+                appContent.setOverflowFooter(footer)
+            } else {
+                appContent.setOverflowFooter(null)
+                addView(footer, if (handleAtBottom) indexOfChild(handle) else childCount)
+            }
+            actionsInViewport = inViewport
+            onActionsInViewportChanged?.invoke(inViewport)
+            focusedAction?.requestFocus()
+        }
         init {clipChildren=false;clipToPadding=false;importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO
             background=contentBackground
             addView(handle);addView(content, if (handleAtBottom) 0 else 1)}
@@ -242,18 +270,71 @@ internal class NativeSheetSurface(
             val width=MeasureSpec.getSize(widthMeasureSpec)
             val remaining=MeasureSpec.getSize(heightMeasureSpec)
             handle.measure(sheetSurfaceAtMost(width),sheetSurfaceAtMost(remaining))
-            val handleSpace=handle.verticalTouchInsetPx+handle.measuredHeight
-            content.measure(sheetSurfaceExact(width),sheetSurfaceAtMost(max(0,remaining-handleSpace)))
-            setMeasuredDimension(width,resolveSize(handleSpace+content.measuredHeight,heightMeasureSpec))
+            val naturalHandleSpace = handle.verticalTouchInsetPx + handle.measuredHeight
+            val footer = pinnedActions
+            footer?.measure(sheetSurfaceExact(width), sheetSurfaceUnspecified())
+            val naturalFooterHeight = footer?.measuredHeight ?: 0
+            val overflow = footer != null && naturalFooterHeight > remaining
+            if (footer != null) placeActions(footer, overflow)
+            val footerHeight = if (overflow) 0 else naturalFooterHeight
+            val showHandle = footer == null || (!overflow && naturalHandleSpace <= remaining - footerHeight)
+            if (footer != null) handle.visibility = if (showHandle) VISIBLE else GONE
+            val handleSpace = if (showHandle) naturalHandleSpace else 0
+            content.measure(sheetSurfaceExact(width),sheetSurfaceAtMost(max(0,remaining-handleSpace-footerHeight)))
+            setMeasuredDimension(width,resolveSize(handleSpace+content.measuredHeight+footerHeight,heightMeasureSpec))
         }
         override fun onLayout(changed:Boolean,l:Int,t:Int,r:Int,b:Int) {
             val x=((width-handle.measuredWidth)*.5f).roundToInt()
             // Mirror the compact handle and its expanded target at the sheet's entry edge.
-            val handleTop = if (handleAtBottom) content.measuredHeight else handle.verticalTouchInsetPx
-            val contentTop = if (handleAtBottom) 0 else handleTop + handle.measuredHeight
-            handle.layout(x,handleTop,x+handle.measuredWidth,handleTop+handle.measuredHeight)
+            val footer = pinnedActions?.takeUnless { actionsInViewport }
+            val handleTop = if (handleAtBottom) content.measuredHeight + (footer?.measuredHeight ?: 0) else handle.verticalTouchInsetPx
+            val contentTop = if (handleAtBottom || handle.visibility == GONE) 0 else handleTop + handle.measuredHeight
+            if (handle.visibility != GONE) {
+                handle.layout(x,handleTop,x+handle.measuredWidth,handleTop+handle.measuredHeight)
+            }
             content.layout(0,contentTop,width,contentTop+content.measuredHeight)
+            footer?.let {
+                val top = contentTop + content.measuredHeight
+                footer.layout(0, top, width, top + footer.measuredHeight)
+            }
         }
+    }
+}
+
+/** Library-owned footer spacing outside the form's scroll viewport. */
+internal class NativeSheetPinnedActions(
+    context: Context,
+    private var style: NativeActionSheetStyle,
+) : ViewGroup(context) {
+    private var actions: View? = null
+    private var actionTop = 0
+    init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
+    fun setContent(view: View) {
+        if (actions === view) return
+        actions?.let(::removeView)
+        actions = view
+        addView(view)
+        NativeModalTextSurface.bindTree(this)
+        requestLayout()
+    }
+    fun updateStyle(next: NativeActionSheetStyle) {
+        if (style == next) return
+        style = next
+        requestLayout()
+    }
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val density = style.textDensity.density
+        val width = MeasureSpec.getSize(widthMeasureSpec)
+        val pad = (style.recipe.horizontalPaddingDp * density).roundToInt()
+        val bottom = if ((actions as? NativeActionFooter)?.isActionFooter == true) 0
+            else (style.recipe.bottomPaddingDp * density).roundToInt()
+        actionTop = (style.recipe.actionsGapDp * density).roundToInt()
+        actions?.measure(sheetSurfaceExact(max(0, width - pad * 2)), sheetSurfaceUnspecified())
+        setMeasuredDimension(width, resolveSize(actionTop + (actions?.measuredHeight ?: 0) + bottom, heightMeasureSpec))
+    }
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        val pad = (style.recipe.horizontalPaddingDp * style.textDensity.density).roundToInt()
+        actions?.let { it.layout(pad, actionTop, pad + it.measuredWidth, actionTop + it.measuredHeight) }
     }
 }
 
@@ -275,6 +356,7 @@ internal class NativeSheetContent(
     private val header=Header(context,titleView,close)
     private var body:View?=null
     private var actions:View?=null
+    private var overflowFooter: View? = null
     private var topHeader=0
     private var topBody=0
     private var topActions=0
@@ -286,10 +368,19 @@ internal class NativeSheetContent(
         bindClose(style,dismiss)
         NativeModalTextSurface.bindTree(titleView)
     }
-    fun setContent(body:View,actions:View) {
-        this.body?.let(::removeView);this.actions?.let(::removeView)
-        this.body=body;this.actions=actions;addView(body);addView(actions)
+    fun setContent(body:View,actions:View?) {
+        // Rebinding a pinned form must not detach its focused editor.
+        val retainsPinnedBody = actions == null && this.actions == null && this.body === body
+        if (!retainsPinnedBody) {
+            this.body?.let(::removeView);this.actions?.let(::removeView)
+            this.body=body;this.actions=actions;addView(body, 1);actions?.let(::addView)
+        }
         NativeModalTextSurface.bindTree(this);requestLayout()
+    }
+    fun setOverflowFooter(footer: View?) {
+        overflowFooter?.let(::removeView)
+        overflowFooter = footer
+        footer?.let(::addView)
     }
     fun bind(title:String,dismiss:()->Unit) {
         currentDismiss=dismiss
@@ -316,7 +407,8 @@ internal class NativeSheetContent(
         val inner=max(0,width-pad*2)
         val bounded=MeasureSpec.getMode(heightMeasureSpec)!=MeasureSpec.UNSPECIFIED
         val maximum=if(bounded)MeasureSpec.getSize(heightMeasureSpec)else Int.MAX_VALUE
-        val bottom = if ((actions as? NativeActionFooter)?.isActionFooter == true) 0
+        val pinned = body != null && actions == null
+        val bottom = if (pinned || (actions as? NativeActionFooter)?.isActionFooter == true) 0
             else min((style.recipe.bottomPaddingDp*density).roundToInt(),maximum)
         val available = max(0, maximum - bottom)
         topHeader = (style.recipe.topPaddingDp * density).roundToInt().coerceIn(0, available)
@@ -327,9 +419,10 @@ internal class NativeSheetContent(
         val bodyGap=min((style.recipe.bodyGapDp*density).roundToInt(),remaining);used+=bodyGap;remaining-=bodyGap
         topBody=used
         body?.let {it.measure(sheetSurfaceExact(inner),childHeight());used+=it.measuredHeight;remaining-=it.measuredHeight}
-        val actionsGap=min((style.recipe.actionsGapDp*density).roundToInt(),remaining);used+=actionsGap;remaining-=actionsGap
+        val actionsGap=if(pinned) 0 else min((style.recipe.actionsGapDp*density).roundToInt(),remaining);used+=actionsGap;remaining-=actionsGap
         topActions=used
         actions?.let {it.measure(sheetSurfaceExact(inner),childHeight());used+=it.measuredHeight}
+        overflowFooter?.let { it.measure(sheetSurfaceExact(width), sheetSurfaceUnspecified()); used += it.measuredHeight }
         setMeasuredDimension(width,resolveSize(used+bottom,heightMeasureSpec))
     }
     override fun onLayout(changed:Boolean,l:Int,t:Int,r:Int,b:Int) {
@@ -337,6 +430,7 @@ internal class NativeSheetContent(
         header.layout(pad, topHeader, pad + header.measuredWidth, topHeader + header.measuredHeight)
         body?.let {it.layout(pad,topBody,pad+it.measuredWidth,topBody+it.measuredHeight)}
         actions?.let {it.layout(pad,topActions,pad+it.measuredWidth,topActions+it.measuredHeight)}
+        overflowFooter?.let { it.layout(0, topActions, width, topActions + it.measuredHeight) }
     }
     private class Header(context:Context,val title:View,val close:View?):ViewGroup(context) {
         init {
@@ -363,3 +457,4 @@ internal class NativeSheetContent(
 }
 private fun sheetSurfaceExact(value:Int)=View.MeasureSpec.makeMeasureSpec(value,View.MeasureSpec.EXACTLY)
 private fun sheetSurfaceAtMost(value:Int)=View.MeasureSpec.makeMeasureSpec(value,View.MeasureSpec.AT_MOST)
+private fun sheetSurfaceUnspecified()=View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED)
