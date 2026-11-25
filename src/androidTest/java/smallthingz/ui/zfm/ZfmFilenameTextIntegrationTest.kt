@@ -238,7 +238,8 @@ class ZfmFilenameTextIntegrationTest {
             text = name
         }
 
-    private fun naturalExtensionSplitWidth(raw: NativeText, name: String): Int {
+    private fun naturalExtensionSplitWidth(raw: NativeText, name: String,
+                                           exactBoundary: Boolean = false): Int {
         // Find the regression's precondition using ordinary Android layout, not the fitter.
         // Search only the small width interval between the stem and the complete filename.
         measure(raw, 4096)
@@ -249,7 +250,8 @@ class ZfmFilenameTextIntegrationTest {
             measure(raw, width)
             val layout = checkNotNull(raw.layout)
             layout.lineCount == 2 && layout.getEllipsisCount(0) == 0 &&
-                layout.getEllipsisCount(1) == 0 && layout.getLineEnd(0) > extension &&
+                layout.getEllipsisCount(1) == 0 &&
+                (if (exactBoundary) layout.getLineEnd(0) == extension else layout.getLineEnd(0) > extension) &&
                 layout.getLineEnd(0) < name.length
         } ?: error("Ordinary TextView did not expose the extension-split precondition")
     }
@@ -308,6 +310,8 @@ class ZfmFilenameTextIntegrationTest {
             val view = label(context, style, name)
             val fitted = measure(view, width)
             assertAtomicExtension(view, name)
+            assertEquals("Move the meaningful tail, not just the numeric suffix or extension",
+                "edited_3.jpg", fitted.text.substringAfter('\n').trimStart('\u200e', '\u200f'))
             var changes = 0
             val watcher = object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
@@ -334,6 +338,75 @@ class ZfmFilenameTextIntegrationTest {
             view.bindName("a.jpg", directory = false)
             assertEquals(measure(ordinaryLabel(context, style, "a.jpg"), width), measure(view, width))
         }
+    }
+
+    @Test fun extensionAlreadyOnItsOwnLineGainsTailButOrdinaryWrappingIsUnchanged() = main {
+        val context = context(1f)
+        val style = NativeTextStyle(16f, lineHeightSp = 24f, weight = 500)
+        val name = "turnbull-heal-preview-861084e2_edited_3.jpg"
+        val raw = ordinaryLabel(context, style, name)
+        val width = naturalExtensionSplitWidth(raw, name, exactBoundary = true)
+        val view = label(context, style, name)
+        val fitted = measure(view, width)
+        assertAtomicExtension(view, name)
+        assertEquals("edited_3.jpg", fitted.text.substringAfter('\n').trimStart('\u200e', '\u200f'))
+        assertEquals("Accessible identity stays the unmodified basename", name, nodeDescription(view))
+
+        // A narrower ordinary wrap already carries basename characters on line two.
+        // Find that state using native layout, then require identical text and geometry.
+        val ordinaryWidth = (width / 2 until width).firstOrNull { candidate ->
+            measure(raw, candidate)
+            val layout = checkNotNull(raw.layout)
+            layout.lineCount == 2 && layout.getEllipsisCount(1) == 0 &&
+                layout.getLineEnd(0) < name.lastIndexOf('.')
+        } ?: error("Missing ordinary two-line wrap precondition")
+        assertEquals(measure(raw, ordinaryWidth), measure(view, ordinaryWidth))
+        assertEquals(fitted, measure(view, width))
+    }
+
+    @Test fun numericOnlyBasenameTailKeepsAtomicExtensionFallback() = main {
+        val context = context(1f)
+        val style = NativeTextStyle(16f)
+        val name = "123456789_456_7.jpg"
+        val width = naturalExtensionSplitWidth(ordinaryLabel(context, style, name), name)
+        val view = label(context, style, name)
+        val fitted = measure(view, width)
+        assertAtomicExtension(view, name)
+        assertEquals("A numeric-only tail must not be promoted as a word",
+            ".jpg", fitted.text.substringAfter('\n').trimStart('\u200e', '\u200f'))
+    }
+
+    @Test fun rejectedMeaningfulTailStillTriesAtomicFallbackAndSettlesWithWatcher() = main {
+        val context = context(1f)
+        val style = NativeTextStyle(16f)
+        val name = "x_" + "a".repeat(40) + ".abcdefgh"
+        val raw = ordinaryLabel(context, style, name)
+        val width = naturalExtensionSplitWidth(raw, name)
+        assertTrue("Precondition: the nearest meaningful tail cannot fit on line two",
+            Layout.getDesiredWidth(name.substringAfter('_'), raw.paint) > width)
+        assertTrue("Precondition: the existing extension-only fallback can fit",
+            Layout.getDesiredWidth(".abcdefgh", raw.paint) < width)
+        val view = label(context, style, name)
+        var changes = 0
+        val watcher = object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { changes++ }
+            override fun afterTextChanged(s: Editable?) = Unit
+        }
+        view.addTextChangedListener(watcher)
+        try {
+            val fitted = measure(view, width)
+            assertTrue("Exercise mutable watched layout during the failed first candidate",
+                view.layout is android.text.DynamicLayout)
+            assertAtomicExtension(view, name)
+            assertEquals("A rejected tail must not bypass the atomic fallback",
+                ".abcdefgh", fitted.text.substringAfter('\n').trimStart('\u200e', '\u200f'))
+            changes = 0
+            repeat(3) { assertEquals(fitted, measure(view, width)) }
+            assertEquals("Cache only the accepted final layout; no repeated retries", 0, changes)
+            view.bindName("a.jpg", directory = false)
+            assertEquals(measure(ordinaryLabel(context, style, "a.jpg"), width), measure(view, width))
+        } finally { view.removeTextChangedListener(watcher) }
     }
 
     @Test fun naturalExtensionWrapPreservesMixedRtlParagraphDirection() = main {
@@ -379,7 +452,7 @@ class ZfmFilenameTextIntegrationTest {
     @Test fun naturalWrapWithOversizedExtensionFallsBackWithoutDroppingCharacters() = main {
         val context = context(1f)
         val style = NativeTextStyle(16f)
-        val name = "a." + "abcdefghij".repeat(4)
+        val name = "x_a." + "abcdefghij".repeat(4)
         val raw = ordinaryLabel(context, style, name)
         measure(raw, 4096)
         val width = ceil(Layout.getDesiredWidth(name, raw.paint) * .7f).toInt()
@@ -388,7 +461,10 @@ class ZfmFilenameTextIntegrationTest {
         assertEquals("Precondition: ordinary text fits two lines without ellipsis", listOf(0, 0), expected.ellipsisCounts)
         assertTrue(rawLayout.getLineEnd(0) > name.lastIndexOf('.'))
         assertTrue(Layout.getDesiredWidth(name.substring(name.lastIndexOf('.')), raw.paint) > width)
-        assertEquals(expected, measure(label(context, style, name), width))
+        val view = label(context, style, name)
+        assertEquals("Both meaningful-tail and atomic candidates fail; restore ordinary layout",
+            expected, measure(view, width))
+        repeat(3) { assertEquals(expected, measure(view, width)) }
     }
 
     @Test fun attachedFilenameKeepsFullAccessibleNameAndHostDescription() = withWindow { activity, root ->
