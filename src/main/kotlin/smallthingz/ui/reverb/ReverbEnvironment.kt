@@ -21,6 +21,8 @@ class ReverbEnvironment private constructor(
     val theme: ReverbTheme,
     private val settingsTextContrast: Boolean,
 ) : NativeSettingsVisualEnvironment {
+    internal constructor(theme: ReverbTheme) : this(theme, false)
+
     constructor(context: Context, darkTheme: Boolean) : this(ReverbDesign.theme(context, darkTheme), false)
 
     constructor(textDensity: Density, sharedFontResolver: FontFamily.Resolver, palette: ReverbPalette) :

@@ -40,7 +40,7 @@ class ReverbPermissionOnboardingRows(
     private val onRequest: (ReverbPermissionOnboardingKind) -> Unit,
 ) : AutoCloseable {
     private val cards = theme.appearance.detailCards
-    private val environment = ReverbEnvironment(theme.density, theme.fontResolver, theme.palette)
+    private val environment = ReverbEnvironment(theme)
     private val rows = linkedMapOf<ReverbPermissionOnboardingKind, Row>()
     private var states = emptyMap<ReverbPermissionOnboardingKind, ReverbPermissionOnboardingState>()
     private var closed = false

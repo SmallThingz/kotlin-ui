@@ -34,7 +34,9 @@ open class NativeQuickTileSectionLayout(
     private val surface = NativeGroupLayout(context, recipe.surfaceRadiusDp, onPaintedSurfaceChanged = onPaintedSurfaceChanged)
     private val rows = TileRowsColumn(context)
     private val loading = tileStatus(context, loadingText, environment)
-    protected val loadingRow = NativeSingleChildInset(context, loading, 16, 16, 16, 16, environment, false)
+    protected val loadingRow = recipe.loadingRowInsetDp.let { inset ->
+        NativeSingleChildInset(context, loading, inset, inset, inset, inset, environment, false)
+    }
     private val applyFirst = tileStatus(context, applyFirstText, environment)
     private val error = tileStatus(context, "", environment)
     private val retry = NativeProgressActionView(context, environment, inputRoot, action = onRetry)
@@ -63,7 +65,7 @@ open class NativeQuickTileSectionLayout(
 
     protected fun bindLoading() {
         environment.bindParagraphStyle(loading, NativeTypographyRole.BODY_SMALL, environment.palette.muted)
-        loadingRow.setEnvironment(environment)
+        loadingRow.setEnvironment(environment, recipe.loadingRowInsetDp)
     }
 
     protected fun bindListContent(children: List<View>, showApplyFirst: Boolean,

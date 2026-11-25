@@ -25,7 +25,7 @@ class ReverbPermissionNotices(
     theme: ReverbTheme,
     private val onRequest: (ReverbPermissionOnboardingKind) -> Unit,
 ) : AutoCloseable {
-    private val environment = ReverbEnvironment(theme.density, theme.fontResolver, theme.palette).forSettings()
+    private val environment = ReverbEnvironment(theme).forSettings()
     private val state = ReverbPermissionNoticeState()
     private val rows = linkedMapOf<ReverbPermissionOnboardingKind, NoticeRow>()
     private var summaryBound = false

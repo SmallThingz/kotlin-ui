@@ -6,6 +6,7 @@ import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeSurface
 import smallthingz.ui.components.NativeSurfaceStyle
 import smallthingz.ui.components.nativeTextStyle
+import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.reverb.ReverbDesign
 
 /** Width includes dialog padding; both policies retain the host's available-width cap. */
@@ -30,8 +31,9 @@ class GalleryDialogSurface(context: Context, dark: Boolean) : NativeSurface(
 
     fun bindTheme(dark: Boolean) {
         val palette = ReverbDesign.appearance.resolveColorScheme(context, dark)
-        setSurfacePreset(palette.surfacePreset)
-        applyStyle(surfaceStyle(palette))
+        val grainIntensity = palette.surfacePreset?.foregroundGrain ?: modals.sheet.grainIntensity
+        setNoiseIntensity(grainIntensity)
+        applyStyle(surfaceStyle(palette, grainIntensity))
     }
 
     companion object {
@@ -43,12 +45,16 @@ class GalleryDialogSurface(context: Context, dark: Boolean) : NativeSurface(
         // Short date wheels and IME-resized inputs retain their actual content height.
         const val compactVerticalPaddingDp: Int = 4
 
-        private fun surfaceStyle(palette: NativeColorScheme) = NativeSurfaceStyle(
-            fillColor = ReverbDesign.modalSurface(palette),
+        private fun surfaceStyle(
+            palette: NativeColorScheme,
+            grainIntensity: Float = palette.surfacePreset?.foregroundGrain ?: modals.sheet.grainIntensity,
+        ) = NativeSurfaceStyle(
+            fillColor = modals.sheet.surfaceColor(palette),
             cornerRadiusDp = modals.sheet.radiusDp,
             outlineColor = palette.surfacePreset?.borderColor,
             outlineWidthDp = palette.surfacePreset?.borderWidthDp ?: 0f,
-            noise = true,
+            noise = modals.sheet.grainSeed != null && grainIntensity > 0f,
+            noiseSeed = modals.sheet.grainSeed ?: NoiseDrawable.SEED_BACKGROUND,
         )
     }
 }

@@ -18,6 +18,7 @@ import android.widget.Space
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.doOnLayout
+import smallthingz.ui.components.NativeForeground
 import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.NativeMaterialButtonView
 import smallthingz.ui.util.closePreservingPrimaryFailure
@@ -43,11 +44,11 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
     title: String, backLabel: String, newLabel: String,
 ) : ReverbBrowserPanelLayout(context) {
     var onTabAction: ((Key?, ReverbBrowserPanelTabAction) -> Unit)? = null
-    private val environment = ReverbEnvironment(theme.density, theme.fontResolver, theme.palette)
+    private val environment = ReverbEnvironment(theme)
     private val back = browserPanelToolbarAction(context, theme, backLabel, ReverbIcon.Back) {
         if (!panelClosed) onTabAction?.invoke(null, ReverbBrowserPanelTabAction.BACK)
     }
-    private val heading = theme.paragraph(context, title, ReverbDesign.appearance.toolbars.centeredTitleRole)
+    private val heading = theme.paragraph(context, title, theme.appearance.toolbars.centeredTitleRole)
     private val newTab = NativeMaterialButtonView(context, ReverbBottomActionDock.buttonStyle(theme),
         theme.density, theme.fontResolver, onClick = ::newTabRequested).apply {
         bind(newLabel, true, theme.palette.buttonPalette, onClick = ::newTabRequested)
@@ -76,7 +77,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
     }.apply { addView(grid, FrameLayout.LayoutParams(-1, -2)) }
     private val footer = ReverbBottomActionDock(context, theme, newTab)
     init {
-        background = ReverbDesign.appearance.backdrops.pageBackground(theme.palette)
+        background = theme.appearance.backdrops.pageBackground(theme.palette)
         ViewCompat.setAccessibilityPaneTitle(this, title)
         ViewCompat.setAccessibilityHeading(heading, true)
         addView(ReverbTitledTopBarLayout(context, theme.density.density, theme.palette, back, heading, Space(context)),
@@ -152,7 +153,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         private var snapshot: ReverbBrowserPanelTab<Key>? = null
         val content get() = checkNotNull(snapshot)
         private var closed = false
-        private val recipe = ReverbDesign.appearance.groupSurfaces.settingsChoices
+        private val recipe = theme.appearance.groupSurfaces.settingsChoices
         private val surface = recipe.create(context, ReverbTextSurface::invalidate).also { recipe.bind(it, theme.palette) }
         val gesture = ReverbBrowserPanelSwipe(context, { it * .35f },
             canSwipe = { !closed && content.enabled && surface.browserPanelAdmitsInput() },
@@ -221,9 +222,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             close.visual.mergedRowAccessibility.enableStandaloneAccessibility({ !closed }) { snapshot?.closeLabel }
             close.visual.glyph.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             close.visual.filterTouchesWhenObscured = true
-            close.visual.background = smallthingz.ui.graphics.NoiseDrawable(theme.palette.raised).apply {
-                setNoiseIntensity(theme.palette.surfacePreset?.foregroundGrain ?: 0f)
-            }
+            close.visual.background = NativeForeground.foregroundBackground(theme.palette.pageControls)
             surface.addRow(body, NativeGroupLayout.LayoutParams(-1, -2))
             gesture.addView(surface, FrameLayout.LayoutParams(-1, -2))
             bind(initial)
@@ -265,7 +264,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
                     image.setImageBitmap(entry.preview)
                     image.alignPreview()
                 } else {
-                    val size = dp(ReverbDesign.appearance.buttons.raisedIcon.surface.iconSizeDp)
+                    val size = dp(theme.appearance.buttons.raisedIcon.surface.iconSizeDp)
                     image.layoutParams = FrameLayout.LayoutParams(size, size, Gravity.CENTER)
                     image.imageTintList = ColorStateList.valueOf(theme.palette.muted)
                     image.scaleType = ImageView.ScaleType.FIT_CENTER

@@ -17,10 +17,12 @@ import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
 
 /** Window-scoped Home actions. Content and admission belong to the caller; recipes live here. */
-class AllDocHomeActions(private val context: Context) {
+class AllDocHomeActions(private val context: Context, appearance: NativeUiAppearance) {
+    constructor(context: Context) : this(context, NativeUiAppearance.Default)
+
     private val density = Density(context)
     private val resolver = createFontFamilyResolver(context)
-    private val buttons = NativeUiAppearance.Default.buttons
+    private val buttons = appearance.buttons
     private val retryRecipe = buttons.neutralText.copy(
         surface = buttons.neutralText.surface.copy(minimumWidthDp = 48, minimumHeightDp = 48),
     )

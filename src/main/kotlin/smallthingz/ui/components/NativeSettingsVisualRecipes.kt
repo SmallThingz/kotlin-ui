@@ -48,7 +48,10 @@ data class NativeQuickTilesRecipe(
     val editorGapDp: Int = 4,
     val disabledActionOpacity: Float = .38f,
     val glyphStroke: Float = 1.7f,
+    val loadingRowInsetDp: Int = 16,
 ) {
+    init { require(loadingRowInsetDp >= 0) }
+
     fun actionInk(ink: Int, enabled: Boolean): Int = if (enabled) ink else srgbColorWithAlpha(ink, disabledActionOpacity)
 
     companion object {
