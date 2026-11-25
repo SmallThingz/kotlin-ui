@@ -209,17 +209,28 @@ class NativeMergedActionLayoutIntegrationTest {
         lateinit var runtime: NativeModalWindowRuntime
         lateinit var env: ReverbEnvironment
         lateinit var root: FrameLayout
+        var ownedRename: ReverbInlineRecordingRename? = null
+        var ownedRuntime: NativeModalWindowRuntime? = null
+        var ownedRoot: FrameLayout? = null
         var layoutListener: View.OnLayoutChangeListener? = null
         val layoutReady = CountDownLatch(1)
         var cancelled = 0
         var saved = 0
-        try {
+        withRetiringTestActivity(activity, root = { ownedRoot }, cleanup = {
+            var failure: Throwable? = null
+            failure = smallthingz.ui.util.closePreservingPrimaryFailure(failure) {
+                layoutListener?.let { ownedRoot?.removeOnLayoutChangeListener(it) }
+            }
+            failure = smallthingz.ui.util.closePreservingPrimaryFailure(failure) { ownedRename?.close() }
+            failure = smallthingz.ui.util.closePreservingPrimaryFailure(failure) { ownedRuntime?.close() }
+            failure?.let { throw it }
+        }) {
             instrumentation.runOnMainSync {
-                runtime = NativeModalWindowRuntime(activity)
+                runtime = NativeModalWindowRuntime(activity).also { ownedRuntime = it }
                 env = ReverbEnvironment(activity, false)
-                root = FrameLayout(activity)
+                root = FrameLayout(activity).also { ownedRoot = it }
                 rename = ReverbInlineRecordingRename(activity, env, runtime.scope, root, "Name", "Cancel", "Save",
-                    { "Recording" }, {}, { cancelled++ }, { saved++ })
+                    { "Recording" }, {}, { cancelled++ }, { saved++ }).also { ownedRename = it }
                 root.addView(rename, FrameLayout.LayoutParams(-1, -2))
                 layoutListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
                     val buttons = descendants(rename).filterIsInstance<NativeMaterialButtonView>()
@@ -264,11 +275,6 @@ class NativeMergedActionLayoutIntegrationTest {
                         } finally { nodes.forEach { it.recycle() } }
                     }
                 }
-            }
-        } finally {
-            instrumentation.runOnMainSync {
-                layoutListener?.let(root::removeOnLayoutChangeListener)
-                try { rename.close(); runtime.close() } finally { activity.finish() }
             }
         }
     }
