@@ -8,9 +8,15 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.LinearLayout
 import smallthingz.ui.components.NativeTopBarInsets
 
-/** Localized label, action availability and behavior for a shared header button. */
-data class ReverbHeaderAction(val label: String, val onClick: () -> Unit, val enabled: Boolean = true) {
-    internal fun withIcon(icon: ReverbIcon) = ReverbTopBarActionContent(icon, label, onClick, enabled)
+/** Localized action content; a null [icon] retains the header slot's default glyph. */
+data class ReverbHeaderAction(
+    val label: String,
+    val onClick: () -> Unit,
+    val enabled: Boolean = true,
+    val icon: ReverbIcon? = null,
+) {
+    internal fun withIcon(defaultIcon: ReverbIcon) =
+        ReverbTopBarActionContent(icon ?: defaultIcon, label, onClick, enabled)
 }
 
 /** The visible copy can abbreviate the value. Accessibility gets the supplied full phrase. */
