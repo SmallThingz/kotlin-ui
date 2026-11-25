@@ -19,8 +19,11 @@ class ControlTheme internal constructor(
         if (colors == this.colors) this else ControlTheme(appearance, colors, density, fontResolver)
 
     companion object {
-        fun resolve(context: Context, dark: Boolean): ControlTheme {
-            val appearance = NativeUiAppearance.Default
+        fun resolve(context: Context, dark: Boolean): ControlTheme =
+            resolve(context, dark, NativeUiAppearance.Default)
+
+        /** Resolve a caller-supplied appearance while retaining the shared default entry point. */
+        fun resolve(context: Context, dark: Boolean, appearance: NativeUiAppearance): ControlTheme {
             return ControlTheme(appearance, appearance.resolveColorScheme(context, dark),
                 Density(context), createFontFamilyResolver(context))
         }

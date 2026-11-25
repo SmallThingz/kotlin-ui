@@ -76,10 +76,7 @@ data class ReverbAboutDetails(
 
 private class AboutContentAppearance(val theme: ReverbTheme) {
     private val typography = ReverbDesign.appearance.typography
-    val panel = ReverbDesign.appearance.modals.floating.let { recipe ->
-        recipe.copy(surfaceElevationDp = 0f,
-            grainSeed = if (theme.palette.surfacePreset != null) recipe.grainSeed else null)
-    }
+    val panel = theme.appearance.modals.floating
     val palette get() = theme.palette
     val headlineSmall get() = typography[panel.headlineRole]
     val titleSmall get() = typography[panel.titleRole]
@@ -87,7 +84,7 @@ private class AboutContentAppearance(val theme: ReverbTheme) {
     val bodySmall get() = typography[panel.detailRole]
     val density get() = theme.density
     val fontResolver get() = theme.fontResolver
-    val panelPalette = palette.copy(surfaceContainerHigh = ReverbDesign.modalSurface(palette))
+    val panelPalette get() = palette
 }
 
 /**

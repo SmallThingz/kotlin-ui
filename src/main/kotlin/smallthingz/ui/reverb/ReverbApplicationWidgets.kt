@@ -5,7 +5,6 @@ import android.graphics.drawable.Drawable
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -107,29 +106,12 @@ class ReverbApplicationWidgets(private val context: Context, theme: ReverbTheme)
         button.bind(label, enabled, colors.buttonPalette, emphasized = primary)
     }
 
-    fun actionPair(first: NativeMaterialButtonView, second: NativeMaterialButtonView): View {
-        val entries = listOf(first, second)
-        val group = settingsGroup(ReverbApplicationGroup.CHOICES).apply {
-            entries.forEach { addRow(it, NativeGroupLayout.LayoutParams(-1, -2)) }
-        }
-        return object : FrameLayout(context) {
-            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-                val both = first.visibility == View.VISIBLE && second.visibility == View.VISIBLE
-                val width = MeasureSpec.getSize(widthMeasureSpec)
-                val horizontal = both && (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED ||
-                    width >= 2 * maxOf(first.preferredWidth(false), second.preferredWidth(false)))
-                group.setRowOrientation(if (horizontal) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL)
-                for (entry in entries) {
-                    val row = entry.layoutParams as NativeGroupLayout.LayoutParams
-                    row.width = if (horizontal) 0 else ViewGroup.LayoutParams.MATCH_PARENT
-                    row.weight = if (horizontal) 1f else 0f
-                    row.dividerStart = entry === second && both && horizontal
-                    row.dividerTop = entry === second && both && !horizontal
-                }
-                super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-            }
-        }.apply { addView(group, FrameLayout.LayoutParams(-1, -2)) }
-    }
+    fun actionPair(first: NativeMaterialButtonView, second: NativeMaterialButtonView): View =
+        mergedActions(listOf(first, second), fillAvailableWidth = true)
+
+    /** Shared adaptive action group; retains arbitrary caller-owned action views. */
+    fun mergedActions(actions: List<View>, fillAvailableWidth: Boolean = false): NativeMergedActionLayout =
+        NativeMergedActionLayout(context, actions, colors, 14f, fillAvailableWidth)
 
     fun icon(glyph: Drawable?, label: String, action: () -> Unit) =
         button("", ReverbApplicationAction.ICON, action).apply {
@@ -139,12 +121,10 @@ class ReverbApplicationWidgets(private val context: Context, theme: ReverbTheme)
             filterTouchesWhenObscured = true
         }
 
-    fun toolbarIcon(glyph: Drawable, label: String, action: () -> Unit) = NativeTopBarAction(
-        context, textDensity.density, inputRoot = { null }, description = label, selectionWrapper = true,
-        rolePresent = true, initialTint = colors.muted, actionStyle = appearance.toolbars.action,
+    fun toolbarIcon(glyph: Drawable, label: String, action: () -> Unit): NativeTopBarAction = NativeThemedToolbarAction(
+        context, textDensity.density, colors, inputRoot = { null }, label = label, selectionWrapper = true,
+        rolePresent = true, style = appearance.toolbars,
     ).apply {
-        val toolbar = appearance.toolbars
-        setSurfacePaletteImmediately(toolbar.actionFill(colors), toolbar.actionOutline(colors, NativeToolbarActionTone.NEUTRAL))
         setGlyph(glyph.mutate().apply { setTint(colors.muted) }, colors.muted)
         accessibilityAction.apply {
             tooltipText = label
@@ -154,8 +134,15 @@ class ReverbApplicationWidgets(private val context: Context, theme: ReverbTheme)
     }
 
     fun bindToolbarIcon(button: NativeTopBarAction, enabled: Boolean, action: () -> Unit) {
-        button.bindSurfacePreset(colors.surfacePreset)
-        button.bindAction(textDensity.density, enabled, colors.muted, appearance.toolbars.contentColor(colors), action)
+        if (button is NativeThemedToolbarAction) {
+            button.bindToolbarAction(textDensity.density, colors, enabled, NativeToolbarActionTone.MUTED, action)
+        } else {
+            val toolbar = appearance.toolbars
+            button.bindSurfacePreset(colors.surfacePreset)
+            button.setSurfacePaletteImmediately(toolbar.actionFill(colors),
+                toolbar.actionOutline(colors, NativeToolbarActionTone.MUTED))
+            button.bindAction(textDensity.density, enabled, colors.muted, toolbar.contentColor(colors), action)
+        }
     }
 
     fun toggle(label: String, changed: (Boolean) -> Unit) = toggle(text(label), changed)

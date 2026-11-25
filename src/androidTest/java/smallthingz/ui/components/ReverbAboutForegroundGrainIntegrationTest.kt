@@ -7,11 +7,13 @@ import android.view.ViewGroup
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import smallthingz.ui.controls.textSurfaceRange
 import smallthingz.ui.graphics.NoiseDrawable
+import smallthingz.ui.graphics.NoiseTexture
 import smallthingz.ui.reverb.ReverbAboutContentView
 import smallthingz.ui.reverb.ReverbAboutDetails
 import smallthingz.ui.reverb.ReverbDesign
@@ -21,8 +23,12 @@ import smallthingz.ui.unit.Density
 /** Exercises About's actual retained panel, including initial paint and both theme rebinds. */
 @RunWith(AndroidJUnit4::class)
 class ReverbAboutForegroundGrainIntegrationTest {
-    @Test fun lightAmoledLightRetainsPanelAndRestoresFlatPaint() {
+    @Test fun rawLightAmoledLightRetainsPanelAndRestoresRecipeGrain() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
+        NoiseTexture.prepare()
+        val deadline = System.nanoTime() + 5_000_000_000L
+        while (NoiseTexture.shader(NoiseDrawable.SEED_BACKGROUND) == null && System.nanoTime() < deadline) Thread.sleep(5)
+        assertNotNull(NoiseTexture.shader(NoiseDrawable.SEED_BACKGROUND))
         instrumentation.runOnMainSync {
             val context = instrumentation.targetContext
             val resolver = createFontFamilyResolver(context)
@@ -42,25 +48,33 @@ class ReverbAboutForegroundGrainIntegrationTest {
                     assertSame(panel, about.predictiveMotionTarget)
                     assertSame(clip, panel.clipHost)
                     assertSame(handle, descendants(about).filterIsInstance<NativeSheetDragHandle>().single())
-                    val fill = ReverbDesign.appearance.modals.floating.copy(surfaceElevationDp = 0f)
-                        .surfaceColor(palette.copy(surfaceContainerHigh = ReverbDesign.modalSurface(palette)))
-                    val expected = if (palette.surfacePreset == null) textSurfaceRange(fill)
-                    else NoiseDrawable(fill).apply {
-                        setNoiseIntensity(palette.surfacePreset.foregroundGrain)
-                    }.paintedTextSurface
-                    assertEquals("Actual panel underlay at step $index", expected, panel.paintedTextSurface)
+                    val floating = NativeFloatingPanelRecipe()
+                    val fill = floating.surfaceColor(palette)
+                    val expectedPaint = NoiseDrawable(fill, floating.grainSeed).apply {
+                        setNoiseIntensity(palette.surfacePreset?.foregroundGrain ?: 1f)
+                    }
+                    assertEquals("Actual panel underlay at step $index", expectedPaint.paintedTextSurface,
+                        panel.paintedTextSurface)
                     about.measure(View.MeasureSpec.makeMeasureSpec(360, View.MeasureSpec.EXACTLY),
                         View.MeasureSpec.makeMeasureSpec(640, View.MeasureSpec.AT_MOST))
                     about.layout(0, 0, about.measuredWidth, about.measuredHeight)
                     if (palette.surfacePreset == null) {
                         val bitmap = Bitmap.createBitmap(panel.width, panel.height, Bitmap.Config.ARGB_8888)
+                        val reference = Bitmap.createBitmap(panel.width, panel.height, Bitmap.Config.ARGB_8888)
                         try {
+                            expectedPaint.setBounds(0, 0, panel.width, panel.height)
+                            expectedPaint.draw(Canvas(reference))
                             panel.draw(Canvas(bitmap))
                             // The top-origin panel's inset above its content is painted by the panel itself.
+                            val pixels = mutableSetOf<Int>()
                             for (y in 2..7) for (x in 2 until panel.width - 2) {
-                                assertEquals("Flat light panel pixel ($x,$y), step $index", fill, bitmap.getPixel(x, y))
+                                val pixel = bitmap.getPixel(x, y)
+                                assertEquals("Raw light panel grain pixel ($x,$y), step $index",
+                                    reference.getPixel(x, y), pixel)
+                                pixels.add(pixel)
                             }
-                        } finally { bitmap.recycle() }
+                            assertTrue("Raw light retains visible recipe grain at step $index", pixels.size > 1)
+                        } finally { bitmap.recycle(); reference.recycle() }
                     }
                 }
             } finally {

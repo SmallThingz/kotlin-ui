@@ -41,7 +41,7 @@ class EmailComposerFields(
 
     fun bindTheme(theme: ControlTheme) {
         val colors = theme.colors
-        view.setPaletteImmediately(recipe.fillColor(colors), recipe.borderColor(colors))
+        recipe.bindImmediately(view, colors)
         subject.applyPalette(colors.settingsControls, colors.error)
     }
 

@@ -20,7 +20,7 @@ import java.util.function.LongSupplier
 
 /** Immutable appearance chosen when constructing the views for a window. */
 class NativeUiAppearance(
-    val colorScheme: NativeColorSchemeResolver = NativeColorScheme,
+    val colorScheme: NativeColorSchemeResolver = NativeDefaultColorScheme,
     val typography: NativeTypography = NativeTypography.Default,
     settingsSelectors: NativeSettingsSelectorStyle? = null,
     buttons: NativeButtonRecipes? = null,

@@ -25,6 +25,18 @@ data class NativeBackdropStyle(
     fun bindPage(binding: NativeBackdropBinding, palette: NativeColorScheme) =
         binding.bind(pageGrainSeed, palette.surface, palette.surfacePreset?.backgroundGrain ?: 1f)
 
+    /** Window handoff using the app's already-resolved palette, including its grain policy. */
+    fun windowBackground(palette: NativeColorScheme): NoiseDrawable =
+        NoiseDrawable(palette.background, windowGrainSeed).also { bindWindowBackground(it, palette) }
+
+    /** Repaint a retained window drawable without replacing its bounds or callback. */
+    fun bindWindowBackground(drawable: NoiseDrawable, palette: NativeColorScheme) {
+        drawable.setBackgroundColor(palette.background)
+        drawable.setGrainSeed(windowGrainSeed)
+        drawable.setNoiseIntensity(palette.surfacePreset?.backgroundGrain ?: 1f)
+    }
+
+    /** Framework-theme fallback for callers without an app-resolved palette. */
     fun windowBackground(context: Context): NoiseDrawable? {
         val value = TypedValue()
         if (!context.theme.resolveAttribute(android.R.attr.colorBackground, value, true)) return null

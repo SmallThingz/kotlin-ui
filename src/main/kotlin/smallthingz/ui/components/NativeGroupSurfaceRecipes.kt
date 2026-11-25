@@ -62,6 +62,12 @@ data class NativeGroupSurfaceRecipe(
         surface.setSurfacePreset(colors.surfacePreset)
         surface.setPalette(fillColor(colors), borderColor(colors))
     }
+
+    /** Apply preset and paint synchronously, retiring any previous palette transition. */
+    fun bindImmediately(surface: NativeGroupLayout, colors: NativeColorScheme) {
+        surface.setSurfacePreset(colors.surfacePreset)
+        surface.setPaletteImmediately(fillColor(colors), borderColor(colors))
+    }
 }
 
 /** Waveform viewport and boundary-control geometry within a range editor. */

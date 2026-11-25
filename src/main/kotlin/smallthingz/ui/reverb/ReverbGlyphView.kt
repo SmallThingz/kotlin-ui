@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Canvas
 import android.os.Bundle
 import android.view.View
+import smallthingz.ui.components.NativeTextSurface
+import smallthingz.ui.components.NativeTextSurfaceTarget
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityEvent
 import smallthingz.ui.text.view.NativeSourceAccessibilityNode
@@ -16,7 +18,7 @@ class ReverbGlyphView(
     context: Context,
     icon: ReverbIcon,
     color: Int,
-) : View(context) {
+) : View(context), NativeTextSurfaceTarget {
     private var descriptionWindow: PlainTextAccessibilityWindowScope? = null
     private var descriptionAccessibility: PlainTextAccessibility? = null
     private var descriptionExposure: (() -> Boolean)? = null
@@ -28,6 +30,7 @@ class ReverbGlyphView(
     private var publishedTint=color
     var useTextSurfaceContrast=false
         set(value) { if(field!=value){field=value;invalidate()} }
+    override fun invalidateTextSurfaceInk() { if (useTextSurfaceContrast) invalidate() }
     private var colorTransition:ViewColorTransition?=null
     init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO; isFocusable = false }
     fun bind(icon: ReverbIcon, color: Int) {
@@ -46,7 +49,7 @@ class ReverbGlyphView(
     }
     private fun publishTint() {
         val ink = if (!useTextSurfaceContrast || colorTransition == null) displayedColor else
-            smallthingz.ui.controls.textSurfaceForeground(ReverbTextSurface.sample(this),displayedColor)
+            smallthingz.ui.controls.textSurfaceForeground(NativeTextSurface.sample(this),displayedColor)
         if (publishedTint != ink) { publishedTint=ink;glyph.setTint(ink) }
     }
     private fun applyTint() {colorTransition?.let {displayedColor=it.color(0)};publishTint();invalidate()}

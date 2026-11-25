@@ -23,13 +23,8 @@ fun createReverbActionSheet(
 fun NativeActionSheet.bindReverbTheme(environment: ReverbTheme) =
     updateStyle(reverbActionSheetStyle(environment))
 
-fun reverbActionSheetStyle(theme: ReverbTheme): NativeActionSheetStyle {
-    val palette = theme.palette.copy(surfaceContainerLow = ReverbDesign.modalSurface(theme.palette))
-    return ReverbDesign.appearance.modals.actionSheetStyle(theme.density, theme.fontResolver, palette).let {
-        it.copy(recipe = it.recipe.copy(handleHeightDp = 2f, handleVerticalPaddingDp = 16f,
-            grainSeed = if (palette.surfacePreset != null) it.recipe.grainSeed else null))
-    }
-}
+fun reverbActionSheetStyle(theme: ReverbTheme): NativeActionSheetStyle =
+    theme.appearance.modals.actionSheetStyle(theme.density, theme.fontResolver, theme.palette)
 
 internal fun createReverbSupportingParagraph(
     context: Context, text: String, role: NativeTypographyRole, theme: ReverbTheme,
