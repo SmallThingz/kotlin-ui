@@ -26,6 +26,7 @@ class ZfmLocationControl(
 ) : NativeSettingsRow(context, theme.palette, theme.locationRowStyle()) {
     private var boundTitle: String? = null
     private var boundParent: String? = null
+    private var boundOwner: Any? = null
     private var locationAction: (() -> Unit)? = null
     private val guardedAction: () -> Unit = {
         if (isAttachedToWindow && isShown && isEnabled && hasWindowFocus()) {
@@ -64,18 +65,36 @@ class ZfmLocationControl(
             paddingLeft + paddingRight + pixels(style.iconSizeDp) +
             pixels(style.gapDp))
 
+    /** Retains the original positional callback API, using the description as its owner. */
     fun bindLocation(
         title: String,
         parent: String,
         description: String,
         enabled: Boolean,
         onClick: () -> Unit,
+    ) = bindLocation(title, parent, description, enabled, description, onClick)
+
+    /**
+     * [owner] must be an immutable equality key for the navigation visit and action mode.
+     * Equal owners retain an in-flight press even when the callback object is refreshed.
+     * The description default is for callers without a stronger semantic owner.
+     */
+    fun bindLocation(
+        title: String,
+        parent: String,
+        description: String,
+        enabled: Boolean,
+        owner: Any? = description,
+        onClick: () -> Unit,
     ) {
-        locationAction = onClick
-        // The common bind requests layout; callback/description-only changes must not.
-        if (boundTitle != title || boundParent != parent) {
+        if (boundOwner != owner || !enabled) {
             cancelPendingInputEvents()
             isPressed = false
+        }
+        boundOwner = owner
+        locationAction = onClick.takeIf { enabled }
+        // The common bind requests layout; callback/description-only changes must not.
+        if (boundTitle != title || boundParent != parent) {
             bind(title = title, detail = parent, onClick = guardedAction)
             boundTitle = title
             boundParent = parent
