@@ -79,16 +79,31 @@ class ZfmTheme private constructor(private val theme: ReverbTheme) {
         filled: Boolean = false,
         enabled: Boolean = true,
         recipe: NativeButtonRecipe = if (filled) buttons.filled else buttons.text,
+        foreground: Int = accent,
         onClick: () -> Unit,
-    ): NativeMaterialButtonView = NativeMaterialButtonView(
-        context, recipe, density, fontResolver, onClick = onClick,
-    ).also { bindButton(it, label, enabled) }
+    ): NativeMaterialButtonView = AppButton(
+        context, this, filled, recipe, ButtonForeground.resolve(foreground, this), onClick,
+    ).also { bindButton(it, label, enabled, filled, foreground) }
 
-    /** The button must have been constructed with a NativeButtonRecipe. */
+    /**
+     * The button must have been constructed with a NativeButtonRecipe. Omitted overrides retain
+     * a ZFM button's filled identity, semantic foreground and current callback.
+     */
     fun bindButton(button: NativeMaterialButtonView, label: String = button.label.getText(),
-                   enabled: Boolean = button.isEnabled) {
+                   enabled: Boolean = button.isEnabled,
+                   filled: Boolean? = null, foreground: Int? = null,
+                   onClick: (() -> Unit)? = null) {
+        val filledAction = filled ?: (button as? AppButton)?.filledAction ?: false
+        val foregroundColor = foreground ?: (button as? AppButton)?.defaultForeground?.color(this) ?: accent
+        // Geometry and filled/text identity belong to the retained construction recipe.
+        require(button !is AppButton || button.filledAction == filledAction) {
+            "A retained button must keep its construction recipe"
+        }
+        val colors = if (filledAction || foregroundColor == accent) buttonPalette
+            else buttonPalette.copy(accent = foregroundColor)
         button.bindTypography(density, fontResolver)
-        button.bind(label, enabled, buttonPalette)
+        if (onClick == null) button.bind(label, enabled, colors)
+        else button.bind(label, enabled, colors, onClick = onClick)
     }
 
     companion object {
@@ -96,3 +111,33 @@ class ZfmTheme private constructor(private val theme: ReverbTheme) {
             ZfmTheme(ReverbDesign.theme(context, dark))
     }
 }
+
+/** Keep semantic foregrounds across palette changes without repurposing the caller's view tags. */
+private class ButtonForeground private constructor(private val role: Role, private val explicit: Int) {
+    private enum class Role { ACCENT, CONTENT, ERROR, EXPLICIT }
+
+    fun color(theme: ZfmTheme): Int = when (role) {
+        Role.ACCENT -> theme.accent
+        Role.CONTENT -> theme.ink
+        Role.ERROR -> theme.error
+        Role.EXPLICIT -> explicit
+    }
+
+    companion object {
+        fun resolve(color: Int, theme: ZfmTheme) = ButtonForeground(when (color) {
+            theme.accent -> Role.ACCENT
+            theme.ink -> Role.CONTENT
+            theme.error -> Role.ERROR
+            else -> Role.EXPLICIT
+        }, color)
+    }
+}
+
+private class AppButton(
+    context: Context,
+    theme: ZfmTheme,
+    val filledAction: Boolean,
+    recipe: NativeButtonRecipe,
+    val defaultForeground: ButtonForeground,
+    onClick: () -> Unit,
+) : NativeMaterialButtonView(context, recipe, theme.density, theme.fontResolver, onClick = onClick)
