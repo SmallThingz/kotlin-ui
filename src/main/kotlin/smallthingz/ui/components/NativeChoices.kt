@@ -13,6 +13,7 @@ import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.DrawableWrapper
 import android.os.Bundle
+import android.text.Layout
 import android.text.TextUtils
 import android.text.Spanned
 import android.text.style.CharacterStyle
@@ -77,6 +78,8 @@ data class NativeChoiceStyle(
     val animateSelection: Boolean = true,
     /** Optional selected-focus ink; null preserves the existing accent outline. */
     val focusedSelectedOutline: NativeChoiceColor? = null,
+    /** Opt in to preserving complete short labels when equal-width choices choose their columns. */
+    val minimumLabelWidth: NativeChoiceLabelWidth = NativeChoiceLabelWidth.GlyphMinimum,
 ) {
     init {
         require(floatArrayOf(radiusDp, minHeightDp, textSizeSp, horizontalPaddingDp,
@@ -616,6 +619,15 @@ class NativeChip(
 
     internal fun minimumCellWidth(): Int {
         val iconWidth = activeIcon()?.bounds?.width() ?: 0
+        if (choiceStyle.minimumLabelWidth == NativeChoiceLabelWidth.WholeLabel) {
+            // onMeasure has already refreshed typography. Preserve the full source when an
+            // ordinary label's layout has ellipsized; reuse transformed text without invoking
+            // a caller's transformation a second time just to probe its width.
+            val displayed = if (transformationMethod == null) text else layout?.text ?: text
+            val labelWidth = if (displayed.isNullOrEmpty()) 0f else Layout.getDesiredWidth(displayed, paint)
+            return wholeLabelChoiceCellWidth(dp(48f), paddingLeft + paddingRight, labelWidth,
+                iconWidth, trailingIcon?.bounds?.width() ?: 0, compoundDrawablePadding, choiceStyle.iconAbove)
+        }
         val textWidth = if (text.isNullOrEmpty()) 0 else max(1, paint.measureText("M").roundToInt())
         val contentWidth = if (choiceStyle.iconAbove) max(iconWidth, textWidth)
             else iconWidth + textWidth + if (iconWidth > 0 && textWidth > 0) compoundDrawablePadding else 0
@@ -1057,8 +1069,8 @@ open class NativeSegmentedChoice(
         naturalWidth += gap.toLong() * max(0, count - 1)
         val compact = singleRow && capsuleColumns == null
         val effectiveFixedColumns = (capsuleColumns ?: fixedColumns)?.let { requested ->
-            if (widthMode == MeasureSpec.UNSPECIFIED) requested else min(requested,
-                max(1, ((available.toLong() + gap) / max(1L, minimumCell.toLong() + gap)).toInt()))
+            if (widthMode == MeasureSpec.UNSPECIFIED) requested else
+                choiceColumnsThatFit(available, gap, minimumCell, requested)
         }
         val singleRowColumns = if (compact) count else effectiveFixedColumns ?: count
         val equalWidth = largest.toLong() * singleRowColumns + gap.toLong() * max(0, singleRowColumns - 1)
@@ -1104,8 +1116,8 @@ open class NativeSegmentedChoice(
             rowCount = 1
         } else if (count > 0) {
             val columnMinimum = if (arrangement == ChoiceArrangement.EqualWidth) minimumCell else largest
-            val rowColumns = effectiveFixedColumns ?: if (fillCells) minOf(count, maxColumns,
-                max(1, ((contentWidth.toLong() + gap) / max(1L, columnMinimum.toLong() + gap)).toInt()))
+            val rowColumns = effectiveFixedColumns ?: if (fillCells)
+                choiceColumnsThatFit(contentWidth, gap, columnMinimum, min(count, maxColumns))
                 else maxColumns
             measuredColumns = rowColumns
             if (fillCells) {
