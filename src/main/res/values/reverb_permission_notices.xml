@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="reverb_permission_notices_summary">
+        <item quantity="one">%d permission needs attention</item>
+        <item quantity="other">%d permissions need attention</item>
+    </plurals>
+    <string name="reverb_permission_notices_review">Review permissions</string>
+    <string name="reverb_permission_notices_hide">Hide details</string>
+</resources>

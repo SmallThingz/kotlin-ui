@@ -143,9 +143,17 @@ open class ReverbPermissionOnboardingScreen(
     unavailableMessage: String,
     onRequest: (ReverbPermissionOnboardingKind) -> Unit,
     private val onContinue: () -> Unit,
+    groupMissingPermissions: Boolean = false,
 ) : ViewGroup(context) {
+    // Preserve the original constructor, including Kotlin trailing-lambda and JVM callers.
+    constructor(context: Context, theme: ReverbTheme, title: String, continueLabel: String,
+        unavailableMessage: String, onRequest: (ReverbPermissionOnboardingKind) -> Unit,
+        onContinue: () -> Unit) : this(context, theme, title, continueLabel, unavailableMessage,
+            onRequest, onContinue, false)
+
     private val geometry = ReverbOnboardingScreenLayout(theme.density)
-    private val permissions = ReverbPermissionOnboardingRows(context, theme, onRequest = onRequest)
+    private val permissions = if (groupMissingPermissions) null else ReverbPermissionOnboardingRows(context, theme, onRequest = onRequest)
+    private val notices = if (groupMissingPermissions) ReverbPermissionNotices(context, theme, onRequest) else null
     private var canContinue = false
     private val unavailable = createReverbSupportingParagraph(context, unavailableMessage, NativeTypographyRole.BODY_SMALL, theme).apply {
         visibility = View.GONE
@@ -170,7 +178,7 @@ open class ReverbPermissionOnboardingScreen(
             addView(theme.paragraph(context, title, NativeTypographyRole.HEADLINE_MEDIUM).apply {
                 isAccessibilityHeading = true
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16) })
-            addView(permissions.view, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(24) })
+            addView(notices?.view ?: requireNotNull(permissions).view, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(24) })
             addView(unavailable, LinearLayout.LayoutParams(-1, -2).apply {
                 topMargin = dp(theme.appearance.outlinedField.supportingPaddingDp)
             })
@@ -190,7 +198,8 @@ open class ReverbPermissionOnboardingScreen(
     }
 
     fun bindPermissions(values: List<ReverbPermissionOnboardingState>, continueEnabled: Boolean) {
-        permissions.bind(values)
+        permissions?.bind(values)
+        notices?.bind(values)
         if (canContinue != continueEnabled) done.cancelInput()
         canContinue = continueEnabled
         done.bind(label, continueEnabled, theme.palette.buttonPalette)
