@@ -78,6 +78,7 @@ class NativeJoinedFieldGroup internal constructor(
     private val fields: Array<out NativeLabeledTextField>,
 ) {
     fun bindPalette(palette: NativeColorScheme) {
+        view.setSurfacePreset(palette.surfacePreset)
         view.setPalette(palette.field, palette.border)
         for (field in fields) field.applyPalette(palette.settingsControls, palette.error)
     }
