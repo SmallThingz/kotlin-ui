@@ -37,7 +37,7 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
     }
 
     private fun scenario(policy: DropdownSelectionPolicy = DropdownSelectionPolicy.PROGRESSIVE,
-        collapseMillis: Long = 0, optionCount: Int = 40, action: (Fixture) -> Unit) {
+        collapseMillis: Long = 0, optionCount: Int = 40, partialEdges: Boolean = false, action: (Fixture) -> Unit) {
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         var fixture: Fixture? = null
@@ -49,7 +49,12 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
                 val anchor = View(activity)
                 root.addView(anchor, FrameLayout.LayoutParams((280 * scale).roundToInt(),
                     (64 * scale).roundToInt(), Gravity.CENTER))
-                activity.setContentView(root)
+                if (partialEdges) {
+                    // Center one row in a four-row host. Both edges bisect a real option.
+                    activity.setContentView(FrameLayout(activity).apply {
+                        addView(root, FrameLayout.LayoutParams(-1, 4 * anchor.layoutParams.height, Gravity.CENTER))
+                    })
+                } else activity.setContentView(root)
                 val owner = NativeAnchoredDropdown(activity, root, appearance,
                     appearance.resolveColorScheme(activity, false), Density(scale), createFontFamilyResolver(activity),
                     appearance.anchoredDropdown.copy(expandMillis = 0, settleMillis = 0, collapseMillis = collapseMillis))
@@ -96,6 +101,44 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
                 assertFalse(flinging(f))
             }
         }
+
+    @Test fun upperPartialOptionBrowsesBeforeExplicitActivation() = checkPartialOptionTap(lower = false)
+
+    @Test fun lowerPartialOptionBrowsesBeforeExplicitActivation() = checkPartialOptionTap(lower = true)
+
+    private fun checkPartialOptionTap(lower: Boolean) = scenario(DropdownSelectionPolicy.EXPLICIT, partialEdges = true) { f ->
+        val inset = 5f * f.root.resources.displayMetrics.density
+        fun cueY() = if (lower) f.wheel.height - inset else inset
+        fun rows() = (0 until f.wheel.childCount).map(f.wheel::getChildAt).filterIsInstance<NativeDropdown<*>>()
+        fun tap(y: Float) {
+            val now = SystemClock.uptimeMillis()
+            touch(f, MotionEvent.ACTION_DOWN, now, now, y)
+            touch(f, MotionEvent.ACTION_UP, now, now + 10, y)
+        }
+        var expected = -1
+        await("Clipped option missing under the overflow cue") {
+            val y = cueY()
+            val edge = rows().singleOrNull { y >= it.translationY && y < it.translationY + it.height }
+            if (edge == null) return@await false
+            val clipped = if (lower) edge.translationY + edge.height > f.wheel.height else edge.translationY < 0f
+            if (clipped && edge.importantForAccessibility == View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS) {
+                expected = edge.optionAccessibilityLabel.toString().removePrefix("Choice ").toInt()
+                expected != f.optionCount / 2
+            } else false
+        }
+        main { tap(cueY()) }
+        assertTrue("A clipped edge tap must only browse", f.selections.isEmpty())
+        await("Edge option did not reach the anchor fully visible") {
+            f.wheel.isAttachedToWindow && rows().any { row ->
+                row.optionAccessibilityLabel.toString() == "Choice $expected" && row.isFocusable && !row.isSelected &&
+                    row.importantForAccessibility == View.IMPORTANT_FOR_ACCESSIBILITY_YES &&
+                    abs(row.translationY + row.height / 2f - slotY(f)) < .5f
+            }
+        }
+        assertTrue(f.selections.isEmpty())
+        main { tap(slotY(f)) }
+        assertEquals(listOf(expected), f.selections)
+    }
 
     @Test fun evictedRowActionCannotCommitAfterItsLogicalSlotIsRemounted() =
         scenario(DropdownSelectionPolicy.EXPLICIT, optionCount = 200) { f ->

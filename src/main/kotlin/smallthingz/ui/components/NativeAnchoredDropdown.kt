@@ -59,7 +59,8 @@ data class NativeAnchoredDropdownStyle(
 
 /**
  * A window owner for [NativeDropdown] fields. Each option occurs once in the rotated list.
- * A drag can coast after release, then snaps to a slot; a tap selects while collapsing.
+ * A drag can coast after release, then snaps to a slot. In explicit mode a tap on a partial
+ * option brings it into view. Tapping a fully visible option selects it and closes the wheel.
  * The caller owns values and must [close] this host with its screen lifetime.
  */
 class NativeAnchoredDropdown(
@@ -441,6 +442,7 @@ class NativeAnchoredDropdown(
             var downY = 0f
             var dragging = false
             var downRow = 0
+            private var downRowWasFullyVisible = false
             var explicitTap = false
             var earlyTap = false
             var pointer = -1
@@ -721,9 +723,10 @@ class NativeAnchoredDropdown(
                         // animation must keep running, including after cancellation/pointer loss.
                         if (!closing) stopAnimation()
                         if (event.y < revealTop || event.y > revealBottom) { cancelSelection(); return true }
+                        downRow = rowAt(event.y)
+                        downRowWasFullyVisible = rows[downRow]?.importantForAccessibility == View.IMPORTANT_FOR_ACCESSIBILITY_YES
                         if (!closing && reveal < 1f) animate(position, 1f, style.expandMillis, move = false) {}
                         gesturePosition = position
-                        downRow = rowAt(event.y)
                         pointer = event.getPointerId(0); downX = event.x; downY = event.y; dragging = false
                         explicitTap = selectionPolicy == DropdownSelectionPolicy.EXPLICIT && event.x >= 0f && event.x < width
                         val tracker = velocityTracker ?: VelocityTracker.obtain().also { velocityTracker = it }
@@ -801,7 +804,14 @@ class NativeAnchoredDropdown(
                                 val rowY = y - row.translationY
                                 if (rowY >= 0f && rowY < rowHeight) {
                                     row.showTapIndication(x, rowY)
-                                    collapse(downRow, afterTapIndication = true)
+                                    // A partial option is a scroll affordance. Bring it into the
+                                    // slot before accepting a separate explicit activation.
+                                    if (selectionPolicy == DropdownSelectionPolicy.EXPLICIT &&
+                                        (!downRowWasFullyVisible || row.importantForAccessibility != View.IMPORTANT_FOR_ACCESSIBILITY_YES)) {
+                                        settle(downRow)
+                                    } else {
+                                        collapse(downRow, afterTapIndication = true)
+                                    }
                                 }
                             }
                         }
