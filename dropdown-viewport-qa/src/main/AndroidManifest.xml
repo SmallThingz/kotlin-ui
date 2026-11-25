@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application android:label="Dropdown Viewport QA" android:theme="@android:style/Theme.Material.NoActionBar" android:allowBackup="false" android:supportsRtl="true">
+    <application android:label="Dropdown Viewport QA" android:theme="@style/NativeDefaultLightHostTheme" android:allowBackup="false" android:supportsRtl="true">
         <activity android:name=".MainActivity" android:exported="true" android:enableOnBackInvokedCallback="false">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -26,10 +26,13 @@ is the default for both `NativeUiAppearance()` and `NativeUiAppearance.Default`.
 controls. Dark mode uses `NativeDarkSurfacePreset.Amoled.colorScheme()`: a black
 page, 25% foreground lightness, 100% background grain, 50% foreground grain,
 and a 1 dp outline at 15% lightness. Light mode starts from raw `NativeColorScheme`
-colors and darkens only the RGB channels of `background` and `surface` by 4%,
-preserving their alpha. Every other light color role remains unchanged. It adds
-`NativeGrainPreset(backgroundGrain = 1f, foregroundGrain = .5f)` and keeps the
-existing light outline policy.
+colors and sets `background` and `surface` from the library's
+`native_default_light_background` resource. It resolves to `#F3EDF4` below API 31,
+`@android:color/system_neutral2_50` on API 31–33, and
+`@android:color/system_background_light` on API 34 and later. These values also
+apply when the caller selects Light under a night configuration. The resolver
+preserves every other Light Material color role and the existing light outline
+policy, and adds `NativeGrainPreset(backgroundGrain = 1f, foregroundGrain = .5f)`.
 
 Apps can explicitly configure these APIs. Raw Material, gray, tinted and custom
 resolvers remain supported, including overrides supplied through `appearance.copy`.
@@ -63,8 +66,8 @@ val recoloredTheme = theme.withColorScheme(colors)
 
 `theme.withColorScheme(colors)` supplies an explicit resolved palette while
 retaining the window's appearance, typography and density. `ReverbDesign` uses
-exactly the shared default colors; `NativeDefaultColorScheme` owns the 4% light
-darkening, with no additional local palette adjustment in Reverb.
+`NativeDefaultColorScheme`, including its qualified Light backdrop and grain
+preset.
 
 The singleton caches the immutable AMOLED resolver and light grain preset.
 It still resolves colors for the supplied SDK and resource reader on each call;

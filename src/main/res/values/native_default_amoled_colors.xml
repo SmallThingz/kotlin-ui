@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Checked against NativeDarkSurfaces.kt by verifyDefaultAmoledBackground. -->
-<resources>
-    <color name="native_default_amoled_background">#000000</color>
-</resources>
