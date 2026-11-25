@@ -153,6 +153,68 @@ class NativeForegroundGrainIntegrationTest {
         } finally { runtime.close() }
     }
 
+    @Test fun switchThemeRebindKeepsThinOutlineAndSameStateThumbGeometry() = onMain { base ->
+        for (densityDpi in listOf(160, 240)) {
+            val config = android.content.res.Configuration(base.resources.configuration).apply {
+                this.densityDpi = densityDpi
+                fontScale = 1.3f
+            }
+            val context = base.createConfigurationContext(config)
+            val density = context.resources.displayMetrics.density
+            val dark = NativeDefaultColorScheme.resolve(true, 30) { context.getColor(it) }
+            val light = NativeDefaultColorScheme.resolve(false, 30) { context.getColor(it) }
+            for (checked in listOf(false, true)) for (enabled in listOf(false, true)) {
+                for (pressed in listOf(false, true)) for (rtl in listOf(false, true)) {
+                    val view = NativeMaterialSwitchView(context, dark.switchPalette, checked, enabled)
+                    view.layoutDirection = if (rtl) android.view.View.LAYOUT_DIRECTION_RTL else android.view.View.LAYOUT_DIRECTION_LTR
+                    view.bindSurfacePreset(dark.surfacePreset)
+                    view.setVisualPressed(pressed)
+                    val unspecified = android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
+                    view.measure(unspecified, unspecified)
+                    view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+                    val size = checkNotNull(field(view, "sizeMotion"))
+                    val offset = checkNotNull(field(view, "offsetMotion"))
+                    val thumb = field(size, "value") as Float
+                    val position = field(offset, "value") as Float
+                    assertEquals((if (pressed) 28f else if (checked) 24f else 16f) * density, thumb, 0f)
+                    val width = view.measuredWidth
+                    val height = view.measuredHeight
+                    val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                    try {
+                        val canvas = android.graphics.Canvas(bitmap)
+                        fun drawnStroke(): Float {
+                            view.draw(canvas)
+                            return (field(view, "borderPaint") as android.graphics.Paint).strokeWidth
+                        }
+                        // Dark is the retained reference; palette-only rebinding must not retarget geometry.
+                        assertEquals(density, drawnStroke(), 0f)
+                        for (colors in listOf(light, dark, light)) {
+                            view.bindSurfacePreset(colors.surfacePreset)
+                            view.setPalette(colors.switchPalette)
+                            view.setState(checked, enabled)
+                            assertSame(size, field(view, "sizeMotion"))
+                            assertSame(offset, field(view, "offsetMotion"))
+                            assertEquals(thumb, field(size, "value") as Float, 0f)
+                            assertEquals(position, field(offset, "value") as Float, 0f)
+                            assertEquals(false, field(size, "isRunning"))
+                            assertEquals(false, field(offset, "isRunning"))
+                            assertEquals(width, view.measuredWidth)
+                            assertEquals(height, view.measuredHeight)
+                            assertEquals(density, drawnStroke(), 0f)
+                        }
+                        // Public explicit customization remains authoritative on a palette-only bind.
+                        view.setTrackOutline(3f, Color.RED)
+                        view.setPalette(dark.switchPalette)
+                        assertEquals(3f * density, drawnStroke(), 0f)
+                        // A preset change still owns style reset, including the palette-free default.
+                        view.bindSurfacePreset(null)
+                        assertEquals(density, drawnStroke(), 0f)
+                    } finally { bitmap.recycle() }
+                }
+            }
+        }
+    }
+
     private fun field(owner: Any, name: String): Any? = owner.javaClass.getDeclaredField(name).let {
         it.isAccessible = true
         it.get(owner)
