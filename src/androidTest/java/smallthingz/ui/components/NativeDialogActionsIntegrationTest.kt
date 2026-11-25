@@ -305,13 +305,13 @@ class NativeDialogActionsIntegrationTest {
                 }
                 onMain {
                     assertTrue("Sheet must be visibly attached", ready)
-                    val info = cancel.createAccessibilityNodeInfo()
+                    val info = requireNotNull(cancel.createAccessibilityNodeInfo()) { "Missing Cancel button node" }
                     try {
                         assertTrue(info.isVisibleToUser)
                         assertTrue(info.actionList.contains(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK))
                         assertTrue(cancel.mergedRowAccessibility.isNodePresent())
                     } finally { info.recycle() }
-                    val label = cancel.label.createAccessibilityNodeInfo()
+                    val label = requireNotNull(cancel.label.createAccessibilityNodeInfo()) { "Missing Cancel label node" }
                     try { assertEquals("Cancel", label.text.toString()) } finally { label.recycle() }
                     assertTrue(cancel.performAccessibilityAction(
                         android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK, null))
