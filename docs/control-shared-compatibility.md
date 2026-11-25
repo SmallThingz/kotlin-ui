@@ -73,3 +73,45 @@ migrating exhaustive consumers is required when adopting launcher identity.
 
 These test sources were added without running a build, instrumentation, or device
 operation. Their presence is not a claim that compilation or execution passed.
+
+## Opt-in canonical launcher artwork bounds
+
+`ReverbProductIdentity.Launcher(drawable, artworkBounds = null)` retains the
+existing full-drawable `FIT_CENTER` policy when the optional bounds are omitted.
+The one-argument JVM constructor remains available. Other identity variants,
+color/tint behavior, action/accessibility ownership and the centered 48dp toolbar
+slot are unchanged.
+
+For canonical foreground artwork whose vector viewport contains launcher safe
+padding, pass its original drawable resource and `ReverbLauncherArtworkBounds`
+with normalized ink bounds (including strokes). The retained ImageView uniformly
+fits and centers that declared ink, without changing paths or resource colors.
+Do not pass adaptive-wrapper coordinates as if they were the original foreground
+viewport: the platform owns the wrapper inset. Bounds outside [0,1], empty or
+nonfinite bounds are rejected. Missing/zero dimensions use ordinary FIT_CENTER
+until measurable; a size change recomputes the matrix.
+
+For Control's existing 108x108 `ic_rc_foreground`, all fill and stroke ink lies
+inside x34..74/y26..82:
+
+```kotlin
+ReverbProductIdentity.Launcher(
+    R.drawable.ic_rc_foreground,
+    ReverbLauncherArtworkBounds(34f / 108f, 26f / 108f, 74f / 108f, 82f / 108f),
+)
+```
+
+This reuses its original foreground, background-colored cutouts, and accent.
+It does not introduce a new mark or recolor it. At a square 48dp slot, the declared
+40x56 ink becomes about 34.286x48dp, centered on both axes; normal unconstrained
+full-viewport fit was about 17.778x24.889dp before any adaptive inset.
+
+`Launcher` is a data class with a new optional constructor property. Rebuild
+consumers using generated `copy`/default-copy descriptors; the legacy one-argument
+constructor alone is not a general binary-compatibility guarantee. There is no
+new sealed variant requiring another exhaustive `when` branch.
+
+Six focused pure-JVM geometry controls cover canonical and asymmetric ink,
+resize/density, ordinary full bounds, unmeasured/nonintrinsic/subnormal inputs,
+and invalid bounds. They do not establish Android draw/accessibility behavior;
+combined Android compilation and actual visual fit remain pending.
