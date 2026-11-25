@@ -16,6 +16,7 @@ import kotlin.math.roundToInt
 /** Reverb's compact warning surface: one group, only missing permissions, independent review actions.
  * The host supplies live facts on resume/focus/permission results; this view never queries or grants access.
  * Owns its external insets, including when mounted directly between a header and weighted content.
+ * The complete notice uses at most half the offered height and 168dp, with internal scrolling.
  */
 class ReverbPermissionNotices(
     context: Context,
@@ -29,15 +30,9 @@ class ReverbPermissionNotices(
     private var closed = false
     private val recipe = environment.appearance.groupSurfaces.settingsWarning
     private val group = recipe.create(context, ReverbTextSurface::invalidate).also { recipe.bind(it, environment.palette) }
-    private val details = NativeGroupLayout(context, 0f)
-    private val detailsScroll = object : ScrollView(context) {
-        init { visibility = GONE; addView(details) }
-        override fun onMeasure(w: Int, h: Int) {
-            val limit = if (MeasureSpec.getMode(h) == MeasureSpec.UNSPECIFIED) dp(168)
-                else min(dp(168), MeasureSpec.getSize(h))
-            super.onMeasure(w, atMost(limit))
-        }
-    }
+    private val details = NativeGroupLayout(context, 0f).apply { visibility = View.GONE }
+    private val scrollContent = NativeGroupLayout(context, 0f)
+    private val viewport = ScrollView(context).apply { addView(scrollContent) }
     private val summary = NoticeRow(context) {
         if (!closed && reverbInformationInputAllowed(view)) {
             state.setExpanded(!state.expanded)
@@ -45,10 +40,13 @@ class ReverbPermissionNotices(
         }
     }
     init {
-        group.addRow(summary, NativeGroupLayout.LayoutParams(-1, -2))
-        group.addRow(detailsScroll, NativeGroupLayout.LayoutParams(-1, -2).apply { dividerTop = true })
+        scrollContent.addRow(summary, NativeGroupLayout.LayoutParams(-1, -2))
+        scrollContent.addRow(details, NativeGroupLayout.LayoutParams(-1, -2).apply { dividerTop = true })
+        group.addRow(viewport, NativeGroupLayout.LayoutParams(-1, -1))
     }
     val view: ViewGroup = object : ViewGroup(context) {
+        private var sideInset = 0
+        private var verticalInset = 0
         init {
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             accessibilityLiveRegion = ACCESSIBILITY_LIVE_REGION_POLITE
@@ -57,11 +55,19 @@ class ReverbPermissionNotices(
         }
         override fun onMeasure(w: Int, h: Int) {
             val width = MeasureSpec.getSize(w)
-            group.measure(exact((width - 2 * dp(16)).coerceAtLeast(0)), unspecified())
-            setMeasuredDimension(resolveSize(width, w), resolveSize(group.measuredHeight + 2 * dp(12), h))
+            val offered = MeasureSpec.getSize(h).takeIf { MeasureSpec.getMode(h) != MeasureSpec.UNSPECIFIED }
+            val budget = permissionNoticeHeightBudget(offered, dp(168))
+            sideInset = min(dp(16), width / 2)
+            verticalInset = min(dp(12), budget / 2)
+            val insideWidth = (width - 2 * sideInset).coerceAtLeast(0)
+            // Measure natural text only INSIDE the scroll viewport. The painted group itself gets
+            // the viewport's bounded size, never its overflowing content height.
+            viewport.measure(exact(insideWidth), atMost((budget - 2 * verticalInset).coerceAtLeast(0)))
+            group.measure(exact(insideWidth), exact(viewport.measuredHeight))
+            setMeasuredDimension(resolveSize(width, w), resolveSize(group.measuredHeight + 2 * verticalInset, h))
         }
         override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-            group.layout(dp(16), dp(12), width - dp(16), dp(12) + group.measuredHeight)
+            group.layout(sideInset, verticalInset, sideInset + group.measuredWidth, verticalInset + group.measuredHeight)
         }
     }
 
@@ -109,8 +115,8 @@ class ReverbPermissionNotices(
         val description = view.context.getString(if (state.expanded) smallthingz.ui.R.string.reverb_permission_notices_hide
             else smallthingz.ui.R.string.reverb_permission_notices_review)
         summary.bind(title, description, action, count > 0)
-        detailsScroll.visibility = if (state.expanded) View.VISIBLE else View.GONE
-        if (!state.expanded && summaryBound) detailsScroll.scrollTo(0, 0)
+        details.visibility = if (state.expanded) View.VISIBLE else View.GONE
+        if (!state.expanded && summaryBound) viewport.scrollTo(0, 0)
         summaryBound = true
         group.requestLayout()
     }
