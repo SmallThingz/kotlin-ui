@@ -46,6 +46,7 @@ import smallthingz.ui.reverb.settings.ReverbSettingsSectionListView
 import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.text.view.ParagraphView
 import smallthingz.ui.unit.Density
+import smallthingz.ui.util.closePreservingPrimaryFailure
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
@@ -122,7 +123,7 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
         )
         lateinit var environment: ReverbEnvironment
         var installed: ReverbLabeledSegmentedSelector<Mode>? = null
-        try {
+        withRetiringTestActivity(activity, root = { installed }, cleanup = { installed?.close() }) {
             instrumentation.runOnMainSync {
                 environment = ReverbEnvironment(activity, false).forSettings()
                 val selector = ReverbLabeledSegmentedSelector(activity, environment, "Retention", options, Mode.TIME,
@@ -171,11 +172,6 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
                 selector.close()
                 assertFalse(automatic.performClick())
                 assertEquals(listOf(Mode.AUTOMATIC), requests)
-            }
-        } finally {
-            instrumentation.runOnMainSync {
-                installed?.close()
-                activity.finish()
             }
         }
     }
@@ -671,10 +667,12 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
         val screen = TraversalScreen(activity, state.environment, runtime, sections)
         fun bind() = sections.bindSection(ReverbSettingsSectionKey.RETENTION)
         fun close() {
-            screen.close()
-            sections.close()
-            selector.close()
-            runtime.close()
+            var failure: Throwable? = null
+            failure = closePreservingPrimaryFailure(failure) { screen.close() }
+            failure = closePreservingPrimaryFailure(failure) { sections.close() }
+            failure = closePreservingPrimaryFailure(failure) { selector.close() }
+            failure = closePreservingPrimaryFailure(failure) { runtime.close() }
+            failure?.let { throw it }
         }
     }
 
@@ -682,7 +680,7 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         var fixture: TraversalFixture? = null
-        try {
+        withRetiringTestActivity(activity, root = { fixture?.screen }, cleanup = { fixture?.close() }) {
             main {
                 fixture = TraversalFixture(activity, SelectorState(
                     ReverbEnvironment(activity, false).forSettings(), options, help = help)).also {
@@ -697,8 +695,6 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
                 assertTrue(mounted.selector.width > 0 && mounted.selector.height > 0)
             }
             block(mounted)
-        } finally {
-            main { fixture?.close(); activity.finish() }
         }
     }
 
@@ -804,7 +800,7 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         var fixture: Fixture? = null
-        try {
+        withRetiringTestActivity(activity, root = { fixture?.root }, cleanup = { fixture?.selector?.close() }) {
             main {
                 val environment = ReverbEnvironment(activity, false).forSettings()
                 val requests = mutableListOf<Mode>()
@@ -819,11 +815,6 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
             }
             instrumentation.waitForIdleSync()
             block(requireNotNull(fixture))
-        } finally {
-            main {
-                fixture?.selector?.close()
-                activity.finish()
-            }
         }
     }
 

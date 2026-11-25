@@ -16,6 +16,8 @@ import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeButtonRecipe
 import smallthingz.ui.components.NativeMaterialButtonView
 import smallthingz.ui.components.NativeMenuAccessibilityTestActivity
+import smallthingz.ui.components.withRetiringTestActivity
+import smallthingz.ui.util.closePreservingPrimaryFailure
 
 /** The retained public adapter is exercised through native paint and live click admission. */
 @RunWith(AndroidJUnit4::class)
@@ -185,19 +187,23 @@ class ZfmThemeButtonBindingIntegrationTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        lateinit var root: FrameLayout
-        try {
+        var root: FrameLayout? = null
+        withRetiringTestActivity(activity, root = { root }, cleanup = {
+            var failure: Throwable? = null
+            root?.let { container ->
+                for (index in 0 until container.childCount) {
+                    failure = closePreservingPrimaryFailure(failure) {
+                        (container.getChildAt(index) as? NativeMaterialButtonView)?.close()
+                    }
+                }
+            }
+            failure?.let { throw it }
+        }) {
             instrumentation.runOnMainSync {
-                root = FrameLayout(activity)
-                activity.setContentView(root)
+                root = FrameLayout(activity).also { activity.setContentView(it) }
             }
             instrumentation.waitForIdleSync()
-            instrumentation.runOnMainSync { assertions(activity, root) }
-        } finally {
-            instrumentation.runOnMainSync {
-                for (index in 0 until root.childCount) (root.getChildAt(index) as? NativeMaterialButtonView)?.close()
-                activity.finish()
-            }
+            instrumentation.runOnMainSync { assertions(activity, checkNotNull(root)) }
         }
     }
 }
