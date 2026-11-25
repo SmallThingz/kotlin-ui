@@ -62,6 +62,8 @@ class GalleryFilenameText(
         }
         extensionSpan = if (extensionStart >= 0) ExtensionSpan() else null
         text = name
+        // A same-height TextView update may skip the measure that installs the new span.
+        if (extensionSpan != null) requestLayout()
     }
 
     private fun Char.isAsciiLetter() = this in 'a'..'z' || this in 'A'..'Z'
