@@ -132,6 +132,6 @@ private fun modalTonalColor(color: Int, palette: NativeColorScheme, elevationDp:
 
 /** A small neutral lift for floating foregrounds; page blacks and Material accents stay owned by the palette. */
 internal fun raisedModalColor(color: Int, palette: NativeColorScheme): Int =
-    if (palette.surfacePreset?.style == NativeDarkSurfaces.AMOLED)
+    if ((palette.surfacePreset as? NativeDarkSurfacePreset)?.style == NativeDarkSurfaces.AMOLED)
         Color.White.copy(alpha = .04f).compositeOver(Color(color)).toArgb()
     else color

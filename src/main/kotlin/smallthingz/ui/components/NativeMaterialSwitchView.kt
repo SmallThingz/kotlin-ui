@@ -115,9 +115,9 @@ class NativeMaterialSwitchView(
         invalidate()
     }
 
-    private var surfacePreset: NativeDarkSurfacePreset? = null
+    private var surfacePreset: NativeSurfacePreset? = null
 
-    internal fun bindSurfacePreset(preset: NativeDarkSurfacePreset?) {
+    internal fun bindSurfacePreset(preset: NativeSurfacePreset?) {
         if (surfacePreset == preset) return
         surfacePreset = preset
         setTrackNoiseIntensity(preset?.foregroundGrain ?: 0f)

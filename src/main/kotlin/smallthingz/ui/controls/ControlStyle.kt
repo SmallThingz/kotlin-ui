@@ -19,7 +19,7 @@ import kotlin.math.roundToInt
 data class ControlPalette(
     val surface: Int, val raised: Int, val content: Int, val muted: Int,
     val accent: Int, val onAccent: Int, val selection: Int, val outline: Int,
-    internal val surfacePreset: smallthingz.ui.components.NativeDarkSurfacePreset? = null,
+    internal val surfacePreset: smallthingz.ui.components.NativeSurfacePreset? = null,
 )
 
 /** Paint for actual Android Views, without a second UI tree or a global theme registry. */

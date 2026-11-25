@@ -257,7 +257,7 @@ open class NativeMaterialButtonView private constructor(
         bind(text, enabled, fill, ink, onClick, paint.indication?.resolve(palette) ?: ink)
     }
 
-    internal fun setSurfacePreset(preset: NativeDarkSurfacePreset?) {
+    internal fun setSurfacePreset(preset: NativeSurfacePreset?) {
         val intensity = preset?.foregroundGrain ?: 0f
         if (grainIntensity == intensity) return
         grainIntensity = intensity

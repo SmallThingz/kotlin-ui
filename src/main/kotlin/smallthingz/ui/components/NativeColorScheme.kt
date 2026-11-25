@@ -84,7 +84,7 @@ data class NativeColorScheme(
     val tertiaryFixedDim: Int,
     val onTertiaryFixed: Int,
     val onTertiaryFixedVariant: Int,
-    internal val surfacePreset: NativeDarkSurfacePreset? = null,
+    internal val surfacePreset: NativeSurfacePreset? = null,
 ) {
     val buttonPalette = NativeButtonPalette(accent = primary, onAccent = onPrimary, content = onSurface,
         muted = onSurfaceVariant, quietSurface = surfaceContainerLow, tonalSurface = secondaryContainer,

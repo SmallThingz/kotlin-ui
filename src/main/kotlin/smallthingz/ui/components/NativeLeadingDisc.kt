@@ -22,7 +22,7 @@ class NativeLeadingDisc(
     }
     private var grain: ViewGrain? = null
 
-    internal fun setSurfacePreset(preset: NativeDarkSurfacePreset?) {
+    internal fun setSurfacePreset(preset: NativeSurfacePreset?) {
         grain = bindGrainLayer(grain, preset?.foregroundGrain ?: 0f)
     }
 

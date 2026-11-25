@@ -8,11 +8,11 @@ data class NativeDarkSurfacePreset(
     val style: NativeDarkSurfaces,
     val backgroundLightness: Float,
     val foregroundLightness: Float,
-    val backgroundGrain: Float,
-    val foregroundGrain: Float,
-    val borderWidthDp: Float,
+    override val backgroundGrain: Float,
+    override val foregroundGrain: Float,
+    override val borderWidthDp: Float,
     val borderLightness: Float,
-) {
+) : NativeSurfacePreset {
     init {
         require(backgroundLightness in 0f..1f && foregroundLightness in 0f..1f)
         require(backgroundGrain in 0f..1f && foregroundGrain in 0f..1f)
@@ -20,7 +20,7 @@ data class NativeDarkSurfacePreset(
     }
 
     @get:ColorInt
-    val borderColor: Int
+    override val borderColor: Int
         get() = (0xff shl 24) or ((borderLightness * 255f).roundToInt() * 0x010101)
 
     /** Apply the fills over a Material resolver while retaining its accent, content, and light colors. */
