@@ -154,7 +154,7 @@ class ReverbApplicationWidgets(private val context: Context, theme: ReverbTheme)
         filterTouchesWhenObscured = true
     }
     fun bindToggle(row: NativeToggleRow, checked: Boolean, enabled: Boolean = true) {
-        row.bindToggle(checked, enabled, colors)
+        row.bindToggle(checked, enabled, colors, textDensity.density)
     }
 
     fun settingsSegments(inputAllowed: () -> Boolean): NativeSegmentedControl =
