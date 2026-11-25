@@ -115,14 +115,14 @@ class NativeThemeSelector internal constructor(
 
     override fun onMeasure(w: Int, h: Int) {
         val width = if (MeasureSpec.getMode(w) == MeasureSpec.UNSPECIFIED)
-            contentLayout.preferredWidth(dp(16)) + 2 * dp(16) else MeasureSpec.getSize(w)
-        val available = (width - 2 * dp(16)).coerceAtLeast(0)
+            contentLayout.preferredWidth(dp(16)) else MeasureSpec.getSize(w)
+        val available = width.coerceAtLeast(0)
         contentLayout.measure(available, inlineGap = dp(16), stackedGap = dp(8))
         setMeasuredDimension(resolveSize(width, w), resolveSize(2 * dp(12) + contentLayout.measuredHeight + dp(12), h))
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        contentLayout.layout(width, dp(16), dp(12), layoutDirection == LAYOUT_DIRECTION_RTL)
+        contentLayout.layout(width, 0, dp(12), layoutDirection == LAYOUT_DIRECTION_RTL)
     }
 
     override fun close() {

@@ -3,13 +3,8 @@ package smallthingz.ui.zfm
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
-import android.os.Build
-import android.text.Editable
-import android.text.Layout
-import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
@@ -17,15 +12,14 @@ import android.widget.TextView
 import smallthingz.ui.components.NativeSurface
 import smallthingz.ui.components.NativeSurfaceStyle
 import smallthingz.ui.components.NativeTextField
-import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 /**
- * Responsive placement for a retained native search field, its actions and result status.
+ * Stable width budget for the bottom query row.
  *
- * [preferredEditorWidth] is a fit budget, not an exact field width. The editor keeps the
- * remaining width of its row. [inputWidth] includes the close control, actions and input
- * container padding; status occupies a separate row unless [inlineStatus] is true.
+ * [preferredEditorWidth] includes the editor's own padding and cursor. [inputWidth] includes
+ * the close control, reserved primary-action slots and container padding. Result status and
+ * secondary actions always occupy a separate row above it; both legacy fit flags stay false.
  * No text, selection, focus or native horizontal scrolling is changed by this calculation.
  */
 data class ZfmSearchLayout(
@@ -33,21 +27,20 @@ data class ZfmSearchLayout(
     val inputWidth: Int,
     val stackActions: Boolean,
     val inlineStatus: Boolean,
+    val contentWidth: Int = inputWidth,
 ) {
     companion object {
         /**
-         * All dimensions are nonnegative physical pixels, rounded up when measuring text.
+         * All dimensions are nonnegative physical pixels.
          * [availableWidth] excludes the outer chrome's padding, but includes [inputPaddingWidth].
-         * [editorPaddingWidth] is the field's compound start plus end padding; [cursorWidth]
-         * reserves room for its native cursor. Measure query/hint with the field's actual
-         * typography and single-line transformation. Only visible controls contribute widths.
-         *
-         * Call once for the whole chrome width, before allocating an inline status width.
-         * Both fit decisions use that same budget. A long query can use the entire editor row
-         * after actions/status move out; it never demands unbounded width. Recompute on text,
-         * font/configuration, visible-action or status-size changes, retaining the existing
-         * NativeTextField and common controls. The caller owns normal View measurement/layout.
+         * [actionsWidth] reserves every supplied primary-action slot, including a hidden Clear.
+         * [minimumEditorWidth] admits horizontal scrolling of the row in exceptionally narrow
+         * windows; [contentWidth] can exceed [inputWidth], which stays within the viewport.
+         * Query/hint, editor padding/cursor and status arguments cannot change this budget.
+         * The retained single-line editor handles long text by scrolling;
+         * neither typing nor asynchronous status updates relocate the controls.
          */
+        @Suppress("UNUSED_PARAMETER") // Legacy inline-status opt-in no longer changes placement.
         fun measure(
             availableWidth: Int,
             queryTextWidth: Int,
@@ -66,27 +59,26 @@ data class ZfmSearchLayout(
                 actionsWidth >= 0 && inputPaddingWidth >= 0 && minimumEditorWidth >= 0 &&
                 statusWidth >= 0) { "Search layout dimensions must be nonnegative" }
 
-            val fixedWidth = inputPaddingWidth.toLong() + closeWidth
-            val maximumEditorWidth = (availableWidth.toLong() - fixedWidth).coerceAtLeast(0)
-            val naturalEditorWidth = maxOf(minimumEditorWidth.toLong(),
-                maxOf(queryTextWidth, hintTextWidth).toLong() + editorPaddingWidth + cursorWidth)
-            val editorWidth = minOf(naturalEditorWidth, maximumEditorWidth)
-            val inlineInputWidth = fixedWidth + editorWidth + actionsWidth
-            val inlineStatus = allowInlineStatus && inlineInputWidth + statusWidth <= availableWidth
-            val inputWidth = availableWidth - if (inlineStatus) statusWidth else 0
+            val fixedWidth = inputPaddingWidth.toLong() + closeWidth + actionsWidth
+            val contentWidth = maxOf(availableWidth.toLong(), fixedWidth + minimumEditorWidth)
+                .coerceAtMost(Int.MAX_VALUE.toLong())
+            val editorWidth = (contentWidth - fixedWidth).coerceAtLeast(0)
             return ZfmSearchLayout(
                 preferredEditorWidth = editorWidth.toInt(),
-                inputWidth = inputWidth,
-                stackActions = actionsWidth > 0 && inlineInputWidth > inputWidth,
-                inlineStatus = inlineStatus,
+                inputWidth = availableWidth,
+                stackActions = false,
+                inlineStatus = false,
+                contentWidth = contentWidth.toInt(),
             )
         }
     }
 }
 
 /**
- * Retained query row. Reflow changes layout parameters, never the editor's parent, text,
- * selection, focus or scroll offset. The caller owns action callbacks and query state.
+ * Retained query row: Close, editor, primary actions (normally Clear only). Put secondary
+ * actions in [ZfmSearchChrome.trailingStatusAction]. Hidden primary actions keep their slots
+ * so the first typed character does not resize the editor. Layout never changes its parent,
+ * text, selection, focus or scroll offset. The caller owns callbacks and query state.
  */
 class ZfmSearchInput(
     context: Context,
@@ -105,27 +97,20 @@ class ZfmSearchInput(
         gravity = Gravity.END or Gravity.CENTER_VERTICAL
         actions.forEach { addView(it, LayoutParams(0, 0)) }
     }
-    private val actionScroll = HorizontalScrollView(context).apply {
-        isFillViewport = true
-        isFocusable = false
-        addView(actionRow, FrameLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
-    }
-    private var observingText = false
-    private val textWatcher = object : TextWatcher {
-        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
-        override fun afterTextChanged(s: Editable?) {
-            // TextView can repaint within the same size without requesting parent measurement.
-            requestLayout()
-        }
-    }
-    // Supplied only for the enclosing chrome's current measure pass; never reused after it.
-    internal var chromeLayout: ZfmSearchLayout? = null
-
-    init {
+    private val contentRow = LinearLayout(context).apply {
+        orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         addView(editorRow, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-        addView(actionScroll, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        addView(actionRow, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+    }
+    private val inputScroll = HorizontalScrollView(context).apply {
+        isFocusable = false
+        addView(contentRow, FrameLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+    }
+    init {
+        orientation = HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        addView(inputScroll, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         bindTheme(theme)
     }
 
@@ -155,81 +140,61 @@ class ZfmSearchInput(
         requestLayout()
     }
 
-    override fun onAttachedToWindow() {
-        super.onAttachedToWindow()
-        if (!observingText) {
-            editor.addTextChangedListener(textWatcher)
-            observingText = true
-        }
-        requestLayout()
-    }
-
-    override fun onDetachedFromWindow() {
-        if (observingText) {
-            editor.removeTextChangedListener(textWatcher)
-            observingText = false
-        }
-        chromeLayout = null
-        super.onDetachedFromWindow()
-    }
-
     private fun actionWidth(): Int = (0 until actionRow.childCount).sumOf { index ->
-        val action = actionRow.getChildAt(index)
-        if (action.visibility == GONE) 0 else action.layoutParams.width
-    }
-
-    internal fun measureChrome(availableWidth: Int, statusWidth: Int, allowInlineStatus: Boolean): ZfmSearchLayout {
-        val text = editor.text ?: ""
-        val displayed = editor.transformationMethod?.getTransformation(text, editor) ?: text
-        fun textWidth(value: CharSequence) = ceil(Layout.getDesiredWidth(value, editor.paint).toDouble())
-            .coerceIn(0.0, Int.MAX_VALUE.toDouble()).toInt()
-        val cursorWidth = if (Build.VERSION.SDK_INT >= 29) editor.textCursorDrawable?.intrinsicWidth else null
-        return ZfmSearchLayout.measure(
-            availableWidth = availableWidth,
-            queryTextWidth = textWidth(displayed), hintTextWidth = textWidth(editor.hint ?: ""),
-            editorPaddingWidth = editor.compoundPaddingStart + editor.compoundPaddingEnd,
-            cursorWidth = cursorWidth?.takeIf { it > 0 } ?: dp(2f).coerceAtLeast(1),
-            closeWidth = close?.takeUnless { it.visibility == GONE }?.layoutParams?.width ?: 0,
-            actionsWidth = actionWidth(), inputPaddingWidth = paddingLeft + paddingRight,
-            minimumEditorWidth = editor.minimumWidth.coerceAtLeast(0),
-            statusWidth = statusWidth, allowInlineStatus = allowInlineStatus,
-        )
-    }
+        actionRow.getChildAt(index).layoutParams.width.toLong()
+    }.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val bounded = MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED
-        val availableWidth = if (bounded) MeasureSpec.getSize(widthMeasureSpec) else Int.MAX_VALUE
-        val layout = chromeLayout?.takeIf { bounded && it.inputWidth == availableWidth }
-            ?: measureChrome(availableWidth, 0, false)
-        val stacked = bounded && layout.stackActions
-        orientation = if (stacked) VERTICAL else HORIZONTAL
+        val actionsWidth = actionWidth()
+        val layout = if (bounded) ZfmSearchLayout.measure(
+            availableWidth = MeasureSpec.getSize(widthMeasureSpec),
+            queryTextWidth = 0, hintTextWidth = 0, editorPaddingWidth = 0, cursorWidth = 0,
+            closeWidth = close?.takeUnless { it.visibility == GONE }?.layoutParams?.width ?: 0,
+            actionsWidth = actionsWidth, inputPaddingWidth = paddingLeft + paddingRight,
+            minimumEditorWidth = dp(theme.appearance.toolbars.action.minimumTargetDp),
+        ) else null
         (editorRow.layoutParams as LayoutParams).apply {
-            width = if (stacked) LayoutParams.MATCH_PARENT else if (bounded) 0 else LayoutParams.WRAP_CONTENT
-            weight = if (stacked || !bounded) 0f else 1f
-        }
-        (editor.layoutParams as LayoutParams).apply {
             width = if (bounded) 0 else LayoutParams.WRAP_CONTENT
             weight = if (bounded) 1f else 0f
         }
-        val actionsWidth = actionWidth()
-        actionScroll.visibility = if (actionsWidth == 0) GONE else VISIBLE
-        actionScroll.layoutParams.width = if (stacked) LayoutParams.MATCH_PARENT else actionsWidth
-        actionScroll.isHorizontalScrollBarEnabled = stacked && actionsWidth >
-            (availableWidth - paddingLeft - paddingRight).coerceAtLeast(0)
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        (editor.layoutParams as LayoutParams).apply {
+            width = layout?.preferredEditorWidth ?: LayoutParams.WRAP_CONTENT
+            weight = 0f
+        }
+        actionRow.visibility = if (actionsWidth == 0) GONE else VISIBLE
+        actionRow.layoutParams.width = actionsWidth
+        contentRow.layoutParams.width = layout?.let {
+            (it.contentWidth - paddingLeft - paddingRight).coerceAtLeast(0)
+        } ?: LayoutParams.WRAP_CONTENT
+        inputScroll.isHorizontalScrollBarEnabled = layout != null && layout.contentWidth > layout.inputWidth
+        val fullWidth = layout?.let { MeasureSpec.makeMeasureSpec(it.inputWidth, MeasureSpec.EXACTLY) }
+        super.onMeasure(fullWidth ?: widthMeasureSpec, heightMeasureSpec)
     }
 }
 
-/** Result status and the retained input share a row only when the same query budget fits both. */
-class ZfmSearchChrome(
+/**
+ * Status and an optional secondary action sit above the full-width bottom query row.
+ * [trailingStatusAction] is normally the single Search options control; the caller owns its
+ * visibility, enabled state, accessible label and callback. Both rows retain their children.
+ */
+class ZfmSearchChrome @JvmOverloads constructor(
     context: Context,
     theme: ZfmTheme,
     private val queryHost: ZfmSearchInput,
     private val statusHost: View,
+    private val trailingStatusAction: View? = null,
 ) : LinearLayout(context) {
+    private var theme = theme
     private val surfaceStyle = NativeSurfaceStyle(Color.TRANSPARENT, cornerRadiusDp = 0f)
     private val querySurface = NativeSurface(context, surfaceStyle).apply {
         addView(queryHost, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+    }
+    private val statusRow = LinearLayout(context).apply {
+        orientation = HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        addView(statusHost, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        trailingStatusAction?.let { addView(it, LayoutParams(0, 0)) }
     }
     private var compactSearch = false
     private var status = ""
@@ -237,14 +202,34 @@ class ZfmSearchChrome(
     init {
         orientation = VERTICAL
         gravity = Gravity.CENTER_VERTICAL
+        addView(statusRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(querySurface, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-        addView(statusHost, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         bindTheme(theme)
     }
 
     fun bindTheme(theme: ZfmTheme) {
+        this.theme = theme
         queryHost.bindTheme(theme)
         theme.bindCard(querySurface, surfaceStyle)
+        applyGeometry()
+        requestLayout()
+    }
+
+    private fun applyGeometry() {
+        val toolbar = theme.appearance.toolbars
+        val density = resources.displayMetrics.density
+        val target = (toolbar.action.minimumTargetDp * density).roundToInt()
+        trailingStatusAction?.layoutParams?.apply { width = target; height = target }
+        // Align Options with Clear without insetting an ordinary navigation/status host.
+        val inset = if (compactSearch && trailingStatusAction != null && trailingStatusAction.visibility != GONE)
+            (toolbar.centeredPaddingDp * density).roundToInt() else 0
+        statusRow.setPaddingRelative(0, 0, inset, 0)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applyGeometry()
+        requestLayout()
     }
 
     fun bind(compactSearch: Boolean, status: String, statusLabel: TextView?) {
@@ -252,37 +237,13 @@ class ZfmSearchChrome(
         if (this.compactSearch == compactSearch && !statusChanged) return
         this.compactSearch = compactSearch
         this.status = status
+        applyGeometry()
         if (statusChanged) statusLabel?.requestLayout()
         requestLayout()
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val available = (MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight).coerceAtLeast(0)
-        val eligible = compactSearch && queryHost.visibility == VISIBLE &&
-            MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.EXACTLY
-        var statusWidth = 0
-        var statusExtent = 0
-        if (eligible && statusHost.visibility != GONE) {
-            val natural = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
-            statusHost.measure(natural, natural)
-            statusWidth = statusHost.measuredWidth
-            val margins = statusHost.layoutParams as? ViewGroup.MarginLayoutParams
-            statusExtent = (statusWidth.toLong() + (margins?.leftMargin ?: 0) +
-                (margins?.rightMargin ?: 0)).coerceIn(0, Int.MAX_VALUE.toLong()).toInt()
-        }
-        val bounded = MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED
-        val layout = queryHost.measureChrome(if (bounded) available else Int.MAX_VALUE, statusExtent, eligible)
-        orientation = if (layout.inlineStatus) HORIZONTAL else VERTICAL
-        (querySurface.layoutParams as LayoutParams).apply {
-            width = if (layout.inlineStatus) layout.inputWidth else LayoutParams.MATCH_PARENT
-            weight = 0f
-        }
-        statusHost.layoutParams.width = if (layout.inlineStatus) statusWidth else LayoutParams.MATCH_PARENT
-        queryHost.chromeLayout = layout.takeIf { bounded }
-        try {
-            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-        } finally {
-            queryHost.chromeLayout = null
-        }
+        applyGeometry() // Visibility can change while the status string stays the same.
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
 }
