@@ -153,6 +153,7 @@ class ReverbHomeBodyView<S : Any, M : Any> internal constructor(
                 animationScope,
                 { animationScope.coroutineContext[smallthingz.ui.MotionDurationScale]?.scaleFactor ?: 1f },
             ).also {
+                it.bindSurfacePreset(environment.palette.surfacePreset)
                 progress = it
                 swipeSurface.addView(it)
             }
@@ -172,6 +173,7 @@ class ReverbHomeBodyView<S : Any, M : Any> internal constructor(
         readoutCache.invalidate()
         blob.setEnvironment(value)
         controls.setEnvironment(value)
+        progress?.bindSurfacePreset(value.palette.surfacePreset)
         progress?.setColor(value.palette.primary)
         unavailable?.let { value.bindParagraphStyle(it, ReverbTextRole.BODY_MEDIUM, value.palette.muted) }
         val current = state

@@ -156,6 +156,8 @@ private class CaptureStatusBranch(
     ) {
         override fun createAccessibilityNodeInfo(): AccessibilityNodeInfo? =
             if (host.sourceNode(this).present) super.createAccessibilityNodeInfo() else null
+    }.apply {
+        bindSurfacePreset(environment.palette.surfacePreset)
     } else null
     private var cancel: ReverbStandardIconButtonView? = null
     private var cancelNode: NativeClickPhaseNode? = null
@@ -262,6 +264,7 @@ private class CaptureStatusBranch(
         if (environment === next) return
         environment = next
         row.setEnvironment(next)
+        progress?.bindSurfacePreset(next.palette.surfacePreset)
         progress?.setColor(next.palette.primary)
         cancel?.let(::bindCancelButton)
     }

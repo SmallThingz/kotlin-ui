@@ -79,7 +79,7 @@ open class NativeDeterminateLinearProgress(
             if(layoutDirection==LAYOUT_DIRECTION_RTL) {
                 canvas.translate(width/2f,height/2f);canvas.scale(-1f,1f);canvas.translate(-width/2f,-height/2f)
             }
-            canvas.drawCircle(width-size/2f-offset,height/2f,size/2f,paint)
+            drawProgressDot(canvas,width-size/2f-offset,height/2f,size/2f)
         }finally {canvas.restoreToCount(save)}
     }
     private fun sourceContentEvent(change:Int) {

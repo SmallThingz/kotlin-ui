@@ -3,6 +3,7 @@ package smallthingz.ui.components
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Path
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -17,6 +18,8 @@ import smallthingz.ui.text.view.NativePlainTextViewGeometry
 import smallthingz.ui.text.view.NativeSourceAccessibilityNode
 import smallthingz.ui.text.view.nativeMergedRoleBoundsInScreen
 import kotlin.math.roundToInt
+import smallthingz.ui.graphics.ViewGrain
+import smallthingz.ui.graphics.bindGrainLayer
 
 /** Shared layout, line painting and accessibility for the two linear progress modes. */
 abstract class NativeLinearProgressView internal constructor(
@@ -33,6 +36,16 @@ abstract class NativeLinearProgressView internal constructor(
     private var geometry: NativePlainTextViewGeometry? = null
     private var exposure: (() -> Boolean)? = null
     private var geometryToken: Any? = null
+    private val linePath = Path()
+    private val lineFill = Path()
+    private var grain: ViewGrain? = null
+    private var grainEnabled = false
+
+    internal fun bindSurfacePreset(preset: NativeSurfacePreset?) {
+        val intensity = preset?.foregroundGrain ?: 0f
+        grainEnabled = intensity > 0f
+        grain = bindGrainLayer(grain, intensity)
+    }
 
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
@@ -65,6 +78,24 @@ abstract class NativeLinearProgressView internal constructor(
             start, end) { a, b, y, round ->
             paint.strokeCap = if (round) Paint.Cap.ROUND else Paint.Cap.BUTT
             canvas.drawLine(a, y, b, y, paint)
+            grain?.takeIf { grainEnabled && paint.alpha != 0 }?.let { layer ->
+                linePath.rewind()
+                linePath.moveTo(a, y)
+                linePath.lineTo(b, y)
+                lineFill.rewind()
+                paint.getFillPath(linePath, lineFill)
+                layer.draw(canvas, lineFill, paint.alpha)
+            }
+        }
+    }
+
+    /** The determinate stop dot uses the same retained grain and current paint coverage. */
+    protected fun drawProgressDot(canvas: Canvas, x: Float, y: Float, radius: Float) {
+        canvas.drawCircle(x, y, radius, paint)
+        grain?.takeIf { grainEnabled && paint.alpha != 0 }?.let { layer ->
+            lineFill.rewind()
+            lineFill.addCircle(x, y, radius, Path.Direction.CW)
+            layer.draw(canvas, lineFill, paint.alpha)
         }
     }
 

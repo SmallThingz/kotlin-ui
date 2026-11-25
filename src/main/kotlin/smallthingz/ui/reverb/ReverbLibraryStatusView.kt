@@ -160,6 +160,7 @@ private class LibraryStatusColumn(
     fun bind(value: ReverbEnvironment, retry: () -> Unit) {
         environment = value
         loading?.let {
+            it.bindSurfacePreset(value.palette.surfacePreset)
             it.setColor(value.palette.primary)
             it.contentDescription = context.getString(R.string.reverb_loading_recordings)
         }

@@ -263,3 +263,27 @@ identify the close action separately. `setLeadingView` leaves the external
 glyph's tint with the row binding. `setLeadingImageTint` uses the button
 recipe's content opacity, including after a change to the button's own enabled
 state. Rebind enabled state and actions independently of the row.
+
+
+## Shared foreground bindings
+
+`smallthingz.ui.components.NativeForeground` binds the window palette to retained
+progress indicators, toggle rows, groups, surfaces, buttons, menu colors and plain
+foreground drawables. It uses the same foreground intensity independently of page
+or document texture. Pass the resolved window's `palette.pageControls`; rebind when
+the palette changes. Colors, progress values, input and lifecycle remain with the
+existing component owner. `floatingSurfaceStyle(palette, appearance)` accepts an
+explicit appearance; omitting it uses the common default.
+
+`NativeForegroundGrain` supports caller-painted enclosures such as recycler
+item decorations. Keep one instance per drawing View for that window's lifetime,
+bind its palette and draw after the base fill using the same bounds and radius.
+It retains the drawing owner even while flat, so a later grain enablement schedules
+its redraw. It reuses the shared texture and retained grain layer. This is not a
+process-global View cache.
+
+The existing `AllDocAppearance` and `AllDocHomeGroupGrain` APIs delegate to these
+common implementations. Reverb's circular and linear progress consumers bind the
+same window preset on creation and retained palette changes. A zero-width circular
+hairline keeps its original stroke and skips grain when Android cannot provide a
+fillable stroke outline. No frame-time or RAM improvement is claimed from extraction.

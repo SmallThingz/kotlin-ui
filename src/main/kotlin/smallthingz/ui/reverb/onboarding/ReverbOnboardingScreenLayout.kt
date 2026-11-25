@@ -79,9 +79,12 @@ class ReverbOnboardingScreenLayout(private val density: Density) {
         fun createLoading(context: Context, environment: ReverbEnvironment, scope: CoroutineScope): NativeCircularProgress =
             NativeCircularProgress(context, environment.palette.primary,
                 requireNotNull(scope.coroutineContext[MonotonicFrameClock]), scope,
-                { scope.coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f }, strokeWidthDp = 4f)
+                { scope.coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f }, strokeWidthDp = 4f).apply {
+                bindSurfacePreset(environment.palette.surfacePreset)
+            }
 
         fun bindLoading(indicator: NativeCircularProgress, environment: ReverbEnvironment) {
+            indicator.bindSurfacePreset(environment.palette.surfacePreset)
             indicator.setColor(environment.palette.primary)
         }
 

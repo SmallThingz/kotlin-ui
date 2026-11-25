@@ -84,6 +84,7 @@ abstract class ReverbSettingsScreenLayout(
                     addView(it)
                 }
             } else if (paintChanged) existing.setColor(next.palette.primary)
+            progress?.bindSurfacePreset(next.palette.surfacePreset)
         } else if (progress != null) {
             progress?.let(::removeView)
             progress = null

@@ -210,6 +210,7 @@ class ExportContent(
                 loadingView = it
                 setLeadingView(it, exposeToAccessibility = true)
             }
+            indicator.bindSurfacePreset(value.palette.surfacePreset)
             indicator.setColor(spinnerColor)
         } else {
             loadingView = null

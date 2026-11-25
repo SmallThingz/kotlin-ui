@@ -131,6 +131,7 @@ class PlayerTrimButtons(
                 spinner = NativeCircularProgress(context, spinnerColor, frames, scope, durationScale)
                     .also { save.setLeadingView(it) }
             }
+            spinner?.bindSurfacePreset(value.palette.surfacePreset)
             spinner?.setColor(spinnerColor)
         } else if (spinner != null) {
             save.setLeadingView(null)

@@ -74,6 +74,7 @@ class ReverbLibraryPullRefreshIndicator(
             it.bindStyle(density, style)
             it.setColor(tint)
         }
+        spinner?.bindSurfacePreset(value.palette.surfacePreset)
         spinner?.setStrokeWidthDp(style.strokeDp)
         spinner?.setColor(tint)
         if (metricsChanged) requestLayout()
@@ -111,6 +112,7 @@ class ReverbLibraryPullRefreshIndicator(
             spinnerFade = Animatable(alpha)
             spinner = NativeCircularProgress(context, style.tint(environment.palette),
                 frames, scope, durationScale, strokeWidthDp = style.strokeDp).also {
+                it.bindSurfacePreset(environment.palette.surfacePreset)
                 it.alpha = alpha
                 surface.addView(it)
             }

@@ -159,10 +159,15 @@ private class CaptureClearProgressBody(
             }
         }
         when (val value = progress) {
-            is NativeDeterminateLinearProgress -> value.bind(checkNotNull(fraction), next.palette.primary,
-                next.palette.secondaryContainer, next.density.density, status.operationId, status.isTerminal)
-            is NativeIndeterminateLinearProgress -> value.bindColors(next.palette.primary,
-                next.palette.secondaryContainer, next.density.density)
+            is NativeDeterminateLinearProgress -> {
+                value.bindSurfacePreset(next.palette.surfacePreset)
+                value.bind(checkNotNull(fraction), next.palette.primary,
+                    next.palette.secondaryContainer, next.density.density, status.operationId, status.isTerminal)
+            }
+            is NativeIndeterminateLinearProgress -> {
+                value.bindSurfacePreset(next.palette.surfacePreset)
+                value.bindColors(next.palette.primary, next.palette.secondaryContainer, next.density.density)
+            }
         }
         next.bindSupportingParagraph(detail, NativeTypographyRole.BODY_MEDIUM)
         next.bindSupportingParagraph(note, NativeTypographyRole.BODY_SMALL)

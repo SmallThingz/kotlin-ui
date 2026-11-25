@@ -125,6 +125,7 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
     }
     private val progress = NativeDeterminateLinearProgress(context, chromeTheme.palette.primary,
         chromeTheme.palette.pageControls.outline, chromeTheme.density.density).apply {
+        bindSurfacePreset(chromeTheme.palette.surfacePreset)
         visibility = INVISIBLE
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
     }
@@ -157,6 +158,7 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
     fun bindTabCount(description: String) = ViewCompat.setStateDescription(tabsAction.accessibilityAction, description)
     fun bindLoading(value: Float, operation: Long, loading: Boolean, chromeVisible: Boolean) {
         if (panelClosed) return
+        progress.bindSurfacePreset(chromeTheme.palette.surfacePreset)
         progress.visibility = if (!chromeVisible) GONE else if (loading) VISIBLE else INVISIBLE
         progress.bind(value, chromeTheme.palette.primary, chromeTheme.palette.pageControls.outline, chromeTheme.density.density,
             operationId = operation, terminal = !loading)

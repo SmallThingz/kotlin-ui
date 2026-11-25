@@ -513,7 +513,9 @@ private class IncidentsEmptyContent(
     scope: CoroutineScope,
     durationScale: () -> Float,
 ) : ViewGroup(context) {
-    private val loading = IncidentsLoadingView(context, appearance.card.palette.primary, frames, scope, durationScale)
+    private val loading = IncidentsLoadingView(context, appearance.card.palette.primary, frames, scope, durationScale).apply {
+        bindSurfacePreset(appearance.card.palette.surfacePreset)
+    }
     private val icon = IncidentStatusIcon(context, appearance.card.palette.muted)
     private val title = paragraph(context, appearance.card, appearance.titleMedium, appearance.card.palette.ink)
     private val detail = paragraph(context, appearance.card, appearance.card.bodyMedium, appearance.card.palette.muted)
@@ -553,6 +555,7 @@ private class IncidentsEmptyContent(
 
     fun setAppearance(value: IncidentsContentAppearance) {
         appearance = value
+        loading.bindSurfacePreset(value.card.palette.surfacePreset)
         loading.setColor(value.card.palette.primary)
         icon.setColor(value.card.palette.muted)
         title.setTypography(value.titleMedium, value.card.density, value.card.fontResolver)
