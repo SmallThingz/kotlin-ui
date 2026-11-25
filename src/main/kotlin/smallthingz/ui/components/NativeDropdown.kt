@@ -118,6 +118,7 @@ class NativeDropdown<T>(
 
     /** Resolve trigger paint and grain from the same shared color scheme. */
     fun bind(next: NativeDropdownContent<T>, expanded: Boolean, scheme: NativeColorScheme) {
+        if (closed) return
         setNoiseIntensity(scheme.surfacePreset?.foregroundGrain ?: 0f)
         bind(next, expanded, NativeDropdownColors(scheme.field, scheme.raised, scheme.muted, scheme.ink, scheme.border))
     }
