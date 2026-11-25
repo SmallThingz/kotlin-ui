@@ -39,8 +39,8 @@ class ReverbControlScreenSections(private val context: Context, environment: Rev
     private fun title(label: String, followsTheme: Boolean = false) =
         settingsSectionTitle(context, label, this.environment).apply {
             isAccessibilityHeading = true
-            setPaddingRelative(dp(heading.sideInsetDp), if (followsTheme) 0 else dp(heading.titleTopInsetDp),
-                dp(heading.sideInsetDp), dp(spacing.stackedGapDp))
+            setPaddingRelative(0, if (followsTheme) 0 else dp(heading.titleTopInsetDp),
+                0, dp(spacing.stackedGapDp))
         }
 
     fun access(themeSelector: View, accessLabel: String, permissions: View): View = column().apply {

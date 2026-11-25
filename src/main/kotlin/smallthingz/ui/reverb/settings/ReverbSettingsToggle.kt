@@ -1,8 +1,10 @@
 package smallthingz.ui.reverb.settings
 
 import android.content.Context
+import android.graphics.drawable.Drawable
 import android.view.View
 import android.widget.FrameLayout
+import android.widget.ImageView
 import smallthingz.ui.common.ToggleRow
 import smallthingz.ui.common.ToggleState
 import smallthingz.ui.components.NativeGroupLayout
@@ -61,13 +63,35 @@ class ReverbSettingsToggle private constructor(
         onChanged = onChanged).apply { glyph?.let(::setLeadingIcon) }
     val view: View get() = row.view
     private var closed = false
+    private var appIcon: ImageView? = null
+
+    /** Installed-app identity is decorative; the retained switch remains the only action. */
+    fun bindAppIcon(drawable: Drawable?) {
+        if (closed) return
+        if (drawable == null) {
+            appIcon?.setImageDrawable(null)
+            row.setLeadingIcon(glyph)
+        } else {
+            val image = appIcon ?: ImageView(view.context).apply {
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                isFocusable = false
+            }.also { appIcon = it }
+            image.setImageDrawable(drawable)
+            row.setLeadingIcon(image)
+        }
+    }
 
     fun bind(next: ToggleState, theme: ReverbTheme) {
         if (closed) return
         row.bind(next, theme.controls)
         if (icon != null) glyph?.bind(icon, if (next.enabled) theme.controls.colors.ink else theme.controls.colors.muted)
     }
-    override fun close() { closed = true; row.close() }
+    override fun close() {
+        closed = true
+        appIcon?.setImageDrawable(null)
+        row.close()
+    }
 }
 
 /** Auto-start's standalone Settings surface and its row. */

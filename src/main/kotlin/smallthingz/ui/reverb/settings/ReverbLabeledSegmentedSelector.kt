@@ -147,8 +147,8 @@ class ReverbLabeledSegmentedSelector<T : Any>(
     override fun onMeasure(w: Int, h: Int) {
         val inlineGap = dp(recipe.inlineGapDp)
         val width = if (MeasureSpec.getMode(w) == MeasureSpec.UNSPECIFIED)
-            content.preferredWidth(inlineGap) + 2 * dp(recipe.sideInsetDp) else MeasureSpec.getSize(w)
-        val inner = (width - 2 * sideInset(width)).coerceAtLeast(0)
+            content.preferredWidth(inlineGap) else MeasureSpec.getSize(w)
+        val inner = width.coerceAtLeast(0)
         content.measure(inner, inlineGap, dp(recipe.stackedGapDp),
             preferredInlineWidth = dp(recipe.preferredInlineWidthDp))
         val supportingHeight = if (reason.visibility != GONE) {
@@ -159,7 +159,7 @@ class ReverbLabeledSegmentedSelector<T : Any>(
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        val inset = sideInset(width)
+        val inset = 0
         content.layout(width, inset, 0, layoutDirection == LAYOUT_DIRECTION_RTL)
         if (reason.visibility != GONE) {
             val top = content.measuredHeight + supportingPadding()
@@ -190,7 +190,6 @@ class ReverbLabeledSegmentedSelector<T : Any>(
         selector.close()
     }
 
-    private fun sideInset(width: Int) = minOf(dp(recipe.sideInsetDp), width / 2)
     private fun supportingPadding() = dp(environment.appearance.outlinedField.supportingPaddingDp)
     private fun dp(value: Int) = (value * environment.textDensity.density).roundToInt()
     private fun dp(value: Float) = (value * environment.textDensity.density).roundToInt()
