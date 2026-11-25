@@ -10,6 +10,7 @@ import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeSurface
 import smallthingz.ui.components.NativeSurfaceStyle
 import smallthingz.ui.controls.ControlPalette
+import smallthingz.ui.controls.textSurfaceForeground
 import smallthingz.ui.graphics.NoiseDrawable
 
 /**
@@ -72,6 +73,15 @@ object NativeForeground {
     fun bindSurface(view: NativeSurface, palette: ControlPalette, style: NativeSurfaceStyle) {
         view.setSurfacePreset(palette.surfacePreset)
         view.applyStyle(style)
+    }
+
+    /**
+     * Bind retained label ink to this surface's current paint, cancelling independent ink motion.
+     * Call on the UI thread from the surface paint callback and explicitly after palette rebinds.
+     * The caller owns the latest palette; this one-shot binding installs no listener or clock.
+     */
+    fun bindSurfaceLabel(label: NativeText, surface: NativeSurface, palette: ControlPalette) {
+        label.setTextColor(textSurfaceForeground(surface.paintedTextSurface, palette.content))
     }
 
     /** Adapt existing reader commands without replacing their input or accessibility ownership. */

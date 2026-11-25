@@ -23,6 +23,8 @@ object AllDocAppearance {
         NativeForeground.bindForegroundBackground(drawable, palette, color)
     fun bindSurface(view: NativeSurface, palette: ControlPalette, style: NativeSurfaceStyle) =
         NativeForeground.bindSurface(view, palette, style)
+    fun bindSurfaceLabel(label: NativeText, surface: NativeSurface, palette: ControlPalette) =
+        NativeForeground.bindSurfaceLabel(label, surface, palette)
     fun bindButton(view: NativeMaterialButtonView, palette: ControlPalette, text: String,
                    enabled: Boolean, container: Int, contentColor: Int) =
         NativeForeground.bindButton(view, palette, text, enabled, container, contentColor)
