@@ -26,7 +26,7 @@ import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-/** Detached Android layout/semantics fixtures. No Activity, device input or physical UI claim. */
+/** Six whole-label cases mount a test Activity for base node metadata; other geometry/raster cases stay detached. */
 @RunWith(AndroidJUnit4::class)
 class AllDocHomeNavigationLayoutTest {
     @Test fun wholeLabelsAt240dpFont1() = checkHome(240, 1f)
@@ -36,15 +36,13 @@ class AllDocHomeNavigationLayoutTest {
     @Test fun wholeLabelsAt320dpFont1() = checkHome(320, 1f)
     @Test fun wholeLabelsAt320dpFont2() = checkHome(320, 2f)
 
-    private fun checkHome(viewportDp: Int, scale: Float) = main {
+    private fun checkHome(viewportDp: Int, scale: Float) {
         for (densityDpi in listOf(160, 420)) for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
-            val context = context(scale, densityDpi)
-            val bar = AllDocHomeNavigation.create(context, palette)
-            val choices = choices()
-            var requests = 0
-            bar.onSelectionRequest = { requests++; true }
-            bar.layoutDirection = direction
-            try {
+            withMountedHome(scale, densityDpi) { context, bar ->
+                val choices = choices()
+                var requests = 0
+                bar.onSelectionRequest = { requests++; true }
+                bar.layoutDirection = direction
                 bar.bind(choices, "Recents")
                 val retained = choices.associate { it.id to checkNotNull(bar.choiceView(it.id)) }
                 for (selected in choices.map { it.id }) {
@@ -95,7 +93,41 @@ class AllDocHomeNavigationLayoutTest {
                 assertFalse(bar.choiceStyle.selectedFill)
                 assertEquals(2f, bar.choiceStyle.indicatorHeightDp, 0f)
                 assertEquals(24f, checkNotNull(bar.choiceStyle.indicatorWidthDp), 0f)
-            } finally { bar.close() }
+            }
+        }
+    }
+
+    // Only whole-label cases inspect real base View node metadata; other geometry cases stay detached.
+    private fun withMountedHome(scale: Float, densityDpi: Int, block: (Context, NativeTabBar) -> Unit) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(android.content.Intent(instrumentation.context,
+            NativeMenuAccessibilityTestActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        var ownedBar: NativeTabBar? = null
+        var listener: View.OnAttachStateChangeListener? = null
+        val attached = java.util.concurrent.CountDownLatch(1)
+        withRetiringTestActivity(activity, root = { ownedBar }, cleanup = {
+            var failure: Throwable? = null
+            failure = smallthingz.ui.util.closePreservingPrimaryFailure(failure) {
+                listener?.let { ownedBar?.removeOnAttachStateChangeListener(it) }
+            }
+            failure = smallthingz.ui.util.closePreservingPrimaryFailure(failure) { ownedBar?.close() }
+            failure?.let { throw it }
+        }) {
+            main {
+                val bar = AllDocHomeNavigation.create(context(scale, densityDpi), palette).also { ownedBar = it }
+                listener = object : View.OnAttachStateChangeListener {
+                    override fun onViewAttachedToWindow(view: View) { attached.countDown() }
+                    override fun onViewDetachedFromWindow(view: View) = Unit
+                }.also(bar::addOnAttachStateChangeListener)
+                activity.setContentView(bar)
+                if (bar.isAttachedToWindow) attached.countDown()
+            }
+            check(attached.await(5, java.util.concurrent.TimeUnit.SECONDS)) { "Home node fixture did not attach" }
+            main {
+                val bar = checkNotNull(ownedBar)
+                check(bar.isAttachedToWindow) { "Home node fixture detached before assertions" }
+                block(bar.context, bar)
+            }
         }
     }
 
