@@ -3,6 +3,8 @@ package smallthingz.ui.reverb
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
+import android.graphics.Matrix
+import android.graphics.Rect
 import android.graphics.drawable.Drawable
 import android.text.TextUtils
 import android.view.Gravity
@@ -12,12 +14,11 @@ import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.ScrollView
 import android.widget.Space
+import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.doOnLayout
-import smallthingz.ui.components.NativeButtonTouchTarget
 import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.NativeMaterialButtonView
-import smallthingz.ui.components.NativeToolbarBackground
 import smallthingz.ui.util.closePreservingPrimaryFailure
 import kotlin.math.roundToInt
 
@@ -46,7 +47,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         if (!panelClosed) onTabAction?.invoke(null, ReverbBrowserPanelTabAction.BACK)
     }
     private val heading = theme.paragraph(context, title, ReverbDesign.appearance.toolbars.centeredTitleRole)
-    private val newTab = NativeMaterialButtonView(context, ReverbDesign.appearance.buttons.filled,
+    private val newTab = NativeMaterialButtonView(context, ReverbBottomActionDock.buttonStyle(theme),
         theme.density, theme.fontResolver, onClick = ::newTabRequested).apply {
         bind(newLabel, true, theme.palette.buttonPalette, onClick = ::newTabRequested)
         setLeadingIcon(ReverbIconDrawable(ReverbIcon.Add, theme.density.density, theme.palette.ink))
@@ -58,12 +59,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
     private var cardWidth = 0
     private val grid = GridLayout(context).apply { setPadding(spacing, spacing, spacing, spacing) }
     private val scroll = ScrollView(context).apply { addView(grid, FrameLayout.LayoutParams(-1, -2)) }
-    private val footer = FrameLayout(context).apply {
-        val recipe = ReverbDesign.appearance.toolbars
-        NativeToolbarBackground(this, recipe, recipe.backgroundColor(theme.palette)) { ReverbTextSurface.invalidate(this) }
-        setPadding(spacing, spacing / 2, spacing, spacing / 2)
-        addView(NativeButtonTouchTarget(newTab), FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
-    }
+    private val footer = ReverbBottomActionDock(context, theme, newTab)
     init {
         background = ReverbDesign.appearance.backdrops.pageBackground(theme.palette)
         ViewCompat.setAccessibilityPaneTitle(this, title)
@@ -80,6 +76,12 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
     fun focusBackAction() { if (!back.accessibilityAction.requestFocus()) requestFocus() }
     val scrollPosition: Int get() = scroll.scrollY
     val footerHeight: Int get() = footer.height
+    /** Remaining safe insets only: the footer includes the full bottom inset in footerHeight. */
+    fun applySafeInsets(insets: Insets) { if (!panelClosed) footer.applySafeInsets(insets) }
+    /** Current preview bounds in this panel, for anchored presentation and geometry consumers. */
+    fun tabPreviewBounds(key: Key): Rect? = cards[key]?.preview?.let { preview ->
+        Rect(0, 0, preview.width, preview.height).also { offsetDescendantRectToMyCoords(preview, it) }
+    }
     fun restoreScrollPosition(position: Int) {
         if (position != 0) scroll.doOnLayout { if (!panelClosed) scroll.scrollTo(0, position) }
     }
@@ -147,8 +149,23 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             titleView.ellipsize = TextUtils.TruncateAt.END
         }
         private val close = ReverbStandardIconButtonView(context, environment, { this@ReverbBrowserPanelTabs })
-        private val image = ImageView(context)
-        private val preview = object : FrameLayout(context) {
+        private val image = object : ImageView(context) {
+            private val topFit = Matrix()
+            fun alignPreview() {
+                if (scaleType != ScaleType.MATRIX) return
+                val art = drawable ?: return
+                if (width <= 0 || height <= 0 || art.intrinsicWidth <= 0 || art.intrinsicHeight <= 0) return
+                val scale = maxOf(width.toFloat() / art.intrinsicWidth, height.toFloat() / art.intrinsicHeight)
+                topFit.setScale(scale, scale)
+                topFit.postTranslate((width - art.intrinsicWidth * scale) / 2f, 0f)
+                imageMatrix = topFit
+            }
+            override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+                super.onSizeChanged(w, h, oldw, oldh)
+                alignPreview()
+            }
+        }
+        val preview = object : FrameLayout(context) {
             override fun onMeasure(w: Int, h: Int) {
                 super.onMeasure(w, MeasureSpec.makeMeasureSpec(minOf(MeasureSpec.getSize(w), dp(200)), MeasureSpec.EXACTLY))
             }
@@ -156,14 +173,21 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             setOnClickListener { dispatch(ReverbBrowserPanelTabAction.SELECT, this) }
             filterTouchesWhenObscured = true
             isFocusable = false
-            importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+            image.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             addView(image, FrameLayout.LayoutParams(-1, -1))
+            addView(close, FrameLayout.LayoutParams(dp(48), dp(48), Gravity.TOP or Gravity.END).apply {
+                topMargin = dp(8)
+                marginEnd = dp(8)
+            })
         }
         init {
             close.visual.mergedRowAccessibility.enableStandaloneAccessibility({ !closed }) { snapshot?.closeLabel }
             close.visual.glyph.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             close.visual.filterTouchesWhenObscured = true
-            row.setAccessory(close)
+            close.visual.background = smallthingz.ui.graphics.NoiseDrawable(theme.palette.raised).apply {
+                setNoiseIntensity(theme.palette.surfacePreset?.foregroundGrain ?: 0f)
+            }
             surface.addRow(row, NativeGroupLayout.LayoutParams(-1, -2))
             surface.addRow(preview, NativeGroupLayout.LayoutParams(-1, -2))
             gesture.addView(surface, FrameLayout.LayoutParams(-1, -2))
@@ -202,8 +226,9 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
                 if (entry.preview != null) {
                     image.layoutParams = FrameLayout.LayoutParams(-1, -1)
                     image.imageTintList = null
-                    image.scaleType = ImageView.ScaleType.CENTER_CROP
+                    image.scaleType = ImageView.ScaleType.MATRIX
                     image.setImageBitmap(entry.preview)
+                    image.alignPreview()
                 } else {
                     val size = dp(ReverbDesign.appearance.buttons.raisedIcon.surface.iconSizeDp)
                     image.layoutParams = FrameLayout.LayoutParams(size, size, Gravity.CENTER)

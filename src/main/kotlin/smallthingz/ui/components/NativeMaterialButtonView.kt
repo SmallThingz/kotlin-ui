@@ -90,6 +90,8 @@ open class NativeMaterialButtonView private constructor(
     private var action = onClick
     private var closed = false
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
+    internal val sampledContainerColor: Int get() = paint.color
+    internal var onContainerColorChanged: ((Int) -> Unit)? = null
     private var colorMotion: ViewColorTransition? = null
     private var grain: ViewGrain? = null
     private var grainIntensity = 0f
@@ -382,6 +384,7 @@ open class NativeMaterialButtonView private constructor(
         if (grainIntensity > 0f) ink = smallthingz.ui.controls.textSurfaceForeground(
             checkNotNull(grain).surfaceRange(fill), ink)
         paint.color = fill
+        onContainerColorChanged?.invoke(fill)
         displayedInk = ink
         label.setTextColor(ink)
         icon?.setTint(ink)
