@@ -163,7 +163,7 @@ class GalleryFilenameTextIntegrationTest {
         }
     }
 
-    @Test fun noBreakSpanSuppressesLegalBreakInsideExtension() {
+    @Test fun atomicExtensionKeepsPairedCjkSuffixTogether() {
         org.junit.Assume.assumeTrue(Build.VERSION.SDK_INT >= 35)
         instrumentation.runOnMainSync {
             // Ordinary space/CJK boundaries avoid Minikin's separate hard-hyphen policy.
@@ -207,7 +207,9 @@ class GalleryFilenameTextIntegrationTest {
                 assertEquals(contentWidth, guardedLayout.width)
                 assertFits(guarded, filename)
                 assertEquals(diagnostics(guarded), 2, guardedLayout.lineCount)
-                assertEquals(diagnostics(guarded), earlierBreak, guardedLayout.getLineStart(1))
+                // A replacement object may break before the dot, not only at the earlier word gap.
+                assertNotEquals(diagnostics(guarded), naturalLayout.getLineStart(1), guardedLayout.getLineStart(1))
+                assertTrue(diagnostics(guarded), guardedLayout.getLineStart(1) <= filename.lastIndexOf('.'))
                 assertExtensionSpan(guarded, filename.lastIndexOf('.'))
                 assertExtensionTogether(guarded)
                 assertExactSelectionAndAccessibility(guarded, filename)
