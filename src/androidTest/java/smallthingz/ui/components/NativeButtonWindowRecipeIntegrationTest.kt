@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
+import android.view.ViewTreeObserver
 import android.widget.ImageView
 import android.widget.LinearLayout
 import androidx.core.view.ViewCompat
@@ -22,6 +23,8 @@ import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
 import smallthingz.ui.unit.sp
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
 @RunWith(AndroidJUnit4::class)
@@ -175,13 +178,40 @@ class NativeButtonWindowRecipeIntegrationTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val firstPreDraw = CountDownLatch(1)
+        var observer: ViewTreeObserver? = null
+        var preDrawListener: ViewTreeObserver.OnPreDrawListener? = null
         try {
             lateinit var assertions: () -> Unit
-            instrumentation.runOnMainSync { assertions = mount(activity) }
+            instrumentation.runOnMainSync {
+                assertions = mount(activity)
+                val mountedObserver = activity.window.decorView.viewTreeObserver
+                observer = mountedObserver
+                val listener = object : ViewTreeObserver.OnPreDrawListener {
+                    override fun onPreDraw(): Boolean {
+                        if (mountedObserver.isAlive) mountedObserver.removeOnPreDrawListener(this)
+                        firstPreDraw.countDown()
+                        return true
+                    }
+                }
+                preDrawListener = listener
+                mountedObserver.addOnPreDrawListener(listener)
+            }
+            // Queue idleness alone can precede the mounted window's first layout traversal.
+            assertTrue("Mounted controls must reach pre-draw", firstPreDraw.await(5, TimeUnit.SECONDS))
             instrumentation.waitForIdleSync()
             instrumentation.runOnMainSync(assertions)
         } finally {
-            instrumentation.runOnMainSync { activity.finish() }
+            instrumentation.runOnMainSync {
+                try {
+                    preDrawListener?.let { listener ->
+                        observer?.takeIf { it.isAlive }?.removeOnPreDrawListener(listener)
+                        val currentObserver = activity.window.decorView.viewTreeObserver
+                        if (currentObserver !== observer && currentObserver.isAlive)
+                            currentObserver.removeOnPreDrawListener(listener)
+                    }
+                } finally { activity.finish() }
+            }
         }
     }
 }
