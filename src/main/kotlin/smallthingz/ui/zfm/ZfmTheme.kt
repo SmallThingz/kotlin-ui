@@ -10,20 +10,18 @@ import smallthingz.ui.components.NativeSurfaceStyle
 import smallthingz.ui.components.NativeUiAppearance
 import smallthingz.ui.components.nativeTextStyle
 import smallthingz.ui.controls.ControlPalette
-import smallthingz.ui.reverb.ReverbDesign
-import smallthingz.ui.reverb.ReverbTheme
 import smallthingz.ui.text.NativeTypographyRole
 
 /**
- * ZFM's window-scoped adapter to Reverb's current recipes, with no independent palette policy.
+ * ZFM's window-scoped adapter to the common recipes, with no independent palette policy.
  * Resolve again after the saved app mode, configuration, font scale or system palette changes.
  * The caller supplies its saved mode; this adapter never substitutes the host's night mode.
  */
-class ZfmTheme private constructor(private val theme: ReverbTheme) {
-    val appearance: NativeUiAppearance get() = ReverbDesign.appearance
-    val colors: NativeColorScheme get() = theme.palette
+class ZfmTheme private constructor(private val theme: ControlTheme) {
+    val appearance: NativeUiAppearance get() = theme.appearance
+    val colors: NativeColorScheme get() = theme.colors
     val palette: ControlPalette get() = colors.pageControls
-    val controlTheme: ControlTheme get() = theme.controlTheme
+    val controlTheme: ControlTheme get() = theme
     val density get() = theme.density
     val fontResolver get() = theme.fontResolver
     val typography get() = appearance.typography
@@ -42,7 +40,7 @@ class ZfmTheme private constructor(private val theme: ReverbTheme) {
     val selection get() = palette.selection
     val outline get() = palette.outline
     val error get() = colors.error
-    val modalSurface get() = ReverbDesign.modalSurface(colors)
+    val modalSurface get() = appearance.modals.sheet.surfaceColor(colors)
 
     val textButtonStyle get() = buttons.text.surface
     val buttonTypography get() = buttons.text.labelStyle
@@ -51,7 +49,7 @@ class ZfmTheme private constructor(private val theme: ReverbTheme) {
 
     /** Use the backdrop recipes for pages/windows so their grain intensity is preserved. */
     fun pageBackground() = appearance.backdrops.pageBackground(colors)
-    fun windowBackground() = ReverbDesign.windowBackdrop(colors)
+    fun windowBackground() = appearance.backdrops.windowBackground(colors)
 
     /** Existing NativeSurface cards can delegate to the shared choices-group geometry. */
     fun cardStyle(
@@ -120,7 +118,10 @@ class ZfmTheme private constructor(private val theme: ReverbTheme) {
 
     companion object {
         fun resolve(context: Context, dark: Boolean): ZfmTheme =
-            ZfmTheme(ReverbDesign.theme(context, dark))
+            ZfmTheme(ControlTheme.resolve(context, dark))
+
+        fun resolve(context: Context, dark: Boolean, appearance: NativeUiAppearance): ZfmTheme =
+            ZfmTheme(ControlTheme.resolve(context, dark, appearance))
     }
 }
 

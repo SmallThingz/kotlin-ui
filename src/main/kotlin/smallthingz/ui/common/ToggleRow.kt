@@ -3,6 +3,7 @@ package smallthingz.ui.common
 import android.content.Context
 import android.view.View
 import smallthingz.ui.components.NativeMaterialSwitchView
+import smallthingz.ui.components.NativeTextSurface
 import smallthingz.ui.components.NativeToggleRow
 import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.text.view.ParagraphView
@@ -12,7 +13,7 @@ import java.util.function.LongSupplier
 data class ToggleState(val label: String, val checked: Boolean, val enabled: Boolean, val description: String? = null)
 
 /** An actionable title, optional description, and switch with one accessible checked state. */
-class ToggleRow internal constructor(
+class ToggleRow(
     context: Context,
     initial: ToggleState,
     theme: ControlTheme,
@@ -21,9 +22,14 @@ class ToggleRow internal constructor(
     private val paintedSurface: ((View) -> Long)?,
     onChanged: (Boolean) -> Unit,
 ) : AutoCloseable {
+    /**
+     * Uses current painted underlay only inside a NativeTextSurfaceScope. Elsewhere the
+     * sampler returns unknown and retains the theme's original ink. The full constructor
+     * allows explicit sampler ownership (or null) and disabled-label policy overrides.
+     */
     constructor(context: Context, initial: ToggleState, theme: ControlTheme, inputRoot: (() -> View?)? = null,
         onChanged: (Boolean) -> Unit,
-    ) : this(context, initial, theme, inputRoot, true, null, onChanged)
+    ) : this(context, initial, theme, inputRoot, true, NativeTextSurface::sample, onChanged)
 
     private val titleRole = NativeTypographyRole.BODY_LARGE
     private val summaryRole = NativeTypographyRole.BODY_SMALL

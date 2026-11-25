@@ -12,9 +12,10 @@ claim: text layout, animation, allocation and View operations still have costs.
 ## Application boundary
 
 Application code supplies content, stable option identities, authoritative state and
-actions. Appearance belongs in this library, including grouping, spacing, colors,
-type, toolbar placement, dialog presentation and motion. Reading a recipe and
-reassembling it in an app creates a second appearance implementation.
+actions. This library supplies appearance defaults, including grouping, spacing,
+colors, type, toolbar placement, dialog presentation and motion. Apps can configure
+the public appearance APIs and supply explicit palettes or recipes. Reusing those
+APIs keeps rendering and layout implementation shared.
 
 - `smallthingz.ui.common` provides retained semantic controls such as `ToggleRow`,
   `SegmentedSelector` and `DropdownGroup`. Resolve a `ControlTheme` for the window;
@@ -26,9 +27,13 @@ reassembling it in an app creates a second appearance implementation.
 - `smallthingz.ui.email` supplies Email's composer fields, recipient rows and
   dropdown selection behavior. The Email app owns account, folder, recipient
   and draft state.
-- Primitive recipes and the examples below are tools for authors of library
-  components and application namespaces. Consuming apps should use their namespace's
-  semantic API instead of overriding recipes, padding, paint or animation rules.
+- `smallthingz.ui.zfm.ZfmTheme` adapts `ControlTheme` directly, using the common
+  palette, modal and backdrop recipes independently of Reverb. Its existing
+  `resolve(context, dark)` uses the shared default; the overload
+  `resolve(context, dark, appearance)` accepts app configuration.
+- Primitive recipes and the examples below support library components, application
+  namespaces and explicit app configuration. Use a namespace's semantic API where
+  it fits, and configure public appearance APIs when different presentation is needed.
 
 ### Icons
 
@@ -311,23 +316,63 @@ Consumers import the direct View DSL from `smallthingz.ui.dsl`.
 
 ## Dark surfaces
 
-Choose neutral `GRAY`, darker `TINTED`, or black `AMOLED` surfaces through the
-window's existing appearance. The resolver keeps the base scheme's accents,
-content colors and light theme. Tint color and strength are configurable.
-AMOLED makes the main surface fills `#000000`. Call `setNoiseIntensity` on a
+`NativeUiAppearance()` and `NativeUiAppearance.Default` use the public singleton
+`NativeDefaultColorScheme : NativeColorSchemeResolver`. Common controls inherit
+it through `ControlTheme.resolve(context, dark)`. Dark mode resolves through
+`NativeDarkSurfacePreset.Amoled.colorScheme()`. Light mode starts from raw
+`NativeColorScheme` colors, darkens the RGB channels of `background` and `surface`
+by 4% while preserving their alpha, and adds
+`NativeGrainPreset(backgroundGrain = 1f, foregroundGrain = .5f)`.
+Every other light color role and the existing outline policy remain unchanged.
+
+The singleton caches the dark resolver and light grain preset, not resolved
+system colors. Resolve again after configuration or system-palette changes.
+Sharing these immutable recipes avoids recreating them on each resolution.
+The shared default owns this light darkening. `ReverbDesign` uses exactly the
+default colors without an additional local palette adjustment.
+
+Apps remain free to configure appearance. Explicit raw Material (`NativeColorScheme`),
+neutral `GRAY`, darker `TINTED`, AMOLED and custom resolvers are honored by the
+constructor and `appearance.copy(colorScheme = ...)`. A copy without a new
+`colorScheme` retains the selected resolver. `withDarkSurfaces` keeps the base
+scheme's accents, content colors and light theme; tint and strength are configurable.
+The plain `AMOLED` surface treatment makes the main surface fills `#000000`;
+the default AMOLED preset also supplies the foreground depth and grain below.
+Call `setNoiseIntensity` on a
 `NoiseDrawable` or a `NativeSurface` with grain enabled to change grain opacity
 independently of the fill. `0f` draws only the base color and `1f` draws the
-full texture. Existing components default to full strength.
+full texture. Appearance-aware recipes apply the selected preset's background
+and foreground intensities.
 
 ```kotlin
 import smallthingz.ui.components.*
 
+val materialAppearance = NativeUiAppearance(colorScheme = NativeColorScheme)
 val appearance = NativeUiAppearance.Default.copy(
     colorScheme = NativeColorScheme.withDarkSurfaces(
         NativeDarkSurfaces.TINTED, tint = 0xff6682dc.toInt(), tintStrength = 0.45f,
     ),
 )
 ```
+
+Common controls accept explicit appearance configuration through the public
+`ControlTheme.resolve(context, dark, appearance)` overload. The two-argument
+overload continues to use `NativeUiAppearance.Default`.
+
+```kotlin
+val theme = smallthingz.ui.common.ControlTheme.resolve(context, dark, appearance)
+val recoloredTheme = theme.withColorScheme(materialAppearance.resolveColorScheme(context, dark))
+```
+
+`withColorScheme` replaces the resolved palette while retaining the window's
+appearance, typography and density.
+
+The `NativeColorScheme` companion remains the explicit low-level Material oracle.
+Keep `rawMaterialNativeColorScheme` access on this raw policy rather than the
+shared appearance default.
+Direct raw-palette calls and hand-painted consumers that bypass appearance
+resolution cannot automatically inherit these defaults. Resolve through the
+chosen appearance and bind its palettes and surface recipes to adopt them.
 
 `NativeDarkSurfacePreset.Amoled` combines a black page and 25% foreground
 lightness with 100% page grain, 50% foreground grain, and a 1 dp outline at
@@ -587,6 +632,21 @@ to the center of the top edge. A new expand request or window detach retires
 a pending collapse callback. The panel uses the platform animator duration scale.
 
 ## Action sheets and floating windows
+
+`appearance.modals.actionSheetStyle(...)` supplies the common sheet policy:
+a 2 dp handle with 16 dp vertical padding, and `surfaceContainerLow` darkened
+by 8% in RGB with alpha preserved. Reverb sheets delegate to this same factory.
+The foreground preset supplies grain intensity when present. **Raw palettes
+without a preset now retain the sheet recipe's grain** (default intensity `1f`
+and background seed); they no longer implicitly disable it. Set the recipe's
+`grainSeed = null` or `grainIntensity = 0f` for an explicit raw-palette opt-out.
+
+About uses the ordinary `NativeFloatingPanelRecipe` with the common palette:
+the panel uses `surfaceContainerHigh`, and its link uses
+`surfaceContainerHighest`. Tonal elevation and the AMOLED neutral lift follow
+the same recipe as other floating panels. Reverb applies no low-surface remap
+or zero-elevation override. The AMOLED white lift composites over the fill,
+so it can increase translucent alpha; sheet RGB darkening preserves alpha.
 
 `NativeActionSheet` owns a real `ComponentDialog`, its two-anchor state, phase
 pointer root, nested drag/scroll connection, predictive transform, scrim, title,

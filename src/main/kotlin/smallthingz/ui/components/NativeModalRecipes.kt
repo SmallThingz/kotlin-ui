@@ -28,7 +28,7 @@ data class NativeModalRecipes(
 ) {
     fun actionSheetStyle(density: Density, resolver: FontFamily.Resolver, palette: NativeColorScheme): NativeActionSheetStyle =
         NativeActionSheetStyle(density, resolver,
-            NativeActionSheetColors(palette.surfaceContainerLow, palette.onSurface, palette.onSurfaceVariant,
+            NativeActionSheetColors(sheet.surfaceColor(palette), palette.onSurface, palette.onSurfaceVariant,
                 palette.scrim, palette.inverseSurface, palette.inverseOnSurface, palette.onSurface),
             typography[sheet.titleRole], typography[sheet.tooltipRole],
             sheet.copy(grainIntensity = palette.surfacePreset?.foregroundGrain ?: sheet.grainIntensity))
@@ -54,12 +54,20 @@ data class NativeActionSheetRecipe(
     val grainSeed: Int? = NoiseDrawable.SEED_BACKGROUND,
     val titleRole: NativeTypographyRole = NativeTypographyRole.TITLE_LARGE,
     val tooltipRole: NativeTypographyRole = NativeTypographyRole.BODY_SMALL,
-    val handleHeightDp: Float = 4f,
-    val handleVerticalPaddingDp: Float = 22f,
+    val handleHeightDp: Float = 2f,
+    val handleVerticalPaddingDp: Float = 16f,
     /** Space above the sheet content header. */
     val topPaddingDp: Float = 0f,
     val grainIntensity: Float = 1f,
-)
+) {
+    /** Shared sheet fill; preserve opacity while lowering only the surface RGB. */
+    fun surfaceColor(palette: NativeColorScheme): Int {
+        val color = palette.surfaceContainerLow
+        fun channel(shift: Int): Int = (((color ushr shift) and 255) * .92f).toInt()
+        return (color and 0xff000000.toInt()) or (channel(16) shl 16) or
+            (channel(8) shl 8) or channel(0)
+    }
+}
 
 /** Top-origin panel with a retained rounded viewport and themed brand/detail content. */
 data class NativeFloatingPanelRecipe(

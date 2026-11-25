@@ -42,10 +42,15 @@ open class NativeTopBarAction(
     private var morph: NativePathMorph? = null
     private var morphProgress = 0f
     private var morphTint: (() -> Int)? = null
-    private val surface = if (sharedSurface) null else NativeGroupLayout(context, actionStyle.radiusDp,
-        onPaintedSurfaceChanged = onPaintedSurfaceChanged)
     private val leaf = NativeTopBarActionLeaf(context, density, inputRoot, description,
         sharedSurface, actionStyle, rolePresent, initialTint, foreground, ::drawGlyph)
+    private val surface = if (sharedSurface) null else NativeGroupLayout(context, actionStyle.radiusDp,
+        onPaintedSurfaceChanged = { owner ->
+            // The glyph is below this surface, while the public ink target is above it.
+            // Dirty the retained leaf for every fill/grain publication, even with unchanged tint.
+            leaf.invalidate()
+            onPaintedSurfaceChanged(owner)
+        })
     val accessibilityAction: View get() = leaf
     val visual: View get() = leaf
     val sampledIconTint: Int get() = leaf.sampledTint

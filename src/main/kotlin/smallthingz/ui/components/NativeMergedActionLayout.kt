@@ -25,8 +25,14 @@ open class NativeMergedActionLayout(
     context: Context,
     private val actions: List<View>,
     palette: NativeColorScheme,
-    cornerRadiusDp: Float = 14f,
+    cornerRadiusDp: Float,
+    private val fillAvailableWidth: Boolean,
 ) : ViewGroup(context), NativePointerLayerShape {
+    /** Retain compact trailing groups for existing callers. */
+    constructor(context: Context, actions: List<View>, palette: NativeColorScheme,
+        cornerRadiusDp: Float = 14f,
+    ) : this(context, actions, palette, cornerRadiusDp, false)
+
     private val surface = mergedButtonGroup(context, cornerRadiusDp, actions.onEach {
         (it as? NativeMergedActionChild)?.joinActionSurface()
     })
@@ -79,11 +85,14 @@ open class NativeMergedActionLayout(
             widest = max(widest, child.measuredWidth)
             stackHeight += child.measuredHeight
         }
-        val needsStack = boundedWidth && totalWidth > width
+        val needsStack = boundedWidth &&
+            (if (fillAvailableWidth) widest.toLong() * visibleCount > width else totalWidth > width)
         val horizontalFallback = needsStack && boundedHeight && stackHeight > heightLimit && minimumWidth <= width
         var stacked = needsStack && !horizontalFallback
-        var groupWidth = if (stacked) widest else if (horizontalFallback) width else totalWidth
-        var spare = if (horizontalFallback) width - minimumWidth else 0
+        var groupWidth = if (boundedWidth && fillAvailableWidth) width
+            else if (stacked) widest else if (horizontalFallback) width else totalWidth
+        var spare = if (horizontalFallback) width - minimumWidth
+            else if (boundedWidth && fillAvailableWidth) width else 0
         var remaining = visibleCount
         var tallest = 0
         for (index in actions.indices) {
@@ -93,6 +102,10 @@ open class NativeMergedActionLayout(
                 stacked -> groupWidth
                 horizontalFallback -> (minimumWidths[index] + spare / remaining).also {
                     spare -= it - minimumWidths[index]
+                    remaining--
+                }
+                boundedWidth && fillAvailableWidth -> (spare / remaining).also {
+                    spare -= it
                     remaining--
                 }
                 else -> preferredWidths[index]
@@ -105,7 +118,7 @@ open class NativeMergedActionLayout(
         // Width minimums alone are insufficient: wrapped labels must fit the height too.
         if (horizontalFallback && tallest > heightLimit) {
             stacked = true
-            groupWidth = widest
+            groupWidth = if (boundedWidth && fillAvailableWidth) width else widest
             for (index in actions.indices) {
                 val child = actions[index]
                 if (child.visibility == GONE) continue

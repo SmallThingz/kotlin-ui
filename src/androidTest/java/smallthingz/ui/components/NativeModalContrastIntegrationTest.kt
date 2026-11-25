@@ -74,12 +74,13 @@ class NativeModalContrastIntegrationTest {
                 val next = theme(dark)
                 if (index != 0) about.bind(next, details)
                 val panel = descendants(about).filterIsInstance<NativeFloatingPanelSurface>().single()
-                val panelFill = ReverbDesign.appearance.modals.floating.copy(surfaceElevationDp = 0f)
-                    .surfaceColor(next.palette.copy(surfaceContainerHigh = ReverbDesign.modalSurface(next.palette)))
+                val floating = NativeFloatingPanelRecipe()
+                val panelFill = floating.surfaceColor(next.palette)
                 assertEquals(grainRange(panelFill,
-                    next.palette.surfacePreset?.foregroundGrain ?: 0f), panel.paintedTextSurface)
+                    next.palette.surfacePreset?.foregroundGrain ?: 1f), panel.paintedTextSurface)
                 val repository = descendants(about).filterIsInstance<NativeGroupLayout>().first()
-                assertEquals(grainRange(ReverbDesign.modalLinkSurface(next.palette),
+                assertEquals(floating.link.fill(next.palette), ReverbDesign.modalLinkSurface(next.palette))
+                assertEquals(grainRange(floating.link.fill(next.palette),
                     next.palette.surfacePreset?.foregroundGrain ?: 0f), repository.paintedTextSurface)
                 val title = descendants(repository).filterIsInstance<ParagraphView>().first()
                 assertEquals(repository.paintedTextSurface, title.paintedTextSurface!!.asLong)
@@ -118,10 +119,17 @@ class NativeModalContrastIntegrationTest {
             surface.updateStyle(current)
             content.updateStyle(current)
             assertEquals(if (dark) .5f else 1f, current.recipe.grainIntensity, 0f)
-            if (dark) assertNotNull(current.recipe.grainSeed) else assertNull(current.recipe.grainSeed)
+            assertEquals(NoiseDrawable.SEED_BACKGROUND, current.recipe.grainSeed)
             assertEquals(2f, current.recipe.handleHeightDp, 0f)
             assertEquals(16f, current.recipe.handleVerticalPaddingDp, 0f)
-            assertEquals(grainRange(current.palette.surfaceContainerLow, if (dark) current.recipe.grainIntensity else 0f),
+            val source = palette(dark)
+            val common = NativeUiAppearance.Default.modals.actionSheetStyle(Density(1f), resolver, source)
+            assertEquals(common, current)
+            val low = source.surfaceContainerLow
+            val expectedFill = Color.argb(Color.alpha(low), (Color.red(low) * .92f).toInt(),
+                (Color.green(low) * .92f).toInt(), (Color.blue(low) * .92f).toInt())
+            assertEquals(expectedFill, current.palette.surfaceContainerLow)
+            assertEquals(grainRange(expectedFill, current.recipe.grainIntensity),
                 surface.paintedTextSurface)
             val title = content.titleView
             assertEquals(surface.paintedTextSurface, title.paintedTextSurface!!.asLong)

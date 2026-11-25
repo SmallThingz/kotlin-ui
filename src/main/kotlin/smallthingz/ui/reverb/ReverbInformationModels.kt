@@ -1,5 +1,7 @@
 package smallthingz.ui.reverb
 
+import android.graphics.drawable.Drawable
+
 /** Localized information and opaque action IDs; opening a destination remains host-owned. */
 data class ReverbInformationLink<K : Any>(val id: K, val label: String)
 data class ReverbInformationStep<K : Any>(val paragraph: String, val link: ReverbInformationLink<K>? = null)
@@ -11,6 +13,7 @@ data class ReverbInformationToggle<K : Any>(
     val checked: Boolean,
     val enabled: Boolean,
     val stateDescription: String? = null,
+    val appIcon: Drawable? = null,
 )
 
 /** Rebinding or closing retires captured actions, including a callback returning after navigation. */

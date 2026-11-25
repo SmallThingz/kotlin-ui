@@ -3,6 +3,7 @@ package smallthingz.ui.gallery
 import android.content.Context
 import android.view.Gravity
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import smallthingz.ui.components.ChoiceArrangement
 import smallthingz.ui.components.NativeChoice
 import smallthingz.ui.components.NativeChoiceStyle
@@ -40,11 +41,31 @@ class GalleryNavigationBar(
     ), gapDp = 0f, arrangement = ChoiceArrangement.EqualWidth,
         fixedColumns = destinations.size, maxColumns = destinations.size,
         fillRowHeight = true, activateOnFocusNavigation = false)
+    private var viewportWidth = 0
+    private val viewport = object : HorizontalScrollView(context) {
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            var width = maxOf(viewportWidth, minimumRowWidth())
+            val childHeight = getChildMeasureSpec(heightMeasureSpec, 0, LayoutParams.WRAP_CONTENT)
+            tabs.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), childHeight)
+            // A retained chip can refresh font/configuration metrics during measurement.
+            // Only that change needs a second pass; ordinary layout keeps one row pass.
+            val refreshed = maxOf(viewportWidth, minimumRowWidth())
+            if (refreshed != width) {
+                width = refreshed
+                tabs.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), childHeight)
+            }
+            setMeasuredDimension(resolveSize(viewportWidth, widthMeasureSpec),
+                resolveSize(tabs.measuredHeight, heightMeasureSpec))
+        }
+    }.apply {
+        isHorizontalScrollBarEnabled = false
+        addView(tabs, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+    }
 
     init {
         require(destinations.isNotEmpty())
         setBackgroundColor(palette.surface)
-        addView(tabs, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        addView(viewport, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         tabs.onSelectionRequest = onSelectionRequest
         bind(selectedId, palette)
     }
@@ -66,9 +87,17 @@ class GalleryNavigationBar(
         val width = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED)
             (360f * resources.displayMetrics.density).roundToInt() else MeasureSpec.getSize(widthMeasureSpec)
         // Wide windows retain reachable destinations without a full-screen selected pill.
-        val contentWidth = minOf(width, (600f * resources.displayMetrics.density).roundToInt())
-        tabs.measure(MeasureSpec.makeMeasureSpec(contentWidth, MeasureSpec.EXACTLY),
+        viewportWidth = minOf(width, (600f * resources.displayMetrics.density).roundToInt())
+        viewport.measure(MeasureSpec.makeMeasureSpec(viewportWidth, MeasureSpec.EXACTLY),
             getChildMeasureSpec(heightMeasureSpec, 0, LayoutParams.WRAP_CONTENT))
-        setMeasuredDimension(resolveSize(width, widthMeasureSpec), resolveSize(tabs.measuredHeight, heightMeasureSpec))
+        setMeasuredDimension(resolveSize(width, widthMeasureSpec), resolveSize(viewport.measuredHeight, heightMeasureSpec))
+    }
+
+    private fun minimumRowWidth(): Int {
+        var cell = (48f * resources.displayMetrics.density).roundToInt()
+        for (index in destinations.indices) {
+            cell = maxOf(cell, tabs.choiceView(destinations[index].id)?.minimumCellWidth() ?: 0)
+        }
+        return cell * destinations.size
     }
 }

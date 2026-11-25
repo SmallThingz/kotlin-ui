@@ -18,6 +18,95 @@ Use `colors.pageControls` for general page controls and `colors.settingsControls
 for grouped Settings controls. Pass `colors.switchPalette` to the switch or
 toggle row and bind its checked and enabled state.
 
+## Defaults and explicit configuration
+
+The public singleton `NativeDefaultColorScheme : NativeColorSchemeResolver`
+is the default for both `NativeUiAppearance()` and `NativeUiAppearance.Default`.
+`ControlTheme.resolve(context, dark)` uses that default appearance for common
+controls. Dark mode uses `NativeDarkSurfacePreset.Amoled.colorScheme()`: a black
+page, 25% foreground lightness, 100% background grain, 50% foreground grain,
+and a 1 dp outline at 15% lightness. Light mode starts from raw `NativeColorScheme`
+colors and darkens only the RGB channels of `background` and `surface` by 4%,
+preserving their alpha. Every other light color role remains unchanged. It adds
+`NativeGrainPreset(backgroundGrain = 1f, foregroundGrain = .5f)` and keeps the
+existing light outline policy.
+
+Apps can explicitly configure these APIs. Raw Material, gray, tinted and custom
+resolvers remain supported, including overrides supplied through `appearance.copy`.
+Copying an appearance without supplying `colorScheme` preserves its existing
+resolver; the shared default does not replace an explicit choice.
+
+```kotlin
+val materialAppearance = NativeUiAppearance(colorScheme = NativeColorScheme)
+val grayAppearance = NativeUiAppearance.Default.copy(
+    colorScheme = NativeColorScheme.withDarkSurfaces(NativeDarkSurfaces.GRAY),
+)
+val tintedAppearance = NativeUiAppearance.Default.copy(
+    colorScheme = NativeColorScheme.withDarkSurfaces(
+        NativeDarkSurfaces.TINTED, tint = 0xff6682dc.toInt(), tintStrength = .45f,
+    ),
+)
+// customResolver implements NativeColorSchemeResolver.
+val customAppearance = appearance.copy(colorScheme = customResolver)
+```
+
+Each explicit resolver controls its own palette and preset policy. For common
+controls, pass the chosen appearance to the public three-argument
+`ControlTheme.resolve(context, dark, appearance)` overload. The existing
+two-argument overload continues to use `NativeUiAppearance.Default`.
+
+```kotlin
+val theme = ControlTheme.resolve(context, dark, tintedAppearance)
+val colors = materialAppearance.resolveColorScheme(context, dark)
+val recoloredTheme = theme.withColorScheme(colors)
+```
+
+`theme.withColorScheme(colors)` supplies an explicit resolved palette while
+retaining the window's appearance, typography and density. `ReverbDesign` uses
+exactly the shared default colors; `NativeDefaultColorScheme` owns the 4% light
+darkening, with no additional local palette adjustment in Reverb.
+
+The singleton caches the immutable AMOLED resolver and light grain preset.
+It still resolves colors for the supplied SDK and resource reader on each call;
+resolve again when configuration or system colors change. Grain rendering uses the
+shared texture described in [Procedural background grain](../README.md#procedural-background-grain).
+
+The `NativeColorScheme` companion remains the explicit low-level Material oracle.
+`rawMaterialNativeColorScheme` access belongs to this explicit raw policy.
+Direct `NativeColorScheme.resolve` calls and hand-painted consumers that bypass
+appearance resolution cannot automatically restyle. To inherit the selected
+appearance, resolve through it and bind the resulting palettes and surface
+recipes; a raw color alone does not carry a grain-rendering instruction.
+
+`ZfmTheme` delegates directly to `ControlTheme` and the shared modal/backdrop
+recipes, without importing Reverb defaults. It preserves
+`ZfmTheme.resolve(context, dark)` and also accepts
+`ZfmTheme.resolve(context, dark, appearance)`. Its default appearance therefore
+has the common 66 dp compact-toolbar recipe; Reverb explicitly selects 58 dp.
+ZFM itself does not construct a toolbar.
+
+## Shared modal surfaces
+
+`appearance.modals.actionSheetStyle(density, fontResolver, colors)` is the common
+sheet factory, also used by Reverb. The default handle is 2 dp high with 16 dp
+vertical padding. `sheet.surfaceColor(colors)` darkens `surfaceContainerLow`
+by 8% in RGB, preserving alpha and the palette's text roles.
+
+The factory uses `surfacePreset.foregroundGrain` when present. **A raw palette
+without a preset now keeps the recipe's grain**, including its default background
+seed and intensity `1f`. For raw palettes, choose `grainSeed = null` or
+`grainIntensity = 0f` explicitly when a flat sheet is required. Custom handle
+geometry and seed remain caller-owned.
+
+About uses the same `NativeFloatingPanelRecipe` and palette as other apps.
+Its panel resolves `surfaceContainerHigh`; its link resolves
+`surfaceContainerHighest` through `floating.link.fill(colors)`, with semantic
+`onSurface` ink. Both retain ordinary tonal elevation and the AMOLED neutral
+lift. Reverb no longer remaps the panel to the sheet fill or forces zero
+elevation, and its link uses the common higher-contrast fill. The white AMOLED
+lift uses source-over compositing, which can increase translucent fill alpha;
+it is not an RGB-only darkening operation.
+
 ## Grouped surfaces
 
 Use `appearance.groupSurfaces.settingsGroup` for the container around a related
@@ -86,6 +175,17 @@ retained `NativeOutlinedFieldOutline`. The owner feeds focus/error state and
 closes that outline when its editor retires.
 
 ## Toolbar and permission actions
+
+`NativeMergedActionLayout` retains any number of action views in one surface and
+stacks them when their labels need more width. Its existing constructor keeps a
+compact trailing group; the five-argument constructor accepts `fillAvailableWidth`
+for full-width rows and equal horizontal shares. Reverb's `actionPair` uses this
+shared full-width mode, including when only one action is visible.
+
+`NativeThemedToolbarAction` is the shared themed toolbar action: it binds the
+palette's surface preset, contrast-aware ink, border/fill transitions and
+predictive glyph preview while retaining one input owner. Pass the chosen
+`appearance.toolbars` as its style to keep app configuration explicit.
 
 `NativeCenteredTopBarLayout(context, density.density, back, title, actions)`
 measures the title separately from its navigation and action slots. Use a

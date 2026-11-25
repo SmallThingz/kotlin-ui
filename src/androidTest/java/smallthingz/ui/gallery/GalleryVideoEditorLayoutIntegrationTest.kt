@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
@@ -15,6 +18,10 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeMenuAccessibilityTestActivity
+import smallthingz.ui.util.closePreservingPrimaryFailure
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
 /** Synthetic retained views only: no media, decoder, global settings or private drafts. */
@@ -181,21 +188,76 @@ class GalleryVideoEditorLayoutIntegrationTest {
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         var fixture: Fixture? = null
+        var failure: Throwable? = null
         try {
-            instrumentation.runOnMainSync {
+            main {
                 val context = activity.createConfigurationContext(Configuration(activity.resources.configuration).apply {
                     fontScale = 2f
                 })
                 fixture = Fixture(context).also { activity.setContentView(it.root) }
             }
-            instrumentation.waitForIdleSync()
-            instrumentation.runOnMainSync {
-                val current = checkNotNull(fixture)
-                assertTrue(current.root.isAttachedToWindow)
+            val current = checkNotNull(fixture)
+            await("Exact video-editor fixture attached, laid out and focused", { viewState(current.root) }) {
+                !activity.isFinishing && !activity.isDestroyed &&
+                    current.root.rootView === activity.window.peekDecorView() && ready(current.root)
+            }
+            main {
+                assertTrue("Fixture lost layout/focus admission: ${viewState(current.root)}", ready(current.root))
                 block(current)
             }
+        } catch (error: Throwable) {
+            failure = error
         } finally {
-            instrumentation.runOnMainSync { activity.finish() }
+            failure = closePreservingPrimaryFailure(failure) { main { activity.finish() } }
+            failure = closePreservingPrimaryFailure(failure) {
+                // Wait for THIS launched Activity, not an unrelated fixture's lifecycle callback.
+                await("Exact video-editor Activity destroyed and detached", {
+                    "destroyed=${activity.isDestroyed}, finishing=${activity.isFinishing}, " +
+                        "decorAttached=${activity.window.peekDecorView()?.isAttachedToWindow}, " +
+                        "rootAttached=${fixture?.root?.isAttachedToWindow}"
+                }) {
+                    activity.isDestroyed && activity.window.peekDecorView()?.isAttachedToWindow != true &&
+                        fixture?.root?.isAttachedToWindow != true
+                }
+            }
+        }
+        failure?.let { throw it }
+    }
+
+    private fun ready(view: View) = view.isAttachedToWindow && view.isShown && view.windowVisibility == View.VISIBLE &&
+        view.isLaidOut && !view.isLayoutRequested && view.width > 0 && view.height > 0 && view.hasWindowFocus()
+
+    private fun viewState(view: View) = "attached=${view.isAttachedToWindow}, shown=${view.isShown}, " +
+        "laidOut=${view.isLaidOut}, layoutRequested=${view.isLayoutRequested}, " +
+        "size=${view.width}x${view.height}, focus=${view.hasWindowFocus()}"
+
+    private fun await(description: String, state: () -> String, condition: () -> Boolean) {
+        val deadline = SystemClock.uptimeMillis() + 5_000L
+        var lastState = "not sampled"
+        while (true) {
+            val remaining = deadline - SystemClock.uptimeMillis()
+            if (remaining <= 0) throw AssertionError("$description: $lastState")
+            var admitted = false
+            onMain(remaining) { admitted = condition(); lastState = state() }
+            if (admitted) return
+            val pause = minOf(16L, deadline - SystemClock.uptimeMillis())
+            if (pause > 0) SystemClock.sleep(pause)
+        }
+    }
+
+    private fun main(action: () -> Unit) = onMain(5_000L, action)
+    private fun onMain(timeoutMillis: Long, action: () -> Unit) {
+        check(Looper.myLooper() != Looper.getMainLooper()) { "Fixture waits must run off the main thread" }
+        val handler = Handler(Looper.getMainLooper())
+        val task = FutureTask<Unit> { action() }
+        check(handler.post(task)) { "Main dispatcher rejected fixture work" }
+        try { task.get(timeoutMillis, TimeUnit.MILLISECONDS) }
+        catch (error: ExecutionException) { throw (error.cause ?: error) }
+        finally {
+            if (!task.isDone) {
+                handler.removeCallbacks(task)
+                task.cancel(false)
+            }
         }
     }
 }

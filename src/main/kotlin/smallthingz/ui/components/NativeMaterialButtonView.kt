@@ -90,6 +90,8 @@ open class NativeMaterialButtonView private constructor(
     private var action = onClick
     private var closed = false
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
+    internal val sampledContainerColor: Int get() = paint.color
+    internal var onContainerColorChanged: ((Int) -> Unit)? = null
     private var colorMotion: ViewColorTransition? = null
     private var grain: ViewGrain? = null
     private var grainIntensity = 0f
@@ -382,6 +384,7 @@ open class NativeMaterialButtonView private constructor(
         if (grainIntensity > 0f) ink = smallthingz.ui.controls.textSurfaceForeground(
             checkNotNull(grain).surfaceRange(fill), ink)
         paint.color = fill
+        onContainerColorChanged?.invoke(fill)
         displayedInk = ink
         label.setTextColor(ink)
         icon?.setTint(ink)
@@ -399,8 +402,16 @@ open class NativeMaterialButtonView private constructor(
         return if (style.assignedSize) width else max(dp(style.minimumWidthDp), width)
     }
     fun intrinsicHeight(width: Int): Int {
-        label.measure(atMost((width - 2 * horizontalPadding()).coerceAtLeast(0)), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-        return max(minimumHeightPx(), label.measuredHeight + 2 * dp(style.verticalPaddingDp))
+        // Match content.onMeasure's available label width before an owner fixes the height.
+        // Measuring only the padded width underestimates wrapping beside a leading icon.
+        val innerWidth = (width - 2 * horizontalPadding()).coerceAtLeast(0)
+        val iconWidth = min(leadingSize(), innerWidth)
+        val iconGap = min(leadingGap(), innerWidth - iconWidth)
+        val labelHeight = if (style.showLabel) {
+            label.measure(atMost(innerWidth - iconWidth - iconGap), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+            label.measuredHeight
+        } else 0
+        return max(minimumHeightPx(), max(leadingSize(), labelHeight) + 2 * dp(style.verticalPaddingDp))
     }
 
     private val layoutDensity get() = if (style.assignedSize) resources.displayMetrics.density else density.density

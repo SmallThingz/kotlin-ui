@@ -31,6 +31,9 @@ import smallthingz.ui.reverb.ReverbStandardIconButtonView
 import smallthingz.ui.reverb.ReverbTextSurface
 import smallthingz.ui.reverb.ReverbTextSurfaceScope
 import smallthingz.ui.graphics.NoiseDrawable
+import smallthingz.ui.graphics.Color as SurfaceColor
+import smallthingz.ui.graphics.compositeOver
+import smallthingz.ui.graphics.toArgb
 import smallthingz.ui.reverb.createReverbSupportingParagraph
 import smallthingz.ui.reverb.settings.ReverbLabeledSegmentedSelector
 import smallthingz.ui.reverb.settings.ReverbSelectorHelp
@@ -56,7 +59,7 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
     )
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
 
-    @Test fun sharedDarkeningPreservesSourceAlphaAndExistingRgb() = main {
+    @Test fun sharedModalFillsPreserveSheetAlphaAndCompositeFloatingLift() = main {
         val context = instrumentation.targetContext
         // Exercise the fallback source and the device's dynamic source, each in light and dark.
         for (sdk in listOf(28, Build.VERSION.SDK_INT).distinct()) for (dark in listOf(false, true)) {
@@ -73,25 +76,38 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
                 // blendARGB truncates 255*(1-.04f)+255*.04f from 254.99998 to 254. The
                 // selector's painted-surface sampler correctly rejects that translucent fill.
                 assertEquals("$role darkening must preserve opacity, dark=$dark sdk=$sdk", 255, actual ushr 24)
-                assertEquals("$role darkening must preserve the published RGB recipe, dark=$dark sdk=$sdk",
-                    ColorUtils.blendARGB(original, Color.BLACK, .04f) and 0x00ffffff, actual and 0x00ffffff)
+                val expectedRgb = if (dark) 0 else
+                    ColorUtils.blendARGB(original, Color.BLACK, .04f) and 0x00ffffff
+                assertEquals("$role uses AMOLED black or light page darkening, dark=$dark sdk=$sdk",
+                    expectedRgb, actual and 0x00ffffff)
             }
-            // Other consumers of this producer must retain intentional transparency too; forcing
-            // every fill opaque would fix the selector while changing caller-owned alpha semantics.
-            for (alpha in listOf(0, 1, 127, 254, 255)) {
-                val surface = ColorUtils.setAlphaComponent(base.surfaceContainerLow, alpha)
-                val link = ColorUtils.setAlphaComponent(base.surfaceContainerHighest, alpha)
-                val variant = base.copy(surfaceContainerLow = surface, surfaceContainerHighest = link)
-                for ((original, amount, actual) in listOf(
-                    Triple(surface, .08f, ReverbDesign.modalSurface(variant)),
-                    Triple(link, .15f, ReverbDesign.modalLinkSurface(variant)),
+            // Raw palettes preserve link fills; AMOLED composites white over floating fills.
+            // Sheet darkening preserves caller-owned alpha in either case.
+            for (source in listOf(base, palette)) for (alpha in listOf(0, 1, 64, 127, 128, 254, 255)) {
+                val surface = ColorUtils.setAlphaComponent(source.surfaceContainerLow, alpha)
+                val link = ColorUtils.setAlphaComponent(source.surfaceContainerHighest, alpha)
+                val variant = source.copy(surfaceContainerLow = surface, surfaceContainerHighest = link)
+                val sheetFill = ReverbDesign.modalSurface(variant)
+                assertEquals("Sheet darkening must retain source alpha", alpha, sheetFill ushr 24)
+                assertEquals("Sheet darkening must retain the RGB recipe",
+                    ColorUtils.blendARGB(surface, Color.BLACK, .08f) and 0x00ffffff, sheetFill and 0x00ffffff)
+                assertEquals(NativeActionSheetRecipe().surfaceColor(variant), sheetFill)
+
+                // These container roles differ from the page surface, so tonal elevation is inactive.
+                assertTrue(link != variant.surface)
+                val lifted = (variant.surfacePreset as? NativeDarkSurfacePreset)?.style == NativeDarkSurfaces.AMOLED
+                val expectedLink = if (lifted) SurfaceColor.White.copy(alpha = .04f)
+                    .compositeOver(SurfaceColor(link)).toArgb() else link
+                val linkFill = ReverbDesign.modalLinkSurface(variant)
+                assertEquals("Floating link uses shared fill and composited opacity", expectedLink, linkFill)
+                assertEquals(NativeFloatingPanelRecipe().link.fill(variant), linkFill)
+                for ((role, actual) in listOf(
+                    "sheet" to sheetFill,
+                    "floating link" to linkFill,
                 )) {
-                    assertEquals("Darkening must retain source alpha", alpha, actual ushr 24)
-                    assertEquals("Darkening must retain the RGB recipe",
-                        ColorUtils.blendARGB(original, Color.BLACK, amount) and 0x00ffffff, actual and 0x00ffffff)
                     val sampled = NoiseDrawable(actual, seed = null).paintedTextSurface
-                    if (alpha == 255) assertTrue("Opaque paint must be sampleable", sampled != 0L)
-                    else assertEquals("Translucent paint must remain unknown", 0L, sampled)
+                    if (actual ushr 24 == 255) assertTrue("Opaque $role paint must be sampleable", sampled != 0L)
+                    else assertEquals("Translucent $role paint must remain unknown", 0L, sampled)
                 }
             }
         }

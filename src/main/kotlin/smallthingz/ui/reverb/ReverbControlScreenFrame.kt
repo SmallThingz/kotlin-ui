@@ -12,7 +12,6 @@ import android.widget.ScrollView
 import androidx.core.graphics.Insets
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import smallthingz.ui.components.NativeButtonTouchTarget
 import smallthingz.ui.components.NativeMaterialButtonView
 import smallthingz.ui.components.NativeText
 import smallthingz.ui.components.NativeTextRole
@@ -22,8 +21,8 @@ import kotlin.math.roundToInt
 
 /**
  * Retained Control page slots. The host owns routes, input admission and system-inset policy;
- * this frame owns their placement. Settings and the primary action align to the canonical
- * settings section edges. No editor, transcript or permission content is recreated here.
+ * this frame owns their placement. Settings align to canonical section edges; the primary action
+ * docks at the window bottom. No editor, transcript or permission content is recreated here.
  *
  * Window-scoped: density/font/theme changes recreate the host, while viewport changes remeasure.
  */
@@ -58,7 +57,12 @@ class ReverbControlScreenFrame(
         visibility = GONE
         setPaddingRelative(dp(sections.sideInsetDp), 0, dp(sections.sideInsetDp), 0)
     }
-    private val primaryTarget = NativeButtonTouchTarget(primaryAction)
+    val primaryActionDock = ReverbBottomActionDock(context, theme, primaryAction)
+    private val transition = ReverbScreenTransition(content)
+    private var safeInsets = Insets.NONE
+    /** Remaining browser bottom inset; this frame owns left/top/right once. */
+    val browserSafeInsets: Insets get() = Insets.of(0, 0, 0, safeInsets.bottom)
+    val isTransitionRunning: Boolean get() = transition.isRunning
     private val backdrop = appearance.backdrops.attachPage(this, theme.palette) { ReverbTextSurface.invalidate(this) }
     private val statusBarProtection = ReverbDesign.statusBarProtection(context)
 
@@ -82,18 +86,40 @@ class ReverbControlScreenFrame(
             addView(content, LayoutParams(-1, 0, 1f))
             addView(status, row())
         }, LayoutParams(-1, 0, 1f))
-        addView(primaryTarget, row().apply {
-            marginStart = dp(sections.sideInsetDp)
-            marginEnd = dp(sections.sideInsetDp)
-            bottomMargin = dp(sections.trailingInsetDp)
-        })
+        addView(primaryActionDock, row())
     }
 
     fun applySafeInsets(insets: Insets) {
-        if (paddingLeft != insets.left || paddingTop != insets.top ||
-            paddingRight != insets.right || paddingBottom != insets.bottom) {
-            setPadding(insets.left, insets.top, insets.right, insets.bottom)
+        safeInsets = insets
+        bindSafeInsets()
+    }
+
+    private fun bindSafeInsets() {
+        val dockVisible = primaryActionDock.visibility == VISIBLE
+        val bottom = if (dockVisible || browserHost.visibility == VISIBLE) 0 else safeInsets.bottom
+        if (paddingLeft != safeInsets.left || paddingTop != safeInsets.top ||
+            paddingRight != safeInsets.right || paddingBottom != bottom) {
+            setPadding(safeInsets.left, safeInsets.top, safeInsets.right, bottom)
         }
+        primaryActionDock.applySafeInsets(Insets.of(0, 0, 0, safeInsets.bottom))
+    }
+
+    /** Call once after the host has bound route visibility. Equal/initial keys do not animate. */
+    fun transitionTo(routeKey: Any) {
+        bindSafeInsets()
+        transition.transitionTo(routeKey)
+    }
+
+    fun cancelTransition() = transition.cancel()
+
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility != VISIBLE) transition.cancel()
+    }
+
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        if (!hasWindowFocus) transition.cancel()
     }
 
     /** Reverb keeps status icons fixed over its protection; navigation follows the selected theme. */
@@ -110,7 +136,8 @@ class ReverbControlScreenFrame(
     fun showPrimaryAction(show: Boolean) {
         val visible = if (show) VISIBLE else GONE
         primaryAction.visibility = visible
-        primaryTarget.visibility = visible
+        primaryActionDock.visibility = visible
+        bindSafeInsets()
     }
 
     /** A pending decision must expose its complete instruction, including the discard action. */
