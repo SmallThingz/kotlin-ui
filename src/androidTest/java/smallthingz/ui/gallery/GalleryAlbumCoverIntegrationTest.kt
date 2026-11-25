@@ -88,6 +88,50 @@ class GalleryAlbumCoverIntegrationTest {
             f.assertCaptionFits()
             assertEquals(-f.dp(400), f.cover.readableRestoredOffset(-f.dp(400)))
 
+            // The portrait single-column policy is independent of compact one-line rows.
+            title.text = "Owned album\nSecond line"
+            f.layout(320)
+            assertFalse(f.cover.isLayoutRequested)
+            f.cover.singleColumnLandscape = true
+            assertTrue("Mode change requests measurement", f.cover.isLayoutRequested)
+            f.layout(320, force = false)
+            assertEquals("16:9 natural height", f.dp(180), f.cover.height)
+            assertEquals(2, title.maxLines)
+            assertEquals(2, title.layout.lineCount)
+            f.assertCaptionFits()
+            val landscapeRestored = f.cover.readableRestoredOffset(-f.cover.height - f.dp(50))
+            assertTrue("Restored landscape caption is complete", f.caption.top + landscapeRestored >= 0)
+            assertTrue(f.cover.height + landscapeRestored >= f.dp(48))
+            assertEquals(-f.dp(4), f.cover.readableRestoredOffset(-f.dp(4)))
+
+            // Grid row equality must work even when the compact budget is null.
+            f.layout(320, matchedHeight = 208, force = false)
+            assertEquals(f.dp(208), f.cover.height)
+            assertEquals(2, title.layout.lineCount)
+            f.assertCaptionFits()
+            title.text = "Owned\nAlbum"
+            f.layout(160)
+            f.assertCaptionFits()
+            assertEquals(2, title.layout.lineCount)
+            assertTrue(f.cover.height >= f.caption.measuredHeight)
+            if (font == 2f) assertTrue("Caption overrides a too-short aspect height", f.cover.height > f.dp(90))
+
+            title.text = "Owned album"
+            f.budget = f.dp(128)
+            f.layout(320)
+            assertEquals("Compact budget keeps precedence", f.dp(128), f.cover.height)
+            assertEquals(1, title.maxLines)
+            f.assertCaptionFits()
+            f.budget = null
+            f.layout(320)
+            assertEquals(2, title.maxLines)
+            f.cover.singleColumnLandscape = false
+            assertTrue(f.cover.isLayoutRequested)
+            f.layout(320, force = false)
+            assertEquals("Default mode returns to a square", f.dp(320), f.cover.height)
+            assertEquals(2, title.maxLines)
+            f.assertCaptionFits()
+
             f.cover.paint(GalleryDesign.palette(f.context, dark = false))
             f.cover.title.text = "Replacement owned album name"
             f.layout(320)
@@ -120,9 +164,9 @@ class GalleryAlbumCoverIntegrationTest {
         }
         val caption get() = cover.title.parent as ViewGroup
         fun dp(value: Int) = (value * context.resources.displayMetrics.density).roundToInt()
-        fun layout(width: Int, matchedHeight: Int? = null) {
+        fun layout(width: Int, matchedHeight: Int? = null, force: Boolean = true) {
             // The app explicitly invalidates cached covers when its external budget changes.
-            cover.forceLayout()
+            if (force) cover.forceLayout()
             cover.measure(View.MeasureSpec.makeMeasureSpec(dp(width), View.MeasureSpec.EXACTLY),
                 if (matchedHeight == null) View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
                 else View.MeasureSpec.makeMeasureSpec(dp(matchedHeight), View.MeasureSpec.EXACTLY))
