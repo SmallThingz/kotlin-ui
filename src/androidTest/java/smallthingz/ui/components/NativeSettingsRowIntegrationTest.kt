@@ -2,6 +2,7 @@ package smallthingz.ui.components
 
 import android.animation.ValueAnimator
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -21,9 +22,43 @@ import org.junit.runner.RunWith
 import smallthingz.ui.controls.ControlPalette
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.math.roundToInt
 
 @RunWith(AndroidJUnit4::class)
 class NativeSettingsRowIntegrationTest {
+    @Test fun newRowLabelsUseTheConfiguredDensityAndTypography() = main {
+        val base = InstrumentationRegistry.getInstrumentation().targetContext
+        fun configured(fontScale: Float, dpi: Int) =
+            base.createConfigurationContext(Configuration(base.resources.configuration).also {
+                it.fontScale = fontScale
+                it.densityDpi = dpi
+            })
+        val palette = ControlPalette(Color.WHITE, Color.WHITE, Color.BLACK, Color.DKGRAY,
+            Color.BLACK, Color.WHITE, Color.BLACK, Color.GRAY)
+        val title = NativeTextStyle(19f, lineHeightSp = 27f, weight = 600)
+        val detail = NativeTextStyle(13f, letterSpacingSp = 0.3f)
+        val style = NativeSettingsRowStyle(titleTextStyle = title, detailTextStyle = detail, valueSizeSp = 15f)
+        for (context in listOf(configured(1f, 160), configured(1.6f, 240))) {
+            val row = NativeSettingsRow(context, palette, style)
+            row.bind("Mail", "Settings", value = "On")
+            val density = context.resources.displayMetrics.density
+            assertEquals((style.horizontalPaddingDp * density).roundToInt(), row.paddingStart)
+            assertEquals((style.minHeightDp * density).roundToInt(), row.minimumHeight)
+            for ((label, textStyle) in listOf(row.titleView to title, row.detailView to detail,
+                    row.valueView to NativeTextStyle(style.valueSizeSp))) {
+                val reference = NativeText(context, palette, textStyle)
+                assertEquals(reference.textSize, label.textSize, 0.01f)
+                assertEquals(reference.letterSpacing, label.letterSpacing, 0.0001f)
+                assertEquals(reference.lineSpacingExtra, label.lineSpacingExtra, 0.01f)
+                assertEquals(reference.typeface, label.typeface)
+            }
+            assertEquals(palette.content, NativeText(context, palette).currentTextColor)
+            assertEquals(palette.content, row.titleView.currentTextColor)
+            assertEquals(palette.muted, row.detailView.currentTextColor)
+            assertEquals(palette.muted, row.valueView.currentTextColor)
+        }
+    }
+
     @Test fun selectedSurfaceQualifiesOwnedInkWithoutChangingAccessoryStateOrAction() = main {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val palette = ControlPalette(Color.WHITE, Color.WHITE, 0xff151515.toInt(), 0xff555555.toInt(),
