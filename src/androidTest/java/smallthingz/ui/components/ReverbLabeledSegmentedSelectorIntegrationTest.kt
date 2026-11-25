@@ -22,6 +22,7 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import smallthingz.ui.R
 import smallthingz.ui.common.SegmentOption
 import smallthingz.ui.reverb.ReverbDesign
 import smallthingz.ui.reverb.ReverbEnvironment
@@ -73,13 +74,9 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
                 Triple("surface", base.surface, palette.surface),
             )) {
                 assertEquals("$role input is opaque, dark=$dark sdk=$sdk", 255, original ushr 24)
-                // blendARGB truncates 255*(1-.04f)+255*.04f from 254.99998 to 254. The
-                // selector's painted-surface sampler correctly rejects that translucent fill.
-                assertEquals("$role darkening must preserve opacity, dark=$dark sdk=$sdk", 255, actual ushr 24)
-                val expectedRgb = if (dark) 0 else
-                    ColorUtils.blendARGB(original, Color.BLACK, .04f) and 0x00ffffff
-                assertEquals("$role uses AMOLED black or light page darkening, dark=$dark sdk=$sdk",
-                    expectedRgb, actual and 0x00ffffff)
+                assertEquals("$role backdrop must be opaque, dark=$dark sdk=$sdk", 255, actual ushr 24)
+                val expected = if (dark) Color.BLACK else readColor(R.color.native_default_light_background)
+                assertEquals("$role uses the shared default backdrop, dark=$dark sdk=$sdk", expected, actual)
             }
             // Raw palettes preserve link fills; AMOLED composites white over floating fills.
             // Sheet darkening preserves caller-owned alpha in either case.

@@ -3,7 +3,7 @@
     <!-- Extracted from Reverb 0e253a92 Theme.Reverb and QuickTileAction. -->
     <style name="ReverbHostTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowNoTitle">true</item>
-        <item name="android:windowBackground">@drawable/reverb_host_window_background</item>
+        <item name="android:windowBackground">@color/native_default_light_background</item>
     </style>
     <style name="ReverbRequestHostTheme" parent="@android:style/Theme.Material.NoActionBar">
         <item name="android:windowNoTitle">true</item>

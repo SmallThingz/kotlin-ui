@@ -1,5 +1,7 @@
 package smallthingz.ui.components
 
+import smallthingz.ui.R
+
 /**
  * Shared appearance policy for windows and common controls.
  *
@@ -14,14 +16,7 @@ object NativeDefaultColorScheme : NativeColorSchemeResolver {
     override fun resolve(darkTheme: Boolean, sdkInt: Int, readColor: (Int) -> Int): NativeColorScheme =
         if (darkTheme) darkColors.resolve(true, sdkInt, readColor)
         else NativeColorScheme.resolve(false, sdkInt, readColor).let { colors ->
-            colors.copy(background = pageColor(colors.background), surface = pageColor(colors.surface),
-                surfacePreset = lightGrain)
+            val backdrop = readColor(R.color.native_default_light_background)
+            colors.copy(background = backdrop, surface = backdrop, surfacePreset = lightGrain)
         }
-
-    // Preserve resource alpha exactly; only the light page RGB is lowered by four percent.
-    private fun pageColor(color: Int): Int {
-        fun channel(shift: Int): Int = (((color ushr shift) and 255) * .96f).toInt()
-        return (color and 0xff000000.toInt()) or (channel(16) shl 16) or
-            (channel(8) shl 8) or channel(0)
-    }
 }

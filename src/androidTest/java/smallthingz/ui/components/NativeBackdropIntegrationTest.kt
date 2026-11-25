@@ -1,6 +1,7 @@
 package smallthingz.ui.components
 
 import android.content.Intent
+import android.os.Build
 import android.util.TypedValue
 import android.view.View
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -10,6 +11,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertSame
 import org.junit.Test
 import org.junit.runner.RunWith
+import smallthingz.ui.R
 import smallthingz.ui.controls.textSurfaceRange
 import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.reverb.ReverbDesign
@@ -18,7 +20,7 @@ import smallthingz.ui.reverb.ReverbDesign
 class NativeBackdropIntegrationTest {
     @Test fun reverbAppearanceUsesAmoledSurfacesAndKeepsMaterialAccentsAcrossResolvers() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        for (sdk in listOf(30, 31, 34)) {
+        for (sdk in listOf(30, 31, 34).filter { it < 31 || it <= Build.VERSION.SDK_INT }) {
             val base = NativeColorScheme.resolve(true, sdk, context::getColor)
             val dark = ReverbDesign.appearance.colorScheme.resolve(true, sdk, context::getColor)
             assertEquals(0xff000000.toInt(), dark.background)
@@ -32,8 +34,9 @@ class NativeBackdropIntegrationTest {
             assertEquals(base.error, dark.error)
             val lightBase = NativeColorScheme.resolve(false, sdk, context::getColor)
             val light = ReverbDesign.appearance.colorScheme.resolve(false, sdk, context::getColor)
-            // Reverb already darkens its light page by 4%; every other light role stays Material.
-            assertEquals(lightBase.copy(background = light.background, surface = light.surface), light)
+            val backdrop = context.getColor(R.color.native_default_light_background)
+            assertEquals(lightBase.copy(background = backdrop, surface = backdrop,
+                surfacePreset = NativeGrainPreset(backgroundGrain = 1f, foregroundGrain = .5f)), light)
         }
     }
 

@@ -41,3 +41,28 @@ dependencies {
     androidTestImplementation 'androidx.test:runner:1.7.0'
     androidTestImplementation 'androidx.test.ext:junit:1.3.0'
 }
+
+// Android starting windows need a packaged color before the Kotlin palette can run.
+def amoledSource = file('src/main/kotlin/smallthingz/ui/components/NativeDarkSurfaces.kt')
+def amoledColors = file('src/main/res/values/native_default_amoled_colors.xml')
+tasks.register('verifyDefaultAmoledBackground') {
+    group = 'verification'
+    description = 'Check the packaged startup color against the native AMOLED default'
+    inputs.files(amoledSource, amoledColors)
+    doLast {
+        def source = amoledSource.getText('UTF-8')
+        def level = source =~ /(?m)^internal const val DEFAULT_AMOLED_BACKGROUND_LEVEL = ([0-9]+)\r?$/
+        def maximum = source =~ /(?m)^private const val MAX_DARK_SURFACE_LEVEL = ([0-9]+)f\r?$/
+        if (!level.find() || !maximum.find() || level.group(1).toInteger() > Math.min(maximum.group(1).toInteger(), 255)) {
+            throw new GradleException("Invalid AMOLED background level in ${amoledSource}")
+        }
+        def expected = '#' + String.format('%02X', level.group(1).toInteger()) * 3
+        def color = amoledColors.getText('UTF-8') =~ /<color name="native_default_amoled_background">([^<]+)<\/color>/
+        if (!color.find() || color.group(1) != expected) {
+            throw new GradleException("Set native_default_amoled_background in ${amoledColors} to ${expected}")
+        }
+    }
+}
+tasks.named('preBuild').configure {
+    dependsOn tasks.named('verifyDefaultAmoledBackground')
+}

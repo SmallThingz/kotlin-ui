@@ -5,6 +5,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Test
+import smallthingz.ui.R
 import smallthingz.ui.reverb.ReverbDesign
 
 class NativeDefaultAppearanceTest {
@@ -49,17 +50,14 @@ class NativeDefaultAppearanceTest {
         }
     }
 
-    @Test fun lightDefaultsShareReverbsFourPercentPageDarkeningAndPreserveOtherMaterialRoles() {
+    @Test fun lightDefaultsUseThePackagedBackdropAndPreserveOtherMaterialRoles() {
         for (sdk in sdks) {
             val raw = NativeColorScheme.resolve(false, sdk, ::resourceColor)
-            val expected = raw.copy(background = darkenPage(raw.background), surface = darkenPage(raw.surface))
+            val backdrop = resourceColor(R.color.native_default_light_background)
+            val expected = raw.copy(background = backdrop, surface = backdrop)
             for (appearance in defaultAppearances()) {
                 val actual = appearance.colorScheme.resolve(false, sdk, ::resourceColor)
                 assertEquals("Default light roles on SDK $sdk", expected, actual.copy(surfacePreset = null))
-                if (sdk == 30) {
-                    assertEquals(0xfff3edf4.toInt(), actual.background)
-                    assertEquals(0xfff3edf4.toInt(), actual.surface)
-                }
                 assertEquals(NativeGrainPreset(backgroundGrain = 1f, foregroundGrain = .5f), actual.surfacePreset)
                 assertNull(actual.surfacePreset!!.borderColor)
                 assertNull(actual.surfacePreset.borderWidthDp)
@@ -68,22 +66,6 @@ class NativeDefaultAppearanceTest {
                 assertEquals(raw.pageControls.outline, actual.pageControls.outline)
                 assertPresetPropagates(actual)
             }
-        }
-    }
-
-    @Test fun lightPageDarkeningChangesOnlyRgbAndPreservesEvenTranslucentResourceAlpha() {
-        // SDK 34 reads the page roles directly, allowing alpha preservation to be checked
-        // without platform APIs or the opaque neutral-tone synthesis used by SDK 31.
-        for (alpha in listOf(0, 1, 127, 254, 255)) {
-            val readColor: (Int) -> Int = { id ->
-                (resourceColor(id) and 0x00ffffff) or (alpha shl 24)
-            }
-            val raw = NativeColorScheme.resolve(false, 34, readColor)
-            val actual = NativeDefaultColorScheme.resolve(false, 34, readColor)
-            assertEquals(alpha, actual.background ushr 24)
-            assertEquals(alpha, actual.surface ushr 24)
-            assertEquals(raw.copy(background = darkenPage(raw.background), surface = darkenPage(raw.surface)),
-                actual.copy(surfacePreset = null))
         }
     }
 
@@ -158,13 +140,6 @@ class NativeDefaultAppearanceTest {
     }
 
     private fun gray(level: Int): Int = 0xff000000.toInt() or (level * 0x010101)
-
-    // Legacy ColorUtils.blendARGB(color, BLACK, .04f) RGB truncation, with original alpha.
-    private fun darkenPage(color: Int): Int {
-        fun channel(shift: Int): Int = (((color ushr shift) and 255) * .96f).toInt()
-        return (color and 0xff000000.toInt()) or (channel(16) shl 16) or
-            (channel(8) shl 8) or channel(0)
-    }
 
     // Distinct opaque resource colors expose lost/misrouted dynamic roles without Android resources.
     private fun resourceColor(id: Int): Int = 0xff000000.toInt() or ((id * 0x45d9f3b) and 0x00ffffff)

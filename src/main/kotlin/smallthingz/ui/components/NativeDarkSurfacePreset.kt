@@ -35,7 +35,7 @@ data class NativeDarkSurfacePreset(
 
     companion object {
         val Amoled = NativeDarkSurfacePreset(NativeDarkSurfaces.AMOLED,
-            backgroundLightness = 0f, foregroundLightness = .25f,
+            backgroundLightness = DEFAULT_AMOLED_BACKGROUND_LIGHTNESS, foregroundLightness = .25f,
             backgroundGrain = 1f, foregroundGrain = .5f,
             borderWidthDp = 1f, borderLightness = .15f)
     }

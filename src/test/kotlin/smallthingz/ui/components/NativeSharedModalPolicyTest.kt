@@ -27,7 +27,7 @@ class NativeSharedModalPolicyTest {
         for (dark in listOf(false, true)) {
             for (raw in listOf(false, true)) {
                 val palette = if (raw) NativeColorScheme.fallback(dark)
-                    else NativeDefaultColorScheme.resolve(dark, 30) { error("No resources") }
+                    else NativeDefaultColorScheme.resolve(dark, 30) { 0xfff3edf4.toInt() }
                 val common = modals.actionSheetStyle(density, resolver, palette)
                 val reverb = reverbActionSheetStyle(ReverbDesign.windowTheme(density, resolver, palette))
                 assertEquals(common, reverb)
@@ -69,7 +69,7 @@ class NativeSharedModalPolicyTest {
             .actionSheetStyle(density, resolver, raw)
         assertNull(flat.recipe.grainSeed)
         assertEquals(.27f, flat.recipe.grainIntensity, 0f)
-        val themed = NativeDefaultColorScheme.resolve(false, 30) { error("No resources") }
+        val themed = NativeDefaultColorScheme.resolve(false, 30) { 0xfff3edf4.toInt() }
         assertEquals(recipe.copy(grainIntensity = .5f),
             modals.actionSheetStyle(density, resolver, themed).recipe)
     }
@@ -78,7 +78,7 @@ class NativeSharedModalPolicyTest {
         val floating = NativeUiAppearance.Default.modals.floating
         assertEquals(floating, ReverbDesign.appearance.modals.floating)
         for (dark in listOf(false, true)) {
-            val palette = NativeDefaultColorScheme.resolve(dark, 30) { error("No resources") }
+            val palette = NativeDefaultColorScheme.resolve(dark, 30) { 0xfff3edf4.toInt() }
             val panelFill = floating.surfaceColor(palette)
             val linkFill = floating.link.fill(palette)
             assertEquals(if (dark) 0xff171717.toInt() else palette.surfaceContainerHigh, panelFill)
@@ -90,7 +90,7 @@ class NativeSharedModalPolicyTest {
 
     @Test fun amoledFloatingLiftCompositesOpacityWhileRawSurfacesKeepTheirAlpha() {
         val floating = NativeUiAppearance.Default.modals.floating
-        val palette = NativeDefaultColorScheme.resolve(true, 30) { error("No resources") }.copy(
+        val palette = NativeDefaultColorScheme.resolve(true, 30) { 0xfff3edf4.toInt() }.copy(
             surfaceContainerHigh = 0x40102030,
             surfaceContainerHighest = 0x80203040.toInt(),
         )

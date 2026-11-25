@@ -8,6 +8,10 @@ enum class NativeDarkSurfaces { GRAY, TINTED, AMOLED }
 
 private const val MAX_DARK_SURFACE_LEVEL = 72f
 
+// The library build verifies the packaged startup color against this level.
+internal const val DEFAULT_AMOLED_BACKGROUND_LEVEL = 0
+internal const val DEFAULT_AMOLED_BACKGROUND_LIGHTNESS = DEFAULT_AMOLED_BACKGROUND_LEVEL / MAX_DARK_SURFACE_LEVEL
+
 /** Wrap a resolver to customize its dark surfaces while preserving its light scheme. */
 fun NativeColorSchemeResolver.withDarkSurfaces(
     style: NativeDarkSurfaces,
