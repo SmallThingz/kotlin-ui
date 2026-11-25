@@ -53,6 +53,7 @@ class NativeGroupLayout(
     private var grainIntensity = 0f
     private var textSurfaceRange = smallthingz.ui.graphics.noiseSurfaceRange(fillPaint.color, 0)
     private val borderBounds = RectF()
+    private var outlineWidthDp = 1f
     private var geometry = roundedGroupGeometry(0f, 0f, resources.displayMetrics.density, cornerRadiusDp)
     private val content = ClippedGroupContent(context)
     private var joinedEdges: NativeGroupEdges? = null
@@ -196,12 +197,22 @@ class NativeGroupLayout(
     }
 
     internal fun setSurfacePreset(preset: NativeSurfacePreset?) {
+        val width = preset?.borderWidthDp ?: 1f
         val intensity = preset?.foregroundGrain ?: 0f
-        if (grainIntensity == intensity) return
-        grainIntensity = intensity
-        grain = (grainInvalidationOwner ?: this).bindGrainLayer(grain, intensity)
-        updateTextSurface()
-        paintedSurfaceChanged()
+        val widthChanged = outlineWidthDp != width
+        val grainChanged = grainIntensity != intensity
+        if (!widthChanged && !grainChanged) return
+        if (widthChanged) {
+            outlineWidthDp = width
+            updateShape()
+            grainInvalidationOwner?.invalidate()
+        }
+        if (grainChanged) {
+            grainIntensity = intensity
+            grain = (grainInvalidationOwner ?: this).bindGrainLayer(grain, intensity)
+            updateTextSurface()
+            paintedSurfaceChanged()
+        }
         invalidate()
     }
 
@@ -248,7 +259,8 @@ class NativeGroupLayout(
     }
 
     private fun updateShape() {
-        geometry = roundedGroupGeometry(width.toFloat(), height.toFloat(), resources.displayMetrics.density, cornerRadiusDp)
+        val density = resources.displayMetrics.density
+        geometry = roundedGroupGeometry(width.toFloat(), height.toFloat(), density, cornerRadiusDp, outlineWidthDp)
         bounds.set(0f, 0f, geometry.width, geometry.height)
         borderBounds.set(bounds)
         borderBounds.inset(geometry.strokeWidth / 2f, geometry.strokeWidth / 2f)
@@ -256,7 +268,7 @@ class NativeGroupLayout(
         val edges = joinedEdges
         if (edges == null) content.setCornerRadiusPx(geometry.radius) else {
             val shape = checkNotNull(joinedShape)
-            shape.update(width.toFloat(), height.toFloat(), resources.displayMetrics.density, edges)
+            shape.update(width.toFloat(), height.toFloat(), density, edges, outlineWidthDp)
             shape.copyFillPath(grainClip)
             content.setJoinedShape(shape)
         }
@@ -284,7 +296,7 @@ class NativeGroupLayout(
     override fun draw(canvas: Canvas) {
         super.draw(canvas)
         if (joinedEdges != null) {
-            // Joined-row outlines use raw 1.dp; uniform borders retain rounded Surface strokes.
+            // Joined-row outlines use raw pixel widths; uniform borders round up to a whole pixel.
             checkNotNull(joinedShape).drawBorder(canvas, borderPaint.color, joinedSeparatorColor)
             return
         }

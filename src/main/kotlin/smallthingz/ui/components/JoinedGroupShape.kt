@@ -6,14 +6,14 @@ import android.graphics.Path
 import android.graphics.RectF
 
 /**
- * Joined rows use raw 1.dp outlines,
- * per-row selected side strokes, and an independently colored one-physical-pixel top separator.
+ * Joined rows draw raw pixel-width outlines and selected side strokes, with an independently
+ * colored one-physical-pixel top separator.
  * A decoration of NativeGroupLayout, sharing its child clip and input owner.
  */
 internal class JoinedGroupShape {
     private var width = 0f
     private var height = 0f
-    private var density = 1f
+    private var strokeWidth = 1f
     var topRadius = 0f
         private set
     var bottomRadius = 0f
@@ -33,13 +33,13 @@ internal class JoinedGroupShape {
         strokeCap = Paint.Cap.BUTT
     }
 
-    fun update(width: Float, height: Float, density: Float, edges: NativeGroupEdges) {
+    fun update(width: Float, height: Float, density: Float, edges: NativeGroupEdges, outlineWidthDp: Float = 1f) {
         this.width = width
         this.height = height
-        this.density = density
         this.edges = edges
         bounds.set(0f, 0f, width, height)
-        val geometry = joinedGroupGeometry(width, height, density, edges)
+        val geometry = joinedGroupGeometry(width, height, density, edges, outlineWidthDp)
+        strokeWidth = geometry.strokeWidth
         topRadius = geometry.topRadius
         bottomRadius = geometry.bottomRadius
         cornersFit = geometry.cornersFit
@@ -82,12 +82,12 @@ internal class JoinedGroupShape {
             if (edges.last || edges.squareBottom) border.close()
         } else border.lineTo(left, if (edges.first) top + radius else 0f)
         borderIsFill = (!edges.first && edges.squareTop) || (!edges.last && edges.squareBottom)
-        if (borderIsFill) {
+        if (borderIsFill && strokeWidth > 0f) {
             // Thin antialiased strokes can blend the two legs of a square join separately.
             // Cache their filled outline at geometry changes so the corner stays solid, with
             // no extra draw or per-frame path work. Reuse the pointer-intersection scratch.
             paint.style = Paint.Style.STROKE
-            paint.strokeWidth = density
+            paint.strokeWidth = strokeWidth
             paint.getFillPath(border, intersection)
             border.set(intersection)
             intersection.rewind()
@@ -103,10 +103,12 @@ internal class JoinedGroupShape {
     }
 
     fun drawBorder(canvas: Canvas, borderColor: Int, separatorColor: Int) {
-        paint.color = borderColor
-        paint.strokeWidth = density
-        paint.style = if (borderIsFill) Paint.Style.FILL else Paint.Style.STROKE
-        canvas.drawPath(border, paint)
+        if (strokeWidth > 0f) {
+            paint.color = borderColor
+            paint.strokeWidth = strokeWidth
+            paint.style = if (borderIsFill) Paint.Style.FILL else Paint.Style.STROKE
+            canvas.drawPath(border, paint)
+        }
         if (!edges.first && !edges.squareTop) {
             paint.color = separatorColor
             paint.strokeWidth = 1f

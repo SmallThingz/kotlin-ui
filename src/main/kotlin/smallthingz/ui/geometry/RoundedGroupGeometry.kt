@@ -49,11 +49,19 @@ fun roundedGroupGeometry(
     height: Float,
     density: Float,
     cornerRadiusDp: Float = 16f,
+): RoundedGroupGeometry = roundedGroupGeometry(width, height, density, cornerRadiusDp, outlineWidthDp = 1f)
+
+internal fun roundedGroupGeometry(
+    width: Float,
+    height: Float,
+    density: Float,
+    cornerRadiusDp: Float,
+    outlineWidthDp: Float,
 ): RoundedGroupGeometry {
     val minimum = min(width, height).coerceAtLeast(0f)
     val radius = roundedRadius(minimum, density, cornerRadiusDp)
     // Compose BorderModifierNode rounds a non-hairline dp stroke up to device pixels.
-    val stroke = min(ceil(density), ceil(minimum / 2f))
+    val stroke = min(ceil(outlineWidthDp * density), ceil(minimum / 2f))
     return RoundedGroupGeometry(
         width = width,
         height = height,

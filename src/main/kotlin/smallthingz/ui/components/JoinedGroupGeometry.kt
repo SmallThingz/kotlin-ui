@@ -23,6 +23,7 @@ internal fun joinedGroupGeometry(
     height: Float,
     density: Float,
     edges: NativeGroupEdges,
+    outlineWidthDp: Float = 1f,
 ): JoinedGroupGeometry {
     val requestedTop = if (edges.first) 16f * density else 0f
     val requestedBottom = if (edges.last) 16f * density else 0f
@@ -31,12 +32,14 @@ internal fun joinedGroupGeometry(
     val scale = if (total > minimum && total > 0f) minimum / total else 1f
     val top = requestedTop * scale
     val bottom = requestedBottom * scale
-    val inset = density / 2f
+    // Bound enlarged outlines while preserving the raw 1 dp stroke on narrow rows.
+    val stroke = minOf(outlineWidthDp * density, maxOf(density, minimum / 2f))
+    val inset = stroke / 2f
     // Preserve the released Float subtraction order, including constrained dimensions.
     val strokeRadius = (16f * density - inset)
         .coerceAtMost(((width - inset) - inset) / 2f)
         .coerceAtMost(((height - inset) - inset) / 2f)
         .coerceAtLeast(0f)
-    return JoinedGroupGeometry(top, bottom, density, inset, strokeRadius,
+    return JoinedGroupGeometry(top, bottom, stroke, inset, strokeRadius,
         top + top <= width && bottom + bottom <= width && top + bottom <= height)
 }

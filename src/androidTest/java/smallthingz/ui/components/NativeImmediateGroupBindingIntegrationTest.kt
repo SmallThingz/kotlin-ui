@@ -3,6 +3,9 @@ package smallthingz.ui.components
 import android.app.Activity
 import android.app.Application
 import android.content.Intent
+import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
@@ -47,6 +50,86 @@ class NativeImmediateGroupBindingIntegrationTest {
             assertEquals(2, notifications)
             assertSame(parent, child.parent)
             assertSame(child, group.pointerContent.getChildAt(0))
+        }
+    }
+
+    @Test fun presetOutlineWidthRebindsLaidOutGroupsAndRestoresTheirDefaultStroke() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync {
+            val target = instrumentation.targetContext
+            val config = Configuration(target.resources.configuration).apply { densityDpi = 420 }
+            val context = target.createConfigurationContext(config)
+            assertEquals(2.625f, context.resources.displayMetrics.density, 0f)
+            val recipe = NativeGroupSurfaceRecipes.Default.settingsGroup
+            val palette = NativeColorScheme.fallback(false).copy(
+                surfaceContainerLow = Color.BLACK,
+                onSurface = Color.WHITE,
+            )
+            val preset = NativeDarkSurfacePreset.Amoled.copy(
+                backgroundGrain = 0f,
+                foregroundGrain = 0f,
+                borderLightness = 1f,
+            )
+            val width = 160
+            val height = 128
+            val middle = height / 2
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            try {
+                for (edges in listOf(null, NativeGroupEdges(false, false),
+                    NativeGroupEdges(false, false, squareTop = true, squareBottom = true))) {
+                    val group = recipe.create(context)
+                    group.setJoinedEdges(edges)
+                    group.setJoinedSeparatorColor(Color.RED)
+                    group.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+                    group.layout(0, 0, width, height)
+                    val cornerWasInside = group.containsVisualPoint(0f, 0f)
+
+                    fun draw() {
+                        bitmap.eraseColor(Color.TRANSPARENT)
+                        group.draw(Canvas(bitmap))
+                        assertEquals(cornerWasInside, group.containsVisualPoint(0f, 0f))
+                        if (edges != null && !edges.squareTop) {
+                            assertEquals(Color.RED, bitmap.getPixel(width / 2, 0))
+                            assertEquals(Color.BLACK, bitmap.getPixel(width / 2, 1))
+                        }
+                    }
+
+                    recipe.bindImmediately(group, palette)
+                    draw()
+                    val defaultEdge = bitmap.getPixel(2, middle)
+                    assertTrue("Missing default 1 dp stroke for $edges", Color.red(defaultEdge) > 0)
+                    assertEquals(Color.BLACK, bitmap.getPixel(3, middle))
+
+                    recipe.bind(group, palette.copy(surfacePreset = preset.copy(borderWidthDp = 2f)))
+                    draw()
+                    assertEquals(Color.WHITE, bitmap.getPixel(4, middle))
+                    assertEquals(Color.BLACK, bitmap.getPixel(6, middle))
+
+                    recipe.bindImmediately(group, palette.copy(surfacePreset = preset.copy(borderWidthDp = 3f)))
+                    draw()
+                    assertEquals(Color.WHITE, bitmap.getPixel(6, middle))
+
+                    recipe.bindImmediately(group, palette.copy(surfacePreset = preset.copy(borderWidthDp = 0f)))
+                    draw()
+                    assertEquals(Color.BLACK, bitmap.getPixel(0, middle))
+
+                    recipe.bind(group, palette.copy(surfacePreset = NativeGrainPreset(0f, 0f)))
+                    draw()
+                    assertEquals(defaultEdge, bitmap.getPixel(2, middle))
+                    assertEquals(Color.BLACK, bitmap.getPixel(3, middle))
+
+                    recipe.bindImmediately(group, palette.copy(surfacePreset = preset.copy(borderWidthDp = 3f)))
+                    draw()
+                    assertEquals(Color.WHITE, bitmap.getPixel(6, middle))
+                    recipe.bindImmediately(group, palette)
+                    draw()
+                    assertEquals(defaultEdge, bitmap.getPixel(2, middle))
+                    assertEquals(Color.BLACK, bitmap.getPixel(3, middle))
+                }
+            } finally {
+                bitmap.recycle()
+            }
         }
     }
 
