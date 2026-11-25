@@ -79,7 +79,17 @@ class ZfmTheme private constructor(private val theme: ReverbTheme) {
         filled: Boolean = false,
         enabled: Boolean = true,
         recipe: NativeButtonRecipe = if (filled) buttons.filled else buttons.text,
-        foreground: Int = accent,
+        onClick: () -> Unit,
+    ): NativeMaterialButtonView = button(context, label, filled, enabled, recipe, accent, onClick)
+
+    /** Explicit foreground variant; the required argument preserves the legacy factory's defaults. */
+    fun button(
+        context: Context,
+        label: String,
+        filled: Boolean = false,
+        enabled: Boolean = true,
+        recipe: NativeButtonRecipe = if (filled) buttons.filled else buttons.text,
+        foreground: Int,
         onClick: () -> Unit,
     ): NativeMaterialButtonView = AppButton(
         context, this, filled, recipe, ButtonForeground.resolve(foreground, this), onClick,
@@ -87,7 +97,9 @@ class ZfmTheme private constructor(private val theme: ReverbTheme) {
 
     /**
      * The button must have been constructed with a NativeButtonRecipe. Omitted overrides retain
-     * a ZFM button's filled identity, semantic foreground and current callback.
+     * a ZFM button's filled identity, construction-time semantic foreground and current callback.
+     * A foreground override affects only this bind; omitting it later resolves the construction
+     * role against this theme again. An explicit callback replaces the retained callback.
      */
     fun bindButton(button: NativeMaterialButtonView, label: String = button.label.getText(),
                    enabled: Boolean = button.isEnabled,
