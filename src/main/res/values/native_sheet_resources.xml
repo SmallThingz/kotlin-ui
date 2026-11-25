@@ -17,7 +17,22 @@
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowElevation">0dp</item>
     </style>
+    <!-- Same sheet window policy, with Light platform controls and accessibility metadata. -->
+    <style name="NativeSheetLightDialogTheme" parent="android:Theme.DeviceDefault.Light.Dialog">
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="27">@integer/native_sheet_cutout_mode</item>
+        <item name="android:windowClipToOutline">false</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowElevation">0dp</item>
+    </style>
     <style name="NativeSheetWindowTheme">
         <item name="android:dialogTheme">@style/NativeSheetDialogTheme</item>
+    </style>
+    <style name="NativeSheetLightWindowTheme">
+        <item name="android:dialogTheme">@style/NativeSheetLightDialogTheme</item>
     </style>
 </resources>

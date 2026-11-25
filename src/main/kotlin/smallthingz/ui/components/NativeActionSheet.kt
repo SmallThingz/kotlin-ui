@@ -17,6 +17,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.os.Build
+import android.util.TypedValue
 import android.view.ContextThemeWrapper
 import android.view.MotionEvent
 import android.view.KeyEvent
@@ -63,6 +64,15 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+private fun sheetWindowContext(anchor: Context): Context {
+    val light = TypedValue()
+    val isLight = anchor.theme.resolveAttribute(android.R.attr.isLightTheme, light, true) &&
+        light.type == TypedValue.TYPE_INT_BOOLEAN && light.data != 0
+    val theme = if (isLight) smallthingz.ui.R.style.NativeSheetLightWindowTheme
+        else smallthingz.ui.R.style.NativeSheetWindowTheme
+    return ContextThemeWrapper(anchor, theme)
+}
+
 /**
  * One caller-owned sheet route. Title Close invokes the current owner immediately by default;
  * scrim/drag/Back use M3's respective hide-then-callback paths. No implicit busy/permission policy.
@@ -80,7 +90,7 @@ class NativeActionSheet(
     contentBackground: android.graphics.drawable.Drawable?,
     private val statusBarProtection: NativeStatusBarProtection?,
     entryEdge: NativeDialogEdge,
-):ComponentDialog(ContextThemeWrapper(anchor.context,smallthingz.ui.R.style.NativeSheetWindowTheme)) {
+):ComponentDialog(sheetWindowContext(anchor.context)) {
     constructor(
         anchor: View,
         initialStyle: NativeActionSheetStyle,
