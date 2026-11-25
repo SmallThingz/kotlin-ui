@@ -262,6 +262,179 @@ class NativeAxisOverscrollTest {
         }
     }
 
+    @Test fun disablingEffectsFinishesActiveEdgesAndRejectsOldFlingAfterReenable() = main {
+        if (Build.VERSION.SDK_INT < 31) return@main
+        for (axis in NativeOverscrollAxis.entries) {
+            var invalidations = 0
+            val owner = NativeAxisOverscroll(context, Density(1f), 0xff666666.toInt(), axis) { invalidations++ }
+            val edges = listOf("near", "far", "nearNegation", "farNegation").associateWith { Edge(context) }
+            try {
+                edges.forEach { (name, edge) -> install(owner, name, edge) }
+                owner.measured(200, 100)
+                val oldFling = owner.beginFling(-1200f)
+                edges.values.forEach { it.stretch = .1f }
+                owner.scroll(0f, NativeOverscrollSource.USER_INPUT) { it }
+                assertTrue(owner.isInProgress)
+                val before = invalidations
+                owner.setEffectsEnabled(false)
+                assertEquals(before + 1, invalidations)
+                assertFalse(owner.isInProgress)
+                edges.values.forEach {
+                    assertEquals(1, it.finishes)
+                    assertEquals(0f, it.stretch, 0f)
+                }
+                owner.setEffectsEnabled(false)
+                assertEquals(before + 1, invalidations)
+                edges.values.forEach { assertEquals(1, it.finishes) }
+                val pulls = edges.mapValues { it.value.pulls.size }
+                val releases = edges.mapValues { it.value.releases }
+                for (source in NativeOverscrollSource.entries) {
+                    for (delta in listOf(-23f, 19f)) {
+                        val delegated = mutableListOf<Float>()
+                        val consumed = owner.scroll(delta, source) { delegated += it; it / 2f }
+                        assertEquals(listOf(delta), delegated)
+                        assertEquals(delta / 2f, consumed, 0f)
+                    }
+                }
+                val disabledFling = owner.beginFling(700f)
+                assertEquals(700f, disabledFling.remainingVelocity, 0f)
+                owner.finishFling(oldFling, -900f)
+                owner.finishFling(disabledFling, 700f)
+                val bitmap = Bitmap.createBitmap(200, 100, Bitmap.Config.ARGB_8888)
+                try {
+                    var draws = 0
+                    owner.draw(Canvas(bitmap)) { draws++ }
+                    assertEquals(1, draws)
+                    assertTrue(edges.values.all { it.drawnOrigins.isEmpty() && it.finishes == 1 })
+                } finally { bitmap.recycle() }
+                owner.setEffectsEnabled(true)
+                val freshFling = owner.beginFling(500f)
+                owner.finishFling(oldFling, -900f)
+                owner.finishFling(disabledFling, 700f)
+                edges.forEach { (name, edge) ->
+                    assertEquals(pulls.getValue(name), edge.pulls.size)
+                    assertEquals(releases.getValue(name), edge.releases)
+                    assertTrue(edge.absorbs.isEmpty())
+                }
+                owner.finishFling(freshFling, 500f)
+                assertEquals(listOf(500), edges.getValue("near").absorbs)
+                // The next cycle resumes the existing zero-distance stretch preparation.
+                edges.getValue("near").stretch = .1f
+                owner.scroll(0f, NativeOverscrollSource.USER_INPUT) { it }
+                assertEquals(pulls.getValue("near") + 1, edges.getValue("near").pulls.size)
+            } finally { owner.dispose() }
+        }
+    }
+
+    @Test fun disposedFlingCannotAbsorbIntoReusedOwner() = main {
+        val owner = effect(NativeOverscrollAxis.VERTICAL)
+        val far = Edge(context)
+        install(owner, "far", far)
+        try {
+            owner.measured(200, 100)
+            val oldFling = owner.beginFling(-900f)
+            owner.dispose()
+            val newFling = owner.beginFling(-700f)
+            owner.finishFling(oldFling, -900f)
+            assertTrue(far.absorbs.isEmpty())
+            assertEquals(0, far.releases)
+            owner.finishFling(newFling, -700f)
+            assertEquals(listOf(700), far.absorbs)
+            assertEquals(1, far.releases)
+        } finally { owner.dispose() }
+    }
+
+    @Test fun nestedDispatchRetirementCannotCreateAPullInTheNewEffectLifetime() = main {
+        val owner = effect(NativeOverscrollAxis.VERTICAL)
+        val near = Edge(context)
+        install(owner, "near", near)
+        try {
+            owner.measured(200, 100)
+            var delegated = 0
+            val consumed = owner.scroll(20f, NativeOverscrollSource.USER_INPUT) {
+                assertEquals(20f, it, 0f)
+                delegated++
+                owner.setEffectsEnabled(false)
+                owner.setEffectsEnabled(true)
+                7f
+            }
+            assertEquals(7f, consumed, 0f)
+            assertEquals(1, delegated)
+            assertEquals(1, near.finishes)
+            assertTrue(near.pulls.isEmpty())
+            owner.scroll(20f, NativeOverscrollSource.USER_INPUT) { 7f }
+            assertEquals(.13f, near.pulls.single().first, .00001f)
+        } finally { owner.dispose() }
+    }
+
+    @Test fun effectSuppressionDuringFlingPreservesSplineFramesAndBoundaryVelocity() = main {
+        if (Build.VERSION.SDK_INT < 31) return@main
+        val owner = effect(NativeOverscrollAxis.VERTICAL)
+        val near = Edge(context)
+        val far = Edge(context)
+        install(owner, "near", near)
+        install(owner, "far", far)
+        owner.measured(200, 100)
+        val start = owner.beginFling(-1200f)
+        val actualDeltas = mutableListOf<Float>()
+        val referenceDeltas = mutableListOf<Float>()
+        val actualFinished = mutableListOf<Float>()
+        val referenceFinished = mutableListOf<Float>()
+        var actualPosition = 0f
+        var referencePosition = 0f
+        val decay = smallthingz.ui.animation.splineBasedDecay(Density(1f))
+        val actual = NativeVerticalFling(decay, { logical ->
+            -owner.scroll(-logical, NativeOverscrollSource.SIDE_EFFECT) { physical ->
+                actualDeltas += -physical
+                val consumed = minOf(-physical, 80f - actualPosition)
+                actualPosition += consumed
+                -consumed
+            }
+        }, actualFinished::add)
+        val reference = NativeVerticalFling(decay, { logical ->
+            referenceDeltas += logical
+            val consumed = minOf(logical, 80f - referencePosition)
+            referencePosition += consumed
+            consumed
+        }, referenceFinished::add)
+        try {
+            actual.start(-start.remainingVelocity)
+            reference.start(1200f)
+            actual.frame(0L)
+            reference.frame(0L)
+            actual.frame(16_666_667L)
+            reference.frame(16_666_667L)
+            val positionBeforeSuppression = actualPosition
+            assertTrue(positionBeforeSuppression > 0f)
+            assertTrue(actual.isRunning)
+            far.stretch = .1f
+            owner.setEffectsEnabled(false)
+            assertEquals(1, far.finishes)
+            assertFalse(owner.isInProgress)
+            for (frame in 2..120) {
+                val time = frame * 16_666_667L
+                actual.frame(time)
+                reference.frame(time)
+                assertEquals(referencePosition, actualPosition, 0f)
+                assertEquals(reference.isRunning, actual.isRunning)
+            }
+            assertTrue(actualPosition > positionBeforeSuppression)
+            assertEquals(80f, actualPosition, 0f)
+            assertEquals(referenceDeltas, actualDeltas)
+            assertEquals(referenceFinished, actualFinished)
+            assertEquals(1, actualFinished.size)
+            assertTrue(actualFinished.single() > 0f)
+            owner.setEffectsEnabled(true)
+            owner.finishFling(start, -actualFinished.single())
+            assertTrue(near.absorbs.isEmpty())
+            assertTrue(far.absorbs.isEmpty())
+        } finally {
+            actual.cancel()
+            reference.cancel()
+            owner.dispose()
+        }
+    }
+
     private fun assertPoints(expected: List<Float>, actual: List<Float>) {
         expected.zip(actual).forEach { (a, b) -> assertEquals(a, b, .001f) }
     }

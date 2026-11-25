@@ -23,12 +23,19 @@ internal fun noiseSurfaceRangeOver(surface: Long, fill: Int, paintAlpha: Int): L
     val darkest = (surface ushr 32).toInt()
     val lightest = surface.toInt()
     if (darkest ushr 24 != 255 || lightest ushr 24 != 255) return 0L
-    fun composite(background: Int): Int {
+    fun composite(background: Int, roundUp: Boolean): Int {
         val alpha = fill ushr 24
-        fun channel(shift: Int) = (((fill ushr shift and 255) * alpha +
-            (background ushr shift and 255) * (255 - alpha) + 127) / 255) shl shift
+        val rounding = if (roundUp) 254 else 0
+        // A raster backend can quantize source premultiplication before destination blending.
+        // Bound the two terms independently; a single rounded sum is not a painted interval.
+        // Exact transparent and opaque inputs retain their exact channel values.
+        fun channel(shift: Int): Int {
+            val source = ((fill ushr shift and 255) * alpha + rounding) / 255
+            val destination = ((background ushr shift and 255) * (255 - alpha) + rounding) / 255
+            return (source + destination).coerceAtMost(255) shl shift
+        }
         return -0x1000000 or channel(16) or channel(8) or channel(0)
     }
-    return textSurfaceRange((noiseSurfaceRange(composite(darkest), paintAlpha) ushr 32).toInt(),
-        noiseSurfaceRange(composite(lightest), paintAlpha).toInt())
+    return textSurfaceRange((noiseSurfaceRange(composite(darkest, false), paintAlpha) ushr 32).toInt(),
+        noiseSurfaceRange(composite(lightest, true), paintAlpha).toInt())
 }

@@ -33,4 +33,46 @@ class NoiseSurfaceRangeTest {
         assertEquals(noiseSurfaceRange(0xffabcdef.toInt(), 128),
             noiseSurfaceRangeOver(underlay, 0xffabcdef.toInt(), 128))
     }
+
+    @Test fun flatTranslucentRangeEnclosesFusedAndPremultipliedIntegerSrcOver() {
+        for (alpha in 0..255) for (source in 0..255) {
+            val fill = (alpha shl 24) or (source * 0x010101)
+            // Independent channel endpoints and interior values include black/white exactness.
+            for (background in listOf(0, 1, 17, 127, 128, 254, 255)) {
+                val surface = textSurfaceRange(-0x1000000 or (background * 0x010101))
+                val range = noiseSurfaceRangeOver(surface, fill, 0)
+                val low = (range ushr 32).toInt() and 255
+                val high = range.toInt() and 255
+                val fused = (source * alpha + background * (255 - alpha) + 127) / 255
+                // SkPremultiplyARGBInline followed by SkPMSrcOver's 256-scaled destination.
+                val premultiplied = (source * alpha + 127) / 255
+                val integerSrcOver = (premultiplied + ((background * (256 - alpha)) ushr 8)).coerceAtMost(255)
+                assertTrue("Fused alpha=$alpha source=$source background=$background",
+                    fused in low..high)
+                assertTrue("Premultiplied alpha=$alpha source=$source background=$background",
+                    integerSrcOver in low..high)
+                if (alpha == 0 || alpha == 255) assertEquals(low, high)
+            }
+        }
+    }
+
+    @Test fun lightIdleFillBoundsObservedHostPixelAndModeledResultsBeforeNoise() {
+        val field = 0xfff7f2fa.toInt()
+        val fill = 0xbdeaddff.toInt()
+        val range = noiseSurfaceRangeOver(textSurfaceRange(field), fill, 0)
+        // Modeled arithmetic routes; neither identifies the native host's exact raster path.
+        val fused = 0xffede2fe.toInt()
+        val premultiplied = 0xffede3fe.toInt()
+        // Baseline diagnostic 58240 / grain-diagnostic-1795638651124424252, SDK35 native:
+        // flat rebind, idle selected slot 0, local (36, 2); actual matched the Canvas oracle.
+        val observedHostPixel = 0xffede2fd.toInt()
+        for (pixel in listOf(fused, premultiplied, observedHostPixel)) for (shift in 0..16 step 8) {
+            val low = (range ushr 32).toInt() ushr shift and 255
+            val high = range.toInt() ushr shift and 255
+            assertTrue((pixel ushr shift and 255) in low..high)
+        }
+        assertEquals(0xffece1fd.toInt(), (range ushr 32).toInt())
+        assertEquals(0xffeee3fe.toInt(), range.toInt())
+    }
+
 }

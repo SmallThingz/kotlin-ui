@@ -11,7 +11,8 @@ class NativeBufferSegmentInk {
     private var indication = 0
     private var endpointFloor = 4.5
     private var targetFloor = 4.5
-    private var background = 0
+    private var backgroundDark = 0
+    private var backgroundLight = 0
     private var backgroundLow = 0.0
     private var backgroundHigh = 0.0
 
@@ -30,6 +31,28 @@ class NativeBufferSegmentInk {
             return animated
         }
         prepareBackground(fill)
+        return qualifiedForeground(animated)
+    }
+
+    /** Textured Home surfaces supply the composed parent and tab paint, including while settled. */
+    internal fun target(surface: Long, indication: Int, foreground: Int) {
+        this.indication = indication
+        prepareBackground(surface)
+        targetFloor = if (foreground ushr 24 == 255) 4.5 else min(4.5, contrastBound(foreground))
+        endpointFloor = min(endpointFloor, targetFloor)
+    }
+
+    internal fun foreground(surface: Long, animated: Int, running: Boolean): Int {
+        if (surface ushr 56 != 255L || (surface ushr 24 and 255L) != 255L) return animated
+        prepareBackground(surface)
+        if (!running) {
+            targetFloor = if (animated ushr 24 == 255) 4.5 else min(4.5, contrastBound(animated))
+            endpointFloor = targetFloor
+        }
+        return qualifiedForeground(animated)
+    }
+
+    private fun qualifiedForeground(animated: Int): Int {
         if (contrastBound(animated) >= endpointFloor) return animated
         val dark = animated and -0x1000000
         val light = dark or 0xFFFFFF
@@ -41,17 +64,22 @@ class NativeBufferSegmentInk {
     }
 
     private fun prepareBackground(fill: Int) {
-        background = composite(fill, field, fill ushr 24)
-        val overlaid = overlay(background)
-        backgroundLow = bufferSegmentSrgbLuminance(channelMinimum(background, overlaid))
-        backgroundHigh = bufferSegmentSrgbLuminance(channelMaximum(background, overlaid))
+        val background = composite(fill, field, fill ushr 24)
+        prepareBackground(smallthingz.ui.controls.textSurfaceRange(background))
+    }
+
+    private fun prepareBackground(surface: Long) {
+        backgroundDark = (surface ushr 32).toInt()
+        backgroundLight = surface.toInt()
+        backgroundLow = bufferSegmentSrgbLuminance(channelMinimum(backgroundDark, overlay(backgroundDark)))
+        backgroundHigh = bufferSegmentSrgbLuminance(channelMaximum(backgroundLight, overlay(backgroundLight)))
     }
 
     private fun contrastBound(foreground: Int): Double {
-        val ink = composite(foreground, background, foreground ushr 24)
-        val overlaid = overlay(ink)
-        val inkLow = bufferSegmentSrgbLuminance(channelMinimum(ink, overlaid))
-        val inkHigh = bufferSegmentSrgbLuminance(channelMaximum(ink, overlaid))
+        val darkInk = composite(foreground, backgroundDark, foreground ushr 24)
+        val lightInk = composite(foreground, backgroundLight, foreground ushr 24)
+        val inkLow = bufferSegmentSrgbLuminance(channelMinimum(darkInk, overlay(darkInk)))
+        val inkHigh = bufferSegmentSrgbLuminance(channelMaximum(lightInk, overlay(lightInk)))
         return when {
             inkLow >= backgroundHigh -> (inkLow + .05) / (backgroundHigh + .05)
             backgroundLow >= inkHigh -> (backgroundLow + .05) / (inkHigh + .05)

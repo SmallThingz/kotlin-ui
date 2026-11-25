@@ -57,6 +57,7 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
     private val rasterPaint = Paint(FLAGS)
     private val shape = Path()
     private var grain: ViewGrain? = null
+    private var paintedSurfaceRange = 0L
     private val mask = Path()
     private val bounds = RectF()
     private val sourceRect = Rect()
@@ -108,6 +109,7 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
             applyColors(palette.field, palette.border)
         }
         motion.retarget(palette.field, palette.border)
+        publishSurfaceRange()
         if (this.density != density) borderDirty = true
         this.density = density
         val nextMetrics = style.resolve(density, segmentStyle)
@@ -124,11 +126,23 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
 
     private fun applyColors(background: Int, border: Int) {
         fill.color = background
+        publishSurfaceRange()
         if (displayedBorder != border) {
             displayedBorder = border
             borderDirty = true
         }
         invalidate()
+    }
+
+    /** Descendant ink follows this sampled fill, including palette-only grain changes. */
+    protected open fun onSurfacePaintChanged(surface: Long) = Unit
+
+    private fun publishSurfaceRange() {
+        val range = grain?.surfaceRange(fill.color)
+            ?: smallthingz.ui.controls.textSurfaceRange(fill.color)
+        if (paintedSurfaceRange == range) return
+        paintedSurfaceRange = range
+        onSurfacePaintChanged(range)
     }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {

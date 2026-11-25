@@ -115,6 +115,11 @@ class ReverbHomeControls<S : Any>(
         addControlRows(listOf(oneShot, looping), buttons)
     }
 
+    override fun onSurfacePaintChanged(surface: Long) {
+        oneShot.bindCaptureSurface(surface)
+        looping.bindCaptureSurface(surface)
+    }
+
     fun bind(state: ReverbHomeControlsState<S>, flip: ReverbHomeFlipFrame, actions: ReverbHomeActions<S>) {
         // Publish actions/slot even when the visual and interaction inputs are unchanged.
         currentActions = actions
@@ -256,6 +261,23 @@ class HomeBufferSegment(context: Context, currentEnvironment: ReverbEnvironment,
     private val backgroundMotion = colorMotion(Color.Transparent)
     private val foregroundMotion = colorMotion(Color(currentEnvironment.palette.muted))
     private val transitionInk = NativeBufferSegmentInk()
+    private var captureSurface = 0L
+    private var hasCaptureSurface = false
+    internal val paintedTextSurface: Long
+        get() = roundedSurfaceRangeOver(captureSurfaceRange(), backgroundMotion.value.toArgb())
+
+    internal fun bindCaptureSurface(surface: Long) {
+        captureSurface = surface
+        hasCaptureSurface = true
+        applyColors()
+    }
+
+    private fun captureSurfaceRange(): Long {
+        if (hasCaptureSurface) return captureSurface
+        val palette = currentEnvironment.palette
+        val alpha = ((palette.surfacePreset?.foregroundGrain ?: 0f) * 255f).roundToInt()
+        return smallthingz.ui.graphics.noiseSurfaceRange(palette.field, alpha)
+    }
     private var initialized = false
     private var selection = false
     private var recording = false
@@ -271,6 +293,7 @@ class HomeBufferSegment(context: Context, currentEnvironment: ReverbEnvironment,
         applyColors()
     }
     init {
+        setRoundedSurfacePreset(currentEnvironment.palette.surfacePreset)
         addView(glyph); addView(label)
         // The shared page owner binds this existing row to Main's minimum-aware source bounds.
         // The role-only child has no drawing/input and keeps the original visual bounds.
@@ -296,6 +319,7 @@ class HomeBufferSegment(context: Context, currentEnvironment: ReverbEnvironment,
     fun setEnvironment(value: ReverbEnvironment) {
         currentEnvironment = value
         style = value.appearance.bufferSegment
+        setRoundedSurfacePreset(value.palette.surfacePreset)
         setRoundedGeometry(value.textDensity.density, style.cornerRadiusDp)
         value.bindParagraphStyle(label, style.labelRole)
         glyph.setEnvironment(value)
@@ -306,7 +330,8 @@ class HomeBufferSegment(context: Context, currentEnvironment: ReverbEnvironment,
         val p = currentEnvironment.palette
         val background = Color(style.fill(p, selection, recording, filled))
         val foreground = Color(if (stateKnown) style.ink(p, selection, recording, bufferEnabled, filled) else p.ink)
-        transitionInk.target(p.field, p.ink, background.toArgb(), foreground.toArgb())
+        transitionInk.target(roundedSurfaceRangeOver(captureSurfaceRange(), background.toArgb()),
+            p.ink, foreground.toArgb())
         if (!initialized) {
             initialized = true; backgroundMotion.snap(background); foregroundMotion.snap(foreground)
         } else {
@@ -320,7 +345,7 @@ class HomeBufferSegment(context: Context, currentEnvironment: ReverbEnvironment,
     private fun applyColors() {
         val fill = backgroundMotion.value.toArgb()
         setRoundedFillColor(fill)
-        val tint = transitionInk.foreground(fill, foregroundMotion.value.toArgb(),
+        val tint = transitionInk.foreground(paintedTextSurface, foregroundMotion.value.toArgb(),
             backgroundMotion.running || foregroundMotion.running)
         glyph.setTint(tint); label.setTextColor(tint); invalidate()
     }

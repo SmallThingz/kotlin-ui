@@ -9,6 +9,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import kotlin.math.min
+import smallthingz.ui.graphics.ViewGrain
+import smallthingz.ui.graphics.bindGrainLayer
 import smallthingz.ui.geometry.roundedGroupContains
 import smallthingz.ui.geometry.roundedGroupGeometry
 
@@ -22,6 +24,7 @@ abstract class NativeRoundedControlSurface(
     private val fill = if (drawFill) {
         Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
     } else null
+    private var grain: ViewGrain? = null
 
     init {
         clipChildren = false
@@ -40,6 +43,15 @@ abstract class NativeRoundedControlSurface(
         this.density = density
         this.cornerRadiusDp = cornerRadiusDp
     }
+
+    protected fun setRoundedSurfacePreset(preset: NativeSurfacePreset?) {
+        if (fill == null) return
+        grain = bindGrainLayer(grain, preset?.foregroundGrain ?: 0f)
+    }
+
+    protected fun roundedSurfaceRangeOver(underlay: Long, color: Int): Long =
+        grain?.surfaceRangeOver(underlay, color)
+            ?: smallthingz.ui.graphics.noiseSurfaceRangeOver(underlay, color, 0)
 
     protected fun setRoundedFillColor(color: Int) {
         fill?.color = color
@@ -63,5 +75,6 @@ abstract class NativeRoundedControlSurface(
         val paint = fill ?: return
         val radius = paintedRadius()
         canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), radius, radius, paint)
+        grain?.draw(canvas, 0f, 0f, width.toFloat(), height.toFloat(), radius, paint.alpha)
     }
 }

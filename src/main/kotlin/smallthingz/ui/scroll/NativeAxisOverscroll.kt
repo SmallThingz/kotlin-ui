@@ -55,11 +55,23 @@ open class NativeAxisOverscroll(
     private var pointerId = -1
     private var pointerCross = Float.NaN
     private var scrollCycle = false
+    private var effectsEnabled = true
+    private var effectGeneration = 0L
     private var near: EdgeEffect? = null
     private var far: EdgeEffect? = null
     private var nearNegation: EdgeEffect? = null
     private var farNegation: EdgeEffect? = null
     private var stretchRenderer: NativeAxisStretchRenderer? = null
+
+    /** Suppress edge paint while preserving delegated scroll and fling motion. */
+    fun setEffectsEnabled(value: Boolean) {
+        if (effectsEnabled == value) return
+        effectsEnabled = value
+        if (!value) {
+            dispose()
+            invalidate()
+        }
+    }
 
     /** Palette-only update: retain every edge and its pull/fling state. */
     fun setGlowColor(color: Int) {
@@ -109,7 +121,8 @@ open class NativeAxisOverscroll(
      * Only drag/UserInput leftovers create a new pull; SideEffect destretches at exactly 4x.
      */
     fun scroll(physicalDelta: Float, source: NativeOverscrollSource, performScroll: (Float) -> Float): Float {
-        if (width <= 0 || height <= 0) return performScroll(physicalDelta)
+        if (!effectsEnabled || width <= 0 || height <= 0) return performScroll(physicalDelta)
+        val generation = effectGeneration
         if (!scrollCycle) {
             if (near.stretched) pullNear(0f)
             if (far.stretched) pullFar(0f)
@@ -134,6 +147,8 @@ open class NativeAxisOverscroll(
         if (preConsumed != 0f) invalidate()
         val available = physicalDelta - preConsumed
         val consumed = performScroll(available)
+        // Nested scroll may synchronously replace the presentation owning these effects.
+        if (!effectsEnabled || generation != effectGeneration) return preConsumed + consumed
         val remainder = available - consumed
         if (available != 0f && consumed != 0f && isInProgress) release()
         var needsInvalidate = false
@@ -156,11 +171,18 @@ open class NativeAxisOverscroll(
         return preConsumed + consumed
     }
 
-    class FlingStart internal constructor(val remainingVelocity: Float, internal val active: Boolean)
+    class FlingStart internal constructor(
+        val remainingVelocity: Float,
+        internal val active: Boolean,
+        internal val generation: Long,
+    )
 
     /** Must precede nested pre-fling, exactly where OverscrollEffect wraps performFling. */
     fun beginFling(physicalVelocity: Float): FlingStart {
-        if (width <= 0 || height <= 0) return FlingStart(physicalVelocity, false)
+        val generation = effectGeneration
+        if (!effectsEnabled || width <= 0 || height <= 0) {
+            return FlingStart(physicalVelocity, false, generation)
+        }
         val consumed = when {
             near.stretched && physicalVelocity < 0f ->
                 nearEffect().absorbToRelaxIfNeeded(physicalVelocity, mainExtent.toFloat(), density)
@@ -169,7 +191,7 @@ open class NativeAxisOverscroll(
             else -> 0f
         }
         if (consumed != 0f) invalidate()
-        return FlingStart(physicalVelocity - consumed, true)
+        return FlingStart(physicalVelocity - consumed, true, generation)
     }
 
     /**
@@ -177,7 +199,7 @@ open class NativeAxisOverscroll(
      * Do not call from a finally block if performFling itself was cancelled: the source has none.
      */
     fun finishFling(start: FlingStart, leftoverPhysicalVelocity: Float) {
-        if (!start.active) return
+        if (!effectsEnabled || !start.active || start.generation != effectGeneration) return
         scrollCycle = false
         if (leftoverPhysicalVelocity > 0f) nearEffect().onAbsorbCompat(leftoverPhysicalVelocity.roundToInt())
         else if (leftoverPhysicalVelocity < 0f) farEffect().onAbsorbCompat(-leftoverPhysicalVelocity.roundToInt())
@@ -239,7 +261,7 @@ open class NativeAxisOverscroll(
     fun draw(canvas: Canvas, drawContent: (Canvas) -> Unit) {
         // DrawScope.size is the viewport's size. Canvas dimensions may include the parent's clip
         // expansion; only RenderNode bounds below use canvas.width/height, exactly as the source.
-        if (width <= 0 || height <= 0) { drawContent(canvas); return }
+        if (!effectsEnabled || width <= 0 || height <= 0) { drawContent(canvas); return }
         if (Build.VERSION.SDK_INT >= 31) {
             if (!canvas.isHardwareAccelerated) {
                 forEachEffect(includeNegation = true) { it.finish() }
@@ -294,8 +316,10 @@ open class NativeAxisOverscroll(
         }
     }
 
-    /** Explicit discarded-owner boundary; hidden but retained pages must not call this. */
+    /** Retire effects and outstanding fling handles; a retained owner can start a fresh cycle. */
     fun dispose() {
+        effectGeneration++
+        scrollCycle = false
         forEachEffect(includeNegation = true) { it.finish() }
         if (Build.VERSION.SDK_INT >= 31) stretchRenderer?.dispose()
         stretchRenderer = null
