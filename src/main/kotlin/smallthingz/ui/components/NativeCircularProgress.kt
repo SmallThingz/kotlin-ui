@@ -10,6 +10,7 @@ import android.content.Context
 import android.database.ContentObserver
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
@@ -28,6 +29,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import smallthingz.ui.graphics.ViewGrain
+import smallthingz.ui.graphics.bindGrainLayer
 
 /** Released indeterminate indicator: The default round stroke is 2dp. */
 open class NativeCircularProgress(
@@ -45,6 +48,16 @@ open class NativeCircularProgress(
         this.color = color
     }
     private val arc = RectF()
+    private val arcPath = Path()
+    private val arcFill = Path()
+    private var grain: ViewGrain? = null
+    private var grainEnabled = false
+
+    internal fun bindSurfacePreset(preset: NativeSurfacePreset?) {
+        val intensity = preset?.foregroundGrain ?: 0f
+        grainEnabled = intensity > 0f
+        grain = bindGrainLayer(grain, intensity)
+    }
     private val colorMotion:ViewColorTransition by lazy {ViewColorTransition(this,intArrayOf(paint.color),{
         paint.color=colorMotion.color(0);invalidate()
     },durationScale)}
@@ -163,6 +176,13 @@ open class NativeCircularProgress(
         canvas.rotate(rotation, width / 2f, height / 2f)
         // Transparent track contributes no pixels; retain active draw at startAngle0, same sweep.
         canvas.drawArc(arc, 0f, progress * 360f, false, paint)
+        grain?.takeIf { grainEnabled && paint.alpha != 0 }?.let { layer ->
+            arcPath.rewind()
+            arcPath.addArc(arc, 0f, progress * 360f)
+            arcFill.rewind()
+            paint.getFillPath(arcPath, arcFill)
+            layer.draw(canvas, arcFill, paint.alpha)
+        }
         canvas.restoreToCount(checkpoint)
     }
 

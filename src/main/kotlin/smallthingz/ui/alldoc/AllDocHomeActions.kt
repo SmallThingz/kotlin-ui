@@ -1,13 +1,18 @@
 package smallthingz.ui.alldoc
 
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.RectF
 import android.view.KeyEvent
+import android.view.View
 import smallthingz.ui.common.Button
 import smallthingz.ui.components.NativeButtonColorRole
 import smallthingz.ui.components.NativeButtonPalette
 import smallthingz.ui.components.NativeButtonRecipe
 import smallthingz.ui.components.NativeUiAppearance
 import smallthingz.ui.controls.ControlPalette
+import smallthingz.ui.graphics.ViewGrain
+import smallthingz.ui.graphics.bindGrainLayer
 import smallthingz.ui.interaction.view.isNativeClickActivationKey
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
@@ -35,8 +40,8 @@ class AllDocHomeActions(private val context: Context) {
     fun retry(label: String, palette: ControlPalette, action: () -> Unit): Button =
         createAction(retryRecipe, action).also { it.bind(label, true, palette.buttons()) }
 
-    fun bindRetry(button: Button, palette: ControlPalette) {
-        button.bind(button.label.getText(), button.isEnabled, palette.buttons())
+    fun bindRetry(button: Button, palette: ControlPalette, enabled: Boolean = button.isEnabled) {
+        button.bind(button.label.getText(), enabled, palette.buttons())
     }
 
     internal fun header(label: String, licenses: Boolean = false, identity: Boolean = false,
@@ -68,4 +73,30 @@ class AllDocHomeActions(private val context: Context) {
         quietSurface = raised, tonalSurface = selection, onTonal = content,
         errorSurface = raised, onError = content, surfacePreset = surfacePreset,
     )
+}
+
+/** Shared cached foreground grain for Home's recycler-owned document enclosures. */
+class AllDocHomeGroupGrain {
+    private var intensity = 0f
+    private var owner: View? = null
+    private var grain: ViewGrain? = null
+
+    fun bind(palette: ControlPalette?) {
+        val next = palette?.surfacePreset?.foregroundGrain ?: 0f
+        if (intensity == next) return
+        intensity = next
+        grain?.setIntensity(next)
+    }
+
+    /** The recycler retains its own fill, bounds, rounded geometry and outline. */
+    fun draw(canvas: Canvas, view: View, bounds: RectF, cornerRadius: Float, fillColor: Int) {
+        if (intensity == 0f || fillColor ushr 24 == 0) return
+        if (owner !== view) {
+            owner = view
+            grain = null
+        }
+        val layer = grain ?: view.bindGrainLayer(null, intensity).also { grain = it }
+        layer?.draw(canvas, bounds.left, bounds.top, bounds.right, bounds.bottom,
+            cornerRadius, fillColor ushr 24)
+    }
 }

@@ -56,6 +56,7 @@ class AllDocHomeTopBar(
 
     fun bindPalette(palette: ControlPalette) {
         this.palette = palette
+        AllDocAppearance.bindGroup(trailing, palette)
         trailing.setPaletteImmediately(palette.raised, palette.outline)
         for (button in listOf(licenses, identity, open, settings))
             actions.bindHeader(button, palette, button.isEnabled)
