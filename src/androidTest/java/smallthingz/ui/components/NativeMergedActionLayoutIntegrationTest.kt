@@ -764,11 +764,16 @@ class NativeMergedActionLayoutIntegrationTest {
                 assertEquals(listOf(allowLabel, denyLabel), buttons.map { it.label.getText() })
                 assertNotSame(buttons[0].mergedRowAccessibility.roleView, buttons[1].mergedRowAccessibility.roleView)
                 assertTrue(footer.isActionFooter)
-                for (button in buttons) {
+                for ((index, button) in buttons.withIndex()) {
                     val recipe = NativeMaterialButtonView::class.java.getDeclaredField("recipe")
                         .apply { isAccessible = true }.get(button) as NativeButtonRecipe
-                    assertEquals(NativeUiAppearance.Default.buttons.tonal.enabledPaint, recipe.enabledPaint)
-                    assertEquals(NativeUiAppearance.Default.buttons.tonal.disabledPaint, recipe.disabledPaint)
+                    val expected = if (index == 0) NativeUiAppearance.Default.buttons.filled
+                        else NativeUiAppearance.Default.buttons.text
+                    assertEquals(expected.enabledPaint, recipe.enabledPaint)
+                    assertEquals(expected.disabledPaint, recipe.disabledPaint)
+                    val glyph = NativeMaterialButtonView::class.java.getDeclaredField("icon")
+                        .apply { isAccessible = true }.get(button)
+                    assertNotNull("Both permission decisions have a semantic icon", glyph)
                     assertFalse(button.performClick())
                 }
                 for ((width, height) in listOf(180 to 140, 360 to 700)) {
