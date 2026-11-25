@@ -66,6 +66,13 @@ open class NativeToggleRow(
 
     internal fun bindSurfacePreset(preset: NativeSurfacePreset?) = switch.bindSurfacePreset(preset)
 
+    /** Keep surface policy and state together when rebinding a themed row. */
+    fun bindToggle(checked: Boolean, enabled: Boolean, scheme: NativeColorScheme,
+        density: Float = resources.displayMetrics.density) {
+        bindSurfacePreset(scheme.surfacePreset)
+        bindToggle(checked, enabled, density, scheme.ink, scheme.switchPalette)
+    }
+
     fun bindToggle(checked: Boolean, enabled: Boolean, density: Float, ink: Int,
         colors: NativeMaterialSwitchPalette) {
         if (closed) return

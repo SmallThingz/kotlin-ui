@@ -1,0 +1,18 @@
+<resources>
+    <style name="NativePanelActivityAnimation" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@anim/native_panel_up_enter</item>
+        <item name="android:activityOpenExitAnimation">@anim/native_panel_hold</item>
+        <item name="android:activityCloseEnterAnimation">@anim/native_panel_hold</item>
+        <item name="android:activityCloseExitAnimation">@anim/native_panel_down_exit</item>
+    </style>
+    <style name="NativeSettingsActivityAnimation" parent="NativePanelActivityAnimation">
+        <item name="android:activityOpenEnterAnimation">@anim/native_panel_hold</item>
+        <item name="android:activityOpenExitAnimation">@anim/native_settings_reveal</item>
+        <item name="android:activityCloseEnterAnimation">@anim/native_panel_up_enter</item>
+        <item name="android:activityCloseExitAnimation">@anim/native_panel_hold</item>
+    </style>
+    <style name="NativeSidePanelActivityAnimation" parent="NativePanelActivityAnimation">
+        <item name="android:activityOpenEnterAnimation">@anim/native_panel_end_enter</item>
+        <item name="android:activityCloseExitAnimation">@anim/native_panel_end_exit</item>
+    </style>
+</resources>

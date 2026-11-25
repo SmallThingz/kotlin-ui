@@ -6,6 +6,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import kotlin.math.roundToInt
+import smallthingz.ui.icons.MaterialRoundedIcon
+import smallthingz.ui.icons.MaterialRoundedIconDrawable
 import smallthingz.ui.common.SegmentOption
 import smallthingz.ui.reverb.settings.ReverbQuickTileEditor
 import smallthingz.ui.reverb.settings.ReverbCalibrationGraph
@@ -764,11 +766,17 @@ class NativeMergedActionLayoutIntegrationTest {
                 assertEquals(listOf(allowLabel, denyLabel), buttons.map { it.label.getText() })
                 assertNotSame(buttons[0].mergedRowAccessibility.roleView, buttons[1].mergedRowAccessibility.roleView)
                 assertTrue(footer.isActionFooter)
-                for (button in buttons) {
+                for ((index, button) in buttons.withIndex()) {
                     val recipe = NativeMaterialButtonView::class.java.getDeclaredField("recipe")
                         .apply { isAccessible = true }.get(button) as NativeButtonRecipe
-                    assertEquals(NativeUiAppearance.Default.buttons.tonal.enabledPaint, recipe.enabledPaint)
-                    assertEquals(NativeUiAppearance.Default.buttons.tonal.disabledPaint, recipe.disabledPaint)
+                    val expected = if (index == 0) NativeUiAppearance.Default.buttons.filled
+                        else NativeUiAppearance.Default.buttons.text
+                    assertEquals(expected.enabledPaint, recipe.enabledPaint)
+                    assertEquals(expected.disabledPaint, recipe.disabledPaint)
+                    val glyph = NativeMaterialButtonView::class.java.getDeclaredField("icon")
+                        .apply { isAccessible = true }.get(button)
+                    assertEquals(if (index == 0) MaterialRoundedIcon.Check else MaterialRoundedIcon.Close,
+                        (glyph as MaterialRoundedIconDrawable).icon)
                     assertFalse(button.performClick())
                 }
                 for ((width, height) in listOf(180 to 140, 360 to 700)) {

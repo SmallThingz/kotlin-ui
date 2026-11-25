@@ -100,11 +100,17 @@ class NativePermissionDialog(
     private var blockedGesture = false
     private val error = text(activity, "", NativeTypographyRole.BODY_MEDIUM, colors.error)
     private val progress = text(activity, "", NativeTypographyRole.BODY_SMALL, colors.muted)
-    private val allow: NativeMaterialButtonView = action(activity, appearance.buttons.tonal) {
+    private val allow: NativeMaterialButtonView = action(activity, appearance.buttons.filled.forDialogAction()) {
         if (!busy && allowEnabled) { setBusy(true); onAllow() }
+    }.apply {
+        setLeadingIcon(smallthingz.ui.icons.MaterialRoundedIconDrawable(
+            smallthingz.ui.icons.MaterialRoundedIcon.Check, density.density, colors.ink))
     }
-    private val deny: NativeMaterialButtonView = action(activity, appearance.buttons.tonal) {
+    private val deny: NativeMaterialButtonView = action(activity, appearance.buttons.text.forDialogAction()) {
         if (!busy) { setBusy(true); onDeny() }
+    }.apply {
+        setLeadingIcon(smallthingz.ui.icons.MaterialRoundedIconDrawable(
+            smallthingz.ui.icons.MaterialRoundedIcon.Close, density.density, colors.ink))
     }
     private val dialog: Dialog = object : Dialog(activity, recipe.windowTheme) {
         override fun cancel() {
