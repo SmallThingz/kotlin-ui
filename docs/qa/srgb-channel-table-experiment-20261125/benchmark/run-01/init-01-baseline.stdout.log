@@ -1,0 +1,10 @@
+{"stage":"empty_boundary","ns":91,"bytes":0,"checksum":"0000000000000000","calls":1}
+{"stage":"load_without_initialization","ns":710534,"bytes":16112,"checksum":"0000000000000000","calls":1}
+{"stage":"reflection_metadata_before_init","ns":172177,"bytes":4064,"checksum":"0000000000000000","calls":1}
+{"stage":"initialized_class_control","ns":56214,"bytes":0,"checksum":"0000000000000000","calls":1}
+{"stage":"runtime_initialization","ns":2363,"bytes":0,"checksum":"0000000000000000","calls":1}
+{"stage":"first_direct_call_after_init_including_linkage","ns":9344,"bytes":0,"checksum":"3fba3bda1521ac51","calls":1}
+{"stage":"table_count","count":0}
+{"stage":"vm_layout","option":"UseCompressedOops","value":"true"}
+{"stage":"vm_layout","option":"UseCompressedClassPointers","value":"true"}
+{"stage":"vm_layout","option":"ObjectAlignmentInBytes","value":"8"}

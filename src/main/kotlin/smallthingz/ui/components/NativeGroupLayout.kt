@@ -188,7 +188,7 @@ class NativeGroupLayout(
         applyPalette(field,border)
     }
 
-    internal fun setSurfacePreset(preset: NativeDarkSurfacePreset?) {
+    internal fun setSurfacePreset(preset: NativeSurfacePreset?) {
         val intensity = preset?.foregroundGrain ?: 0f
         if (grainIntensity == intensity) return
         grainIntensity = intensity

@@ -64,7 +64,7 @@ open class NativeMaterialButtonView private constructor(
     inputPolicy: NativeButtonInputPolicy,
     onClick: () -> Unit,
     private val recipe: NativeButtonRecipe?,
-) : ViewGroup(context), NativeClickPhaseHost, NativePointerLayerShape, NativeMergedRowAccessibilityHost, AutoCloseable {
+) : ViewGroup(context), NativeClickPhaseHost, NativePointerLayerShape, NativeMergedRowAccessibilityHost, NativeMergedActionChild, AutoCloseable {
     constructor(
         context: Context,
         filled: Boolean,
@@ -86,6 +86,7 @@ open class NativeMaterialButtonView private constructor(
     ) : this(context, recipe.elevated, recipe.labelStyle, density, resolver, recipe.surface, inputPolicy, onClick, recipe)
 
     val minimumTouchTargetDp: Int get() = recipe?.minimumTouchTargetDp ?: 48
+    private var joinedSurface = false
     private var action = onClick
     private var closed = false
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -137,7 +138,7 @@ open class NativeMaterialButtonView private constructor(
                 if (bounded) atMost(innerHeight) else h)
             setMeasuredDimension(
                 if (style.assignedSize) width else resolveSize(contentWidth(horizontal, iconWidth, iconGap, label.measuredWidth), w),
-                if (style.assignedSize) height else resolveSize(max(dp(style.minimumHeightDp), 2 * vertical + max(iconHeight, label.measuredHeight)), h),
+                if (style.assignedSize) height else resolveSize(max(minimumHeightPx(), 2 * vertical + max(iconHeight, label.measuredHeight)), h),
             )
         }
         override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
@@ -158,9 +159,7 @@ open class NativeMaterialButtonView private constructor(
             icon?.let { it.layoutDirection = layoutDirection; it.draw(canvas) }
         }
         override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-            clipPath.rewind()
-            val radius = radius(w, h)
-            clipPath.addRoundRect(0f, 0f, w.toFloat(), h.toFloat(), radius, radius, Path.Direction.CW)
+            updateContentClip(w, h)
         }
         override fun draw(canvas: Canvas) {
             if (canvas.isHardwareAccelerated) super.draw(canvas) else {
@@ -169,7 +168,7 @@ open class NativeMaterialButtonView private constructor(
             }
         }
     }
-    private val input = NativeMaterialButtonInput(this, content, style.radiusDp, minimumTouchTargetDp, filled, inputPolicy) { elevation = it }
+    private val input = NativeMaterialButtonInput(this, content, style.radiusDp, minimumTouchTargetDp, filled, inputPolicy) { elevation = if (joinedSurface) 0f else it }
     override val nativeClickEndpoint get() = input.pointerEndpoint
     override val mergedRowAccessibility = MergedRowAccessibility(this, NativeMergedRowRole.BUTTON,
         { NativeMergedRowAccessibilityState(isEnabled, null, null, accessibilityChildren,
@@ -179,8 +178,45 @@ open class NativeMaterialButtonView private constructor(
     protected open fun mergedActionDescription(): CharSequence? = null
     private val shape = object : ViewOutlineProvider() {
         override fun getOutline(view: View, outline: Outline) {
+            // Refreshes outside onLayout (including failed ones) invalidate its last-layout key.
+            // Clear before reading density; only a successful layout invalidation commits a key.
+            when {
+                view === this@NativeMaterialButtonView -> buttonOutlineGeometry.valid = false
+                view === content -> contentOutlineGeometry.valid = false
+            }
             outline.setRoundRect(0, 0, view.width, view.height, radius(view.width, view.height))
         }
+    }
+    private class OutlineGeometry {
+        var valid = false
+        var width = 0
+        var height = 0
+        var density = 0f
+        var radius = 0f
+    }
+    private val buttonOutlineGeometry = OutlineGeometry()
+    private val contentOutlineGeometry = OutlineGeometry()
+
+    private fun invalidateLayoutOutline(view: View, previous: OutlineGeometry) {
+        if (view.outlineProvider !== shape) {
+            previous.valid = false
+            view.invalidateOutline()
+            return
+        }
+        val width = view.width
+        val height = view.height
+        val density = layoutDensity
+        val radius = radius(width, height)
+        val finite = density.isFinite() && radius.isFinite()
+        if (finite && previous.valid && previous.width == width && previous.height == height &&
+            previous.density == density && previous.radius == radius) return
+        previous.valid = false
+        view.invalidateOutline()
+        previous.width = width
+        previous.height = height
+        previous.density = density
+        previous.radius = radius
+        previous.valid = finite
     }
     init {
         setWillNotDraw(false)
@@ -204,6 +240,27 @@ open class NativeMaterialButtonView private constructor(
         setOnClickListener { if (canActivate()) action() }
         if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
         inputReady = true
+    }
+
+    override val actionMinimumWidthPx: Int get() = dp(minimumTouchTargetDp)
+
+    override fun joinActionSurface() {
+        if (joinedSurface) return
+        joinedSurface = true
+        input.useSquareSurface()
+        elevation = 0f
+        updateContentClip(content.width, content.height)
+        invalidateOutline()
+        content.invalidateOutline()
+        content.invalidate()
+        invalidate()
+        requestLayout()
+    }
+
+    private fun updateContentClip(w: Int, h: Int) {
+        clipPath.rewind()
+        val radius = radius(w, h)
+        clipPath.addRoundRect(0f, 0f, w.toFloat(), h.toFloat(), radius, radius, Path.Direction.CW)
     }
 
     fun clipsAccessibilityTextAt(view: View): Boolean = view === content
@@ -237,7 +294,7 @@ open class NativeMaterialButtonView private constructor(
         bind(text, enabled, fill, ink, onClick, paint.indication?.resolve(palette) ?: ink)
     }
 
-    internal fun setSurfacePreset(preset: NativeDarkSurfacePreset?) {
+    internal fun setSurfacePreset(preset: NativeSurfacePreset?) {
         val intensity = preset?.foregroundGrain ?: 0f
         if (grainIntensity == intensity) return
         grainIntensity = intensity
@@ -343,14 +400,16 @@ open class NativeMaterialButtonView private constructor(
     }
     fun intrinsicHeight(width: Int): Int {
         label.measure(atMost((width - 2 * horizontalPadding()).coerceAtLeast(0)), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-        return max(dp(style.minimumHeightDp), label.measuredHeight + 2 * dp(style.verticalPaddingDp))
+        return max(minimumHeightPx(), label.measuredHeight + 2 * dp(style.verticalPaddingDp))
     }
 
     private val layoutDensity get() = if (style.assignedSize) resources.displayMetrics.density else density.density
     private fun dp(value: Int) = (value * layoutDensity).roundToInt()
     private fun padding(compact: Boolean) = dp(if (compact && filled) 12 else style.horizontalPaddingDp)
     private fun horizontalPadding() = padding(compactPadding)
-    private fun radius(w: Int, h: Int): Float = min(min(w, h) / 2f, style.radiusDp?.times(layoutDensity) ?: Float.MAX_VALUE)
+    private fun minimumHeightPx() = dp(if (joinedSurface) max(style.minimumHeightDp, minimumTouchTargetDp)
+        else style.minimumHeightDp)
+    private fun radius(w: Int, h: Int): Float = if (joinedSurface) 0f else min(min(w, h) / 2f, style.radiusDp?.times(layoutDensity) ?: Float.MAX_VALUE)
     override fun containsPointerLayer(x: Float, y: Float): Boolean = roundedGroupContains(width.toFloat(), height.toFloat(),
         layoutDensity, radius(width, height) / layoutDensity, x, y)
     override fun onMeasure(w: Int, h: Int) {
@@ -361,8 +420,8 @@ open class NativeMaterialButtonView private constructor(
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         content.layout(0, 0, width, height)
         mergedRowAccessibility.roleView.layout(0, 0, width, height)
-        invalidateOutline()
-        content.invalidateOutline()
+        invalidateLayoutOutline(this, buttonOutlineGeometry)
+        invalidateLayoutOutline(content, contentOutlineGeometry)
         input.measured()
     }
     override fun onDraw(canvas: Canvas) {

@@ -2,6 +2,9 @@ package smallthingz.ui.components
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Path
 import android.graphics.Region
 import android.view.View
@@ -21,10 +24,10 @@ import kotlin.math.roundToInt
 class ReverbIncidentDayGroupingIntegrationTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
 
-    @Test fun threeMessagesShareOnlyTheDayOuterCornersThroughSelectionUpdates() = withFixture { f ->
+    @Test fun topicGapsHaveSquareSolidEdgesAndRetainDayOuterCornersThroughSelectionUpdates() = withFixture { f ->
         f.bind(day(2, "Today", group("A", "a"), group("B", "b"), group("C", "c")))
-        val expected = arrayOf(dayLabel("Today"), top("Error A"), square("a"),
-            square("Error B"), square("b"), square("Error C"), bottom("c"))
+        val expected = arrayOf(dayLabel("Today"), top("Error A"), square("a", gap = 2),
+            square("Error B"), square("b", gap = 2), square("Error C"), bottom("c"))
         f.assertRows(*expected)
         val ids = f.ids()
         f.click("Multi-select")
@@ -51,12 +54,12 @@ class ReverbIncidentDayGroupingIntegrationTest {
         val b = group("B", "b1", "b2")
         val c = group("C", "c")
         f.bind(day(2, "Today", a, b, c))
-        f.assertRows(dayLabel("Today"), top("Error A"), square("a"), square("Error B"),
-            square("b1"), square("b2"), square("Error C"), bottom("c"))
+        f.assertRows(dayLabel("Today"), top("Error A"), square("a", gap = 2), square("Error B"),
+            square("b1"), square("b2", gap = 2), square("Error C"), bottom("c"))
         val bHeadingId = f.idAt(3)
         val bLastId = f.idAt(5)
         f.bind(day(2, "Today", b, c)) // Accepted history after removal of the first message.
-        f.assertRows(dayLabel("Today"), top("Error B"), square("b1"), square("b2"),
+        f.assertRows(dayLabel("Today"), top("Error B"), square("b1"), square("b2", gap = 2),
             square("Error C"), bottom("c"))
         assertEquals(bHeadingId, f.idAt(1))
         assertEquals(bLastId, f.idAt(3))
@@ -65,8 +68,8 @@ class ReverbIncidentDayGroupingIntegrationTest {
         assertEquals(bHeadingId, f.idAt(1))
         assertEquals(bLastId, f.idAt(3))
         f.bind(day(2, "Today", a, b, c))
-        f.assertRows(dayLabel("Today"), top("Error A"), square("a"), square("Error B"),
-            square("b1"), square("b2"), square("Error C"), bottom("c"))
+        f.assertRows(dayLabel("Today"), top("Error A"), square("a", gap = 2), square("Error B"),
+            square("b1"), square("b2", gap = 2), square("Error C"), bottom("c"))
         assertEquals(bHeadingId, f.idAt(3))
         assertEquals(bLastId, f.idAt(5))
     }
@@ -75,7 +78,7 @@ class ReverbIncidentDayGroupingIntegrationTest {
         f.bind(day(3, "Empty day", group("none")),
             day(2, "Today", group("empty-first"), group("A", "a"), group("empty-middle"),
                 group("B", "b"), group("empty-last")), day(1, "Another empty day"))
-        f.assertRows(dayLabel("Today"), top("Error A"), square("a"), square("Error B"), bottom("b"))
+        f.assertRows(dayLabel("Today"), top("Error A"), square("a", gap = 2), square("Error B"), bottom("b"))
         f.bind(day(2, "Today", group("empty-first"), group("A", "a"), group("B")))
         f.assertRows(dayLabel("Today"), top("Error A"), bottom("a"))
         f.bind()
@@ -101,7 +104,7 @@ class ReverbIncidentDayGroupingIntegrationTest {
     private data class Expected(val label: String, val topRounded: Boolean?, val bottomRounded: Boolean?, val gap: Int)
     private fun dayLabel(label: String) = Expected(label, null, null, 2)
     private fun top(label: String) = Expected(label, true, false, 0)
-    private fun square(label: String) = Expected(label, false, false, 0)
+    private fun square(label: String, gap: Int = 0) = Expected(label, false, false, gap)
     private fun bottom(label: String, gap: Int = 0) = Expected(label, false, true, gap)
 
     private class Fixture(val activity: Activity, runtime: NativeModalWindowRuntime) {
@@ -158,10 +161,36 @@ class ReverbIncidentDayGroupingIntegrationTest {
                 } else {
                     val surface = (view as ViewGroup).getChildAt(0) as NativeGroupLayout
                     assertShape(row.label, surface, row.topRounded, checkNotNull(row.bottomRounded))
+                    assertEquals("Surface starts at the row edge", 0, surface.top)
+                    assertEquals("Surface ends at the row edge", view.height, surface.bottom)
+                    val topCap = index > 0 && expected[index - 1].gap > 0 && !row.topRounded
+                    val bottomCap = row.gap > 0 && row.bottomRounded == false
+                    if (topCap || bottomCap) assertSolidCaps(row.label, surface, topCap, bottomCap)
                 }
                 if (index < views.lastIndex) assertEquals("Compact join after ${row.label}",
                     view.bottom + dp(row.gap), views[index + 1].top)
             }
+        }
+
+        private fun assertSolidCaps(label: String, surface: NativeGroupLayout, top: Boolean, bottom: Boolean) {
+            // Contrast isolates the actual renderer's outline from theme/grain/text. No copied path model.
+            surface.setPaletteImmediately(Color.BLACK, Color.WHITE)
+            surface.setJoinedSeparatorColor(Color.WHITE)
+            val bitmap = Bitmap.createBitmap(surface.width, surface.height, Bitmap.Config.ARGB_8888)
+            try {
+                surface.draw(Canvas(bitmap))
+                val inset = (activity.resources.displayMetrics.density / 2f).toInt()
+                    .coerceAtMost((surface.height - 1) / 2)
+                fun horizontal(edge: String, y: Int) {
+                    for (x in dp(2) until surface.width - dp(2)) {
+                        val color = bitmap.getPixel(x, y)
+                        assertTrue("$label $edge outline is solid at x=$x", Color.red(color) >= 240 &&
+                            Color.green(color) >= 240 && Color.blue(color) >= 240)
+                    }
+                }
+                if (top) horizontal("top", inset)
+                if (bottom) horizontal("bottom", surface.height - 1 - inset)
+            } finally { bitmap.recycle() }
         }
 
         private fun assertShape(label: String, surface: NativeGroupLayout, topRounded: Boolean, bottomRounded: Boolean) {

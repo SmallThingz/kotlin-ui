@@ -30,6 +30,14 @@ reassembling it in an app creates a second appearance implementation.
   components and application namespaces. Consuming apps should use their namespace's
   semantic API instead of overriding recipes, padding, paint or animation rules.
 
+### Icons
+
+The recommended common set is `smallthingz.ui.icons.MaterialRoundedIcon`:
+AndroidX Material Rounded 1.7.8, rendered by the retained native path-mask cache.
+Reverb semantic names remain compatibility adapters. Icon geometry and custom
+artwork belong to the library; apps provide state and platform adapters.
+See [icon conventions and provenance](docs/icons.md).
+
 ### Email
 
 `EmailDropdownGroup` retains one anchored choice at a time in the window's
@@ -201,6 +209,18 @@ rows retain 16dp corner geometry, raw 1dp side outlines and a physical-pixel top
 separator. `setPaletteImmediately` accepts colors already sampled by a caller's
 multi-channel animation. The optional `onPaintedSurfaceChanged` callback observes
 actual fill changes for caller-owned contrast invalidation.
+Use `squareTop` or `squareBottom` on `NativeGroupEdges` for a closed, square border
+facing a gap between topics; the caller still owns the gap itself.
+
+`NativeMergedActionLayout` is the common Cancel/confirm action group used by Trim,
+Rename and confirmation sheets. It accepts any nonempty list of retained actions,
+stacks when labels need more width, and excludes `GONE` actions from layout and
+dividers. It preserves each button's semantic paints, callbacks and accessibility
+owner. Rebind its palette with the window; close the child actions with their owner.
+Joining a `NativeMergedActionChild` changes that instance's geometry for its lifetime.
+In short viewports, put the group inside the owning scroll container and measure
+its content at natural height; the group clips to hard bounds without shrinking
+targets. Phase hit trees must retain its actual group and viewport shape clips.
 
 Use `NativeSettingsRow` as row content when a setting needs a title, description,
 and a value. A `NativeToggleRow` supplies one checked action for the whole row.

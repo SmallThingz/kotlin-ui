@@ -34,7 +34,7 @@ class NativeButtonInputPolicy(
 internal class NativeMaterialButtonInput(
     private val inputHost: View,
     private val indicationHost: View,
-    private val radiusDp: Float?,
+    private var radiusDp: Float?,
     private val minimumTouchTargetDp: Int,
     filled: Boolean,
     private val policy: NativeButtonInputPolicy,
@@ -118,6 +118,13 @@ internal class NativeMaterialButtonInput(
         shadow?.bindEnabled(enabled)
         indication.updateColor(contentColor)
         bindInput()
+    }
+    fun useSquareSurface() {
+        if (radiusDp == 0f) return
+        input.cancel()
+        shadow?.close()
+        elevationTokens?.clear()
+        radiusDp = 0f
     }
     fun measured() {
         indication.onMeasured(indicationHost.width, indicationHost.height, indicationHost.resources.displayMetrics.density)

@@ -8,6 +8,7 @@ import smallthingz.ui.common.ControlTheme
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeColorSchemeResolver
 import smallthingz.ui.components.NativeDarkSurfacePreset
+import smallthingz.ui.components.NativeGrainPreset
 import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.components.NativeUiAppearance
 import smallthingz.ui.text.NativeTypographyRole
@@ -20,12 +21,15 @@ import smallthingz.ui.unit.Density
 object ReverbDesign {
     private val darkSurfaces = NativeDarkSurfacePreset.Amoled
     private val darkColors = darkSurfaces.colorScheme()
+    // Grain is an all-theme Reverb policy; Light keeps Material fills and outlines.
+    private val lightGrain = NativeGrainPreset(backgroundGrain = 1f, foregroundGrain = .5f)
 
     val appearance: NativeUiAppearance = NativeUiAppearance.Default.copy(
         colorScheme = NativeColorSchemeResolver { dark, sdk, readColor ->
             if (dark) darkColors.resolve(dark, sdk, readColor)
             else NativeColorScheme.resolve(dark, sdk, readColor).let { base ->
-                base.copy(background = darken(base.background, .04f), surface = darken(base.surface, .04f))
+                base.copy(background = darken(base.background, .04f), surface = darken(base.surface, .04f),
+                    surfacePreset = lightGrain)
             }
         },
         toolbars = NativeUiAppearance.Default.toolbars.copy(compactHeightDp = 58f),

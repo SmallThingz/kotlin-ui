@@ -1,0 +1,18 @@
+src/androidTest/java/smallthingz/ui/components/NativeButtonOutlineLayoutIntegrationTest.kt:185:32: warning: 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+                finally { role.recycle() }
+                               ^^^^^^^
+src/androidTest/java/smallthingz/ui/components/NativeButtonOutlineLayoutIntegrationTest.kt:292:36: warning: unnecessary non-null assertion (!!) on a non-null receiver of type 'NativeButtonOutlineLayoutIntegrationTest.Fixture'.
+                    addView(fixture!!.button, FrameLayout.LayoutParams(420, 140))
+                                   ^^
+src/androidTest/java/smallthingz/ui/components/NativeMenuAccessibilityIntegrationTest.kt:69:93: warning: unnecessary non-null assertion (!!) on a non-null receiver of type 'Throwable'.
+                catch (error: Throwable) { if (failure == null) failure = error else failure!!.addSuppressed(error) }
+                                                                                            ^^
+src/androidTest/java/smallthingz/ui/components/NativeMenuAccessibilityIntegrationTest.kt:84:26: warning: 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+        } finally { node.recycle(); text.recycle() }
+                         ^^^^^^^
+src/androidTest/java/smallthingz/ui/components/NativeMenuAccessibilityIntegrationTest.kt:84:42: warning: 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+        } finally { node.recycle(); text.recycle() }
+                                         ^^^^^^^
+src/androidTest/java/smallthingz/ui/components/NativeMenuAccessibilityIntegrationTest.kt:111:32: warning: 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+                finally { node.recycle() }
+                               ^^^^^^^

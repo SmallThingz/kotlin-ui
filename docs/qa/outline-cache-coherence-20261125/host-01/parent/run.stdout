@@ -1,0 +1,16 @@
+FAIL density ABA delivered outline button: returned delivered: 16.0 != 8.0
+FAIL failed custom to owned delivered outline button: recovered owned delivered: 3.0 != 8.0
+FAIL external refresh dirties only target button: one target refresh: (3, 2) != (4, 2)
+FAIL direct sample cannot relabel delivered intermediate button: layout delivers current geometry: 16.0 != 8.0
+PASS custom null identity fallback button
+FAIL density ABA delivered outline content: returned delivered: 16.0 != 8.0
+FAIL failed custom to owned delivered outline content: recovered owned delivered: 3.0 != 8.0
+FAIL external refresh dirties only target content: one target refresh: (2, 3) != (2, 4)
+FAIL direct sample cannot relabel delivered intermediate content: layout delivers current geometry: 16.0 != 8.0
+PASS custom null identity fallback content
+PASS stable geometry retains child role and input work
+PASS nonfinite density and radius never cache
+PASS layout failure before callback cannot commit key
+FAIL external failure after callback cannot retain key: recovery: 3.0 != 8.0
+FAIL attachment framework rebuild clears old key: layout restores: 16.0 != 8.0
+RESULT cases=15 assertions=66 failures=10

@@ -1,0 +1,139 @@
+{
+  "cold_fresh_jvms_per_mode_per_version": 5,
+  "hot_forks_per_version": 3,
+  "warmup_batches_per_workload": 8,
+  "measured_batches_per_workload": 7,
+  "calls_per_batch": {
+    "srgbLuminance": 524288,
+    "selectionForegroundWithIndication": 16384,
+    "SelectionContrast.foreground": 65536
+  },
+  "corpus": "4096 ARGBs: 256 opaque grays then xorshift32 seed 0x5a17c9e3; four palettes",
+  "indication_max_alpha": 40,
+  "target_bytecode": 17,
+  "ordering": "alternate baseline/candidate order by fork/sample; sequential processes",
+  "started_utc": "2026-11-25T03:55:34.583699+00:00",
+  "baseline_commit": "d3aced695a49d193f32edfb9abb21236c5147bfc",
+  "scope": "Host HotSpot only; not phone/ART, CPU shares, or performance acceptance",
+  "source": {
+    "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/src/main/kotlin/smallthingz/ui/controls/SelectionContrast.kt",
+    "bytes": 8427,
+    "sha256": "31c50eafd47a657516d7bde73dedd4896bd0dea66d4d218ac1d5fd555dbedea4"
+  },
+  "script": {
+    "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/scripts/benchmark_srgb_luminance_host.py",
+    "bytes": 11310,
+    "sha256": "c4da1ab1488a864ec128c12e65882c6d8e6af9a8ce73b68bb9656dda1dbfe7be"
+  },
+  "harness": {
+    "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/scripts/host/srgb-luminance-benchmark/SrgbLuminanceBenchmark.java",
+    "bytes": 9335,
+    "sha256": "260569f9c2324c8f6f06d1ab6ef3a4e18daa352ca9063cfc1b5c7d7cf46d90d0"
+  },
+  "compiler_record": {
+    "path": "/workspace/control/.tmp/control-product-provider-marker-v1/host-controls-01/result.json",
+    "bytes": 12587,
+    "sha256": "7e15bbdd196c69f6ca6f61042f563ee8a324c1b71277567259392e6c658c65a2"
+  },
+  "compiler_dependencies": {
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.4.21/3cd9c37c505fb9879e03ebeaf91d9c9500ab6eca/kotlin-compiler-embeddable-2.4.21.jar": "ef19419c765e7ac8404465fa026ca8fc4dbb8a822de0fc79aa53c8dce29f1d02",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-build-tools-api/2.4.21/f5fd68c20ba38519b91ab2411b004a1730453d6f/kotlin-build-tools-api-2.4.21.jar": "c5cd6a49bd072b529ae10809111c16a7aa0f92147e95d288354017fd65799461",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar": "bd8250210584cb659847dce9cda660f8e9906e5def7fbebcea93dc6dcb6a88a3",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-script-runtime/2.4.21/abc7ff9f7e229cb6bdfadad81e93c871e6cdde41/kotlin-script-runtime-2.4.21.jar": "a658cf5902a1525a06c264a5e42b437e97a6679ddeef8ca641246f270cf6a013",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-reflect/1.6.10/1cbe9c92c12a94eea200d23c2bbaedaf3daf5132/kotlin-reflect-1.6.10.jar": "3277ac102ae17aad10a55abec75ff5696c8d109790396434b496e75087854203",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-daemon-embeddable/2.4.21/5d9b0394b3ff65cd3dd33c6c31a2956b1d59885a/kotlin-daemon-embeddable-2.4.21.jar": "7b3ef24674e5bcffcadfc4e43202ea314194939ecbcdd90a4770b2f1b04e0d07",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.8.0/ac1dc37a30a93150b704022f8d895ee1bd3a36b3/kotlinx-coroutines-core-jvm-1.8.0.jar": "9860906a1937490bf5f3b06d2f0e10ef451e65b95b269f22daf68a3d1f5065c5",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/23.0.0/8cc20c07506ec18e0834947b84a864bfc094484e/annotations-23.0.0.jar": "7b0f19724082cbfcbc66e5abea2b9bc92cf08a1ea11e191933ed43801eb3cd05"
+  },
+  "java": {
+    "path": "/workspace/android-toolchain/jdk/bin/java",
+    "bytes": 12328,
+    "sha256": "75fc4bd3b528a2058a94fa2249a620c73c0717d652e9a072be1e13ba2fcc10dc"
+  },
+  "javac": {
+    "path": "/workspace/android-toolchain/jdk/bin/javac",
+    "bytes": 12424,
+    "sha256": "93209d5202c87e902050ea54618985a006ba0d0e48695a9c8cf8a08a50510e02"
+  },
+  "runtime_files": [
+    {
+      "path": "/workspace/android-toolchain/jdk/release",
+      "bytes": 1628,
+      "sha256": "6e5af5fd8dd18811f37933a8f9be2d27ef64884b32f6f63a1df24d7a6c1299e0"
+    },
+    {
+      "path": "/workspace/android-toolchain/jdk/lib/modules",
+      "bytes": 142530386,
+      "sha256": "ce298990407d3a6e79ba7f9e158b5ce77614dc53dce6b1ca6a156be187969e92"
+    },
+    {
+      "path": "/workspace/android-toolchain/jdk/lib/server/libjvm.so",
+      "bytes": 27056488,
+      "sha256": "a2f4ca487a33caa19010634e0cbdb7930de26414baabb8195a8d5bb0aac40029"
+    }
+  ],
+  "environment": {
+    "tmpdir": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+    "LC_ALL": "C",
+    "injected_java_options_removed": true
+  },
+  "source_snapshots": {
+    "baseline": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/SelectionContrast.kt",
+      "bytes": 8259,
+      "sha256": "f986c8d61974b853c4ca4f091a8d366d26c804ba1b7ca4f93df318c6f661e675"
+    },
+    "candidate": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/SelectionContrast.kt",
+      "bytes": 8427,
+      "sha256": "31c50eafd47a657516d7bde73dedd4896bd0dea66d4d218ac1d5fd555dbedea4"
+    }
+  },
+  "classfiles": [
+    {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes/smallthingz/ui/controls/SelectionContrast$Companion.class",
+      "bytes": 1115,
+      "sha256": "5cf04dff3a724937e19fb9bf8704192430e9e06f22e9fcad2a9b1a1dac270bbd"
+    },
+    {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes/smallthingz/ui/controls/SelectionContrast.class",
+      "bytes": 4662,
+      "sha256": "8cd530468ad7be007bbbe85c79e64b145057a8111fd7c983e29886d0983ce45d"
+    },
+    {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes/smallthingz/ui/controls/SelectionContrastKt.class",
+      "bytes": 4204,
+      "sha256": "97751493398974fca96163e8b58bc5813e8ac4e00ad1e0c4bae906577f6a99fb"
+    },
+    {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/classes/smallthingz/ui/controls/SelectionContrast$Companion.class",
+      "bytes": 1115,
+      "sha256": "5cf04dff3a724937e19fb9bf8704192430e9e06f22e9fcad2a9b1a1dac270bbd"
+    },
+    {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/classes/smallthingz/ui/controls/SelectionContrast.class",
+      "bytes": 4662,
+      "sha256": "8cd530468ad7be007bbbe85c79e64b145057a8111fd7c983e29886d0983ce45d"
+    },
+    {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/classes/smallthingz/ui/controls/SelectionContrastKt.class",
+      "bytes": 4509,
+      "sha256": "b431d80ffeec2b8b2dd4e2ee9e0fb448dbe6447bd8d10e424d5581617edd983a"
+    },
+    {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes/SrgbLuminanceBenchmark$SizeAgent.class",
+      "bytes": 510,
+      "sha256": "4832ca56131700c17125623aafdbd27c6b35c14112fa99ff6ea7216afffa3f00"
+    },
+    {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes/SrgbLuminanceBenchmark.class",
+      "bytes": 8273,
+      "sha256": "50ca9a25c3052c212c225bf4608e2a1944892f25343987ddd1db53f34fcc3832"
+    }
+  ],
+  "agent": {
+    "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+    "bytes": 871,
+    "sha256": "bce8107aa2cb04f514c59d51830349c24217e1b19664b64ff6e395f501293c59"
+  }
+}

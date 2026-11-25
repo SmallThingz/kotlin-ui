@@ -56,6 +56,7 @@ open class NativeQuickTileSectionLayout(
         environment = next
         val colors = next.palette
         next.bindParagraphStyle(title, NativeTypographyRole.TITLE_MEDIUM, colors.ink)
+        surface.setSurfacePreset(colors.surfacePreset)
         surface.setPalette(colors.field, colors.border)
         rows.dividerColor = colors.border
     }

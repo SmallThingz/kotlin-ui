@@ -26,7 +26,10 @@ data class NativePairedFieldRecipe(
     fun createFields(context: Context, first: View, second: View, supporting: View?, density: Float): NativePairedFieldLayout =
         NativePairedFieldLayout(context, this, first, second, supporting, density)
 
-    fun bindSurface(surface: NativeGroupLayout, palette: NativeColorScheme) = surface.setPalette(palette.field, palette.border)
+    fun bindSurface(surface: NativeGroupLayout, palette: NativeColorScheme) {
+        surface.setSurfacePreset(palette.surfacePreset)
+        surface.setPalette(palette.field, palette.border)
+    }
 }
 
 class NativePairedFieldLayout internal constructor(

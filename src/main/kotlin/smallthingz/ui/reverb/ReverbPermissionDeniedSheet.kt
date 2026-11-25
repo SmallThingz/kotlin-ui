@@ -30,7 +30,7 @@ class ReverbPermissionDeniedSheet(
     private var disposed=false
     init {
         message.isScreenReaderFocusable=true
-        dialog.setContent(message,actions,listOf(actions.hitLayout))
+        dialog.setContent(message,actions,listOf(actions.hitLayout),scrollable=true)
         bind(title, messageText, closeText, allowText, onDismiss, onOpenApplicationSettings)
     }
     fun bind(title: String, messageText: String, closeText: String, allowText: String,

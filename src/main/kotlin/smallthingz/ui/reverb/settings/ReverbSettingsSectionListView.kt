@@ -21,7 +21,8 @@ enum class ReverbSettingsSectionKey(val sourceKey: String) {
     AUTO_START("auto-start");
     companion object {
         // Display order is independent of the enum ordinals used as stable IDs and view types.
-        private val displayOrder = listOf(BACKGROUND, THEME, RETENTION, RECORDING, AUTO_START, QUICK_TILES, STORAGE)
+        // AUTO_START keeps its legacy ordinal but its row now belongs to RECORDING's shared group.
+        private val displayOrder = listOf(BACKGROUND, THEME, RETENTION, RECORDING, QUICK_TILES, STORAGE)
         fun visible(restricted: Boolean): List<ReverbSettingsSectionKey> =
             if (restricted) displayOrder else displayOrder.drop(1)
         fun retentionIndex(restricted: Boolean) = if (restricted) 2 else 1
@@ -104,7 +105,7 @@ class ReverbSettingsSectionListView(
 
     fun bindSection(key: ReverbSettingsSectionKey) {
         check(!closed)
-        rows.bindAttached(key)
+        rows.bindAttached(if (key == ReverbSettingsSectionKey.AUTO_START) ReverbSettingsSectionKey.RECORDING else key)
     }
 
     fun focusRetention() {

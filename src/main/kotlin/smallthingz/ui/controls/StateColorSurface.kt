@@ -61,7 +61,7 @@ class StateColorSurface(
     private var grain: smallthingz.ui.graphics.ViewGrain? = null
     private var grainIntensity = 0f
 
-    internal fun setSurfacePreset(preset: smallthingz.ui.components.NativeDarkSurfacePreset?) {
+    internal fun setSurfacePreset(preset: smallthingz.ui.components.NativeSurfacePreset?) {
         val intensity = preset?.foregroundGrain ?: 0f
         if (grainIntensity == intensity) return
         grainIntensity = intensity

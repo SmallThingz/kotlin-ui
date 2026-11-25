@@ -101,7 +101,7 @@ open class NativeTopBarAction(
         }
         drawable.draw(canvas)
     }
-    internal fun bindSurfacePreset(preset: NativeDarkSurfacePreset?) { surface?.setSurfacePreset(preset) }
+    internal fun bindSurfacePreset(preset: NativeSurfacePreset?) { surface?.setSurfacePreset(preset) }
     fun setSurfacePaletteImmediately(fill: Int, border: Int) { surface?.setPaletteImmediately(fill, border) }
     fun setDescription(value: String) = leaf.setDescription(value)
     fun cancelInput() = leaf.cancelInput()

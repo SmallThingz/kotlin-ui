@@ -4,6 +4,8 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.app.Activity
 import android.app.UiAutomation
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Rect
 import android.os.Bundle
 import android.os.SystemClock
@@ -21,11 +23,16 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import smallthingz.ui.common.ControlTheme
+import smallthingz.ui.common.DropdownField
+import smallthingz.ui.common.DropdownGroup
+import smallthingz.ui.email.EmailDropdownGroup
 import smallthingz.ui.components.NativeDropdown
 import smallthingz.ui.components.NativeAnchoredDropdown
 import smallthingz.ui.components.NativeDropdownContent
 import smallthingz.ui.components.NativeUiAppearance
 import smallthingz.ui.text.font.createFontFamilyResolver
+import smallthingz.ui.text.view.ParagraphView
 import smallthingz.ui.unit.Density
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -191,6 +198,90 @@ class DropdownInteractionTest {
         } finally {
             info.flags = originalFlags
             automation.serviceInfo = info
+        }
+    }
+
+    @Test fun emailChoicesShowOnlyOptionLabelsAndMarkTheCommittedValue() = withActivity { activity ->
+        val label = "Avatar type"
+        val choices = listOf("Monogram", "Icon", "Image")
+        var current = NativeDropdownContent(label, choices.first(), choices) { it }
+        val commits = mutableListOf<String>()
+        lateinit var group: DropdownGroup
+        lateinit var field: DropdownField<String>
+        instrumentation.runOnMainSync {
+            val host = activity.findViewById<FrameLayout>(android.R.id.content)
+            group = EmailDropdownGroup(ControlTheme.resolve(activity, false), { host }, { true })
+            field = group.field(activity, current) { selected ->
+                commits += selected
+                current = current.copy(selected = selected)
+                field.bind(current)
+            }
+            host.addView(field.view, FrameLayout.LayoutParams(-1, -2, android.view.Gravity.CENTER))
+        }
+        fun openChoices() {
+            instrumentation.runOnMainSync { assertTrue(field.view.performClick()) }
+            await("Email choices not mounted") {
+                choices.all { option -> nodes().any { it.contentDescription == option && it.isVisibleToUser } }
+            }
+        }
+        fun assertPresentation(expected: String) {
+            instrumentation.runOnMainSync {
+                val wheel = checkNotNull(popupPane(label)).getChildAt(1) as ViewGroup
+                val rows = (0 until wheel.childCount).map { wheel.getChildAt(it) as NativeDropdown<*> }
+                assertEquals(choices.toSet(), rows.map { it.createAccessibilityNodeInfo().contentDescription.toString() }.toSet())
+                for (row in rows) {
+                    val name = row.createAccessibilityNodeInfo().contentDescription.toString()
+                    val pageTitle = row.getChildAt(0)
+                    val option = row.getChildAt(1) as ParagraphView
+                    assertFalse(pageTitle.isShown)
+                    assertTrue(option.isShown)
+                    assertEquals(name, option.getText())
+                    assertEquals(name == expected, row.createAccessibilityNodeInfo().isSelected)
+
+                    // Render the trailing glyph itself, independent of wheel position or focus.
+                    val mark = row.getChildAt(2)
+                    val bitmap = Bitmap.createBitmap(mark.width, mark.height, Bitmap.Config.ARGB_8888)
+                    try {
+                        mark.draw(Canvas(bitmap))
+                        val pixels = IntArray(bitmap.width * bitmap.height)
+                        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+                        val opaque = pixels.filter { it ushr 24 == 255 }.toSet()
+                        if (name == expected) {
+                            assertTrue("Selected option must paint its circle and contrasting check", opaque.size >= 2)
+                        } else {
+                            assertTrue("Other options must have no trailing glyph", pixels.all { it == 0 })
+                        }
+                    } finally { bitmap.recycle() }
+                }
+            }
+        }
+        try {
+            await("Email field not laid out") {
+                var ready = false
+                instrumentation.runOnMainSync { ready = field.view.isShown && field.view.width > 0 && field.view.height > 0 }
+                ready
+            }
+            openChoices()
+            assertPresentation("Monogram")
+            guardInput()
+            instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN)
+            assertPresentation("Monogram")
+            instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_ESCAPE)
+            await("Email popup did not cancel") { wheel() == null }
+            assertTrue(commits.isEmpty())
+            openChoices()
+            assertTrue(nodes().single { it.contentDescription == "Icon" && it.isClickable }
+                .performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            await("Email popup did not commit") { wheel() == null }
+            assertEquals(listOf("Icon"), commits)
+            openChoices()
+            assertPresentation("Icon")
+        } finally {
+            instrumentation.runOnMainSync {
+                group.close()
+                field.close()
+                (field.view.parent as? ViewGroup)?.removeView(field.view)
+            }
         }
     }
 

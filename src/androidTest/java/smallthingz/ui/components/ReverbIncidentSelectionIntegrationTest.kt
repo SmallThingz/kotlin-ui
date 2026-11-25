@@ -32,7 +32,7 @@ class ReverbIncidentSelectionIntegrationTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
 
     @Test @SdkSuppress(minSdkVersion = 29)
-    fun titlePhaseLongPressAddsSameErrorAcrossDaysAndPreservesOtherSelectionsAndCorners() = withFixture { f ->
+    fun titlePhaseLongPressAddsOnlySameDateTopicAndPreservesOtherSelectionsAndCorners() = withFixture { f ->
         // Equal display text intentionally has a different error identity.
         val ambiguous = ReverbIncidentGroup("different-error", "Error A", listOf(Row("not-a")))
         f.bind(day(2, "Today", group("A", "a1", "a2"), group("B", "b")),
@@ -47,17 +47,48 @@ class ReverbIncidentSelectionIntegrationTest {
         f.place()
         assertTrue(f.panel.selectionActive)
         // Observe the pointer result before any semantic action can mask a broken phase hookup.
-        for (position in listOf(2, 3, 5, 8)) f.assertSelected(position, true)
+        for (position in listOf(2, 3, 5)) f.assertSelected(position, true)
+        f.assertSelected(8, false)
         f.assertSelected(10, false)
         // Repeating the title action adds, never toggles the group back off.
         assertTrue(heading.performAccessibilityAction(AccessibilityNodeInfo.ACTION_LONG_CLICK, null))
-        f.assertRows(dayLabel("Today"), top("Error A"), square("a1"), square("a2"),
+        f.assertRows(dayLabel("Today"), top("Error A"), square("a1"), square("a2", gap = 2),
             square("Error B"), bottom("b", gap = 2), dayLabel("Yesterday"), top("Error A"),
-            square("old-a"), square("Error A"), bottom("not-a"))
+            square("old-a", gap = 2), square("Error A"), bottom("not-a"))
         f.click("Delete selected")
-        assertEquals(setOf("b", "a1", "a2", "old-a"), f.deleted.single().map { it.identity }.toSet())
-        assertEquals(4, f.deleted.single().size)
+        assertEquals(setOf("b", "a1", "a2"), f.deleted.single().map { it.identity }.toSet())
+        assertEquals(3, f.deleted.single().size)
         assertEquals(0, f.acknowledgements)
+    }
+
+    @Test fun semanticTitleSelectionIsDateAndTopicScopedWhileRowAndSelectAllActionsRemainIndividual() = withFixture { f ->
+        val sameLabelOtherTopic = ReverbIncidentGroup("different-error", "Error A", listOf(Row("not-a")))
+        // Labels are presentation only: even identical date/topic labels must use their actual keys.
+        f.bind(day(2, "Same date label", group("A", "a1", "a2"), sameLabelOtherTopic),
+            day(1, "Same date label", group("A", "old-a")))
+        f.activateOccurrence(2)
+        assertEquals(1, f.acknowledgements)
+        assertFalse(f.panel.selectionActive)
+        assertTrue(f.rowAt(1).performAccessibilityAction(AccessibilityNodeInfo.ACTION_LONG_CLICK, null))
+        f.place()
+        f.assertSelected(2, true)
+        f.assertSelected(3, true)
+        f.assertSelected(5, false)
+        f.assertSelected(8, false)
+        f.activateOccurrence(2)
+        f.assertSelected(2, false)
+        f.assertSelected(3, true)
+        assertEquals(1, f.acknowledgements)
+        f.click("Select all")
+        for (position in listOf(2, 3, 5, 8)) f.assertSelected(position, true)
+        f.click("Deselect all")
+        for (position in listOf(2, 3, 5, 8)) f.assertSelected(position, false)
+        assertTrue(f.rowAt(7).performAccessibilityAction(AccessibilityNodeInfo.ACTION_LONG_CLICK, null))
+        f.place()
+        for (position in listOf(2, 3, 5)) f.assertSelected(position, false)
+        f.assertSelected(8, true)
+        f.click("Delete selected")
+        assertEquals(listOf("old-a"), f.deleted.single().map { it.identity })
     }
 
     @Test fun titleSelectionPinsOccurrenceIdentityThroughEnrichmentAndConcurrentArrivals() = withFixture { f ->
@@ -133,7 +164,7 @@ class ReverbIncidentSelectionIntegrationTest {
     private data class Expected(val label: String, val topRounded: Boolean?, val bottomRounded: Boolean?, val gap: Int)
     private fun dayLabel(label: String) = Expected(label, null, null, 2)
     private fun top(label: String) = Expected(label, true, false, 0)
-    private fun square(label: String) = Expected(label, false, false, 0)
+    private fun square(label: String, gap: Int = 0) = Expected(label, false, false, gap)
     private fun bottom(label: String, gap: Int = 0) = Expected(label, false, true, gap)
 
     private class Fixture(val activity: Activity, runtime: NativeModalWindowRuntime) {

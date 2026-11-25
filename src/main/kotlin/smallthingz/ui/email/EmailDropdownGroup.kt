@@ -11,4 +11,4 @@ fun EmailDropdownGroup(
     initialTheme: ControlTheme,
     overlayHost: () -> FrameLayout?,
     inputAllowed: () -> Boolean,
-): DropdownGroup = DropdownGroup(initialTheme, overlayHost, inputAllowed, DropdownSelectionPolicy.EXPLICIT)
+): DropdownGroup = DropdownGroup(initialTheme, overlayHost, inputAllowed, DropdownSelectionPolicy.EXPLICIT, choiceRows = true)

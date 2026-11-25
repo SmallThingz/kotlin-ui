@@ -64,7 +64,7 @@ open class NativeSurface(context: Context, style: NativeSurfaceStyle,
     private val onPaintedSurfaceChanged: (View) -> Unit = {},
 ) : FrameLayout(context) {
     private var requestedStyle = style
-    private var surfacePreset: NativeDarkSurfacePreset? = null
+    private var surfacePreset: NativeSurfacePreset? = null
     private val fill = GradientDrawable()
     private val border = NativeSurfaceBorderDrawable()
     private val mask = GradientDrawable().apply { setColor(Color.WHITE) }
@@ -89,7 +89,7 @@ open class NativeSurface(context: Context, style: NativeSurfaceStyle,
         grain?.surfaceRange(paintedFillColor) ?: smallthingz.ui.graphics.noiseSurfaceRange(paintedFillColor, 0)
         else smallthingz.ui.graphics.noiseSurfaceRange(paintedFillColor, 0)
 
-    internal fun setSurfacePreset(preset: NativeDarkSurfacePreset?) {
+    internal fun setSurfacePreset(preset: NativeSurfacePreset?) {
         if (surfacePreset == preset) return
         surfacePreset = preset
         applyStyle(requestedStyle)

@@ -1,0 +1,49 @@
+"""Source-only icon ownership and byte-identical geometry relocation checks."""
+import hashlib
+import json
+from pathlib import Path
+import re
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+PROVENANCE = ROOT / 'src/main/resource-provenance/reverb-icons'
+KOTLIN = ROOT / 'src/main/kotlin/smallthingz/ui'
+
+
+class IconOwnershipTest(unittest.TestCase):
+    def test_relocated_path_commands_retain_recorded_geometry(self):
+        manifest = json.loads((PROVENANCE / 'OWNERSHIP.json').read_text())
+        found = {}
+        for relative in ('icons/MaterialRoundedPaths.kt', 'reverb/ReverbIconPaths.kt'):
+            for match in re.finditer(r'    private val (\w+): Path by lazy \{.*?\n    \}',
+                                     (KOTLIN / relative).read_text(), re.S):
+                name = match.group(1)
+                self.assertNotIn(name, found, 'Duplicate geometry owner')
+                found[name] = hashlib.sha256(match.group().encode()).hexdigest()
+        self.assertEqual(manifest['paths'], found)
+
+    def test_common_api_has_no_reverb_or_runtime_vector_dependency(self):
+        for source in (KOTLIN / 'icons').glob('*.kt'):
+            text = source.read_text()
+            for forbidden in ('smallthingz.ui.reverb', 'androidx.compose', 'PathParser',
+                              'createPathFromPathData', 'ImageVector'):
+                self.assertNotIn(forbidden, text, str(source))
+        self.assertNotIn('PathParser.createPathFromPathData',
+                         (KOTLIN / 'reverb/ReverbIconPaths.kt').read_text())
+
+    def test_browser_parser_oracle_retains_historical_input(self):
+        manifest = json.loads((PROVENANCE / 'OWNERSHIP.json').read_text())
+        data = (PROVENANCE / 'browser-path.txt').read_bytes()
+        self.assertEqual(manifest['browserPathDataSha256'], hashlib.sha256(data).hexdigest())
+        oracle = (ROOT / 'src/androidTest/java/smallthingz/ui/icons/MaterialRoundedIconIntegrationTest.kt').read_text()
+        self.assertIn(data.decode().strip(), oracle)
+
+    def test_platform_assets_retain_original_bytes(self):
+        manifest = json.loads((PROVENANCE / 'OWNERSHIP.json').read_text())
+        for item in manifest['platformResources'].values():
+            data = (ROOT / 'src/main/res/drawable' / (item['resource'] + '.xml')).read_bytes()
+            self.assertEqual(item['sha256'], hashlib.sha256(data).hexdigest())
+
+
+if __name__ == '__main__':
+    unittest.main()

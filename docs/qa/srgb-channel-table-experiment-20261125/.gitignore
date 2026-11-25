@@ -1,0 +1,6 @@
+# Retain generated JVM artifacts in owned RAM; source pins and receipts are archived.
+benchmark/run-*/baseline/classes/
+benchmark/run-*/candidate/classes/
+benchmark/run-*/harness-classes/
+benchmark/run-*/size-agent.jar
+benchmark/run-*/scratch/

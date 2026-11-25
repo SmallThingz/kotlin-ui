@@ -41,6 +41,27 @@ class JoinedGroupGeometryTest {
         assertTrue(singleton.cornersFit)
     }
 
+    @Test fun solidTopicCapsKeepGapFacingCornersSquareAtEveryDensity() {
+        for (density in listOf(1f, 1.5f, 2.625f, 3f)) {
+            val aboveGap = joinedGroupGeometry(300f, 180f, density,
+                NativeGroupEdges(first = true, last = false, squareBottom = true))
+            val betweenGaps = joinedGroupGeometry(300f, 180f, density,
+                NativeGroupEdges(first = false, last = false, squareTop = true, squareBottom = true))
+            val belowGap = joinedGroupGeometry(300f, 180f, density,
+                NativeGroupEdges(first = false, last = true, squareTop = true))
+            assertEquals(16f * density, aboveGap.topRadius, 0f)
+            assertEquals(0f, aboveGap.bottomRadius, 0f)
+            assertEquals(0f, betweenGaps.topRadius, 0f)
+            assertEquals(0f, betweenGaps.bottomRadius, 0f)
+            assertEquals(0f, belowGap.topRadius, 0f)
+            assertEquals(16f * density, belowGap.bottomRadius, 0f)
+            for (geometry in listOf(aboveGap, betweenGaps, belowGap)) {
+                assertEquals(density, geometry.strokeWidth, 0f)
+                assertTrue(geometry.cornersFit)
+            }
+        }
+    }
+
     @Test fun shortSingletonUsesSourceVerticalCornerNormalization() {
         val geometry = joinedGroupGeometry(300f, 20f, 2f, NativeGroupEdges(true, true))
         assertEquals(10f, geometry.topRadius, 0f)

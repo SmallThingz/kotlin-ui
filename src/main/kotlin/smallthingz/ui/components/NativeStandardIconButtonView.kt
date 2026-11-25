@@ -84,13 +84,14 @@ open class NativeStandardIconButtonView(
         inheritedContentColor: Int,
         onClick: () -> Unit,
     ) {
+        val densityChanged = this.density != density
         this.density = density; currentClick = onClick
         visual.isEnabled = enabled; visual.isFocusable = enabled
         visual.glyph.contentDescription = description
         // IconButton's LocalContentColor inherits the parent even when Icon overrides its tint.
         indication.updateColor(inheritedContentColor)
         controller.bind(NativeClickBinding(identity, enabled, { visual.performClick() }))
-        requestLayout()
+        if (densityChanged) requestLayout()
     }
 
     /** The host supplies its shared cursor and exact source presence/hidden/touch bounds facts. */

@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import smallthingz.ui.components.NativeActionSheetContentContext
 import smallthingz.ui.components.NativeButtonInputPolicy
 import smallthingz.ui.components.NativeMaterialButtonView
+import smallthingz.ui.components.NativeMergedActionChild
 import smallthingz.ui.geometry.Offset
 import smallthingz.ui.input.phase.NativeClickPhaseNode
 import smallthingz.ui.input.phase.NativeDragPointerChange
@@ -67,7 +68,7 @@ class ReverbSheetButton(
     onClick: () -> Unit,
     private val leadingIcon: ReverbIcon? = null,
     errorColors: Boolean = false,
-) : ViewGroup(context), AutoCloseable {
+) : ViewGroup(context), NativeMergedActionChild, AutoCloseable {
     constructor(context:Context,host:NativeActionSheetContentContext,environment:ReverbTheme,filled:Boolean,text:String,onClick:()->Unit,
                 leadingIcon:ReverbIcon?=null,errorColors:Boolean=false):
         this(context,ReverbSheetButtonHost.forSheet(host,environment),filled,text,onClick,leadingIcon,errorColors) {
@@ -116,6 +117,9 @@ class ReverbSheetButton(
         bindIcon()
         bind(text, true, onClick)
     }
+    override val actionMinimumWidthPx: Int get() = surface.actionMinimumWidthPx
+    override fun joinActionSurface() = surface.joinActionSurface()
+
     fun bind(text: String, enabled: Boolean, onClick: () -> Unit) {
         labelText = text
         action = onClick

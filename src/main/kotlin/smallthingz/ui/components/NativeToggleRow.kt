@@ -64,7 +64,7 @@ open class NativeToggleRow(
     override val hasRowAction get() = onChanged != null
     override fun activateRow() { onChanged?.invoke(rowChecked != true) }
 
-    internal fun bindSurfacePreset(preset: NativeDarkSurfacePreset?) = switch.bindSurfacePreset(preset)
+    internal fun bindSurfacePreset(preset: NativeSurfacePreset?) = switch.bindSurfacePreset(preset)
 
     fun bindToggle(checked: Boolean, enabled: Boolean, density: Float, ink: Int,
         colors: NativeMaterialSwitchPalette) {

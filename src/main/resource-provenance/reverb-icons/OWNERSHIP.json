@@ -1,0 +1,70 @@
+{
+  "baselineUiCommit": "785c29a1942c8c026108181fd1cdf74a0af4dd23",
+  "pack": "AndroidX Material Rounded 1.7.8",
+  "paths": {
+    "browserPath": "45b13e2cc30bbf5d70f1c3ca435c06258dc3568cf78d05c9bc902a434dd5fbf0",
+    "settingsPath0": "6a186cde25543f25747c52e36e41bc759b1a9c7075b1bdf1546addff75c0aefb",
+    "incidentsPath0": "7e504f262feafc7b03cc8a88e3a619f3579497535d61462d33bc084a8b9622b1",
+    "sharePath0": "4f5716610fd8c11e765a1b3320aa595eccbb81dec064a1e54d46529b651861ce",
+    "copyPath0": "570c26f3fdacc334b9d279f03bbfc6b00b458c4a549082178d3c4afc0f594403",
+    "deletePath0": "285dee6e645c27463a7c75b2f2dc80d19808d432afd711cc75163a045aaad7a7",
+    "editPath0": "0cf23501ce29cff88ba73df396d24cb69e0aba989acfc580611d67061249efb4",
+    "infoPath0": "e0b469b0197c3d6b757212aef4ed86b796f708215dd56d0c4fd9be069ddebbfe",
+    "closePath0": "86bd88d1eee7a5632b61d6115ed749c01a896aa2cab1231de34c7cb66a5ff017",
+    "trimPath0": "10014cfee33ee1bb020b26362ddb3dd036785e74e30895ffaf4c7927318aa1c8",
+    "backPath0": "6f361b05556d219704812f3746cc96bcc4742240dc05dcc7c47776f665fa0fc5",
+    "checkPath0": "b3c7cdc2e2ff920f7ab489096a95d8265c8b55b56a61da8c8d3cb0a1296d37b2",
+    "checkedPath0": "df7850dd450d7e46ee8bf032968a92c1b6ece2b8d5efa90dc60a22d5490d8668",
+    "uncheckedPath0": "4722e55588fed9bec110646ba0cb254cb7a48796808044475856050671f6f421",
+    "multiSelectPath0": "056b0dc68ad55ef4ab2b2a118a18068b0bbd395541f7e246670bab0615e1ae66",
+    "playPath0": "eda28d8a51051a632882eca68039b3154046491c75956677d1e49b6a6e7502fb",
+    "pausePath0": "d6ebb0cbaeacc30e52ca63d9c0ea52a81121b377b7db19e66f8ab0adabc4e75f",
+    "savePath0": "0170e0748cdb95fa80e55a44ebf7c755811f8691dd288510a2a6c76c568081d5",
+    "exportRangePath0": "4ed2ed9133be0f2c29735eb42053b008fc9b71fa974b26472c5f31985002092c",
+    "libraryPath0": "20301b4e7d349fb7dd442436a32020ac09422a62a01177d130b9da3f483ef0e7",
+    "audioFilePath0": "a77373eaa67e62d516b6be4de687b0b7011fb1a72fe9a9add61507b61b62fc25",
+    "capturePath0": "66e09f69879d1ac1017864b19ce8af236f10996029ed411c1731e8be60e11052",
+    "oneShotPath0": "364874c0dbdcc2c95bde5583bb33841e4934633b56aaa2b240f882444e51d136",
+    "loopingPath0": "039f2317effcd660873a73e0f99eddb53f71d83262b268a1be72600d1112764f",
+    "resetPath0": "8152c84717a84523bb8e1a55d58b5c63d749a661991d62179d231673008b5f57",
+    "resetPath1": "6a7ad20ba06f9cdf152c2449d33a4f2509b4b175f5c615722b5aac9a67c1d057",
+    "folderPath0": "43853207e4ff16528b884771122faa0f5a89dd9e3a41a5edd4c9fecf6c4684c0",
+    "undoPath0": "06e5a43973c6986249106acfd466242afefa911eb16bbd72939df6ed41433d6d",
+    "backgroundWarningPath0": "b8d0df8a382597fe700c550c1b292d5a546155a75b9cddb519814b5904af5a24",
+    "addPath0": "f39243baa7e1043cceb25170b76c235bdf6bf0b3b63f9e480802b11e4ff95f03",
+    "githubPath": "097541dfd01b574dc360724638c581923daa8694957bfcd47011fec4ac38ab2b",
+    "themeSystemPath0": "8d7ae733e27e1591ad5e7af7e2933d637eba245717732923a293bbe0e3dfdd3b",
+    "themeLightPath0": "0bdfda30dac3fdca74131755ac7e806353a48efc251b1d9c2d095f3212904b1e",
+    "themeDarkPath0": "524177d9596a4918090bdc4f21cb2890f0d354489c3807fa9f7c2595865a2578",
+    "arrowDropDownPath0": "42e99ade33f10e0208d929899d1c4e38923cd6d746ffa6cfd1f8721627741545"
+  },
+  "platformResources": {
+    "ic_github": {
+      "resource": "native_reverb_github",
+      "sha256": "46cd349d917e22cd8e86a15a1658e079668ee5acafa077b28f19745899f842c8"
+    },
+    "ic_qs_quick_save": {
+      "resource": "native_reverb_qs_quick_save",
+      "sha256": "529f1ff398afc235ee79d1f81e08155d68f63f4f181c43ad52193a6980ee31f2"
+    },
+    "ic_qs_looping": {
+      "resource": "native_reverb_qs_looping",
+      "sha256": "4542d191b313a556f708b896779c072bd9be8dba46b12f1363dc9f9d7af58c0b"
+    },
+    "ic_qs_one_shot": {
+      "resource": "native_reverb_qs_one_shot",
+      "sha256": "61c2935080dfb6a01eb1cbf66eec067c68b48dbbe60b623de6b4969bac17201e"
+    },
+    "ic_notification_recording": {
+      "resource": "native_reverb_notification_recording",
+      "sha256": "ef19c6d1906595e1112868c16988723b819177fc515248765702e58d0fed2fda"
+    },
+    "ic_notification_saved": {
+      "resource": "native_reverb_notification_saved",
+      "sha256": "955919032700d5e0012f8e40e711c7354b81fb8891a9aa3cdb77cefc239766f3"
+    }
+  },
+  "originalBrowserPathBlockSha256": "0c31677b127cafd6ab027dd3bb0ccd9cf6ed51ca7f9f472c6105295d8181272a",
+  "browserPathDataSha256": "54805d6fd3c755411a86de741aee88a24cf5e7bad46fc39b99ee7b43a4e3c79f",
+  "baselineAppCommit": "13b5fe0ccacb42a61b6cbf7d594f1e6b1a9934a2"
+}

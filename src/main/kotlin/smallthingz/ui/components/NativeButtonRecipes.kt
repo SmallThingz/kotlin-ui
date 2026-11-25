@@ -17,7 +17,7 @@ data class NativeButtonPalette(
     val errorSurface: Int,
     val onError: Int,
     val raisedSurface: Int = quietSurface,
-    internal val surfacePreset: NativeDarkSurfacePreset? = null,
+    internal val surfacePreset: NativeSurfacePreset? = null,
 )
 
 enum class NativeButtonColorRole {

@@ -19,6 +19,52 @@ import smallthingz.ui.foundation.MutatorMutex
 
 class NativeTooltipReleaseLifetimeTest {
     @Test(timeout = 10_000)
+    fun replacementWindowReceivesSettledFocusAppearanceBeforeShow() = runBlocking {
+        val motion = NativeSheetTooltipMotion()
+        motion.target(true)
+        motion.animate { motion.frame(0L, 0f) }
+
+        // Detaching the handle retires its window; a focus-owned show retains the motion target.
+        motion.target(true)
+        var replacementAlpha = 0f
+        var replacementScale = 0f
+        var shown = false
+        motion.showWindow({ scale, alpha ->
+            replacementAlpha = alpha
+            replacementScale = scale
+        }, {
+            assertEquals(1f, replacementAlpha, 0f)
+            assertEquals(1f, replacementScale, 0f)
+            shown = true
+        })
+        assertTrue(shown)
+        motion.animate { error("Showing an already settled tooltip must not restart frames") }
+    }
+
+    @Test(timeout = 10_000)
+    fun settledFocusedPopupStopsRequestingFramesAndDismissRestartsMotion() = runBlocking {
+        val motion = NativeSheetTooltipMotion()
+        var frames = 0
+        suspend fun finishTransition() {
+            motion.animate {
+                check(++frames <= 2) { "Settled tooltip requested another frame" }
+                motion.frame(0L, 0f)
+            }
+        }
+        motion.target(true)
+        finishTransition()
+        assertTrue(motion.shouldExist)
+        assertEquals(1f, motion.alpha, 0f)
+        finishTransition()
+        assertEquals(1, frames)
+        motion.target(false)
+        finishTransition()
+        assertEquals(2, frames)
+        assertFalse(motion.shouldExist)
+        assertEquals(0f, motion.alpha, 0f)
+    }
+
+    @Test(timeout = 10_000)
     fun repeatedGesturesLeaveNoSubscribersOrChildJobs() = runBlocking {
         val owner = Job(coroutineContext[Job])
         val scope = CoroutineScope(coroutineContext + owner)

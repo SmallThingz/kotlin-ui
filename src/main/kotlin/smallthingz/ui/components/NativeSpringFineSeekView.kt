@@ -344,7 +344,7 @@ class NativeSpringFineSeekView<B : NativeSpringFineSeekBinding>(
         private val surfacePaint = Paint(PAINT_FLAGS)
         private var grain = bindGrainLayer(null, environment.palette.surfacePreset?.foregroundGrain ?: 0f)
 
-        fun bindSurfacePreset(preset: NativeDarkSurfacePreset?) {
+        fun bindSurfacePreset(preset: NativeSurfacePreset?) {
             grain = bindGrainLayer(grain, preset?.foregroundGrain ?: 0f)
         }
         val controller = ViewClickController(this, object : NativeClickEnvironment {
