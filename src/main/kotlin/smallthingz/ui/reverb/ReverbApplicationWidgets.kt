@@ -59,7 +59,7 @@ class ReverbApplicationWidgets(private val context: Context, theme: ReverbTheme)
         text = label
         isAccessibilityHeading = true
         val layout = appearance.settingsSelectors.recordingSection
-        setPaddingRelative(dp(layout.sideInsetDp), if (topInset) dp(layout.titleTopInsetDp) else 0, dp(layout.sideInsetDp),
+        setPaddingRelative(0, if (topInset) dp(layout.titleTopInsetDp) else 0, 0,
             dp(appearance.settingsSelectors.retentionSection.stackedGapDp))
     }
 
@@ -201,14 +201,13 @@ class ReverbApplicationWidgets(private val context: Context, theme: ReverbTheme)
 
             override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
                 val width = MeasureSpec.getSize(widthMeasureSpec)
-                val inset = dp(layout.sideInsetDp)
-                row.measure((width - 2 * inset).coerceAtLeast(0), dp(layout.inlineGapDp),
+                row.measure(width, dp(layout.inlineGapDp),
                     dp(layout.stackedGapDp), preferredInlineWidth = 0)
                 setMeasuredDimension(width, resolveSize(row.measuredHeight, heightMeasureSpec))
             }
 
             override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
-                row.layout(width, dp(layout.sideInsetDp), 0, layoutDirection == View.LAYOUT_DIRECTION_RTL)
+                row.layout(width, 0, 0, layoutDirection == View.LAYOUT_DIRECTION_RTL)
             }
         }
     }

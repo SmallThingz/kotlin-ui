@@ -57,6 +57,7 @@ class ReverbInformationToggleList<K : Any>(
                 created.also { it.view.filterTouchesWhenObscured = true }
             }
             toggle.bind(item.toggle(), theme)
+            toggle.bindAppIcon(item.appIcon)
             ViewCompat.setStateDescription(toggle.view, item.stateDescription)
             ordered[item.id] = toggle
             if (orderChanged) group.addRow(toggle.view, NativeGroupLayout.LayoutParams(-1, -2).apply {
