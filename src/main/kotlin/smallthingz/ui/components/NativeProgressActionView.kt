@@ -53,6 +53,8 @@ open class NativeProgressActionView(
 
     /** Adds instructions to the button's accessibility label without adding visible text. */
     internal fun setActionDescription(description: String?) { visual.contentDescription = description }
+    /** Native hosts can expose this action until a source-geometry owner takes over. */
+    internal fun enableStandaloneAccessibility() = visual.enableStandaloneAccessibility()
     override fun onMeasure(w:Int,h:Int) {
         visual.measure(w,h)
         val minimum=(environment.appearance.calibration.actionMinTargetDp * environment.textDensity.density).roundToInt()
@@ -105,6 +107,12 @@ private class CalibrationActionSurface(
         intArrayOf(progressTint()), { invalidate() }) else null
 
     init { bindIcon() }
+
+    fun enableStandaloneAccessibility() {
+        mergedRowAccessibility.enableStandaloneAccessibility({ !closed }) {
+            contentDescription ?: label.getText()
+        }
+    }
 
     override fun mergedActionDescription(): CharSequence? = contentDescription
 

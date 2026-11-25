@@ -402,8 +402,16 @@ open class NativeMaterialButtonView private constructor(
         return if (style.assignedSize) width else max(dp(style.minimumWidthDp), width)
     }
     fun intrinsicHeight(width: Int): Int {
-        label.measure(atMost((width - 2 * horizontalPadding()).coerceAtLeast(0)), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-        return max(minimumHeightPx(), label.measuredHeight + 2 * dp(style.verticalPaddingDp))
+        // Match content.onMeasure's available label width before an owner fixes the height.
+        // Measuring only the padded width underestimates wrapping beside a leading icon.
+        val innerWidth = (width - 2 * horizontalPadding()).coerceAtLeast(0)
+        val iconWidth = min(leadingSize(), innerWidth)
+        val iconGap = min(leadingGap(), innerWidth - iconWidth)
+        val labelHeight = if (style.showLabel) {
+            label.measure(atMost(innerWidth - iconWidth - iconGap), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+            label.measuredHeight
+        } else 0
+        return max(minimumHeightPx(), max(leadingSize(), labelHeight) + 2 * dp(style.verticalPaddingDp))
     }
 
     private val layoutDensity get() = if (style.assignedSize) resources.displayMetrics.density else density.density

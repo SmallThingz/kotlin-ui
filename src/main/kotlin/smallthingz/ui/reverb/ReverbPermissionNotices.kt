@@ -124,7 +124,9 @@ class ReverbPermissionNotices(
     private inner class NoticeRow(context: Context, request: () -> Unit) : ViewGroup(context), AutoCloseable {
         private val icon = ReverbGlyphView(context, ReverbIcon.BackgroundWarning, environment.palette.tertiary)
         private val message = environment.paragraph(context, "", ReverbTextRole.BODY_MEDIUM, environment.palette.onSurface)
-        private val action = ReverbSettingsActionView(context, environment, { null }, action = request)
+        private val action = ReverbSettingsActionView(context, environment, { null }, action = request).apply {
+            enableStandaloneAccessibility()
+        }
         private var rowHeight = 0
         private var stacked = false
         private var gap = 0
