@@ -380,7 +380,7 @@ private class AboutRepositoryCard(context: Context, appearance: AboutContentAppe
     fun setAppearance(value: AboutContentAppearance, details: ReverbAboutDetails) {
         group.setCornerRadiusDp(value.panel.link.radiusDp)
         group.setSurfacePreset(value.palette.surfacePreset)
-        group.setPalette(ReverbDesign.modalLinkSurface(value.palette), 0)
+        group.setPalette(value.panel.link.fill(value.palette), 0)
         row.setAppearance(value, details)
     }
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {

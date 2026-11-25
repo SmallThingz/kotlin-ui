@@ -1,21 +1,27 @@
 package smallthingz.ui.components
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.core.graphics.ColorUtils
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import smallthingz.ui.animation.ColorTransition
+import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.controls.textSurfaceForeground
+import smallthingz.ui.controls.textSurfaceRange
 import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.reverb.ReverbAboutContentView
 import smallthingz.ui.reverb.ReverbAboutDetails
 import smallthingz.ui.reverb.ReverbDesign
+import smallthingz.ui.reverb.ReverbTheme
 import smallthingz.ui.reverb.menuColors
 import smallthingz.ui.reverb.reverbActionSheetStyle
 import smallthingz.ui.scroll.NativeVerticalScrollState
@@ -92,6 +98,35 @@ class NativeModalContrastIntegrationTest {
         } finally { about.dispose(); runtime.close() }
     }
 
+    @Test fun githubCardHonorsActiveLinkRecipeOnFirstPaintAndRebind() = instrumentation.runOnMainSync {
+        val context = instrumentation.targetContext
+        val resolver = createFontFamilyResolver(context)
+        val runtime = NativeModalWindowRuntime(context)
+        val details = ReverbAboutDetails("Reverb", "1.0", "GitHub", "Repository", "Unavailable")
+        val base = palette(false)
+        val colors = base.copy(surfaceContainerHighest = base.surface)
+        val appearance = ReverbDesign.appearance
+        val floating = appearance.modals.floating
+        fun theme(elevationDp: Float): ReverbTheme {
+            val panel = floating.copy(link = floating.link.copy(elevationDp = elevationDp))
+            return ReverbTheme(Density(1f), resolver, colors,
+                appearance.copy(modals = appearance.modals.copy(floating = panel)))
+        }
+        val about = ReverbAboutContentView(context, theme(0f), details, {}, { false }, runtime, 0)
+        try {
+            val repository = descendants(about).filterIsInstance<NativeGroupLayout>().first()
+            val defaultFill = ReverbDesign.modalLinkSurface(colors)
+            assertNotEquals(defaultFill, colors.surface)
+            assertEquals(colors.surface, repository.paintedFillColor)
+
+            val rebound = theme(16f)
+            val expected = rebound.appearance.modals.floating.link.fill(colors)
+            assertNotEquals(defaultFill, expected)
+            about.bind(rebound, details)
+            assertEquals(expected, repository.paintedFillColor)
+        } finally { about.dispose(); runtime.close() }
+    }
+
     @Test fun sheetTitleFirstPaintRebindAndControlPaintOwnership() = instrumentation.runOnMainSync {
         val context = instrumentation.targetContext
         val resolver = createFontFamilyResolver(context)
@@ -139,6 +174,44 @@ class NativeModalContrastIntegrationTest {
             assertNull("Directly painted button ink stays button-owned", button.label.paintedTextSurface)
         }
         button.close()
+    }
+
+    @Test fun sheetTooltipInkTracksCurrentFillAtIntermediateThemeFrame() = instrumentation.runOnMainSync {
+        val context = instrumentation.targetContext
+        val resolver = createFontFamilyResolver(context)
+        fun style(dark: Boolean): NativeActionSheetStyle {
+            val base = reverbActionSheetStyle(ReverbDesign.windowTheme(Density(1f), resolver, palette(dark)))
+            return base.copy(tooltipStyle = base.tooltipStyle.copy(fontSize = 24.sp))
+        }
+        val light = style(false)
+        val dark = style(true)
+        val type = Class.forName("smallthingz.ui.components.NativePlainTooltipWindow\$TooltipBubble")
+        val bubble = type.getDeclaredConstructor(Context::class.java, NativeActionSheetStyle::class.java,
+            String::class.java).apply { isAccessible = true }.newInstance(context, light, "Drag handle") as ViewGroup
+        val label = descendants(bubble).filterIsInstance<ParagraphView>().single()
+        val motion = type.getDeclaredField("fillMotion").apply { isAccessible = true }
+            .get(bubble) as ViewColorTransition
+        try {
+            type.getDeclaredMethod("updateStyle", NativeActionSheetStyle::class.java)
+                .apply { isAccessible = true }.invoke(bubble, dark)
+            val samples = ColorTransition(intArrayOf(light.palette.inverseSurface, light.palette.inverseOnSurface))
+            samples.retarget(intArrayOf(dark.palette.inverseSurface, dark.palette.inverseOnSurface), 0L)
+            samples.frame(ColorTransition.DURATION_NANOS * 3 / 10)
+            val fill = samples.color(0)
+            val ink = samples.color(1)
+            assertTrue(samples.isInterpolating)
+            assertNotEquals(dark.palette.inverseSurface, fill)
+            assertTrue(ColorUtils.calculateContrast(ink, fill) < 4.5)
+
+            // Publish deterministic samples through the real detached paint owners.
+            label.animateTextColor(ink)
+            motion.snap(fill)
+            val underlay = textSurfaceRange(fill)
+            val corrected = textSurfaceForeground(underlay, ink)
+            assertTrue(ColorUtils.calculateContrast(corrected, fill) >= 4.5)
+            assertInk(label, corrected)
+            assertEquals(underlay, label.paintedTextSurface!!.asLong)
+        } finally { motion.close() }
     }
 
     private fun palette(dark: Boolean): NativeColorScheme = if (dark)

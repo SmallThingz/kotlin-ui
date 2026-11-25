@@ -5,6 +5,7 @@
  */
 package smallthingz.ui.components
 
+import smallthingz.ui.controls.textSurfaceRange
 import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
 import smallthingz.ui.text.view.NativePlainTextViewGeometry
 import smallthingz.ui.text.view.NativeSourceAccessibilityNode
@@ -417,18 +418,21 @@ private class NativePlainTooltipWindow(
         return NativeSourceAccessibilityNode(!bounds.isEmpty,hidden,!hidden&&!bounds.isEmpty,bounds)
     }
     private class TooltipBubble(context:android.content.Context,private var env:NativeActionSheetStyle,text:String):
-        ViewGroup(context) {
+        ViewGroup(context), NativeModalPaintedSurface {
         private val fill=Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
             color=env.palette.inverseSurface
         }
+        override val paintedTextSurface: Long get() = textSurfaceRange(fill.color)
+        val label=env.tooltip(context,text)
         private val fillMotion = run {
             lateinit var motion: smallthingz.ui.animation.view.ViewColorTransition
             motion=smallthingz.ui.animation.view.ViewColorTransition(this,intArrayOf(fill.color),{
-                fill.color=motion.color(0);invalidate()
+                fill.color=motion.color(0)
+                label.invalidate()
+                invalidate()
             })
             motion
         }
-        val label=env.tooltip(context,text)
         val clip=NativeSheetSurface.SheetClip(context)
         private val content=object:NativeSheetFrame(context) {
             override fun onMeasure(widthMeasureSpec:Int,heightMeasureSpec:Int) {
@@ -439,6 +443,7 @@ private class NativePlainTooltipWindow(
         init {
             setWillNotDraw(false);clipChildren=false;importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO
             content.addView(label);clip.addView(content);addView(clip)
+            NativeModalTextSurface.bindTree(label)
         }
         fun updateStyle(next:NativeActionSheetStyle) {
             val densityChanged=env.textDensity!=next.textDensity
