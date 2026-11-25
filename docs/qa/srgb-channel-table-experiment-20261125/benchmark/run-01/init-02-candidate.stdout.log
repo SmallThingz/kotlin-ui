@@ -1,0 +1,11 @@
+{"stage":"empty_boundary","ns":90,"bytes":0,"checksum":"0000000000000000","calls":1}
+{"stage":"load_without_initialization","ns":437255,"bytes":16456,"checksum":"0000000000000000","calls":1}
+{"stage":"reflection_metadata_before_init","ns":152628,"bytes":4288,"checksum":"0000000000000000","calls":1}
+{"stage":"initialized_class_control","ns":50165,"bytes":0,"checksum":"0000000000000000","calls":1}
+{"stage":"runtime_initialization","ns":34281,"bytes":2064,"checksum":"0000000000000000","calls":1}
+{"stage":"first_direct_call_after_init_including_linkage","ns":2413,"bytes":0,"checksum":"3fba3bda1521ac51","calls":1}
+{"stage":"table_layout","field":"SRGB_CHANNEL_LUMINANCE","entries":256,"payload_bytes":2048,"shallow_and_primitive_graph_bytes":2064,"overhead_bytes":16,"checksum":"8101a6be3d5dab0c"}
+{"stage":"table_count","count":1}
+{"stage":"vm_layout","option":"UseCompressedOops","value":"true"}
+{"stage":"vm_layout","option":"UseCompressedClassPointers","value":"true"}
+{"stage":"vm_layout","option":"ObjectAlignmentInBytes","value":"8"}

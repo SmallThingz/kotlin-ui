@@ -1,0 +1,2 @@
+{"stage":"empty_boundary","ns":50,"bytes":0,"checksum":"0000000000000000","calls":1}
+{"stage":"first_use_including_lazy_loading","ns":617364,"bytes":16048,"checksum":"3fba3bda1521ac51","calls":1}

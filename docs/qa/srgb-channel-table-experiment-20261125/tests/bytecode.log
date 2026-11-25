@@ -1,0 +1,482 @@
+Compiled from "SelectionContrast.kt"
+public final class smallthingz.ui.controls.SelectionContrastKt {
+  private static final double[] SRGB_CHANNEL_LUMINANCE;
+
+  public static final double srgbLuminance(int);
+    Code:
+       0: ldc2_w        #7                  // double 0.2126d
+       3: iload_0
+       4: bipush        16
+       6: invokestatic  #12                 // Method srgbLuminance$channel:(II)D
+       9: dmul
+      10: ldc2_w        #13                 // double 0.7152d
+      13: iload_0
+      14: bipush        8
+      16: invokestatic  #12                 // Method srgbLuminance$channel:(II)D
+      19: dmul
+      20: dadd
+      21: ldc2_w        #15                 // double 0.0722d
+      24: iload_0
+      25: iconst_0
+      26: invokestatic  #12                 // Method srgbLuminance$channel:(II)D
+      29: dmul
+      30: dadd
+      31: dreturn
+
+  public static final int selectionForeground(int, int, int, int);
+    Code:
+       0: iload_0
+       1: bipush        24
+       3: iushr
+       4: istore        4
+       6: ldc           #21                 // int -16777216
+       8: iload_0
+       9: iload         4
+      11: iload_1
+      12: bipush        16
+      14: invokestatic  #24                 // Method selectionForeground$channel:(IIII)I
+      17: ior
+      18: iload_0
+      19: iload         4
+      21: iload_1
+      22: bipush        8
+      24: invokestatic  #24                 // Method selectionForeground$channel:(IIII)I
+      27: ior
+      28: iload_0
+      29: iload         4
+      31: iload_1
+      32: iconst_0
+      33: invokestatic  #24                 // Method selectionForeground$channel:(IIII)I
+      36: ior
+      37: invokestatic  #26                 // Method srgbLuminance:(I)D
+      40: dstore        5
+      42: nop
+      43: iload_2
+      44: bipush        24
+      46: iushr
+      47: sipush        255
+      50: if_icmpne     70
+      53: dload         5
+      55: iload_2
+      56: invokestatic  #30                 // Method selectionForeground$ratio:(DI)D
+      59: ldc2_w        #31                 // double 4.5d
+      62: dcmpl
+      63: iflt          70
+      66: iload_2
+      67: goto          119
+      70: iload_3
+      71: bipush        24
+      73: iushr
+      74: sipush        255
+      77: if_icmpne     97
+      80: dload         5
+      82: iload_3
+      83: invokestatic  #30                 // Method selectionForeground$ratio:(DI)D
+      86: ldc2_w        #31                 // double 4.5d
+      89: dcmpl
+      90: iflt          97
+      93: iload_3
+      94: goto          119
+      97: dload         5
+      99: ldc2_w        #33                 // double 0.052500000000000005d
+     102: invokestatic  #40                 // Method java/lang/Math.sqrt:(D)D
+     105: ldc2_w        #41                 // double 0.05d
+     108: dsub
+     109: dcmpg
+     110: ifgt          117
+     113: iconst_m1
+     114: goto          119
+     117: ldc           #21                 // int -16777216
+     119: ireturn
+
+  public static final long selectionForegroundWithIndication(int, int, int, int);
+    Code:
+       0: iload_0
+       1: iload_1
+       2: iload_0
+       3: bipush        24
+       5: iushr
+       6: invokestatic  #55                 // Method selectionForegroundWithIndication$composite:(III)I
+       9: istore        4
+      11: iload         4
+      13: invokestatic  #26                 // Method srgbLuminance:(I)D
+      16: dstore        5
+      18: dload         5
+      20: dstore        7
+      22: iload_2
+      23: invokestatic  #26                 // Method srgbLuminance:(I)D
+      26: dstore        9
+      28: dload         5
+      30: dload         7
+      32: iload_2
+      33: dload         9
+      35: invokestatic  #59                 // Method selectionInkForLuminanceRange:(DDID)I
+      38: istore        11
+      40: iload         11
+      42: ifeq          49
+      45: iconst_1
+      46: goto          50
+      49: iconst_0
+      50: ifne          63
+      53: new           #61                 // class java/lang/IllegalStateException
+      56: dup
+      57: ldc           #63                 // String Check failed.
+      59: invokespecial #67                 // Method java/lang/IllegalStateException."<init>":(Ljava/lang/String;)V
+      62: athrow
+      63: iconst_0
+      64: istore        12
+      66: iconst_1
+      67: istore        13
+      69: iload_3
+      70: bipush        24
+      72: iushr
+      73: istore        14
+      75: iload         13
+      77: iload         14
+      79: if_icmpgt     151
+      82: iload_3
+      83: iload         4
+      85: iload         13
+      87: invokestatic  #55                 // Method selectionForegroundWithIndication$composite:(III)I
+      90: invokestatic  #26                 // Method srgbLuminance:(I)D
+      93: dstore        15
+      95: dload         5
+      97: dload         15
+      99: invokestatic  #71                 // Method java/lang/Math.min:(DD)D
+     102: dstore        5
+     104: dload         7
+     106: dload         15
+     108: invokestatic  #74                 // Method java/lang/Math.max:(DD)D
+     111: dstore        7
+     113: dload         5
+     115: dload         7
+     117: iload_2
+     118: dload         9
+     120: invokestatic  #59                 // Method selectionInkForLuminanceRange:(DDID)I
+     123: istore        17
+     125: iload         17
+     127: ifeq          151
+     130: iload         17
+     132: istore        11
+     134: iload         13
+     136: istore        12
+     138: iload         13
+     140: iload         14
+     142: if_icmpeq     151
+     145: iinc          13, 1
+     148: goto          82
+     151: iload         12
+     153: i2l
+     154: bipush        32
+     156: lshl
+     157: iload         11
+     159: i2l
+     160: ldc2_w        #75                 // long 4294967295l
+     163: land
+     164: lor
+     165: lreturn
+
+  private static final int selectionInkForLuminanceRange(double, double, int, double);
+    Code:
+       0: dload         5
+       2: dload_0
+       3: dload_2
+       4: invokestatic  #90                 // Method kotlin/ranges/RangesKt.coerceIn:(DDD)D
+       7: dstore        7
+       9: dload         7
+      11: dload         5
+      13: invokestatic  #74                 // Method java/lang/Math.max:(DD)D
+      16: ldc2_w        #41                 // double 0.05d
+      19: dadd
+      20: dload         7
+      22: dload         5
+      24: invokestatic  #71                 // Method java/lang/Math.min:(DD)D
+      27: ldc2_w        #41                 // double 0.05d
+      30: dadd
+      31: ddiv
+      32: dstore        9
+      34: nop
+      35: iload         4
+      37: bipush        24
+      39: iushr
+      40: sipush        255
+      43: if_icmpne     60
+      46: dload         9
+      48: ldc2_w        #31                 // double 4.5d
+      51: dcmpl
+      52: iflt          60
+      55: iload         4
+      57: goto          102
+      60: ldc2_w        #91                 // double 1.05d
+      63: dload_2
+      64: ldc2_w        #41                 // double 0.05d
+      67: dadd
+      68: ddiv
+      69: ldc2_w        #31                 // double 4.5d
+      72: dcmpl
+      73: iflt          80
+      76: iconst_m1
+      77: goto          102
+      80: dload_0
+      81: ldc2_w        #41                 // double 0.05d
+      84: dadd
+      85: ldc2_w        #41                 // double 0.05d
+      88: ddiv
+      89: ldc2_w        #31                 // double 4.5d
+      92: dcmpl
+      93: iflt          101
+      96: ldc           #21                 // int -16777216
+      98: goto          102
+     101: iconst_0
+     102: ireturn
+
+  public static final int selectionIndication(int, int, int, int);
+    Code:
+       0: iload_0
+       1: iload_1
+       2: iload_0
+       3: bipush        24
+       5: iushr
+       6: invokestatic  #98                 // Method selectionIndication$composite:(III)I
+       9: istore        4
+      11: iload         4
+      13: invokestatic  #26                 // Method srgbLuminance:(I)D
+      16: dstore        5
+      18: iload_2
+      19: invokestatic  #26                 // Method srgbLuminance:(I)D
+      22: dstore        7
+      24: iconst_1
+      25: istore        9
+      27: iload         9
+      29: bipush        41
+      31: if_icmpge     98
+      34: iload_3
+      35: iload         4
+      37: iload         9
+      39: invokestatic  #98                 // Method selectionIndication$composite:(III)I
+      42: invokestatic  #26                 // Method srgbLuminance:(I)D
+      45: dstore        10
+      47: dload         10
+      49: dload         7
+      51: invokestatic  #74                 // Method java/lang/Math.max:(DD)D
+      54: ldc2_w        #41                 // double 0.05d
+      57: dadd
+      58: dload         10
+      60: dload         7
+      62: invokestatic  #71                 // Method java/lang/Math.min:(DD)D
+      65: ldc2_w        #41                 // double 0.05d
+      68: dadd
+      69: ddiv
+      70: ldc2_w        #31                 // double 4.5d
+      73: dcmpg
+      74: ifge          92
+      77: dload         5
+      79: dload         7
+      81: dcmpg
+      82: ifge          90
+      85: ldc           #21                 // int -16777216
+      87: goto          91
+      90: iconst_m1
+      91: ireturn
+      92: iinc          9, 1
+      95: goto          27
+      98: iload_3
+      99: ireturn
+
+  private static final double srgbLuminance$channel(int, int);
+    Code:
+       0: getstatic     #104                // Field SRGB_CHANNEL_LUMINANCE:[D
+       3: iload_0
+       4: iload_1
+       5: iushr
+       6: sipush        255
+       9: iand
+      10: daload
+      11: dreturn
+
+  private static final int selectionForeground$channel(int, int, int, int);
+    Code:
+       0: iload_0
+       1: iload_3
+       2: iushr
+       3: sipush        255
+       6: iand
+       7: iload_1
+       8: imul
+       9: iload_2
+      10: iload_3
+      11: iushr
+      12: sipush        255
+      15: iand
+      16: sipush        255
+      19: iload_1
+      20: isub
+      21: imul
+      22: iadd
+      23: bipush        127
+      25: iadd
+      26: sipush        255
+      29: idiv
+      30: iload_3
+      31: ishl
+      32: ireturn
+
+  private static final double selectionForeground$ratio(double, int);
+    Code:
+       0: iload_2
+       1: invokestatic  #26                 // Method srgbLuminance:(I)D
+       4: dstore_3
+       5: dload_0
+       6: dload_3
+       7: invokestatic  #74                 // Method java/lang/Math.max:(DD)D
+      10: ldc2_w        #41                 // double 0.05d
+      13: dadd
+      14: dload_0
+      15: dload_3
+      16: invokestatic  #71                 // Method java/lang/Math.min:(DD)D
+      19: ldc2_w        #41                 // double 0.05d
+      22: dadd
+      23: ddiv
+      24: dreturn
+
+  private static final int selectionForegroundWithIndication$composite$channel(int, int, int, int);
+    Code:
+       0: iload_0
+       1: iload_3
+       2: iushr
+       3: sipush        255
+       6: iand
+       7: iload_1
+       8: imul
+       9: iload_2
+      10: iload_3
+      11: iushr
+      12: sipush        255
+      15: iand
+      16: sipush        255
+      19: iload_1
+      20: isub
+      21: imul
+      22: iadd
+      23: bipush        127
+      25: iadd
+      26: sipush        255
+      29: idiv
+      30: iload_3
+      31: ishl
+      32: ireturn
+
+  private static final int selectionForegroundWithIndication$composite(int, int, int);
+    Code:
+       0: ldc           #21                 // int -16777216
+       2: iload_0
+       3: iload_2
+       4: iload_1
+       5: bipush        16
+       7: invokestatic  #115                // Method selectionForegroundWithIndication$composite$channel:(IIII)I
+      10: ior
+      11: iload_0
+      12: iload_2
+      13: iload_1
+      14: bipush        8
+      16: invokestatic  #115                // Method selectionForegroundWithIndication$composite$channel:(IIII)I
+      19: ior
+      20: iload_0
+      21: iload_2
+      22: iload_1
+      23: iconst_0
+      24: invokestatic  #115                // Method selectionForegroundWithIndication$composite$channel:(IIII)I
+      27: ior
+      28: ireturn
+
+  private static final int selectionIndication$composite$channel(int, int, int, int);
+    Code:
+       0: iload_0
+       1: iload_3
+       2: iushr
+       3: sipush        255
+       6: iand
+       7: iload_1
+       8: imul
+       9: iload_2
+      10: iload_3
+      11: iushr
+      12: sipush        255
+      15: iand
+      16: sipush        255
+      19: iload_1
+      20: isub
+      21: imul
+      22: iadd
+      23: bipush        127
+      25: iadd
+      26: sipush        255
+      29: idiv
+      30: iload_3
+      31: ishl
+      32: ireturn
+
+  private static final int selectionIndication$composite(int, int, int);
+    Code:
+       0: ldc           #21                 // int -16777216
+       2: iload_0
+       3: iload_2
+       4: iload_1
+       5: bipush        16
+       7: invokestatic  #118                // Method selectionIndication$composite$channel:(IIII)I
+      10: ior
+      11: iload_0
+      12: iload_2
+      13: iload_1
+      14: bipush        8
+      16: invokestatic  #118                // Method selectionIndication$composite$channel:(IIII)I
+      19: ior
+      20: iload_0
+      21: iload_2
+      22: iload_1
+      23: iconst_0
+      24: invokestatic  #118                // Method selectionIndication$composite$channel:(IIII)I
+      27: ior
+      28: ireturn
+
+  static {};
+    Code:
+       0: iconst_0
+       1: istore_0
+       2: sipush        256
+       5: newarray       double
+       7: astore_1
+       8: iload_0
+       9: sipush        256
+      12: if_icmpge     64
+      15: iload_0
+      16: istore_2
+      17: aload_1
+      18: iload_2
+      19: iload_2
+      20: i2d
+      21: ldc2_w        #121                // double 255.0d
+      24: ddiv
+      25: dstore_3
+      26: dload_3
+      27: ldc2_w        #123                // double 0.04045d
+      30: dcmpg
+      31: ifgt          42
+      34: dload_3
+      35: ldc2_w        #125                // double 12.92d
+      38: ddiv
+      39: goto          57
+      42: dload_3
+      43: ldc2_w        #127                // double 0.055d
+      46: dadd
+      47: ldc2_w        #129                // double 1.055d
+      50: ddiv
+      51: ldc2_w        #131                // double 2.4d
+      54: invokestatic  #135                // Method java/lang/Math.pow:(DD)D
+      57: dastore
+      58: iinc          0, 1
+      61: goto          8
+      64: aload_1
+      65: putstatic     #104                // Field SRGB_CHANNEL_LUMINANCE:[D
+      68: return
+}

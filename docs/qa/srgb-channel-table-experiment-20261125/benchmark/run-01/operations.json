@@ -1,0 +1,847 @@
+[
+  {
+    "label": "java-version",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-version"
+    ],
+    "elapsed_ns": 66464297,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/java-version.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/java-version.stderr.log",
+      "bytes": 205,
+      "sha256": "8a710a5f14701a0b8dd97ae64ae9e2e7951078fe036190b0b59d37a51fb9ef7c"
+    }
+  },
+  {
+    "label": "compile-baseline",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-cp",
+      "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.4.21/3cd9c37c505fb9879e03ebeaf91d9c9500ab6eca/kotlin-compiler-embeddable-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-build-tools-api/2.4.21/f5fd68c20ba38519b91ab2411b004a1730453d6f/kotlin-build-tools-api-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-script-runtime/2.4.21/abc7ff9f7e229cb6bdfadad81e93c871e6cdde41/kotlin-script-runtime-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-reflect/1.6.10/1cbe9c92c12a94eea200d23c2bbaedaf3daf5132/kotlin-reflect-1.6.10.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-daemon-embeddable/2.4.21/5d9b0394b3ff65cd3dd33c6c31a2956b1d59885a/kotlin-daemon-embeddable-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.8.0/ac1dc37a30a93150b704022f8d895ee1bd3a36b3/kotlinx-coroutines-core-jvm-1.8.0.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/23.0.0/8cc20c07506ec18e0834947b84a864bfc094484e/annotations-23.0.0.jar",
+      "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
+      "-no-stdlib",
+      "-no-reflect",
+      "-jvm-target",
+      "17",
+      "-classpath",
+      "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/23.0.0/8cc20c07506ec18e0834947b84a864bfc094484e/annotations-23.0.0.jar",
+      "-d",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/SelectionContrast.kt"
+    ],
+    "elapsed_ns": 4610456556,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/compile-baseline.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/compile-baseline.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "compile-candidate",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-cp",
+      "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.4.21/3cd9c37c505fb9879e03ebeaf91d9c9500ab6eca/kotlin-compiler-embeddable-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-build-tools-api/2.4.21/f5fd68c20ba38519b91ab2411b004a1730453d6f/kotlin-build-tools-api-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-script-runtime/2.4.21/abc7ff9f7e229cb6bdfadad81e93c871e6cdde41/kotlin-script-runtime-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-reflect/1.6.10/1cbe9c92c12a94eea200d23c2bbaedaf3daf5132/kotlin-reflect-1.6.10.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-daemon-embeddable/2.4.21/5d9b0394b3ff65cd3dd33c6c31a2956b1d59885a/kotlin-daemon-embeddable-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.8.0/ac1dc37a30a93150b704022f8d895ee1bd3a36b3/kotlinx-coroutines-core-jvm-1.8.0.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/23.0.0/8cc20c07506ec18e0834947b84a864bfc094484e/annotations-23.0.0.jar",
+      "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
+      "-no-stdlib",
+      "-no-reflect",
+      "-jvm-target",
+      "17",
+      "-classpath",
+      "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/23.0.0/8cc20c07506ec18e0834947b84a864bfc094484e/annotations-23.0.0.jar",
+      "-d",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/classes",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/SelectionContrast.kt"
+    ],
+    "elapsed_ns": 3996135710,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/compile-candidate.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/compile-candidate.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "compile-harness",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/javac",
+      "-J-XX:-UsePerfData",
+      "-J-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "--release",
+      "17",
+      "-classpath",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "-d",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/scripts/host/srgb-luminance-benchmark/SrgbLuminanceBenchmark.java"
+    ],
+    "elapsed_ns": 778923607,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/compile-harness.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/compile-harness.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "first-00-baseline",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "first"
+    ],
+    "elapsed_ns": 78531094,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-00-baseline.stdout.log",
+      "bytes": 196,
+      "sha256": "6fcd309a13e1ceb1cb2ede7119486df510ee09e390355fd0dab51fc19a3bb839"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-00-baseline.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "first-00-candidate",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "first"
+    ],
+    "elapsed_ns": 77759618,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-00-candidate.stdout.log",
+      "bytes": 196,
+      "sha256": "383fbf5641ad0ea82e419f66c7f29ea8e7535558a031cad5010ac35911b8ef12"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-00-candidate.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "first-01-candidate",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "first"
+    ],
+    "elapsed_ns": 78894208,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-01-candidate.stdout.log",
+      "bytes": 196,
+      "sha256": "d94a604267b9d4ffe688a938b39db807e268e9eb7e743f252079bc4667e2aa22"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-01-candidate.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "first-01-baseline",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "first"
+    ],
+    "elapsed_ns": 76439323,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-01-baseline.stdout.log",
+      "bytes": 196,
+      "sha256": "f5f24f4cdfe879107846cc57c0694902d617181f332016eb09c6bfada43cf0cf"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-01-baseline.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "first-02-baseline",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "first"
+    ],
+    "elapsed_ns": 76731732,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-02-baseline.stdout.log",
+      "bytes": 196,
+      "sha256": "a1df31c623426c5e72605159e646393ca04a4529960d14d1d37b4dd95cba20df"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-02-baseline.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "first-02-candidate",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "first"
+    ],
+    "elapsed_ns": 76149599,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-02-candidate.stdout.log",
+      "bytes": 196,
+      "sha256": "0a7f094d26b01bb807d64e301b390a8b01f95b1e39ce0d6de412aef5468186dc"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-02-candidate.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "first-03-candidate",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "first"
+    ],
+    "elapsed_ns": 68850858,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-03-candidate.stdout.log",
+      "bytes": 196,
+      "sha256": "0c0f411c16043f198e74ede0b973491c88bc1b1eb8201da96d528d54c25d5e01"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-03-candidate.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "first-03-baseline",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "first"
+    ],
+    "elapsed_ns": 71778509,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-03-baseline.stdout.log",
+      "bytes": 196,
+      "sha256": "c71a5e0df758f9c66d1d80ca52b119793e1bf84d3493f19fcaa08072c6d094d5"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-03-baseline.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "first-04-baseline",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "first"
+    ],
+    "elapsed_ns": 92696172,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-04-baseline.stdout.log",
+      "bytes": 196,
+      "sha256": "a652e7dee603fca8cbf3c3f319578cd10250abfab1167ce2dffc1a3695c89314"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-04-baseline.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "first-04-candidate",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "first"
+    ],
+    "elapsed_ns": 81084164,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-04-candidate.stdout.log",
+      "bytes": 196,
+      "sha256": "39ae7dd84f388d0b8695eb414785347f105dafb85b652678550f9bd92f20abff"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/first-04-candidate.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "init-00-baseline",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "init"
+    ],
+    "elapsed_ns": 92574941,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-00-baseline.stdout.log",
+      "bytes": 857,
+      "sha256": "4fc56803088e4c8e8b0ccc8cc5344feafaa668948d1dc5a8f43fbb55f24503a6"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-00-baseline.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "init-00-candidate",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "init"
+    ],
+    "elapsed_ns": 92755981,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-00-candidate.stdout.log",
+      "bytes": 1045,
+      "sha256": "a039be5d35581dfc724b9b8d5066e919a8c22eb1bfc2ba488f9fb6d417d198b0"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-00-candidate.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "init-01-candidate",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "init"
+    ],
+    "elapsed_ns": 93606054,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-01-candidate.stdout.log",
+      "bytes": 1044,
+      "sha256": "912f373c14aad4404314c53dbecc400f64a6e677d7d292358c7f7120d7a75341"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-01-candidate.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "init-01-baseline",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "init"
+    ],
+    "elapsed_ns": 92311756,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-01-baseline.stdout.log",
+      "bytes": 856,
+      "sha256": "8b81ce98ad98febc19e21d36891a22612359a4265646f2eaa8ed8c455e8967a3"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-01-baseline.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "init-02-baseline",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "init"
+    ],
+    "elapsed_ns": 84817952,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-02-baseline.stdout.log",
+      "bytes": 857,
+      "sha256": "23287557d706795405561dc2c3f6b0c89283927ef367f00b9874b446355ef395"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-02-baseline.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "init-02-candidate",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "init"
+    ],
+    "elapsed_ns": 86767831,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-02-candidate.stdout.log",
+      "bytes": 1044,
+      "sha256": "618656f2fa9ff37132a57a994788aaa1fec697ea8a6dfd17db18f8cb71813cb4"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-02-candidate.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "init-03-candidate",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "init"
+    ],
+    "elapsed_ns": 170469551,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-03-candidate.stdout.log",
+      "bytes": 1044,
+      "sha256": "6c3b9f068fe8a437273354b5207e8030d3309eec3e7f022a5091ec5524ae2354"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-03-candidate.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "init-03-baseline",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "init"
+    ],
+    "elapsed_ns": 84448650,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-03-baseline.stdout.log",
+      "bytes": 856,
+      "sha256": "9361c8b4f5f3fe6ac12a6191e831a63b022403b7cb46c18ef54360c6620a054e"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-03-baseline.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "init-04-baseline",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "init"
+    ],
+    "elapsed_ns": 82285994,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-04-baseline.stdout.log",
+      "bytes": 858,
+      "sha256": "0daa9c463d51653c26ff9900bb275fb7fd6cbb2ed088feeaf7d65d5e5f446c04"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-04-baseline.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "init-04-candidate",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "init"
+    ],
+    "elapsed_ns": 86009030,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-04-candidate.stdout.log",
+      "bytes": 1044,
+      "sha256": "8d8c9f891bc2d1a8fcb4f4b91a8c7548c9740451ed3814c03080d1d73f584430"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/init-04-candidate.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "hot-00-baseline",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "hot"
+    ],
+    "elapsed_ns": 1338192663,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/hot-00-baseline.stdout.log",
+      "bytes": 2484,
+      "sha256": "828638d6c7bf98395fdc0d0d481258b05252a1d7c45a804101ae890c02be0442"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/hot-00-baseline.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "hot-00-candidate",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "hot"
+    ],
+    "elapsed_ns": 258683245,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/hot-00-candidate.stdout.log",
+      "bytes": 2455,
+      "sha256": "df74711b184eb9cb624378e21b141faba670d210b04a3caa3514f46bd8faf5a5"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/hot-00-candidate.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "hot-01-candidate",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "hot"
+    ],
+    "elapsed_ns": 340431324,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/hot-01-candidate.stdout.log",
+      "bytes": 2454,
+      "sha256": "4875e7fa5e218f21396cb20a87da927f5079cef875b4ea67db22e18c5d665707"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/hot-01-candidate.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "hot-01-baseline",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "hot"
+    ],
+    "elapsed_ns": 1310931412,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/hot-01-baseline.stdout.log",
+      "bytes": 2481,
+      "sha256": "9a480ba60ae85c0dc8361bba30e5bb3e78ff8146e233d67ea313876b5f804a7a"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/hot-01-baseline.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "hot-02-baseline",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/baseline/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "hot"
+    ],
+    "elapsed_ns": 1381116104,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/hot-02-baseline.stdout.log",
+      "bytes": 2484,
+      "sha256": "e96e27679aa7a9f8c93b2e8f31b7100f5c1cddfa3294e99a7180210c88fda0b8"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/hot-02-baseline.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  {
+    "label": "hot-02-candidate",
+    "argv": [
+      "/workspace/android-toolchain/jdk/bin/java",
+      "-XX:-UsePerfData",
+      "-Xms64m",
+      "-Xmx256m",
+      "-XX:+UseSerialGC",
+      "-Djava.io.tmpdir=/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/scratch",
+      "-javaagent:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/size-agent.jar",
+      "-cp",
+      "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/harness-classes:/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/candidate/classes:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar",
+      "SrgbLuminanceBenchmark",
+      "hot"
+    ],
+    "elapsed_ns": 291307289,
+    "exit_code": 0,
+    "stdout": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/hot-02-candidate.stdout.log",
+      "bytes": 2457,
+      "sha256": "ad4b4d85dcbae472f00773c53d509ac319d8ff912b6c153de1bc4fdf043b567a"
+    },
+    "stderr": {
+      "path": "/dev/shm/codex-srgb-channel-table-20261125/worktree/docs/qa/srgb-channel-table-experiment-20261125/benchmark/run-01/hot-02-candidate.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+]

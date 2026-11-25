@@ -1,0 +1,2612 @@
+[
+  {
+    "stage": "empty_boundary",
+    "ns": 50,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "first"
+  },
+  {
+    "stage": "first_use_including_lazy_loading",
+    "ns": 556212,
+    "bytes": 16048,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "first"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 60,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "first"
+  },
+  {
+    "stage": "first_use_including_lazy_loading",
+    "ns": 584385,
+    "bytes": 18456,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "first"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 60,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "first"
+  },
+  {
+    "stage": "first_use_including_lazy_loading",
+    "ns": 575932,
+    "bytes": 18456,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "first"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 60,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "first"
+  },
+  {
+    "stage": "first_use_including_lazy_loading",
+    "ns": 517264,
+    "bytes": 16048,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "first"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 70,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "first"
+  },
+  {
+    "stage": "first_use_including_lazy_loading",
+    "ns": 585967,
+    "bytes": 16048,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "first"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 50,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "first"
+  },
+  {
+    "stage": "first_use_including_lazy_loading",
+    "ns": 548230,
+    "bytes": 18456,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "first"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 50,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 3,
+    "mode": "first"
+  },
+  {
+    "stage": "first_use_including_lazy_loading",
+    "ns": 667549,
+    "bytes": 18456,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 3,
+    "mode": "first"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 50,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 3,
+    "mode": "first"
+  },
+  {
+    "stage": "first_use_including_lazy_loading",
+    "ns": 617364,
+    "bytes": 16048,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 3,
+    "mode": "first"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 80,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 4,
+    "mode": "first"
+  },
+  {
+    "stage": "first_use_including_lazy_loading",
+    "ns": 734429,
+    "bytes": 16048,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 4,
+    "mode": "first"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 70,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 4,
+    "mode": "first"
+  },
+  {
+    "stage": "first_use_including_lazy_loading",
+    "ns": 567409,
+    "bytes": 18456,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 4,
+    "mode": "first"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 90,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "load_without_initialization",
+    "ns": 666527,
+    "bytes": 16112,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "reflection_metadata_before_init",
+    "ns": 165267,
+    "bytes": 4064,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "initialized_class_control",
+    "ns": 45328,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "runtime_initialization",
+    "ns": 2454,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "first_direct_call_after_init_including_linkage",
+    "ns": 10145,
+    "bytes": 0,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "table_count",
+    "count": 0,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedOops",
+    "value": "true",
+    "version": "baseline",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedClassPointers",
+    "value": "true",
+    "version": "baseline",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "ObjectAlignmentInBytes",
+    "value": "8",
+    "version": "baseline",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 120,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "load_without_initialization",
+    "ns": 604966,
+    "bytes": 16456,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "reflection_metadata_before_init",
+    "ns": 204005,
+    "bytes": 4288,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "initialized_class_control",
+    "ns": 22073,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "runtime_initialization",
+    "ns": 50556,
+    "bytes": 2064,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "first_direct_call_after_init_including_linkage",
+    "ns": 4967,
+    "bytes": 0,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "table_layout",
+    "field": "SRGB_CHANNEL_LUMINANCE",
+    "entries": 256,
+    "payload_bytes": 2048,
+    "shallow_and_primitive_graph_bytes": 2064,
+    "overhead_bytes": 16,
+    "checksum": "8101a6be3d5dab0c",
+    "version": "candidate",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "table_count",
+    "count": 1,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedOops",
+    "value": "true",
+    "version": "candidate",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedClassPointers",
+    "value": "true",
+    "version": "candidate",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "ObjectAlignmentInBytes",
+    "value": "8",
+    "version": "candidate",
+    "fork": 0,
+    "mode": "init"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 90,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "load_without_initialization",
+    "ns": 662301,
+    "bytes": 16456,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "reflection_metadata_before_init",
+    "ns": 212969,
+    "bytes": 4288,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "initialized_class_control",
+    "ns": 22384,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "runtime_initialization",
+    "ns": 51997,
+    "bytes": 2064,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "first_direct_call_after_init_including_linkage",
+    "ns": 4937,
+    "bytes": 0,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "table_layout",
+    "field": "SRGB_CHANNEL_LUMINANCE",
+    "entries": 256,
+    "payload_bytes": 2048,
+    "shallow_and_primitive_graph_bytes": 2064,
+    "overhead_bytes": 16,
+    "checksum": "8101a6be3d5dab0c",
+    "version": "candidate",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "table_count",
+    "count": 1,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedOops",
+    "value": "true",
+    "version": "candidate",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedClassPointers",
+    "value": "true",
+    "version": "candidate",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "ObjectAlignmentInBytes",
+    "value": "8",
+    "version": "candidate",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 91,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "load_without_initialization",
+    "ns": 710534,
+    "bytes": 16112,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "reflection_metadata_before_init",
+    "ns": 172177,
+    "bytes": 4064,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "initialized_class_control",
+    "ns": 56214,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "runtime_initialization",
+    "ns": 2363,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "first_direct_call_after_init_including_linkage",
+    "ns": 9344,
+    "bytes": 0,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "table_count",
+    "count": 0,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedOops",
+    "value": "true",
+    "version": "baseline",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedClassPointers",
+    "value": "true",
+    "version": "baseline",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "ObjectAlignmentInBytes",
+    "value": "8",
+    "version": "baseline",
+    "fork": 1,
+    "mode": "init"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 90,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "load_without_initialization",
+    "ns": 627338,
+    "bytes": 16112,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "reflection_metadata_before_init",
+    "ns": 207651,
+    "bytes": 4064,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "initialized_class_control",
+    "ns": 35523,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "runtime_initialization",
+    "ns": 12949,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "first_direct_call_after_init_including_linkage",
+    "ns": 9134,
+    "bytes": 0,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "table_count",
+    "count": 0,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedOops",
+    "value": "true",
+    "version": "baseline",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedClassPointers",
+    "value": "true",
+    "version": "baseline",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "ObjectAlignmentInBytes",
+    "value": "8",
+    "version": "baseline",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 90,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "load_without_initialization",
+    "ns": 437255,
+    "bytes": 16456,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "reflection_metadata_before_init",
+    "ns": 152628,
+    "bytes": 4288,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "initialized_class_control",
+    "ns": 50165,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "runtime_initialization",
+    "ns": 34281,
+    "bytes": 2064,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "first_direct_call_after_init_including_linkage",
+    "ns": 2413,
+    "bytes": 0,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "table_layout",
+    "field": "SRGB_CHANNEL_LUMINANCE",
+    "entries": 256,
+    "payload_bytes": 2048,
+    "shallow_and_primitive_graph_bytes": 2064,
+    "overhead_bytes": 16,
+    "checksum": "8101a6be3d5dab0c",
+    "version": "candidate",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "table_count",
+    "count": 1,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedOops",
+    "value": "true",
+    "version": "candidate",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedClassPointers",
+    "value": "true",
+    "version": "candidate",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "ObjectAlignmentInBytes",
+    "value": "8",
+    "version": "candidate",
+    "fork": 2,
+    "mode": "init"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 90,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "load_without_initialization",
+    "ns": 536773,
+    "bytes": 16456,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "reflection_metadata_before_init",
+    "ns": 205888,
+    "bytes": 4288,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "initialized_class_control",
+    "ns": 42514,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "runtime_initialization",
+    "ns": 31847,
+    "bytes": 2064,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "first_direct_call_after_init_including_linkage",
+    "ns": 2694,
+    "bytes": 0,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "table_layout",
+    "field": "SRGB_CHANNEL_LUMINANCE",
+    "entries": 256,
+    "payload_bytes": 2048,
+    "shallow_and_primitive_graph_bytes": 2064,
+    "overhead_bytes": 16,
+    "checksum": "8101a6be3d5dab0c",
+    "version": "candidate",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "table_count",
+    "count": 1,
+    "version": "candidate",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedOops",
+    "value": "true",
+    "version": "candidate",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedClassPointers",
+    "value": "true",
+    "version": "candidate",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "ObjectAlignmentInBytes",
+    "value": "8",
+    "version": "candidate",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 80,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "load_without_initialization",
+    "ns": 478606,
+    "bytes": 16112,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "reflection_metadata_before_init",
+    "ns": 145959,
+    "bytes": 4064,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "initialized_class_control",
+    "ns": 40391,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "runtime_initialization",
+    "ns": 1532,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "first_direct_call_after_init_including_linkage",
+    "ns": 6269,
+    "bytes": 0,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "table_count",
+    "count": 0,
+    "version": "baseline",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedOops",
+    "value": "true",
+    "version": "baseline",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedClassPointers",
+    "value": "true",
+    "version": "baseline",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "ObjectAlignmentInBytes",
+    "value": "8",
+    "version": "baseline",
+    "fork": 3,
+    "mode": "init"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 100,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "load_without_initialization",
+    "ns": 554860,
+    "bytes": 16112,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "reflection_metadata_before_init",
+    "ns": 132328,
+    "bytes": 4064,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "initialized_class_control",
+    "ns": 34061,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "runtime_initialization",
+    "ns": 1392,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "first_direct_call_after_init_including_linkage",
+    "ns": 24256,
+    "bytes": 0,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "table_count",
+    "count": 0,
+    "version": "baseline",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedOops",
+    "value": "true",
+    "version": "baseline",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedClassPointers",
+    "value": "true",
+    "version": "baseline",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "ObjectAlignmentInBytes",
+    "value": "8",
+    "version": "baseline",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 90,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "load_without_initialization",
+    "ns": 463033,
+    "bytes": 16456,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "reflection_metadata_before_init",
+    "ns": 156464,
+    "bytes": 4288,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "initialized_class_control",
+    "ns": 57916,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "runtime_initialization",
+    "ns": 32830,
+    "bytes": 2064,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "first_direct_call_after_init_including_linkage",
+    "ns": 2594,
+    "bytes": 0,
+    "checksum": "3fba3bda1521ac51",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "table_layout",
+    "field": "SRGB_CHANNEL_LUMINANCE",
+    "entries": 256,
+    "payload_bytes": 2048,
+    "shallow_and_primitive_graph_bytes": 2064,
+    "overhead_bytes": 16,
+    "checksum": "8101a6be3d5dab0c",
+    "version": "candidate",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "table_count",
+    "count": 1,
+    "version": "candidate",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedOops",
+    "value": "true",
+    "version": "candidate",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "UseCompressedClassPointers",
+    "value": "true",
+    "version": "candidate",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "vm_layout",
+    "option": "ObjectAlignmentInBytes",
+    "value": "8",
+    "version": "candidate",
+    "fork": 4,
+    "mode": "init"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 110,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 24764221,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 24546805,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 24674736,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 26384215,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 24514006,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 24666294,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 27651831,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 120,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 49442522,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 45512810,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 44922488,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 46722692,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 45035286,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 45352322,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 45170819,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 111,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10943678,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10108307,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 12298746,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10169598,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10114617,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10804649,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10647484,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 91,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 464264,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 479768,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 461891,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 461912,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 553559,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 475682,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 461821,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 100,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8576886,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8522795,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8495603,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8343716,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8293992,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8284958,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8219521,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 110,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1457210,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1435368,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1369469,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1518993,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1358083,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1378853,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1400867,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 0,
+    "mode": "hot"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 90,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 463503,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 481620,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 502883,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 486348,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 478847,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 480469,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 461931,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 80,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8601323,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8590887,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8151770,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8134142,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8181684,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8157097,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8413231,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 100,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1364973,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1564762,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1688016,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1450811,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1420175,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1376009,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1798361,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 81,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 24185675,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 24577841,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 23942391,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 23956422,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 23628100,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 23791384,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 23957694,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 90,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 43906618,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 44746345,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 43622503,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 44018295,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 43795862,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 43655232,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 44238955,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 110,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10719803,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10229650,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10217981,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10925982,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10210180,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10246274,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 9882900,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 1,
+    "mode": "hot"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 100,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 24207659,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 24289169,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 24838843,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 23548270,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 24003362,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 24405554,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 24605063,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 170,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 45866070,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 44865974,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 47456871,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 49056936,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 45411049,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 47595138,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 48844622,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 100,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10368948,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10645501,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10428538,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10492222,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 11369706,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10336239,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 10073015,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "baseline",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 110,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 465146,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 479488,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 463474,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 488892,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 483163,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 481040,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "srgbLuminance",
+    "ns": 463344,
+    "bytes": 0,
+    "checksum": "82e8c5a1cc6a1200",
+    "calls": 524288,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 101,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8316085,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8218810,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8109416,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 13083345,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 9201100,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8979358,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "selectionForegroundWithIndication",
+    "ns": 8415545,
+    "bytes": 0,
+    "checksum": "000a122a36daded8",
+    "calls": 16384,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "empty_boundary",
+    "ns": 111,
+    "bytes": 0,
+    "checksum": "0000000000000000",
+    "calls": 1,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1525553,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1547175,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1394798,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1537551,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1417932,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1527656,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  },
+  {
+    "stage": "SelectionContrast.foreground",
+    "ns": 1399835,
+    "bytes": 0,
+    "checksum": "468d1d7121f50a90",
+    "calls": 65536,
+    "version": "candidate",
+    "fork": 2,
+    "mode": "hot"
+  }
+]

@@ -1,0 +1,635 @@
+{
+  "checks": {
+    "srgbLuminance": true,
+    "selectionForegroundWithIndication": true,
+    "SelectionContrast.foreground": true,
+    "first_use_including_lazy_loading": true,
+    "first_direct_call_after_init_including_linkage": true,
+    "baseline_table_count": true,
+    "candidate_table_count": true,
+    "source_unchanged_during_run": true
+  },
+  "summaries": {
+    "SelectionContrast.foreground": {
+      "baseline": {
+        "samples": 21,
+        "median_ns_per_call": 158.21759033203125,
+        "min_ns_per_call": 150.80108642578125,
+        "max_ns_per_call": 187.66397094726562,
+        "median_bytes_per_call": 0.0,
+        "max_bytes_per_call": 0.0,
+        "per_fork_median_ns_per_call": {
+          "0": 162.46771240234375,
+          "1": 156.09207153320312,
+          "2": 159.12686157226562
+        }
+      },
+      "candidate": {
+        "samples": 21,
+        "median_ns_per_call": 21.9019775390625,
+        "min_ns_per_call": 20.722702026367188,
+        "max_ns_per_call": 27.440811157226562,
+        "median_bytes_per_call": 0.0,
+        "max_bytes_per_call": 0.0,
+        "per_fork_median_ns_per_call": {
+          "0": 21.375534057617188,
+          "1": 22.137619018554688,
+          "2": 23.278091430664062
+        }
+      }
+    },
+    "empty_boundary": {
+      "baseline": {
+        "samples": 19,
+        "median_ns_per_call": 90.0,
+        "min_ns_per_call": 50.0,
+        "max_ns_per_call": 170.0,
+        "median_bytes_per_call": 0.0,
+        "max_bytes_per_call": 0.0,
+        "per_fork_median_ns_per_call": {
+          "0": 110.0,
+          "1": 90.0,
+          "2": 100.0,
+          "3": 65.0,
+          "4": 90.0
+        }
+      },
+      "candidate": {
+        "samples": 19,
+        "median_ns_per_call": 90.0,
+        "min_ns_per_call": 50.0,
+        "max_ns_per_call": 120.0,
+        "median_bytes_per_call": 0.0,
+        "max_bytes_per_call": 0.0,
+        "per_fork_median_ns_per_call": {
+          "0": 100.0,
+          "1": 90.0,
+          "2": 101.0,
+          "3": 70.0,
+          "4": 80.0
+        }
+      }
+    },
+    "first_direct_call_after_init_including_linkage": {
+      "baseline": {
+        "samples": 5,
+        "median_ns_per_call": 9344.0,
+        "min_ns_per_call": 6269.0,
+        "max_ns_per_call": 24256.0,
+        "median_bytes_per_call": 0.0,
+        "max_bytes_per_call": 0.0,
+        "per_fork_median_ns_per_call": {
+          "0": 10145.0,
+          "1": 9344.0,
+          "2": 9134.0,
+          "3": 6269.0,
+          "4": 24256.0
+        }
+      },
+      "candidate": {
+        "samples": 5,
+        "median_ns_per_call": 2694.0,
+        "min_ns_per_call": 2413.0,
+        "max_ns_per_call": 4967.0,
+        "median_bytes_per_call": 0.0,
+        "max_bytes_per_call": 0.0,
+        "per_fork_median_ns_per_call": {
+          "0": 4967.0,
+          "1": 4937.0,
+          "2": 2413.0,
+          "3": 2694.0,
+          "4": 2594.0
+        }
+      }
+    },
+    "first_use_including_lazy_loading": {
+      "baseline": {
+        "samples": 5,
+        "median_ns_per_call": 585967.0,
+        "min_ns_per_call": 517264.0,
+        "max_ns_per_call": 734429.0,
+        "median_bytes_per_call": 16048.0,
+        "max_bytes_per_call": 16048.0,
+        "per_fork_median_ns_per_call": {
+          "0": 556212.0,
+          "1": 517264.0,
+          "2": 585967.0,
+          "3": 617364.0,
+          "4": 734429.0
+        }
+      },
+      "candidate": {
+        "samples": 5,
+        "median_ns_per_call": 575932.0,
+        "min_ns_per_call": 548230.0,
+        "max_ns_per_call": 667549.0,
+        "median_bytes_per_call": 18456.0,
+        "max_bytes_per_call": 18456.0,
+        "per_fork_median_ns_per_call": {
+          "0": 584385.0,
+          "1": 575932.0,
+          "2": 548230.0,
+          "3": 667549.0,
+          "4": 567409.0
+        }
+      }
+    },
+    "initialized_class_control": {
+      "baseline": {
+        "samples": 5,
+        "median_ns_per_call": 40391.0,
+        "min_ns_per_call": 34061.0,
+        "max_ns_per_call": 56214.0,
+        "median_bytes_per_call": 0.0,
+        "max_bytes_per_call": 0.0,
+        "per_fork_median_ns_per_call": {
+          "0": 45328.0,
+          "1": 56214.0,
+          "2": 35523.0,
+          "3": 40391.0,
+          "4": 34061.0
+        }
+      },
+      "candidate": {
+        "samples": 5,
+        "median_ns_per_call": 42514.0,
+        "min_ns_per_call": 22073.0,
+        "max_ns_per_call": 57916.0,
+        "median_bytes_per_call": 0.0,
+        "max_bytes_per_call": 0.0,
+        "per_fork_median_ns_per_call": {
+          "0": 22073.0,
+          "1": 22384.0,
+          "2": 50165.0,
+          "3": 42514.0,
+          "4": 57916.0
+        }
+      }
+    },
+    "load_without_initialization": {
+      "baseline": {
+        "samples": 5,
+        "median_ns_per_call": 627338.0,
+        "min_ns_per_call": 478606.0,
+        "max_ns_per_call": 710534.0,
+        "median_bytes_per_call": 16112.0,
+        "max_bytes_per_call": 16112.0,
+        "per_fork_median_ns_per_call": {
+          "0": 666527.0,
+          "1": 710534.0,
+          "2": 627338.0,
+          "3": 478606.0,
+          "4": 554860.0
+        }
+      },
+      "candidate": {
+        "samples": 5,
+        "median_ns_per_call": 536773.0,
+        "min_ns_per_call": 437255.0,
+        "max_ns_per_call": 662301.0,
+        "median_bytes_per_call": 16456.0,
+        "max_bytes_per_call": 16456.0,
+        "per_fork_median_ns_per_call": {
+          "0": 604966.0,
+          "1": 662301.0,
+          "2": 437255.0,
+          "3": 536773.0,
+          "4": 463033.0
+        }
+      }
+    },
+    "reflection_metadata_before_init": {
+      "baseline": {
+        "samples": 5,
+        "median_ns_per_call": 165267.0,
+        "min_ns_per_call": 132328.0,
+        "max_ns_per_call": 207651.0,
+        "median_bytes_per_call": 4064.0,
+        "max_bytes_per_call": 4064.0,
+        "per_fork_median_ns_per_call": {
+          "0": 165267.0,
+          "1": 172177.0,
+          "2": 207651.0,
+          "3": 145959.0,
+          "4": 132328.0
+        }
+      },
+      "candidate": {
+        "samples": 5,
+        "median_ns_per_call": 204005.0,
+        "min_ns_per_call": 152628.0,
+        "max_ns_per_call": 212969.0,
+        "median_bytes_per_call": 4288.0,
+        "max_bytes_per_call": 4288.0,
+        "per_fork_median_ns_per_call": {
+          "0": 204005.0,
+          "1": 212969.0,
+          "2": 152628.0,
+          "3": 205888.0,
+          "4": 156464.0
+        }
+      }
+    },
+    "runtime_initialization": {
+      "baseline": {
+        "samples": 5,
+        "median_ns_per_call": 2363.0,
+        "min_ns_per_call": 1392.0,
+        "max_ns_per_call": 12949.0,
+        "median_bytes_per_call": 0.0,
+        "max_bytes_per_call": 0.0,
+        "per_fork_median_ns_per_call": {
+          "0": 2454.0,
+          "1": 2363.0,
+          "2": 12949.0,
+          "3": 1532.0,
+          "4": 1392.0
+        }
+      },
+      "candidate": {
+        "samples": 5,
+        "median_ns_per_call": 34281.0,
+        "min_ns_per_call": 31847.0,
+        "max_ns_per_call": 51997.0,
+        "median_bytes_per_call": 2064.0,
+        "max_bytes_per_call": 2064.0,
+        "per_fork_median_ns_per_call": {
+          "0": 50556.0,
+          "1": 51997.0,
+          "2": 34281.0,
+          "3": 31847.0,
+          "4": 32830.0
+        }
+      }
+    },
+    "selectionForegroundWithIndication": {
+      "baseline": {
+        "samples": 21,
+        "median_ns_per_call": 2757.0079956054688,
+        "min_ns_per_call": 2662.5062866210938,
+        "max_ns_per_call": 3017.7320556640625,
+        "median_bytes_per_call": 0.0,
+        "max_bytes_per_call": 0.0,
+        "per_fork_median_ns_per_call": {
+          "0": 2768.0860595703125,
+          "1": 2679.8472900390625,
+          "2": 2896.5375366210938
+        }
+      },
+      "candidate": {
+        "samples": 21,
+        "median_ns_per_call": 509.260009765625,
+        "min_ns_per_call": 494.95947265625,
+        "max_ns_per_call": 798.5440063476562,
+        "median_bytes_per_call": 0.0,
+        "max_bytes_per_call": 0.0,
+        "per_fork_median_ns_per_call": {
+          "0": 509.260009765625,
+          "1": 499.370361328125,
+          "2": 513.6441040039062
+        }
+      }
+    },
+    "srgbLuminance": {
+      "baseline": {
+        "samples": 21,
+        "median_ns_per_call": 46.54990005493164,
+        "min_ns_per_call": 44.91476058959961,
+        "max_ns_per_call": 52.741682052612305,
+        "median_bytes_per_call": 0.0,
+        "max_bytes_per_call": 0.0,
+        "per_fork_median_ns_per_call": {
+          "0": 47.063323974609375,
+          "1": 45.6932487487793,
+          "2": 46.32791328430176
+        }
+      },
+      "candidate": {
+        "samples": 21,
+        "median_ns_per_call": 0.9133281707763672,
+        "min_ns_per_call": 0.8808536529541016,
+        "max_ns_per_call": 1.0558300018310547,
+        "median_bytes_per_call": 0.0,
+        "max_bytes_per_call": 0.0,
+        "per_fork_median_ns_per_call": {
+          "0": 0.8855133056640625,
+          "1": 0.9164218902587891,
+          "2": 0.91455078125
+        }
+      }
+    }
+  },
+  "table_layout": [
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedOops",
+      "value": "true",
+      "version": "baseline",
+      "fork": 0,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedClassPointers",
+      "value": "true",
+      "version": "baseline",
+      "fork": 0,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "ObjectAlignmentInBytes",
+      "value": "8",
+      "version": "baseline",
+      "fork": 0,
+      "mode": "init"
+    },
+    {
+      "stage": "table_layout",
+      "field": "SRGB_CHANNEL_LUMINANCE",
+      "entries": 256,
+      "payload_bytes": 2048,
+      "shallow_and_primitive_graph_bytes": 2064,
+      "overhead_bytes": 16,
+      "checksum": "8101a6be3d5dab0c",
+      "version": "candidate",
+      "fork": 0,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedOops",
+      "value": "true",
+      "version": "candidate",
+      "fork": 0,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedClassPointers",
+      "value": "true",
+      "version": "candidate",
+      "fork": 0,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "ObjectAlignmentInBytes",
+      "value": "8",
+      "version": "candidate",
+      "fork": 0,
+      "mode": "init"
+    },
+    {
+      "stage": "table_layout",
+      "field": "SRGB_CHANNEL_LUMINANCE",
+      "entries": 256,
+      "payload_bytes": 2048,
+      "shallow_and_primitive_graph_bytes": 2064,
+      "overhead_bytes": 16,
+      "checksum": "8101a6be3d5dab0c",
+      "version": "candidate",
+      "fork": 1,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedOops",
+      "value": "true",
+      "version": "candidate",
+      "fork": 1,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedClassPointers",
+      "value": "true",
+      "version": "candidate",
+      "fork": 1,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "ObjectAlignmentInBytes",
+      "value": "8",
+      "version": "candidate",
+      "fork": 1,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedOops",
+      "value": "true",
+      "version": "baseline",
+      "fork": 1,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedClassPointers",
+      "value": "true",
+      "version": "baseline",
+      "fork": 1,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "ObjectAlignmentInBytes",
+      "value": "8",
+      "version": "baseline",
+      "fork": 1,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedOops",
+      "value": "true",
+      "version": "baseline",
+      "fork": 2,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedClassPointers",
+      "value": "true",
+      "version": "baseline",
+      "fork": 2,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "ObjectAlignmentInBytes",
+      "value": "8",
+      "version": "baseline",
+      "fork": 2,
+      "mode": "init"
+    },
+    {
+      "stage": "table_layout",
+      "field": "SRGB_CHANNEL_LUMINANCE",
+      "entries": 256,
+      "payload_bytes": 2048,
+      "shallow_and_primitive_graph_bytes": 2064,
+      "overhead_bytes": 16,
+      "checksum": "8101a6be3d5dab0c",
+      "version": "candidate",
+      "fork": 2,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedOops",
+      "value": "true",
+      "version": "candidate",
+      "fork": 2,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedClassPointers",
+      "value": "true",
+      "version": "candidate",
+      "fork": 2,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "ObjectAlignmentInBytes",
+      "value": "8",
+      "version": "candidate",
+      "fork": 2,
+      "mode": "init"
+    },
+    {
+      "stage": "table_layout",
+      "field": "SRGB_CHANNEL_LUMINANCE",
+      "entries": 256,
+      "payload_bytes": 2048,
+      "shallow_and_primitive_graph_bytes": 2064,
+      "overhead_bytes": 16,
+      "checksum": "8101a6be3d5dab0c",
+      "version": "candidate",
+      "fork": 3,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedOops",
+      "value": "true",
+      "version": "candidate",
+      "fork": 3,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedClassPointers",
+      "value": "true",
+      "version": "candidate",
+      "fork": 3,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "ObjectAlignmentInBytes",
+      "value": "8",
+      "version": "candidate",
+      "fork": 3,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedOops",
+      "value": "true",
+      "version": "baseline",
+      "fork": 3,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedClassPointers",
+      "value": "true",
+      "version": "baseline",
+      "fork": 3,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "ObjectAlignmentInBytes",
+      "value": "8",
+      "version": "baseline",
+      "fork": 3,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedOops",
+      "value": "true",
+      "version": "baseline",
+      "fork": 4,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedClassPointers",
+      "value": "true",
+      "version": "baseline",
+      "fork": 4,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "ObjectAlignmentInBytes",
+      "value": "8",
+      "version": "baseline",
+      "fork": 4,
+      "mode": "init"
+    },
+    {
+      "stage": "table_layout",
+      "field": "SRGB_CHANNEL_LUMINANCE",
+      "entries": 256,
+      "payload_bytes": 2048,
+      "shallow_and_primitive_graph_bytes": 2064,
+      "overhead_bytes": 16,
+      "checksum": "8101a6be3d5dab0c",
+      "version": "candidate",
+      "fork": 4,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedOops",
+      "value": "true",
+      "version": "candidate",
+      "fork": 4,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "UseCompressedClassPointers",
+      "value": "true",
+      "version": "candidate",
+      "fork": 4,
+      "mode": "init"
+    },
+    {
+      "stage": "vm_layout",
+      "option": "ObjectAlignmentInBytes",
+      "value": "8",
+      "version": "candidate",
+      "fork": 4,
+      "mode": "init"
+    }
+  ],
+  "limits": [
+    "HotSpot host measurements only; no phone/ART or performance acceptance claim.",
+    "Small sequential fork sample; scheduling, JIT, thermal/load and GC noise are uncontrolled.",
+    "Cold first-use includes VM lazy loading/linkage and first call; not process startup.",
+    "Isolated initialization preloads target metadata and warms JDK Math/initialization API.",
+    "Initialization includes residual ensureInitialized overhead; control is reported, not subtracted.",
+    "ThreadMXBean measures current-thread Java heap bytes, excluding native/metaspace/other-thread costs.",
+    "Instrumentation array size is HotSpot-specific; static reference/Class metadata excluded.",
+    "Hot samples include loop, checksum and fixed timing/counter overhead; no overhead subtraction.",
+    "Checksums support measurement integrity; focused bitwise/JUnit regression remains main-owned."
+  ]
+}

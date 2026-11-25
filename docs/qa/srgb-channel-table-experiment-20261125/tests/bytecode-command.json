@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "/workspace/android-toolchain/jdk/bin/javap",
+    "-classpath",
+    "/dev/shm/codex-srgb-channel-table-20261125/test-01/classes",
+    "-c",
+    "-p",
+    "smallthingz.ui.controls.SelectionContrastKt"
+  ],
+  "exit_code": 0,
+  "sha256": "67af98990e5118d4ec41aac696d6e450badef913542c9e8220bb9fc21b74df46"
+}

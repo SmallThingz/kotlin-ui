@@ -1,0 +1,18 @@
+{
+  "base_commit": "d3aced695a49d193f32edfb9abb21236c5147bfc",
+  "path": "src/main/kotlin/smallthingz/ui/controls/SelectionContrast.kt",
+  "base_sha256": "f986c8d61974b853c4ca4f091a8d366d26c804ba1b7ca4f93df318c6f661e675",
+  "candidate_sha256": "31c50eafd47a657516d7bde73dedd4896bd0dea66d4d218ac1d5fd555dbedea4",
+  "single_exact_block_replacement": true,
+  "remaining_file_byte_identical": true,
+  "rgb_weights_and_evaluation_order_unchanged": true,
+  "table_private_runtime_DoubleArray_entries": 256,
+  "tests": {
+    "channel_raw_bits": 256,
+    "full_argb_raw_bits": 10096,
+    "alpha_prefix_raw_bits": 4096,
+    "existing_contrast_tests": 11,
+    "new_tests": 3
+  },
+  "scope": "Same JVM formula/basis equivalence; no cross-runtime floating-point or phone performance acceptance."
+}

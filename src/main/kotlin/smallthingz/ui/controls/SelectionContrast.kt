@@ -85,11 +85,14 @@ class SelectionContrast(
     }
 }
 
+// Runtime evaluation preserves the channel formula without repeating it for each color.
+private val SRGB_CHANNEL_LUMINANCE = DoubleArray(256) { channel ->
+    val value = channel / 255.0
+    if (value <= .04045) value / 12.92 else ((value + .055) / 1.055).pow(2.4)
+}
+
 internal fun srgbLuminance(argb: Int): Double {
-    fun channel(shift: Int): Double {
-        val value = (argb ushr shift and 255) / 255.0
-        return if (value <= .04045) value / 12.92 else ((value + .055) / 1.055).pow(2.4)
-    }
+    fun channel(shift: Int): Double = SRGB_CHANNEL_LUMINANCE[argb ushr shift and 255]
     return .2126 * channel(16) + .7152 * channel(8) + .0722 * channel(0)
 }
 
