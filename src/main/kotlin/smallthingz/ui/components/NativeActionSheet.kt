@@ -88,7 +88,7 @@ class NativeActionSheet(
     closeIcon: NativeActionSheetIcon?,
     // Shared background spans the handle and content inside the sheet's shape clip.
     contentBackground: android.graphics.drawable.Drawable?,
-    private val statusBarProtection: NativeStatusBarProtection?,
+    statusBarProtection: NativeStatusBarProtection?,
     entryEdge: NativeDialogEdge,
 ):ComponentDialog(sheetWindowContext(anchor.context)) {
     constructor(
@@ -173,8 +173,11 @@ class NativeActionSheet(
         root,style,runtime,nested,pointer,dragNode::interested,accessibility,scrollEvents,::requestAnimatedDismiss,
         { !disposed && !animatedDismissRequested },
     )
+    private var statusBarProtection = statusBarProtection
+    private var latestInsets: WindowInsetsCompat? = null
     private val insets=NativeWindowInsetsBinding(root) {
-        statusBarProtection?.updateInsets(it)
+        latestInsets = it
+        this.statusBarProtection?.updateInsets(it)
         root.insets(it)
     }
     private var contentScroll:NativeVerticalPhaseBinding?=null
@@ -283,6 +286,21 @@ class NativeActionSheet(
         root.bindMaxWidth(next.recipe.maxWidthDp)
         updateWindowColors()
     }
+    /** Replace the foreground of this retained Window using its current status-bar insets. */
+    fun updateStatusBarProtection(next: NativeStatusBarProtection?) {
+        if (disposed || statusBarProtection === next) return
+        if (next != null) latestInsets?.let(next::updateInsets)
+        statusBarProtection = next
+        root.foreground = next
+        updateWindowColors()
+    }
+
+    internal fun updateStatusBarAppearance(resolve: (Context) -> NativeStatusBarAppearance) {
+        if (disposed) return
+        val next = resolve(anchor.context)
+        if (statusBarProtection?.appearance != next) updateStatusBarProtection(next.createProtection())
+    }
+
     /** Busy-policy correction: admission precedes M3's hide-then-callback path. */
     fun setDismissalAdmission(allowed:()->Boolean) {
         hasDismissalAdmission=true

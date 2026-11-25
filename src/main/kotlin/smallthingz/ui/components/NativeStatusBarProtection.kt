@@ -19,6 +19,14 @@ class NativeStatusBarProtection(
     background: Drawable,
     val darkIcons: Boolean = false,
 ) : DrawableWrapper(background) {
+    internal var appearance: NativeStatusBarAppearance? = null
+        private set
+
+    internal constructor(background: Drawable, appearance: NativeStatusBarAppearance) :
+        this(background, appearance.darkIcons) {
+        this.appearance = appearance
+    }
+
     private var statusInsets = Insets.NONE
 
     fun updateInsets(insets: WindowInsetsCompat) {

@@ -39,7 +39,23 @@ data class NativeStatusBarStyle(
     val grainSeed: Int? = NoiseDrawable.SEED_TOP_BAR,
 ) {
     fun create(palette: NativeColorScheme): NativeStatusBarProtection =
-        NativeStatusBarProtection(NoiseDrawable(palette.surface, grainSeed), darkIcons)
+        resolve(palette).createProtection()
+
+    internal fun resolve(
+        palette: NativeColorScheme,
+        preset: NativeSurfacePreset? = palette.surfacePreset,
+    ) = NativeStatusBarAppearance(palette.surface, grainSeed, preset?.backgroundGrain ?: 1f, darkIcons)
+}
+
+internal data class NativeStatusBarAppearance(
+    val surface: Int,
+    val grainSeed: Int?,
+    val backgroundGrain: Float,
+    val darkIcons: Boolean,
+) {
+    fun createProtection() = NativeStatusBarProtection(NoiseDrawable(surface, grainSeed).apply {
+        setNoiseIntensity(backgroundGrain)
+    }, this)
 }
 
 data class NativeActionSheetRecipe(

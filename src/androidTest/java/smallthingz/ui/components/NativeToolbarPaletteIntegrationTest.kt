@@ -1,0 +1,105 @@
+package smallthingz.ui.components
+
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.view.View
+import android.view.ViewGroup
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
+import org.junit.Test
+import org.junit.runner.RunWith
+import smallthingz.ui.graphics.NoiseDrawable
+import smallthingz.ui.graphics.noiseSurfaceRange
+import smallthingz.ui.reverb.ReverbBrowserChrome
+import smallthingz.ui.reverb.ReverbBrowserChromeAction
+import smallthingz.ui.reverb.ReverbBrowserChromeIcon
+import smallthingz.ui.reverb.ReverbDesign
+import smallthingz.ui.reverb.ReverbIcon
+import smallthingz.ui.reverb.ReverbTheme
+import smallthingz.ui.text.font.createFontFamilyResolver
+import smallthingz.ui.unit.Density
+import kotlin.math.roundToInt
+
+/** Palette ownership checks; no animation clock, texture readiness or window is required. */
+@RunWith(AndroidJUnit4::class)
+class NativeToolbarPaletteIntegrationTest {
+    private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
+    private val fill = 0xff596b7d.toInt()
+
+    @Test fun constructionAndPresetOnlyRebindKeepOneDrawableAndNotifyInk() = main {
+        val owner = View(instrumentation.targetContext)
+        val style = NativeToolbarStyle.Default
+        var notifications = 0
+        val binding = NativeToolbarBackground(owner, style, palette(0f)) { notifications++ }
+        val drawable = owner.background as NoiseDrawable
+        assertEquals(noiseSurfaceRange(fill, 0), drawable.paintedTextSurface)
+        assertEquals("Initial paint already has the requested grain", 0, notifications)
+        assertFlat(drawable)
+        for ((index, intensity) in listOf(.25f, 1f, 0f).withIndex()) {
+            binding.bind(style, palette(intensity))
+            assertSame(drawable, owner.background)
+            assertEquals(noiseSurfaceRange(fill, (intensity * 255).roundToInt()), drawable.paintedTextSurface)
+            assertEquals(index + 1, notifications)
+            binding.bind(style, palette(intensity))
+            assertEquals("Identical palette is a no-op", index + 1, notifications)
+        }
+    }
+
+    @Test fun paletteConstructionLegacyCallsAndNullSeedPreserveTheirContracts() = main {
+        val owner = View(instrumentation.targetContext)
+        val style = NativeToolbarStyle.Default
+        for (intensity in listOf(0f, .25f, 1f, null)) {
+            NativeToolbarBackground(owner, style, palette(intensity))
+            assertEquals(noiseSurfaceRange(fill, ((intensity ?: 1f) * 255).roundToInt()),
+                (owner.background as NoiseDrawable).paintedTextSurface)
+        }
+        // Keep both the old trailing-lambda constructor and old color-only bind callable.
+        val legacy = NativeToolbarBackground(owner, style, fill) {}
+        val drawable = owner.background as NoiseDrawable
+        assertEquals(noiseSurfaceRange(fill, 255), drawable.paintedTextSurface)
+        legacy.bind(style, fill, .25f)
+        assertEquals(noiseSurfaceRange(fill, 64), drawable.paintedTextSurface)
+        legacy.bind(style, fill)
+        assertEquals(noiseSurfaceRange(fill, 255), drawable.paintedTextSurface)
+        legacy.bind(style.copy(grainSeed = null), palette(1f))
+        assertSame(drawable, owner.background)
+        assertEquals(noiseSurfaceRange(fill, 0), drawable.paintedTextSurface)
+    }
+
+    @Test fun browserToolbarUsesSuppliedPaletteAndToolbarRecipeAtFirstPaint() = main {
+        val context = instrumentation.targetContext
+        val resolver = createFontFamilyResolver(context)
+        for ((intensity, seed) in listOf(0f to NoiseDrawable.SEED_TOP_BAR,
+            .25f to NoiseDrawable.SEED_TOP_BAR, 1f to null)) {
+            val appearance = ReverbDesign.appearance.copy(
+                toolbars = ReverbDesign.appearance.toolbars.copy(grainSeed = seed))
+            val theme = ReverbTheme(Density(1f), resolver, palette(intensity), appearance)
+            fun action(id: String) = ReverbBrowserChromeAction(id, id, ReverbBrowserChromeIcon.Shared(ReverbIcon.Save))
+            val chrome = ReverbBrowserChrome(context, theme, "Address", action("site"), action("tabs"), action("menu"))
+            try {
+                val toolbar = (chrome.chromeToolbar as ViewGroup).getChildAt(0)
+                val drawable = toolbar.background as NoiseDrawable
+                assertEquals(noiseSurfaceRange(fill, if (seed == null) 0 else (intensity * 255).roundToInt()),
+                    drawable.paintedTextSurface)
+                if (intensity == 0f || seed == null) assertFlat(drawable)
+            } finally { chrome.close() }
+        }
+    }
+
+    private fun palette(intensity: Float?) = NativeColorScheme.fallback(false).copy(surface = fill,
+        surfacePreset = intensity?.let { NativeGrainPreset(it, 1f - it) })
+
+    private fun assertFlat(drawable: NoiseDrawable) {
+        val bitmap = Bitmap.createBitmap(16, 8, Bitmap.Config.ARGB_8888)
+        try {
+            drawable.setBounds(0, 0, bitmap.width, bitmap.height)
+            drawable.draw(Canvas(bitmap))
+            for (y in 0 until bitmap.height) for (x in 0 until bitmap.width)
+                assertEquals(fill, bitmap.getPixel(x, y))
+        } finally { bitmap.recycle() }
+    }
+
+    private fun main(block: () -> Unit) = instrumentation.runOnMainSync { block() }
+}

@@ -91,6 +91,8 @@ open class NativeMaterialButtonView private constructor(
     private var closed = false
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
     internal val sampledContainerColor: Int get() = paint.color
+    internal val sampledContainerGrainIntensity: Float get() = grainIntensity
+    /** Also publishes preset-only changes, even before the first color bind. */
     internal var onContainerColorChanged: ((Int) -> Unit)? = null
     private var colorMotion: ViewColorTransition? = null
     private var grain: ViewGrain? = null
@@ -301,7 +303,7 @@ open class NativeMaterialButtonView private constructor(
         if (grainIntensity == intensity) return
         grainIntensity = intensity
         grain = bindGrainLayer(grain, intensity)
-        publishColors()
+        if (colorMotion == null) onContainerColorChanged?.invoke(paint.color) else publishColors()
     }
 
     override fun setEnabled(enabled: Boolean) {

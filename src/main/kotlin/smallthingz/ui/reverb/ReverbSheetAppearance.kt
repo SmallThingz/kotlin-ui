@@ -17,21 +17,23 @@ fun createReverbActionSheet(
     return NativeActionSheet(anchor, reverbActionSheetStyle(environment), title, onDismiss,
         closeIcon = null,
         contentBackground = null,
-        statusBarProtection = ReverbDesign.statusBarProtection(anchor.context))
+        statusBarProtection = ReverbDesign.statusBarProtection(anchor.context, environment))
 }
 
-fun NativeActionSheet.bindReverbTheme(environment: ReverbTheme) =
+fun NativeActionSheet.bindReverbTheme(environment: ReverbTheme) {
     updateStyle(reverbActionSheetStyle(environment))
+    updateStatusBarAppearance { ReverbDesign.statusBarAppearance(it, environment) }
+}
 
 fun reverbActionSheetStyle(theme: ReverbTheme): NativeActionSheetStyle =
     theme.appearance.modals.actionSheetStyle(theme.density, theme.fontResolver, theme.palette)
 
 internal fun createReverbSupportingParagraph(
     context: Context, text: String, role: NativeTypographyRole, theme: ReverbTheme,
-): ParagraphView = createReverbParagraph(context, text, role, theme.density, theme.fontResolver,
-    theme.palette.onSurfaceVariant)
+): ParagraphView = ParagraphView(context, theme.appearance.typography[role], theme.density, theme.fontResolver,
+    theme.palette.onSurfaceVariant).also { it.setText(text) }
 
 internal fun ReverbTheme.bindSupportingParagraph(view: ParagraphView, role: NativeTypographyRole) {
-    view.setTypography(ReverbDesign.appearance.typography[role], density, fontResolver)
+    view.setTypography(appearance.typography[role], density, fontResolver)
     view.animateTextColor(palette.onSurfaceVariant)
 }

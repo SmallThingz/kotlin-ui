@@ -12,12 +12,27 @@ import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
 
 /** Solid or textured retained toolbar fill. Only the fill color animates. */
-class NativeToolbarBackground(
-    view: View,
-    style: NativeToolbarStyle,
-    initialColor: Int,
-    onPaintChanged: () -> Unit = {},
-) : NativeBackdropBinding(view, style.grainSeed, initialColor, onPaintChanged) {
+class NativeToolbarBackground : NativeBackdropBinding {
+    /** Legacy color-only construction retains full-intensity grain. */
+    constructor(
+        view: View,
+        style: NativeToolbarStyle,
+        initialColor: Int,
+        onPaintChanged: () -> Unit = {},
+    ) : super(view, style.grainSeed, initialColor, onPaintChanged)
+
+    /** Resolve the fill and background grain together before the drawable is attached. */
+    constructor(
+        view: View,
+        style: NativeToolbarStyle,
+        palette: NativeColorScheme,
+        onPaintChanged: () -> Unit = {},
+    ) : super(view, style.grainSeed, style.backgroundColor(palette),
+        palette.surfacePreset?.backgroundGrain ?: 1f, onPaintChanged)
+
+    fun bind(style: NativeToolbarStyle, palette: NativeColorScheme) =
+        bind(style, style.backgroundColor(palette), palette.surfacePreset?.backgroundGrain ?: 1f)
+
     fun bind(style: NativeToolbarStyle, color: Int, grainIntensity: Float = 1f) =
         bind(style.grainSeed, color, grainIntensity)
 }

@@ -113,8 +113,8 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
         addView(LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            val recipe = ReverbDesign.appearance.toolbars
-            NativeToolbarBackground(this, recipe, recipe.backgroundColor(chromeTheme.palette)) { ReverbTextSurface.invalidate(this) }
+            val recipe = chromeTheme.appearance.toolbars
+            NativeToolbarBackground(this, recipe, chromeTheme.palette) { ReverbTextSurface.invalidate(this) }
             val inset = (recipe.centeredPaddingDp * chromeTheme.density.density).roundToInt()
             setPaddingRelative(inset, 0, inset, 0)
             addView(siteAction)

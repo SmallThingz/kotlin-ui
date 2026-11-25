@@ -34,6 +34,16 @@ object ReverbDesign {
         style.create(appearance.resolveColorScheme(context, darkTheme = !style.darkIcons))
     }
 
+    /** Resolve contrasting colors from this appearance, retaining any explicit window grain policy. */
+    fun statusBarProtection(context: Context, theme: ReverbTheme) =
+        statusBarAppearance(context, theme).createProtection()
+
+    internal fun statusBarAppearance(context: Context, theme: ReverbTheme) =
+        theme.appearance.modals.statusBar.let { style ->
+            val palette = theme.appearance.resolveColorScheme(context, darkTheme = !style.darkIcons)
+            style.resolve(palette, theme.palette.surfacePreset ?: palette.surfacePreset)
+        }
+
     fun theme(context: Context, dark: Boolean): ReverbTheme = windowTheme(
         Density(context), createFontFamilyResolver(context), appearance.resolveColorScheme(context, dark),
     )
