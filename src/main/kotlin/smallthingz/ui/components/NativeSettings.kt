@@ -74,9 +74,9 @@ open class NativeSettingsRow(
 ) : ViewGroup(context) {
     private val resolvedTitleStyle = style.titleTextStyle ?: NativeTextStyle(style.titleSizeSp, weight = style.titleWeight)
     private val resolvedDetailStyle = style.detailTextStyle ?: NativeTextStyle(style.detailSizeSp)
-    val titleView = NativeText(context, palette, resolvedTitleStyle)
-    val detailView = NativeText(context, palette, resolvedDetailStyle, NativeTextRole.MUTED)
-    val valueView = NativeText(context, palette, NativeTextStyle(style.valueSizeSp), NativeTextRole.MUTED)
+    val titleView = NativeText.forSettingsRow(context, palette, resolvedTitleStyle, NativeTextRole.CONTENT)
+    val detailView = NativeText.forSettingsRow(context, palette, resolvedDetailStyle, NativeTextRole.MUTED)
+    val valueView = NativeText.forSettingsRow(context, palette, NativeTextStyle(style.valueSizeSp), NativeTextRole.MUTED)
     private val iconView = ImageView(context)
     private val textColumn = LinearLayout(context)
     private var detailContent: View? = null
@@ -85,8 +85,9 @@ open class NativeSettingsRow(
     private val accessory = FrameLayout(context)
     private var action: (() -> Unit)? = null
     private var appliedPalette: ControlPalette? = null
-    private var appliedDensity = Float.NaN
-    private var appliedFontScale = Float.NaN
+    // The labels and initial row spacing already use this configuration.
+    private var appliedDensity = resources.displayMetrics.density
+    private var appliedFontScale = resources.configuration.fontScale
     private var initialized = false
     private var colorSurface:StateColorSurface?=null
     private var hasPublishedInk = false

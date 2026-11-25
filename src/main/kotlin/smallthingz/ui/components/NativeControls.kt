@@ -164,12 +164,20 @@ internal inline fun ControlPalette.roleColor(role: NativeTextRole): Int = when (
 }
 
 /** A retained native text node with shared typography and palette handling. */
-open class NativeText(
+open class NativeText private constructor(
     context: Context,
     palette: ControlPalette,
-    style: NativeTextStyle = NativeTextStyle(),
-    role: NativeTextRole = NativeTextRole.CONTENT,
+    style: NativeTextStyle,
+    role: NativeTextRole,
+    initializeOwnInk: Boolean,
 ) : TextView(context) {
+    constructor(
+        context: Context,
+        palette: ControlPalette,
+        style: NativeTextStyle = NativeTextStyle(),
+        role: NativeTextRole = NativeTextRole.CONTENT,
+    ) : this(context, palette, style, role, initializeOwnInk = true)
+
     private var componentPalette = palette
     private var componentStyle = style
     private var componentRole = role
@@ -177,7 +185,10 @@ open class NativeText(
     private var extraLineSpacingPx: Float? = null
     private var inkMotion:ViewColorTransition?=null
     private var inkTargets:ColorStateList?=null
-    init { refreshMetrics(); applyColor() }
+    init {
+        refreshMetrics()
+        if (initializeOwnInk) applyColor()
+    }
     /**
      * Retains additional natural line spacing in raw pixels, with multiplier 1.
      * An explicit [NativeTextStyle.lineHeightSp] takes precedence: this value remains dormant
@@ -260,6 +271,13 @@ open class NativeText(
     override fun drawableStateChanged() {
         super.drawableStateChanged()
         inkTargets?.let {inkMotion?.retarget(it.getColorForState(drawableState,it.defaultColor))}
+    }
+
+    internal companion object {
+        /** The row publishes its own sampled ink before the labels can attach. */
+        @JvmSynthetic
+        fun forSettingsRow(context: Context, palette: ControlPalette, style: NativeTextStyle, role: NativeTextRole) =
+            NativeText(context, palette, style, role, initializeOwnInk = false)
     }
 }
 
