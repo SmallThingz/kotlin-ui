@@ -63,6 +63,10 @@ class NativeMaterialSwitchView(
     private var trackWidth = 0
     private var trackHeight = 0
     private var borderWidth = 0f
+    /** Theme-aware construction shared by application and plugin controls. */
+    constructor(context: Context, scheme: NativeColorScheme, checked: Boolean = false, enabled: Boolean = true) :
+        this(context, scheme.switchPalette, checked, enabled) { bindSurfacePreset(scheme.surfacePreset) }
+
     private var customOutlineWidthDp: Float? = null
     private var customOutlineColor = 0
     private var sizeMotion: SwitchFloatMotion? = null
