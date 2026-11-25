@@ -16,6 +16,7 @@ import smallthingz.ui.components.NativeSurface
 import smallthingz.ui.components.NativeSurfaceStyle
 import smallthingz.ui.components.NativeText
 import smallthingz.ui.controls.ControlStyle
+import smallthingz.ui.input.DEFAULT_MINIMUM_TOUCH_TARGET_DP
 import smallthingz.ui.text.NativeTypographyRole
 import kotlin.math.roundToInt
 
@@ -48,7 +49,7 @@ class GalleryAlbumCover(context: Context, colors: NativeColorScheme, private val
         }, LinearLayout.LayoutParams(-1, 0, 1f))
         addView(captionShade, LinearLayout.LayoutParams(-1, 0))
     }
-    private val minimumTargetHeight = dp(48)
+    private val minimumTargetHeight = dp(DEFAULT_MINIMUM_TOUCH_TARGET_DP)
     private val caption = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
         setPaddingRelative(dp(12), dp(12), dp(12), dp(12))

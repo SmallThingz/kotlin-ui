@@ -4,8 +4,11 @@ import android.content.Context
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
+import smallthingz.ui.components.NativeButtonPalette
 import smallthingz.ui.components.NativeChoiceStyle
+import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeTextRole
+import smallthingz.ui.components.NativeUiAppearance
 import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.controls.ControlStyle
 import smallthingz.ui.text.NativeTypographyRole
@@ -24,7 +27,20 @@ object GalleryHealControlsStyle {
 
     /** Keep the existing Button, target, text layout and input-owner callbacks. */
     fun emphasizePreview(button: Button, palette: ControlPalette) {
-        ControlStyle(button.context, palette).applyButton(button, filled = true)
+        val colors = NativeButtonPalette(accent = palette.accent, onAccent = palette.onAccent,
+            content = palette.content, muted = palette.muted, quietSurface = palette.raised,
+            tonalSurface = palette.selection, onTonal = palette.content, errorSurface = palette.raised,
+            onError = palette.content, surfacePreset = palette.surfacePreset)
+        ControlStyle(button.context, palette).applyButton(button, GalleryDesign.appearance.buttons.filled, colors)
+    }
+
+    /** Use the window's appearance and all of its semantic button colors when available. */
+    fun emphasizePreview(
+        button: Button,
+        colors: NativeColorScheme,
+        appearance: NativeUiAppearance = GalleryDesign.appearance,
+    ) {
+        ControlStyle(button.context, colors.pageControls).applyButton(button, appearance.buttons.filled, colors.buttonPalette)
     }
 }
 

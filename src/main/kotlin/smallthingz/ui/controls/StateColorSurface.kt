@@ -70,7 +70,6 @@ class StateColorSurface(
     }
 
     private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
-    private val mask=GradientDrawable().apply {setColor(-1);cornerRadius=radiusPx}
     private val surface=object:Drawable() {
         private var opacity=255
         override fun isStateful()=true
@@ -98,7 +97,8 @@ class StateColorSurface(
         @Suppress("DEPRECATION") override fun getOpacity()=PixelFormat.TRANSLUCENT
     }
     private val motion=ViewColorTransition(view,colors(view.drawableState),{publish()})
-    val background=RippleDrawable(ColorStateList.valueOf(motion.color(3)),surface,mask)
+    val background = RippleDrawable(ColorStateList.valueOf(motion.color(3)), surface,
+        GradientDrawable().apply { setColor(-1); cornerRadius = radiusPx })
     private var publishedRippleColor = motion.color(3)
     internal val animatedRippleColor: Int get() = motion.color(3)
     internal fun foregroundOnSurface(preferred: Int, alternate: Int): Int =
@@ -119,7 +119,12 @@ class StateColorSurface(
         require(radiusPx.isFinite()&&radiusPx>=0f&&strokePx.isFinite()&&strokePx>=0f)
         fills=fill;strokes=stroke;inks=ink;ripples=ripple
         secondaryInks=secondaryInk;accentInks=accentInk;underlayColor=underlay
-        if(radius!=radiusPx){radius=radiusPx;mask.cornerRadius=radiusPx;view.invalidateOutline()}
+        if (radius != radiusPx) {
+            radius = radiusPx
+            // Applying a View background tint can mutate the ripple and clone its mask.
+            (background.findDrawableByLayerId(android.R.id.mask) as? GradientDrawable)?.cornerRadius = radiusPx
+            view.invalidateOutline()
+        }
         strokeWidth=strokePx
         retarget()
     }

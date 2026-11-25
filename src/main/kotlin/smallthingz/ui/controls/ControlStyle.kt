@@ -13,6 +13,8 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.TextView
 import smallthingz.ui.R
+import smallthingz.ui.components.NativeButtonPalette
+import smallthingz.ui.components.NativeButtonRecipe
 import kotlin.math.roundToInt
 
 /** Semantic colors supplied by the app's current theme, including contrast on its accent. */
@@ -144,6 +146,67 @@ class ControlStyle(context: Context, val palette: ControlPalette) {
         applied(button, BUTTON, filled, outlined, radius, surface)
     }
 
+    /** Paint a retained platform button from a native recipe, keeping its layout and input owner. */
+    internal fun applyButton(button: Button, recipe: NativeButtonRecipe, colors: NativeButtonPalette) {
+        val previous = button.getTag(R.id.native_ui_control_style)
+        val retained = previous as? RecipeButton
+        if (retained != null && retained.recipe == recipe && retained.colors == colors &&
+            retained.density == density && retained.underlay == palette.surface &&
+            button.background === retained.surface.background) return
+
+        retained?.let { button.removeOnLayoutChangeListener(it.layoutListener) }
+        (previous as? Applied)?.surface?.close()
+
+        val enabled = recipe.paint(enabled = true, emphasized = true)
+        val disabled = recipe.paint(enabled = false, emphasized = true)
+        val enabledInk = enabled.content.resolve(colors, enabled.contentOpacity)
+        val enabledIndication = enabled.indication?.resolve(colors) ?: enabledInk
+        val states = arrayOf(DISABLED, DEFAULT)
+        val fills = ColorStateList(states, intArrayOf(
+            disabled.container.resolve(colors, disabled.containerOpacity),
+            enabled.container.resolve(colors, enabled.containerOpacity),
+        ))
+        val inks = ColorStateList(states, intArrayOf(
+            disabled.content.resolve(colors, disabled.contentOpacity), enabledInk,
+        ))
+        val strokes = ColorStateList(arrayOf(DISABLED, FOCUSED, DEFAULT),
+            intArrayOf(Color.TRANSPARENT, enabledIndication, Color.TRANSPARENT))
+        val ripples = ColorStateList(states, intArrayOf(Color.TRANSPARENT,
+            withAlpha(enabledIndication, ((enabledIndication ushr 24) * 40 + 127) / 255)))
+        val radiusLimit = recipe.surface.radiusDp?.times(density) ?: Float.MAX_VALUE
+        fun radius(width: Int, height: Int) = minOf(radiusLimit, minOf(width, height) / 2f)
+        val strokeWidth = dp(1).coerceAtLeast(1).toFloat()
+        val surface = retained?.surface ?: StateColorSurface(button, fills, strokes, inks, ripples,
+            radius(button.width, button.height), strokeWidth, underlay = palette.surface) { ink, icon, _ ->
+            button.setTextColor(ink)
+            button.compoundDrawableTintList = ColorStateList.valueOf(icon)
+        }
+        fun bindRadius(width: Int, height: Int) {
+            surface.bind(fills, strokes, inks, ripples, radius(width, height), strokeWidth, underlay = palette.surface)
+        }
+        surface.setSurfacePreset(colors.surfacePreset)
+        bindRadius(button.width, button.height)
+        button.backgroundTintList = null
+        if (button.background !== surface.background) {
+            val start = button.paddingStart
+            val top = button.paddingTop
+            val end = button.paddingEnd
+            val bottom = button.paddingBottom
+            val relative = button.isPaddingRelative
+            val left = button.paddingLeft
+            val right = button.paddingRight
+            button.background = surface.background
+            if (relative) button.setPaddingRelative(start, top, end, bottom)
+            else button.setPadding(left, top, right, bottom)
+        }
+        val layoutListener = View.OnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
+            bindRadius(right - left, bottom - top)
+        }
+        button.addOnLayoutChangeListener(layoutListener)
+        button.setTag(R.id.native_ui_control_style,
+            RecipeButton(recipe, colors, density, palette.surface, surface, layoutListener))
+    }
+
     fun applyIcon(view: ImageView, filled: Boolean = false, radius: Int = 12) {
         if (alreadyApplied(view, ICON, filled, false, radius)) return
         view.backgroundTintList = null
@@ -187,7 +250,12 @@ class ControlStyle(context: Context, val palette: ControlPalette) {
     private fun surface(view:View,kind:Int,fill:ColorStateList,stroke:ColorStateList,ink:ColorStateList,
         ripple:ColorStateList,radius:Int,secondary:ColorStateList,accent:ColorStateList,
         publish:(Int,Int,Int)->Unit):StateColorSurface {
-        val previous=view.getTag(R.id.native_ui_control_style) as? Applied
+        val binding = view.getTag(R.id.native_ui_control_style)
+        if (binding is RecipeButton) {
+            view.removeOnLayoutChangeListener(binding.layoutListener)
+            binding.surface.close()
+        }
+        val previous = binding as? Applied
         val retained=previous?.surface?.takeIf {previous.kind==kind}
         if(retained==null)previous?.surface?.close()
         val result=retained ?: StateColorSurface(view,fill,stroke,ink,ripple,dp(radius).toFloat(),
@@ -210,6 +278,15 @@ class ControlStyle(context: Context, val palette: ControlPalette) {
     }
     private data class Applied(val kind: Int, val palette: ControlPalette, val density: Float,
                                val filled: Boolean, val outlined: Boolean, val radius: Int,val surface:StateColorSurface?=null)
+
+    private data class RecipeButton(
+        val recipe: NativeButtonRecipe,
+        val colors: NativeButtonPalette,
+        val density: Float,
+        val underlay: Int,
+        val surface: StateColorSurface,
+        val layoutListener: View.OnLayoutChangeListener,
+    )
 
     private companion object {
         const val BUTTON = 1; const val ICON = 2; const val INPUT = 3
