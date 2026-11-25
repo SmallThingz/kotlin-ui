@@ -17,6 +17,9 @@ import smallthingz.ui.controls.ControlPalette
  * Use a separate full-name control for selection or copying.
  *
  * Overflowing files keep their final extension when it fits with an ellipsis on the last line.
+ * A natural two-line break inside that extension moves the whole extension to line two
+ * when the measured result fits. Explicit bidi embedding/override/isolate controls exclude
+ * this natural-break adjustment, since adding a paragraph can change their ordering.
  * Directories, dotfiles, names without an eligible extension and names with explicit line
  * separators keep ordinary END ellipsis. A row that supplies its own full-name semantics can
  * mark this child as decorative.
@@ -76,21 +79,24 @@ class ZfmFilenameText(
         val raw = layout ?: return
         // DynamicLayout can retain backing lines past TextView's two visible lines.
         val rawLineCount = raw.lineCount
+        val atomicExtension = atomicExtensionText(raw)
         if (directory || rawLineCount < 2 ||
-            (rawLineCount == 2 && raw.getEllipsisCount(1) == 0)) return
+            (rawLineCount == 2 && raw.getEllipsisCount(1) == 0 && atomicExtension == null)) return
 
-        val fitted = suffixText(raw)
+        val fitted = atomicExtension ?: suffixText(raw)
         if (fitted != null) {
+            val direction = raw.getParagraphDirection(0)
             setDisplayText(fitted)
             super.onMeasure(widthMeasureSpec, heightMeasureSpec)
             val result = layout
-            val direction = raw.getParagraphDirection(0)
             // Shaping and wrapping can change after inserting a paragraph boundary.
             if (result == null || result.lineCount != 2 ||
                 result.getLineStart(1) != fitted.indexOf('\n') + 1 ||
-                result.getLineEnd(1) != fitted.length || result.getEllipsisCount(1) != 0 ||
+                result.getLineEnd(1) != fitted.length || result.getEllipsisCount(0) != 0 ||
+                result.getEllipsisCount(1) != 0 ||
                 result.getParagraphDirection(0) != direction ||
                 result.getParagraphDirection(1) != direction ||
+                result.getLineMax(0) > result.ellipsizedWidth ||
                 result.getLineMax(1) > result.ellipsizedWidth) {
                 setDisplayText(name)
                 super.onMeasure(widthMeasureSpec, heightMeasureSpec)
@@ -117,6 +123,22 @@ class ZfmFilenameText(
         } finally {
             ellipsize = mode
         }
+    }
+
+    private fun atomicExtensionText(raw: Layout): String? {
+        if (directory || raw.lineCount != 2 || raw.getEllipsisCount(0) != 0 ||
+            raw.getEllipsisCount(1) != 0) return null
+        val extension = name.lastIndexOf('.')
+        val split = raw.getLineEnd(0)
+        // Preserve the existing exclusion of all leading-dot names, not just extensionless ones.
+        if (name.startsWith('.') || extension !in 1 until name.lastIndex ||
+            split <= extension || split >= name.length ||
+            name.any { it == '\n' || it == '\r' || it == '\u2028' || it == '\u2029' ||
+                it in '\u202a'..'\u202e' || it in '\u2066'..'\u2069' }) return null
+
+        val mark = if (raw.getParagraphDirection(0) == Layout.DIR_RIGHT_TO_LEFT) '\u200f' else '\u200e'
+        // Unlike overflow fitting, natural wrapping must retain every basename character.
+        return name.substring(0, extension) + "\n" + mark + name.substring(extension)
     }
 
     private fun suffixText(raw: Layout): String? {
