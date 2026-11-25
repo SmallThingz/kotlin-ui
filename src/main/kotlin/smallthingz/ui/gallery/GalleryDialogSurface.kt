@@ -1,11 +1,26 @@
 package smallthingz.ui.gallery
 
 import android.content.Context
+import android.view.View.MeasureSpec
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeSurface
 import smallthingz.ui.components.NativeSurfaceStyle
 import smallthingz.ui.components.nativeTextStyle
 import smallthingz.ui.reverb.ReverbDesign
+
+/** Width includes dialog padding; both policies retain the host's available-width cap. */
+enum class GalleryDialogWidthPolicy {
+    Natural,
+    FillAvailable;
+
+    fun measureSpec(parentWidthSpec: Int, maximumWidthPx: Int): Int {
+        require(maximumWidthPx >= 0)
+        val width = if (MeasureSpec.getMode(parentWidthSpec) == MeasureSpec.UNSPECIFIED) maximumWidthPx
+            else minOf(maximumWidthPx, MeasureSpec.getSize(parentWidthSpec))
+        return MeasureSpec.makeMeasureSpec(width,
+            if (this == FillAvailable) MeasureSpec.EXACTLY else MeasureSpec.AT_MOST)
+    }
+}
 
 /** Gallery's centered content dialogs share the library's surfaces and typography. */
 class GalleryDialogSurface(context: Context, dark: Boolean) : NativeSurface(
