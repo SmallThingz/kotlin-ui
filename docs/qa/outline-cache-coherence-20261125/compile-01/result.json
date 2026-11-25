@@ -1,0 +1,249 @@
+{
+  "schema": 1,
+  "state": "terminal",
+  "base": "93bea5f2c412aadb600b06f97063a70dc39367d6",
+  "sources": [
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/worktree/src/main/kotlin/smallthingz/ui/components/NativeMaterialButtonView.kt",
+      "bytes": 21049,
+      "sha256": "fab0ce61e97f3be95abfabf543db7a8400b1b58749daa92cb7a65c99b8bdacac"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/worktree/src/androidTest/java/smallthingz/ui/components/NativeButtonOutlineLayoutIntegrationTest.kt",
+      "bytes": 14495,
+      "sha256": "c8d6e0483cac452b6a4266ccd27d7c3790a6ed05b4520fa2007f7c150ce2fd80"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/worktree/src/androidTest/java/smallthingz/ui/components/NativeMenuAccessibilityIntegrationTest.kt",
+      "bytes": 7609,
+      "sha256": "cc067652c22951292332256cac8f4692b33363a033bd606def05adaa1cce662b"
+    }
+  ],
+  "argv": [
+    "/workspace/android-toolchain/jdk/bin/java",
+    "-XX:-UsePerfData",
+    "-Xmx512m",
+    "-Djava.io.tmpdir=/dev/shm/codex-outline-coherence-20261125/compile-01/scratch",
+    "-cp",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.4.21/3cd9c37c505fb9879e03ebeaf91d9c9500ab6eca/kotlin-compiler-embeddable-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-build-tools-api/2.4.21/f5fd68c20ba38519b91ab2411b004a1730453d6f/kotlin-build-tools-api-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-script-runtime/2.4.21/abc7ff9f7e229cb6bdfadad81e93c871e6cdde41/kotlin-script-runtime-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-reflect/1.6.10/1cbe9c92c12a94eea200d23c2bbaedaf3daf5132/kotlin-reflect-1.6.10.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-daemon-embeddable/2.4.21/5d9b0394b3ff65cd3dd33c6c31a2956b1d59885a/kotlin-daemon-embeddable-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.8.0/ac1dc37a30a93150b704022f8d895ee1bd3a36b3/kotlinx-coroutines-core-jvm-1.8.0.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/23.0.0/8cc20c07506ec18e0834947b84a864bfc094484e/annotations-23.0.0.jar",
+    "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler",
+    "-no-stdlib",
+    "-no-reflect",
+    "-jvm-target",
+    "17",
+    "-Xfriend-paths=/workspace/control/.tmp/control-final-107/build-evidence/native-ui-release-runtime.jar",
+    "-classpath",
+    "/home/agent/.gradle/caches/9.8.2/transforms/0014b6bdd8da3ce67804914475b9f50b/transformed/annotation-experimental-1.4.1/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/047659ea040de7103e872bbd4278ce99/transformed/aidl-13.1.5/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/07081a68a147c97674259ae0fd9bc408/transformed/tracing-1.2.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/267fe072fdcff53828c8fde6873e66a2/transformed/navigationevent/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/27d4b4b1957a9255d0fb85f489a8dce2/transformed/lifecycle-runtime/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/282bd3d11cb56ba87386533335537d47/transformed/savedstate/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/2865be0f005c3b0fa170d73dcda7418c/transformed/shared-13.1.5/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/2ab3d5c235dd196e14c12aeec4fdbaf1/transformed/core-1.19.1/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/2ae7a10cf83ee7dd66c8bd880c3b6702/transformed/lifecycle-runtime-ktx/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/2fdc15d6935c75ee7b1dab83502c78fc/transformed/webkit-1.18.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/3f552eb8c18abb4adcd88f968843bcee/transformed/core-ktx-1.19.1/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/44517fd9bbd0c312b27591687b48ed20/transformed/recyclerview-1.4.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/608a7c397930371162d4404210003205/transformed/lifecycle-livedata-core-2.10.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/6c2a578156ef17054b4cfde72aafc653/transformed/lifecycle-process-2.10.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/73e51fbcdc30d3cd25720ab998bace18/transformed/profileinstaller-1.4.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/73fe2614f621368592cf9b0cf35141f4/transformed/lifecycle-viewmodel-savedstate/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/76b09bf1ae039c665d61c53bb50ed331/transformed/startup-runtime-1.2.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/7f621289703b1eaa517cdfe37aad8dea/transformed/savedstate-ktx-1.4.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/8dc7fe43a548f7d2440ff9b5c18168f0/transformed/activity-ktx-1.13.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/8e8dbbe8c996a93c1dc797b70fcd8854/transformed/core-runtime-2.2.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/965cecb580c9f1933ee50016cd5627a9/transformed/versionedparcelable-1.1.1/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/99b091da9cbe1f2961cd8e9b1e2ef5cf/transformed/api-13.1.5/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/9eb0310ff526765b4f5a081e3dab1b23/transformed/lifecycle-viewmodel/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/a7364de7514cf22b5b0738fde4bdea80/transformed/activity-1.13.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/b57c52a78ffcf62bead9466e281fedbc/transformed/customview-poolingcontainer-1.0.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/b899b955be50ea286db7e722ed5aeff6/transformed/interpolator-1.0.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/cd07711e71adb875d6c4b12f17143c93/transformed/runtime-annotation/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/d3c9ed4bd301e95b85c18887bd22a666/transformed/emoji2-1.4.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/d3c9ed4bd301e95b85c18887bd22a666/transformed/emoji2-1.4.0/jars/libs/repackaged.jar:/home/agent/.gradle/caches/9.8.2/transforms/d9312537817cabdd70bb2d6cb501bcc5/transformed/lifecycle-viewmodel-ktx-2.10.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/d9a3a418b86a5ad75e0cbf9e1f9cd0aa/transformed/core-viewtree-1.0.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/e7896062a07d4ac3440acf425b9f73ef/transformed/provider-13.1.5/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/f5767e80fd253006cbe6d538476ebfcc/transformed/okhttp/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/fd7ca5d3ebcd90748fd5af948eb063b9/transformed/customview-1.0.0/jars/classes.jar:/home/agent/.gradle/caches/modules-2/files-2.1/androidx.annotation/annotation-jvm/1.10.0/388cfaa79001d0f024d28f6a13d5a3dfc2f0e18f/annotation-jvm-1.10.0.jar:/home/agent/.gradle/caches/modules-2/files-2.1/androidx.arch.core/core-common/2.2.0/5e1b8b81dfd5f52c56a8d53b18ca759c19a301f3/core-common-2.2.0.jar:/home/agent/.gradle/caches/modules-2/files-2.1/androidx.collection/collection-jvm/1.4.2/bc60b5568a66d765a9fe8e266fd0c6c727e0b50b/collection-jvm-1.4.2.jar:/home/agent/.gradle/caches/modules-2/files-2.1/androidx.concurrent/concurrent-futures/1.1.0/50b7fb98350d5f42a4e49704b03278542293ba48/concurrent-futures-1.1.0.jar:/home/agent/.gradle/caches/modules-2/files-2.1/androidx.lifecycle/lifecycle-common-jvm/2.10.0/2b7a92c746f3339efc533a2da0024e596760f816/lifecycle-common-jvm-2.10.0.jar:/home/agent/.gradle/caches/modules-2/files-2.1/com.chaquo.python.runtime/chaquopy_java/17.2.0/5ad39ab4974c49416dab58ef5797aa5cf4efaee3/chaquopy_java-17.2.0.jar:/home/agent/.gradle/caches/modules-2/files-2.1/com.google.guava/listenablefuture/1.0/c949a840a6acbc5268d088e47b04177bf90b3cad/listenablefuture-1.0.jar:/home/agent/.gradle/caches/modules-2/files-2.1/com.squareup.okio/okio-jvm/3.18.1/a3a8128bb3a0157d23ecc18c17e8330d9c0ac96c/okio-jvm-3.18.1.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-android/1.9.0/6cf3b8df5a2ce8c6b0dffe55657a827c405ee2fe/kotlinx-coroutines-android-1.9.0.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.9.0/9beade4c1c1569e4f36cbd2c37e02e3e41502601/kotlinx-coroutines-core-jvm-1.9.0.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-serialization-core-jvm/1.7.3/1f226780b845ff9206474c05159245d861556249/kotlinx-serialization-core-jvm-1.7.3.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/23.0.0/8cc20c07506ec18e0834947b84a864bfc094484e/annotations-23.0.0.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.jspecify/jspecify/1.0.0/7425a601c1c7ec76645a78d22b8c6a627edee507/jspecify-1.0.0.jar:/home/agent/.gradle/caches/9.8.2/transforms/9c5a641c45a3344b507fad009f9424e3/transformed/monitor-1.8.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/b60bf656d0f58bca47191d75d28f8f58/transformed/runner-1.7.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/cfd357b5262536825d0278b37595acbe/transformed/core-1.7.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/d79f793f0b2b31246512b2b2927fe02a/transformed/junit-1.3.0/jars/classes.jar:/home/agent/.gradle/caches/9.8.2/transforms/e542006d36f516e37b8d81a4d13bd2b7/transformed/storage-1.6.0/jars/classes.jar:/home/agent/.gradle/caches/modules-2/files-2.1/androidx.concurrent/concurrent-futures-ktx/1.2.0/13b49fdb58c74bdfb12eb131b5e22d6d09683e30/concurrent-futures-ktx-1.2.0.jar:/home/agent/.gradle/caches/modules-2/files-2.1/junit/junit/4.13.2/8ac9e16d933b6fb43bc7f576336b8f4d7eb5ba12/junit-4.13.2.jar:/home/agent/.gradle/caches/modules-2/files-2.1/org.hamcrest/hamcrest-core/1.3/42a25dc3219429f0e5d060061f71acb49bf010a0/hamcrest-core-1.3.jar:/workspace/android-toolchain/sdk/platforms/android-37.0/android.jar:/workspace/android-toolchain/sdk/platforms/android-37.0/optional/android.test.base.jar:/workspace/android-toolchain/sdk/platforms/android-37.0/optional/android.test.runner.jar:/workspace/control/.tmp/control-final-107/build-evidence/native-ui-release-runtime.jar",
+    "-d",
+    "/dev/shm/codex-outline-coherence-20261125/compile-01/classes",
+    "/dev/shm/codex-outline-coherence-20261125/worktree/src/main/kotlin/smallthingz/ui/components/NativeMaterialButtonView.kt",
+    "/dev/shm/codex-outline-coherence-20261125/worktree/src/androidTest/java/smallthingz/ui/components/NativeButtonOutlineLayoutIntegrationTest.kt",
+    "/dev/shm/codex-outline-coherence-20261125/worktree/src/androidTest/java/smallthingz/ui/components/NativeMenuAccessibilityIntegrationTest.kt"
+  ],
+  "tools_origin": {
+    "path": "/dev/shm/kotlin-ui-segmented-spacing-halley-20261125/.tmp/segmented-spacing-review/compile-02/result.json",
+    "bytes": 28979,
+    "sha256": "15f4c0e25d5e8e2b0fd8a8770f62c2e7b462f5b3dabe8041c8689047dd255eed"
+  },
+  "dependencies": {
+    "/home/agent/.gradle/caches/9.8.2/transforms/0014b6bdd8da3ce67804914475b9f50b/transformed/annotation-experimental-1.4.1/jars/classes.jar": "f97daae3e5fa12312593041412661117b7d82fa70ff2a1db45bb7092f1ce19ee",
+    "/home/agent/.gradle/caches/9.8.2/transforms/047659ea040de7103e872bbd4278ce99/transformed/aidl-13.1.5/jars/classes.jar": "584945c98f21b0c4e3ccdb74b51528f89852174c30bb2a4786c43a8ca456e496",
+    "/home/agent/.gradle/caches/9.8.2/transforms/07081a68a147c97674259ae0fd9bc408/transformed/tracing-1.2.0/jars/classes.jar": "ba2884d7e9f4e315fe99de295592280a8846a4c8bb4b7eefa5ed1aa52d6b468b",
+    "/home/agent/.gradle/caches/9.8.2/transforms/267fe072fdcff53828c8fde6873e66a2/transformed/navigationevent/jars/classes.jar": "525d5f988236caa7985497e48614fd5db27b4c456998381af704c343d52e97c1",
+    "/home/agent/.gradle/caches/9.8.2/transforms/27d4b4b1957a9255d0fb85f489a8dce2/transformed/lifecycle-runtime/jars/classes.jar": "78bbca42d83262eef1fbb3062cc2422b5e01fc1417f4242d0200d6b532576966",
+    "/home/agent/.gradle/caches/9.8.2/transforms/282bd3d11cb56ba87386533335537d47/transformed/savedstate/jars/classes.jar": "70e718fd5b47a440622e4ee587a137c865faeff3acb175a6a3db4aa58a90011f",
+    "/home/agent/.gradle/caches/9.8.2/transforms/2865be0f005c3b0fa170d73dcda7418c/transformed/shared-13.1.5/jars/classes.jar": "8557b8c715d374f8da18e148ca5b971d1c7435e91447e6d4f7664403c7328760",
+    "/home/agent/.gradle/caches/9.8.2/transforms/2ab3d5c235dd196e14c12aeec4fdbaf1/transformed/core-1.19.1/jars/classes.jar": "c970a9157d81e045f085f807d1054b8b63ab3e4a1725d9f1bb24c84241ff4ac3",
+    "/home/agent/.gradle/caches/9.8.2/transforms/2ae7a10cf83ee7dd66c8bd880c3b6702/transformed/lifecycle-runtime-ktx/jars/classes.jar": "428e6953adc645011962394427abf09d0e15904b7f189f9469f876ae238f0a05",
+    "/home/agent/.gradle/caches/9.8.2/transforms/2fdc15d6935c75ee7b1dab83502c78fc/transformed/webkit-1.18.0/jars/classes.jar": "2b8112e33c3d5a801628a59948a700875d52e368ac9ca0781a1c2bf295a836a2",
+    "/home/agent/.gradle/caches/9.8.2/transforms/3f552eb8c18abb4adcd88f968843bcee/transformed/core-ktx-1.19.1/jars/classes.jar": "5b414190ff0fa5186477105e86e8c6badcf7854c4d07801f906946120c4853a7",
+    "/home/agent/.gradle/caches/9.8.2/transforms/44517fd9bbd0c312b27591687b48ed20/transformed/recyclerview-1.4.0/jars/classes.jar": "081050e5e99f7be94009b60575aae3f298366a6b51b92f1d9d8d94643a1e57c0",
+    "/home/agent/.gradle/caches/9.8.2/transforms/608a7c397930371162d4404210003205/transformed/lifecycle-livedata-core-2.10.0/jars/classes.jar": "ea8c05ab1d133b3a4abe9c8122dcde6119f387634974d2642d93f9406253b48e",
+    "/home/agent/.gradle/caches/9.8.2/transforms/6c2a578156ef17054b4cfde72aafc653/transformed/lifecycle-process-2.10.0/jars/classes.jar": "491d87b762e32e6fb36735f26723dd6af8959fb1b060a10daa726b1b9086f241",
+    "/home/agent/.gradle/caches/9.8.2/transforms/73e51fbcdc30d3cd25720ab998bace18/transformed/profileinstaller-1.4.0/jars/classes.jar": "4f5b02cc0ad1d10380a7764bdecb7d881e1202007c5633fd6618bb7ce6d32eb4",
+    "/home/agent/.gradle/caches/9.8.2/transforms/73fe2614f621368592cf9b0cf35141f4/transformed/lifecycle-viewmodel-savedstate/jars/classes.jar": "26c47dc21d76709e1cd8b2996ec5fe01e6b35ce6573936c959f76bc3e340de8e",
+    "/home/agent/.gradle/caches/9.8.2/transforms/76b09bf1ae039c665d61c53bb50ed331/transformed/startup-runtime-1.2.0/jars/classes.jar": "c7049a3503ba8b9d68de20719a045b5dcc11f2a9086edb1d1b6cd9487d7cc5e6",
+    "/home/agent/.gradle/caches/9.8.2/transforms/7f621289703b1eaa517cdfe37aad8dea/transformed/savedstate-ktx-1.4.0/jars/classes.jar": "2c3fb2fb23e3f9d300881e1e1d61789d923797f3f5a8b43a86ab3adad8c59dcb",
+    "/home/agent/.gradle/caches/9.8.2/transforms/8dc7fe43a548f7d2440ff9b5c18168f0/transformed/activity-ktx-1.13.0/jars/classes.jar": "27f9d13cbb14946f50bc1797537c40121f619ee86ad9a6d6c6994d6c863fabfc",
+    "/home/agent/.gradle/caches/9.8.2/transforms/8e8dbbe8c996a93c1dc797b70fcd8854/transformed/core-runtime-2.2.0/jars/classes.jar": "c57bea6797743219c1cacafcee2c835f79390996bca44f090f21f9a32810a549",
+    "/home/agent/.gradle/caches/9.8.2/transforms/965cecb580c9f1933ee50016cd5627a9/transformed/versionedparcelable-1.1.1/jars/classes.jar": "4733ce6afbb1c7941989ae581ca7bfc28925c0afc8f91c3e5f5f0500da6c9f83",
+    "/home/agent/.gradle/caches/9.8.2/transforms/99b091da9cbe1f2961cd8e9b1e2ef5cf/transformed/api-13.1.5/jars/classes.jar": "4315fcd853f487321548be5a997749fe43105fa29aaaa6f6e7a8cdc958a38357",
+    "/home/agent/.gradle/caches/9.8.2/transforms/9eb0310ff526765b4f5a081e3dab1b23/transformed/lifecycle-viewmodel/jars/classes.jar": "00d20868d48eda5be85a3f88ae5ad911b64d5746660b7190fa5316b8c807e356",
+    "/home/agent/.gradle/caches/9.8.2/transforms/a7364de7514cf22b5b0738fde4bdea80/transformed/activity-1.13.0/jars/classes.jar": "10b1ce80d96f5eba6bf930e7233145636beff49598c72261300a7b5f18471c61",
+    "/home/agent/.gradle/caches/9.8.2/transforms/b57c52a78ffcf62bead9466e281fedbc/transformed/customview-poolingcontainer-1.0.0/jars/classes.jar": "0690e2d3b17755c30c52246078e82fa3f448ab652ca0f0f72da00a8c75c81d5f",
+    "/home/agent/.gradle/caches/9.8.2/transforms/b899b955be50ea286db7e722ed5aeff6/transformed/interpolator-1.0.0/jars/classes.jar": "041d65e8566445b97a2ae741227ce05ab6783c783a83e6fb173d8abc9eabd55b",
+    "/home/agent/.gradle/caches/9.8.2/transforms/cd07711e71adb875d6c4b12f17143c93/transformed/runtime-annotation/jars/classes.jar": "c948b55857fee443e063b90df40b400ae804f27fe18b4e034f7ffa8c4b6cb984",
+    "/home/agent/.gradle/caches/9.8.2/transforms/d3c9ed4bd301e95b85c18887bd22a666/transformed/emoji2-1.4.0/jars/classes.jar": "3754ea9040ac7b657cf61a91ca707f6b90122f5ffac54bb871fcdc3234605652",
+    "/home/agent/.gradle/caches/9.8.2/transforms/d3c9ed4bd301e95b85c18887bd22a666/transformed/emoji2-1.4.0/jars/libs/repackaged.jar": "de10d78b35a33c1ade2607b63c29b3b70a856cad821b5bc711a9018eed9a43ab",
+    "/home/agent/.gradle/caches/9.8.2/transforms/d9312537817cabdd70bb2d6cb501bcc5/transformed/lifecycle-viewmodel-ktx-2.10.0/jars/classes.jar": "e5ec0e428993b81d86236221196d23637681fcbbdd5d5a2c7ef5f89eca78edb8",
+    "/home/agent/.gradle/caches/9.8.2/transforms/d9a3a418b86a5ad75e0cbf9e1f9cd0aa/transformed/core-viewtree-1.0.0/jars/classes.jar": "0979a3d91da3a70dc42b5660d1d382424d2482b947a87f7a88ae1989622cdfd0",
+    "/home/agent/.gradle/caches/9.8.2/transforms/e7896062a07d4ac3440acf425b9f73ef/transformed/provider-13.1.5/jars/classes.jar": "35aee86b938cb8d06b315c9d73c30f41ec7cfdc10009a5de83733bc5c4db5051",
+    "/home/agent/.gradle/caches/9.8.2/transforms/f5767e80fd253006cbe6d538476ebfcc/transformed/okhttp/jars/classes.jar": "1dc59d283780d37a351698cc7b6f790fe8dab522c2a048541e625296bdf6e837",
+    "/home/agent/.gradle/caches/9.8.2/transforms/fd7ca5d3ebcd90748fd5af948eb063b9/transformed/customview-1.0.0/jars/classes.jar": "319f904d5ee4b9fa9d4f0755fcc8549a0dd9a576510648e3e31afe10c2cf8fc0",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/androidx.annotation/annotation-jvm/1.10.0/388cfaa79001d0f024d28f6a13d5a3dfc2f0e18f/annotation-jvm-1.10.0.jar": "ddd072ddbb553178e205517ce777b2f05aa9e412982d9ecb4eedc74f1212f697",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/androidx.arch.core/core-common/2.2.0/5e1b8b81dfd5f52c56a8d53b18ca759c19a301f3/core-common-2.2.0.jar": "65308a06b1c00ee186cb9e19321383f043b993813f1522c47f4a3e3303bdba41",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/androidx.collection/collection-jvm/1.4.2/bc60b5568a66d765a9fe8e266fd0c6c727e0b50b/collection-jvm-1.4.2.jar": "984ce9bd780055eafb8a105aca3f514686bf7b1b6272ec7c645a98ce40fc7db4",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/androidx.concurrent/concurrent-futures/1.1.0/50b7fb98350d5f42a4e49704b03278542293ba48/concurrent-futures-1.1.0.jar": "0ce067c514a0d1049d1bebdf709e344ed3266fe9744275682937cdcb13334e9e",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/androidx.lifecycle/lifecycle-common-jvm/2.10.0/2b7a92c746f3339efc533a2da0024e596760f816/lifecycle-common-jvm-2.10.0.jar": "15943082d87bcd78830398fa377f2c8b12643de290d0906ed8e49a2d335ddb54",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/com.chaquo.python.runtime/chaquopy_java/17.2.0/5ad39ab4974c49416dab58ef5797aa5cf4efaee3/chaquopy_java-17.2.0.jar": "9cf6f66ba74f89e334f9da3ffade49cfd3f48ed06030557299087216d7054c35",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/com.google.guava/listenablefuture/1.0/c949a840a6acbc5268d088e47b04177bf90b3cad/listenablefuture-1.0.jar": "e4ad7607e5c0477c6f890ef26a49cb8d1bb4dffb650bab4502afee64644e3069",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/com.squareup.okio/okio-jvm/3.18.1/a3a8128bb3a0157d23ecc18c17e8330d9c0ac96c/okio-jvm-3.18.1.jar": "b97b640557a650d15411f2be29aef558c4e422a83653cb18ba494311dbed18be",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar": "bd8250210584cb659847dce9cda660f8e9906e5def7fbebcea93dc6dcb6a88a3",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-android/1.9.0/6cf3b8df5a2ce8c6b0dffe55657a827c405ee2fe/kotlinx-coroutines-android-1.9.0.jar": "bd783acd2f9738845d58380f46f45b5cde95d0cb03027d56725338b26bfc4d72",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.9.0/9beade4c1c1569e4f36cbd2c37e02e3e41502601/kotlinx-coroutines-core-jvm-1.9.0.jar": "ad89c2892235e670f222d819cb3d81188143cb19a05b59df9889ae4269f5c70a",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-serialization-core-jvm/1.7.3/1f226780b845ff9206474c05159245d861556249/kotlinx-serialization-core-jvm-1.7.3.jar": "f0adde45864144475385cf4aa7e0b7feb27f61fcf9472665ed98cc971b06b1eb",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/23.0.0/8cc20c07506ec18e0834947b84a864bfc094484e/annotations-23.0.0.jar": "7b0f19724082cbfcbc66e5abea2b9bc92cf08a1ea11e191933ed43801eb3cd05",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jspecify/jspecify/1.0.0/7425a601c1c7ec76645a78d22b8c6a627edee507/jspecify-1.0.0.jar": "1fad6e6be7557781e4d33729d49ae1cdc8fdda6fe477bb0cc68ce351eafdfbab",
+    "/home/agent/.gradle/caches/9.8.2/transforms/9c5a641c45a3344b507fad009f9424e3/transformed/monitor-1.8.0/jars/classes.jar": "343391452abb133d044d8e5665ef2e2e670412a5c8a0f0ee992db9ecea7c7896",
+    "/home/agent/.gradle/caches/9.8.2/transforms/b60bf656d0f58bca47191d75d28f8f58/transformed/runner-1.7.0/jars/classes.jar": "bec1e1be4f387386c44eaa2c71c35f7aa47ed08519eecea580c1de9231b9d9b5",
+    "/home/agent/.gradle/caches/9.8.2/transforms/cfd357b5262536825d0278b37595acbe/transformed/core-1.7.0/jars/classes.jar": "0d897808fd493386a74364d21b2ae39b9becf7f92040a8ff770aa4af95340384",
+    "/home/agent/.gradle/caches/9.8.2/transforms/d79f793f0b2b31246512b2b2927fe02a/transformed/junit-1.3.0/jars/classes.jar": "2f0bfe0da0188f67f6f6024ef92e536ddb5aed7e8db4c4bddd16b1dc3275b55d",
+    "/home/agent/.gradle/caches/9.8.2/transforms/e542006d36f516e37b8d81a4d13bd2b7/transformed/storage-1.6.0/jars/classes.jar": "a82a1ec613932393d7931ec0e2e202b9257e58a0021bd53771462c81cc2a9035",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/androidx.concurrent/concurrent-futures-ktx/1.2.0/13b49fdb58c74bdfb12eb131b5e22d6d09683e30/concurrent-futures-ktx-1.2.0.jar": "e1f3e17bb4358ccd6c77ca45f70635c9aba237261f19eaa4f64a0218c00e2a3e",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/junit/junit/4.13.2/8ac9e16d933b6fb43bc7f576336b8f4d7eb5ba12/junit-4.13.2.jar": "8e495b634469d64fb8acfa3495a065cbacc8a0fff55ce1e31007be4c16dc57d3",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.hamcrest/hamcrest-core/1.3/42a25dc3219429f0e5d060061f71acb49bf010a0/hamcrest-core-1.3.jar": "66fdef91e9739348df7a096aa384a5685f4e875584cce89386a7a47251c4d8e9",
+    "/workspace/android-toolchain/sdk/platforms/android-37.0/android.jar": "bf1b4387cc7ca94fc6ef684f040d9d16fbf16248e181819f020736ea2053f177",
+    "/workspace/android-toolchain/sdk/platforms/android-37.0/optional/android.test.base.jar": "39cba5b2c198aadcbefc450fd0edd3e913162236669043dd634bc3eb196a7c4d",
+    "/workspace/android-toolchain/sdk/platforms/android-37.0/optional/android.test.runner.jar": "9d37c9386454ac3e530a8a8ddce897524b573ff6f19cf30d68fb586984e367d5",
+    "/workspace/control/.tmp/control-final-107/build-evidence/native-ui-release-runtime.jar": "16d04846ed578f0a26c1c5fb749f8c55461941579a35b88308640de10f04df03"
+  },
+  "compiler_inputs": {
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.4.21/3cd9c37c505fb9879e03ebeaf91d9c9500ab6eca/kotlin-compiler-embeddable-2.4.21.jar": "ef19419c765e7ac8404465fa026ca8fc4dbb8a822de0fc79aa53c8dce29f1d02",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-build-tools-api/2.4.21/f5fd68c20ba38519b91ab2411b004a1730453d6f/kotlin-build-tools-api-2.4.21.jar": "c5cd6a49bd072b529ae10809111c16a7aa0f92147e95d288354017fd65799461",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.21/c343e135bd1e7dd94b7ed76b4159068d888d09db/kotlin-stdlib-2.4.21.jar": "bd8250210584cb659847dce9cda660f8e9906e5def7fbebcea93dc6dcb6a88a3",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-script-runtime/2.4.21/abc7ff9f7e229cb6bdfadad81e93c871e6cdde41/kotlin-script-runtime-2.4.21.jar": "a658cf5902a1525a06c264a5e42b437e97a6679ddeef8ca641246f270cf6a013",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-reflect/1.6.10/1cbe9c92c12a94eea200d23c2bbaedaf3daf5132/kotlin-reflect-1.6.10.jar": "3277ac102ae17aad10a55abec75ff5696c8d109790396434b496e75087854203",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-daemon-embeddable/2.4.21/5d9b0394b3ff65cd3dd33c6c31a2956b1d59885a/kotlin-daemon-embeddable-2.4.21.jar": "7b3ef24674e5bcffcadfc4e43202ea314194939ecbcdd90a4770b2f1b04e0d07",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlinx/kotlinx-coroutines-core-jvm/1.8.0/ac1dc37a30a93150b704022f8d895ee1bd3a36b3/kotlinx-coroutines-core-jvm-1.8.0.jar": "9860906a1937490bf5f3b06d2f0e10ef451e65b95b269f22daf68a3d1f5065c5",
+    "/home/agent/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/23.0.0/8cc20c07506ec18e0834947b84a864bfc094484e/annotations-23.0.0.jar": "7b0f19724082cbfcbc66e5abea2b9bc92cf08a1ea11e191933ed43801eb3cd05"
+  },
+  "java": {
+    "path": "/workspace/android-toolchain/jdk/bin/java",
+    "sha256": "75fc4bd3b528a2058a94fa2249a620c73c0717d652e9a072be1e13ba2fcc10dc",
+    "bytes": 12328
+  },
+  "device_actions": false,
+  "apk_build": false,
+  "tests_executed": false,
+  "compute_timeout": null,
+  "limits": "Selected files compiled against retained historical e17 APIs, not a whole-library build. Mounted Android tests remain NOT_RUN.",
+  "exit_code": 0,
+  "stdout": {
+    "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/stdout.log",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "stderr": {
+    "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/stderr.log",
+    "bytes": 1749,
+    "sha256": "ec77dd5b4f881c7e1d90414fe62d36aa4c7ddd2ecef41dfaea2d89af60115fd6"
+  },
+  "classfiles": [
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeButtonOutlineLayoutIntegrationTest$Companion.class",
+      "bytes": 1571,
+      "sha256": "857b33d5202ab32ebfb7974f7a8cff6cee41bb4565759da5f751dd0a24855e23"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeButtonOutlineLayoutIntegrationTest$Fixture.class",
+      "bytes": 7980,
+      "sha256": "a20830a3c208676249c9decf3250a51340254577f6a1cd983476856c577af345"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeButtonOutlineLayoutIntegrationTest$QueryDensity.class",
+      "bytes": 3026,
+      "sha256": "317f6cd4312e94853f913e8f01a70a597e0370fe6667c8ba8752a0ed4a890287"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeButtonOutlineLayoutIntegrationTest$QueryMeter.class",
+      "bytes": 4172,
+      "sha256": "9815b7e8355f79ab21447c484bbb807305e0c2e35b32961cebb6d5f881b282c5"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeButtonOutlineLayoutIntegrationTest$customButtonAndContentProvidersRemainIndependentAndReturnToOwnedRefreshes$1$custom$1.class",
+      "bytes": 1977,
+      "sha256": "8d7c8398f4bd5896ba592d487ee9bb1e947a899b219668c96276376617d43938"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeButtonOutlineLayoutIntegrationTest$customButtonAndContentProvidersRemainIndependentAndReturnToOwnedRefreshes$1$replacement$1.class",
+      "bytes": 1480,
+      "sha256": "2abb39ea5a928a6f3d3e7bd525e19f7b42119d3e0ee5288d0ed1f77c96689092"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeButtonOutlineLayoutIntegrationTest$failedReturnToOwnedProviderCannotReuseAPreviousLayoutKey$1$1.class",
+      "bytes": 1509,
+      "sha256": "047c66649962e2bffe029578c7ddde1bc92aa8534094832d631c2eb7bb8bf2c2"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeButtonOutlineLayoutIntegrationTest.class",
+      "bytes": 18803,
+      "sha256": "a43dcec3245922d5626bd7edb7ad06774708ca8ff6fe2ce823336b9441759b2d"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeMaterialButtonStyle.class",
+      "bytes": 6049,
+      "sha256": "1b02e03793c8235090958f6ed81362f68f7aadd16d4404572abb21ee1b964f05"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeMaterialButtonView$OutlineGeometry.class",
+      "bytes": 1912,
+      "sha256": "bf3b90028c312949fb803dd0e1e2ab0994e5ed46bc3811141abf80200fbceb95"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeMaterialButtonView$bind$motion$1.class",
+      "bytes": 1384,
+      "sha256": "e4887b8e189ec64631feeb9bc231a7fdfadca289f91e121e824021c17d7d30f2"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeMaterialButtonView$content$1.class",
+      "bytes": 7766,
+      "sha256": "a99aab63b573e41b2dbd420536bb620bb07d235f42bb8b488ba2afc34d827b5d"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeMaterialButtonView$shape$1.class",
+      "bytes": 2627,
+      "sha256": "ad413bc33989bc8e6f40e814eb043c811710e5c54920d7fc05776a3ad86be518"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeMaterialButtonView.class",
+      "bytes": 39003,
+      "sha256": "7e36854cebb0120387a3fe9b2d86e32afa1b0b9656da58baf7694ebc59b43e21"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeMenuAccessibilityIntegrationTest$duplicateLabelsKeepTypedSelectionAndClickIdentity$1$1.class",
+      "bytes": 1363,
+      "sha256": "fdd1e4bfe3f8380c5799ab0fce90c6bdab520aebbc035aec88a632abc4f9f825"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeMenuAccessibilityIntegrationTest$duplicateLabelsKeepTypedSelectionAndClickIdentity$1$Choice.class",
+      "bytes": 3176,
+      "sha256": "6991d89f016fb9564a1b23f845b13b0a2c351a96d11e3945de59a03eee151539"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeMenuAccessibilityIntegrationTest$icons$1.class",
+      "bytes": 2572,
+      "sha256": "ee48dcb8b33e59e8419a97c564f66fcbe825d02f82b95017621a89704de09b6c"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeMenuAccessibilityIntegrationTest$reboundSelectionAndActionReusePublishOnlyChangedSelection$1$3.class",
+      "bytes": 2531,
+      "sha256": "5bd9c783744346a12d7f6af58051782786bd8decdd38f57e15c8d6a1c0852a57"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeMenuAccessibilityIntegrationTest$withAttachedColumn$attachment$1.class",
+      "bytes": 1624,
+      "sha256": "5116436556e212f02f1050e4e7b4c8321840ad78735e2417bf743a11b10b74f3"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeMenuAccessibilityIntegrationTest.class",
+      "bytes": 20605,
+      "sha256": "169f0cb9fd9e194436c6fb0d9c6695c538a6da8d6c080bf6e99512f4254c5e96"
+    },
+    {
+      "path": "/dev/shm/codex-outline-coherence-20261125/compile-01/classes/smallthingz/ui/components/NativeMenuAccessibilityTestActivity.class",
+      "bytes": 605,
+      "sha256": "f464e0cb81ad9b56b8309395cccb5b85e2d7b930e7ee47bf039dae8860e185fd"
+    }
+  ],
+  "sources_unchanged": true
+}

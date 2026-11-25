@@ -1,0 +1,16 @@
+PASS density ABA delivered outline button
+FAIL failed custom to owned delivered outline button: recovered owned delivered: 3.0 != 8.0
+PASS external refresh dirties only target button
+PASS direct sample cannot relabel delivered intermediate button
+PASS custom null identity fallback button
+PASS density ABA delivered outline content
+FAIL failed custom to owned delivered outline content: recovered owned delivered: 3.0 != 8.0
+PASS external refresh dirties only target content
+PASS direct sample cannot relabel delivered intermediate content
+PASS custom null identity fallback content
+PASS stable geometry retains child role and input work
+PASS nonfinite density and radius never cache
+PASS layout failure before callback cannot commit key
+PASS external failure after callback cannot retain key
+PASS attachment framework rebuild clears old key
+RESULT cases=15 assertions=70 failures=2

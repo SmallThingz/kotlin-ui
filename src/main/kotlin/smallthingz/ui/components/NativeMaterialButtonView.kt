@@ -178,8 +178,45 @@ open class NativeMaterialButtonView private constructor(
     protected open fun mergedActionDescription(): CharSequence? = null
     private val shape = object : ViewOutlineProvider() {
         override fun getOutline(view: View, outline: Outline) {
+            // Refreshes outside onLayout (including failed ones) invalidate its last-layout key.
+            // Clear before reading density; only a successful layout invalidation commits a key.
+            when {
+                view === this@NativeMaterialButtonView -> buttonOutlineGeometry.valid = false
+                view === content -> contentOutlineGeometry.valid = false
+            }
             outline.setRoundRect(0, 0, view.width, view.height, radius(view.width, view.height))
         }
+    }
+    private class OutlineGeometry {
+        var valid = false
+        var width = 0
+        var height = 0
+        var density = 0f
+        var radius = 0f
+    }
+    private val buttonOutlineGeometry = OutlineGeometry()
+    private val contentOutlineGeometry = OutlineGeometry()
+
+    private fun invalidateLayoutOutline(view: View, previous: OutlineGeometry) {
+        if (view.outlineProvider !== shape) {
+            previous.valid = false
+            view.invalidateOutline()
+            return
+        }
+        val width = view.width
+        val height = view.height
+        val density = layoutDensity
+        val radius = radius(width, height)
+        val finite = density.isFinite() && radius.isFinite()
+        if (finite && previous.valid && previous.width == width && previous.height == height &&
+            previous.density == density && previous.radius == radius) return
+        previous.valid = false
+        view.invalidateOutline()
+        previous.width = width
+        previous.height = height
+        previous.density = density
+        previous.radius = radius
+        previous.valid = finite
     }
     init {
         setWillNotDraw(false)
@@ -383,8 +420,8 @@ open class NativeMaterialButtonView private constructor(
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         content.layout(0, 0, width, height)
         mergedRowAccessibility.roleView.layout(0, 0, width, height)
-        invalidateOutline()
-        content.invalidateOutline()
+        invalidateLayoutOutline(this, buttonOutlineGeometry)
+        invalidateLayoutOutline(content, contentOutlineGeometry)
         input.measured()
     }
     override fun onDraw(canvas: Canvas) {

@@ -75,6 +75,8 @@ data class NativeChoiceStyle(
     val trailingIconSizeDp: Float = 18f,
     /** Shared color timing by default; false snaps state changes while palette changes still animate. */
     val animateSelection: Boolean = true,
+    /** Optional selected-focus ink; null preserves the existing accent outline. */
+    val focusedSelectedOutline: NativeChoiceColor? = null,
 ) {
     init {
         require(floatArrayOf(radiusDp, minHeightDp, textSizeSp, horizontalPaddingDp,
@@ -701,7 +703,7 @@ class NativeChip(
             if (selectedOutlined) choiceStyle.disabledSelectedOutline?.resolve(currentPalette)
                 ?: choiceStyle.disabledOutline?.resolve(currentPalette) ?: currentPalette.outline else 0,
             if (unselectedOutlined) choiceStyle.disabledOutline?.resolve(currentPalette) ?: currentPalette.outline else 0,
-            currentPalette.accent, currentPalette.accent,
+            choiceStyle.focusedSelectedOutline?.resolve(currentPalette) ?: currentPalette.accent, currentPalette.accent,
             if (selectedOutlined) selectedOutline else 0, if (unselectedOutlined) currentPalette.outline else 0))
         val indication = selectionIndication(selectedFill,currentPalette.surface,defaultSelectedInk(),currentPalette.accent)
         val ripple = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_selected), intArrayOf()),

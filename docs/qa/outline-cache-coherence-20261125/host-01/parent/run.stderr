@@ -1,0 +1,3 @@
+Exception in thread "main" java.lang.IllegalStateException: 10 failed cases
+	at OutlineCoherenceControlsKt.main(OutlineCoherenceControls.kt:218)
+	at OutlineCoherenceControlsKt.main(OutlineCoherenceControls.kt)
