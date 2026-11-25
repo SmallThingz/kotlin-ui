@@ -6,6 +6,7 @@ import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
@@ -18,6 +19,32 @@ import kotlin.math.roundToInt
 /** Detached geometry/local focus only; no media, activity launch or global configuration changes. */
 @RunWith(AndroidJUnit4::class)
 class GalleryViewerActionsIntegrationTest {
+    private fun assertLabelFits(row: GalleryViewerActions, action: TextView, scenario: String) {
+        val text = checkNotNull(action.layout)
+        val content = row.getChildAt(0)
+        assertTrue("Complete label must fit: $scenario label=${action.text} " +
+            "font=${action.resources.configuration.fontScale} direction=${row.layoutDirection} " +
+            "row=${row.width}x${row.height} measured=${row.measuredWidth}x${row.measuredHeight} " +
+            "content=${content.width}x${content.height} measured=${content.measuredWidth}x${content.measuredHeight} " +
+            "action=${action.width}x${action.height} measured=${action.measuredWidth}x${action.measuredHeight} " +
+            "text=${text.width}x${text.height} lines=${text.lineCount} textSize=${action.textSize} " +
+            "padding=${action.paddingLeft},${action.paddingTop},${action.paddingRight},${action.paddingBottom} " +
+            "compoundPadding=${action.compoundPaddingLeft},${action.compoundPaddingTop}," +
+            "${action.compoundPaddingRight},${action.compoundPaddingBottom} " +
+            "layoutRequested=${row.isLayoutRequested}/${content.isLayoutRequested}/${action.isLayoutRequested}",
+            text.height <= action.height - action.compoundPaddingTop - action.compoundPaddingBottom)
+    }
+
+    private fun focusLaidOutDetachedAction(action: View) {
+        assertFalse("Focus fixture must stay detached", action.isAttachedToWindow)
+        assertTrue("Production action must already support focus", action.isFocusable && action.isEnabled)
+        assertTrue("Focus requires initial fixture geometry", action.isLaidOut && action.width > 0 && action.height > 0)
+        // Detached views can inherit the device's default touch mode. Opt in only on
+        // this fixture node: test retained local focus without changing system input mode.
+        action.isFocusableInTouchMode = true
+        assertTrue("Laid-out detached action must acquire local focus", action.requestFocus())
+    }
+
     @Test fun equalSlotsRetainActionsAcrossFontDirectionCompactAndNarrowViewport() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.runOnMainSync {
@@ -57,7 +84,7 @@ class GalleryViewerActionsIntegrationTest {
                                 assertEquals("An unbroken action name must not split", 1, textLayout.lineCount)
                                 assertEquals(action.text.length, textLayout.getLineEnd(textLayout.lineCount - 1))
                                 for (line in 0 until textLayout.lineCount) assertEquals(0, textLayout.getEllipsisCount(line))
-                                assertTrue(textLayout.height <= action.height - action.compoundPaddingTop - action.compoundPaddingBottom)
+                                assertLabelFits(row, action, "compact=$compact widthDp=$width")
                             }
                             assertFalse(actions[2].isEnabled)
                             assertTrue(actions[2].isSelected)
@@ -98,7 +125,10 @@ class GalleryViewerActionsIntegrationTest {
                 val textSizes = actions.map { it.textSize }
                 val more = actions.last()
                 try {
-                    assertTrue(more.requestFocus())
+                    row.measure(View.MeasureSpec.makeMeasureSpec(dp(384), View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+                    row.layout(0, 0, row.measuredWidth, row.measuredHeight)
+                    focusLaidOutDetachedAction(more)
                     for (compact in listOf(false, true, false)) {
                         row.setCompact(compact)
                         for (width in listOf(384, 240, 800, 384)) {
@@ -131,7 +161,7 @@ class GalleryViewerActionsIntegrationTest {
                                     assertEquals(action.text.length, text.getLineEnd(0))
                                     assertTrue(text.getLineWidth(0) <= action.width -
                                         action.compoundPaddingLeft - action.compoundPaddingRight + .5f)
-                                    assertTrue(text.height <= action.height - action.compoundPaddingTop - action.compoundPaddingBottom)
+                                    assertLabelFits(row, action, "compact=$compact widthDp=$width")
                                 }
                             }
                             assertTrue(actions[2].isSelected)
@@ -185,7 +215,7 @@ class GalleryViewerActionsIntegrationTest {
                 assertEquals("copy", save.text.subSequence(text.getLineStart(1), text.getLineEnd(1)).toString().trim())
                 assertEquals(0, text.getEllipsisCount(0))
                 assertEquals(0, text.getEllipsisCount(1))
-                assertTrue(text.height <= save.height - save.compoundPaddingTop - save.compoundPaddingBottom)
+                assertLabelFits(row, save, "compact=false widthPx=${2 * slot} multiword")
             } finally { save.close(); more.close() }
         }
     }
@@ -219,7 +249,7 @@ class GalleryViewerActionsIntegrationTest {
                 val ids = actions.map { it.id }
                 val sizes = actions.map { it.textSize }
                 try {
-                    assertTrue(actions.last().requestFocus())
+                    var focusInitialized = false
                     // First populate the cache, then change only the retained views'
                     // text locale, then return. No resource or system locale mutation.
                     for (locale in listOf(Locale.US, hebrew, Locale.US)) {
@@ -236,6 +266,10 @@ class GalleryViewerActionsIntegrationTest {
                         row.measure(View.MeasureSpec.makeMeasureSpec(viewport, View.MeasureSpec.EXACTLY),
                             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
                         row.layout(0, 0, row.measuredWidth, row.measuredHeight)
+                        if (!focusInitialized) {
+                            focusLaidOutDetachedAction(actions.last())
+                            focusInitialized = true
+                        }
                         val content = row.getChildAt(0) as ViewGroup
                         assertEquals(2 * slot, content.width)
                         assertTrue(content.width > row.width)
@@ -249,7 +283,7 @@ class GalleryViewerActionsIntegrationTest {
                             assertEquals(0, text.getEllipsisCount(line))
                             assertTrue(text.getLineWidth(line) <= save.width - save.compoundPaddingLeft - save.compoundPaddingRight + .5f)
                         }
-                        assertTrue(text.height <= save.height - save.compoundPaddingTop - save.compoundPaddingBottom)
+                        assertLabelFits(row, save, "compact=false widthPx=$viewport locale=$locale")
                         actions.forEachIndexed { index, action ->
                             assertSame(action, content.getChildAt(index))
                             assertEquals(locale, action.textLocale)
