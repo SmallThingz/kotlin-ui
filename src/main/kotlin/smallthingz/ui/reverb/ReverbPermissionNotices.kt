@@ -3,7 +3,9 @@ package smallthingz.ui.reverb
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.ScrollView
+import smallthingz.ui.components.NativeDividerLayout
 import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.atMost
 import smallthingz.ui.components.exact
@@ -30,8 +32,16 @@ class ReverbPermissionNotices(
     private var closed = false
     private val recipe = environment.appearance.groupSurfaces.settingsWarning
     private val group = recipe.create(context, ReverbTextSurface::invalidate).also { recipe.bind(it, environment.palette) }
-    private val details = NativeGroupLayout(context, 0f).apply { visibility = View.GONE }
-    private val scrollContent = NativeGroupLayout(context, 0f)
+    // Layout-only content leaves paint and text-underlay ownership with the warning group.
+    private val details = NativeDividerLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        clipChildren = false
+        visibility = View.GONE
+    }
+    private val scrollContent = NativeDividerLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        clipChildren = false
+    }
     private val viewport = ScrollView(context).apply { addView(scrollContent) }
     private val summary = NoticeRow(context) {
         if (!closed && reverbInformationInputAllowed(view)) {
@@ -40,8 +50,8 @@ class ReverbPermissionNotices(
         }
     }
     init {
-        scrollContent.addRow(summary, NativeGroupLayout.LayoutParams(-1, -2))
-        scrollContent.addRow(details, NativeGroupLayout.LayoutParams(-1, -2).apply { dividerTop = true })
+        scrollContent.addView(summary, NativeGroupLayout.LayoutParams(-1, -2))
+        scrollContent.addView(details, NativeGroupLayout.LayoutParams(-1, -2).apply { dividerTop = true })
         group.addRow(viewport, NativeGroupLayout.LayoutParams(-1, -1))
     }
     val view: ViewGroup = object : ViewGroup(context) {
@@ -86,7 +96,7 @@ class ReverbPermissionNotices(
         val next = state.items
         // Keep unchanged rows attached so a live refresh does not steal keyboard/TalkBack focus.
         rows.keys.filter { key -> next.none { it.kind == key } }.toList().forEach { key ->
-            rows.remove(key)?.let { details.removeRow(it); it.close() }
+            rows.remove(key)?.let { details.removeView(it); it.close() }
         }
         next.forEachIndexed { index, item ->
             val row = rows.getOrPut(item.kind) {
@@ -94,7 +104,7 @@ class ReverbPermissionNotices(
                     val expected = state.revision
                     if (!closed && state.admits(item.kind, expected) && reverbInformationInputAllowed(view) &&
                         state.admits(item.kind, expected) && state.expanded) onRequest(item.kind)
-                }.also { details.addRow(index, it, NativeGroupLayout.LayoutParams(-1, -2)) }
+                }.also { details.addView(it, index, NativeGroupLayout.LayoutParams(-1, -2)) }
             }
             row.bind("${item.title}\n${item.detail}", item.requestLabel,
                 view.context.getString(smallthingz.ui.R.string.reverb_settings_background_review),
@@ -177,7 +187,7 @@ class ReverbPermissionNotices(
         closed = true
         focusLease.close()
         state.bind(emptyList(), false)
-        rows.values.forEach { details.removeRow(it); it.close() }
+        rows.values.forEach { details.removeView(it); it.close() }
         summary.close()
         rows.clear()
         view.visibility = View.GONE
