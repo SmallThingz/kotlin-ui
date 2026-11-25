@@ -1,5 +1,6 @@
 package smallthingz.ui.components
 
+import android.content.Context
 import android.graphics.Rect
 import android.text.Editable
 import android.text.InputType
@@ -14,6 +15,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.reverb.ReverbApplicationWidgets
 import smallthingz.ui.reverb.ReverbDesign
+import smallthingz.ui.reverb.ReverbEnvironment
+import smallthingz.ui.unit.Density
 import kotlin.math.roundToInt
 
 /** Local measurement/binding only. No Activity/window, IME, input injection or accessibility service. */
@@ -83,6 +86,58 @@ class ReverbApplicationWidgetsIntegrationTest {
             first.performClick()
             assertEquals(0, callbacks)
         } finally { first.close(); second.close() }
+    }
+
+    @Test fun quickTileLoadingInsetRebindRoundsEachEdgeAndSaturatesExtremeSizes() = instrumentation.runOnMainSync {
+        val context = instrumentation.targetContext
+        val base = ReverbEnvironment(context, false)
+        val appearance = base.appearance
+        fun environment(insetDp: Int) = ReverbEnvironment.withTestAppearance(
+            Density(1.5f), base.sharedFontResolver, base.palette,
+            appearance.copy(quickTiles = appearance.quickTiles.copy(loadingRowInsetDp = insetDp)),
+        )
+
+        val section = LoadingTileSection(context, environment(16))
+        val row = section.inset
+        val content = row.content
+        val unbounded = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        fun assertGeometry(edgePx: Int) {
+            row.measure(unbounded, unbounded)
+            row.layout(0, 0, row.measuredWidth, row.measuredHeight)
+            assertSame(row, section.inset)
+            assertSame(content, row.getChildAt(0))
+            assertEquals(content.measuredWidth + 2 * edgePx, row.measuredWidth)
+            assertEquals(content.measuredHeight + 2 * edgePx, row.measuredHeight)
+            assertEquals(edgePx, content.left)
+            assertEquals(edgePx, content.top)
+        }
+
+        assertGeometry(24)
+        section.rebind(environment(7))
+        assertTrue(row.isLayoutRequested)
+        assertGeometry(11) // Round 10.5 px on each edge before adding the two edges.
+
+        section.rebind(environment(Int.MAX_VALUE))
+        row.measure(unbounded, unbounded)
+        assertEquals(View.MEASURED_SIZE_MASK, row.measuredWidthAndState)
+        assertEquals(View.MEASURED_SIZE_MASK, row.measuredHeightAndState)
+        val bounded = View.MeasureSpec.makeMeasureSpec(120, View.MeasureSpec.AT_MOST)
+        row.measure(bounded, unbounded)
+        assertEquals(120, row.measuredWidth)
+        assertEquals(0, content.measuredWidth)
+
+        section.rebind(environment(7))
+        assertGeometry(11)
+    }
+
+    private class LoadingTileSection(context: Context, environment: ReverbEnvironment) :
+        NativeQuickTileSectionLayout(context, environment, "Tiles", "Loading", "Apply first", { null }, {}, {}) {
+        val inset get() = loadingRow
+
+        fun rebind(environment: ReverbEnvironment) {
+            bindListAppearance(environment)
+            bindLoading()
+        }
     }
 
     private fun ViewGroup.descendants(): Sequence<View> = sequence {

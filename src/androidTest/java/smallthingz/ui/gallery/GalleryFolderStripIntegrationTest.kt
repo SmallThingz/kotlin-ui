@@ -12,6 +12,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeSurface
 import smallthingz.ui.components.NativeText
+import smallthingz.ui.graphics.noiseSurfaceRange
 import kotlin.math.roundToInt
 
 /** Detached production geometry only: no Activity, device input or global configuration changes. */
@@ -59,6 +60,9 @@ class GalleryFolderStripIntegrationTest {
     @Test fun singleFolderUsesViewportAndShortFoldersKeepNaturalWidth() = main {
         val single = Fixture(2f, 160, View.LAYOUT_DIRECTION_LTR, listOf(longLabel))
         single.layout(320)
+        val palette = single.palette
+        val grainAlpha = (checkNotNull(palette.surfacePreset).foregroundGrain * 255f).roundToInt()
+        assertEquals(noiseSurfaceRange(palette.surface, grainAlpha), single.chips.single().paintedTextSurface)
         assertEquals(single.dp(320), single.chips.single().width)
         assertTrue(single.labels.single().layout.getEllipsisCount(0) > 0)
         single.assertLabels()
@@ -120,7 +124,8 @@ class GalleryFolderStripIntegrationTest {
             fontScale = font
         })
         var calls = 0
-        val strip = GalleryFolderStrip(context, GalleryDesign.palette(context, dark = true).pageControls,
+        val palette = GalleryDesign.palette(context, dark = true).pageControls
+        val strip = GalleryFolderStrip(context, palette,
             names.map { GalleryFolderEntry(it) { calls++ } }).apply { layoutDirection = direction }
         val row get() = strip.getChildAt(0) as LinearLayout
         val chips get() = (0 until row.childCount).map { row.getChildAt(it) as NativeSurface }

@@ -88,6 +88,24 @@ class NativeToolbarPaletteIntegrationTest {
         }
     }
 
+    @Test fun browserUsesWindowBackdropRecipeAndScalesStatusGrainByFillAlpha() = main {
+        val context = instrumentation.targetContext
+        val colors = palette(.25f).copy(surfaceContainerHigh = 0x80596b7d.toInt())
+        val base = ReverbDesign.appearance
+        val appearance = base.copy(backdrops = base.backdrops.copy(pageGrainSeed = null))
+        val theme = ReverbTheme(Density(1f), createFontFamilyResolver(context), colors, appearance)
+        fun action(id: String) = ReverbBrowserChromeAction(id, id, ReverbBrowserChromeIcon.Shared(ReverbIcon.Save))
+        val chrome = ReverbBrowserChrome(context, theme, "Address", action("site"), action("tabs"), action("menu"))
+        try {
+            assertEquals(noiseSurfaceRange(fill, 0), (chrome.background as NoiseDrawable).paintedTextSurface)
+
+            chrome.bindBrowserStatus("Offline", visible = true)
+            val statusBackground = chrome.getChildAt(2).background as NoiseDrawable
+            // Sample the drawable's grain against an opaque probe to isolate the configured opacity.
+            assertEquals(noiseSurfaceRange(fill, (.75f * 128).roundToInt()), statusBackground.surfaceRange(fill))
+        } finally { chrome.close() }
+    }
+
     private fun palette(intensity: Float?) = NativeColorScheme.fallback(false).copy(surface = fill,
         surfacePreset = intensity?.let { NativeGrainPreset(it, 1f - it) })
 

@@ -98,18 +98,18 @@ class ReverbBrowserPanelChoice internal constructor(context: Context, private va
     onSelect: (String, String) -> Boolean, onAction: (String) -> Unit,
 ) : ReverbBrowserPanelLayout(context), ReverbBrowserPanelRow {
     override val view: View get() = this
-    private val environment = ReverbEnvironment(theme.density, theme.fontResolver, theme.palette).forSettings()
+    private val environment = ReverbEnvironment(theme).forSettings()
     private var callback: ((String, String) -> Boolean)? = onSelect
     private val request: (String) -> Boolean = { value ->
         browserPanelAdmitsInput() && !panelClosed && callback?.invoke(id, value) == true
     }
-    private val selector = ReverbDesign.appearance.settingsSelectors.createSegmentedControl(context,
+    private val selector = theme.appearance.settingsSelectors.createSegmentedControl(context,
         theme.palette.settingsControls, theme.density.density, { browserPanelAdmitsInput() }, ReverbTextSurface::invalidate)
     private val heading = label?.let { settingsSectionTitle(context, it, environment).apply {
         ViewCompat.setAccessibilityHeading(this, true)
     } }
     private val labeled = heading?.let { title -> object : ViewGroup(context) {
-        private val recipe = ReverbDesign.appearance.settingsSelectors.retentionSection
+        private val recipe = theme.appearance.settingsSelectors.retentionSection
         private val layout = NativeLabeledSegmentedLayout(title, selector)
         init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO; addView(title); addView(selector) }
         private fun dp(value: Int) = (value * theme.density.density).roundToInt()
@@ -181,9 +181,9 @@ open class ReverbBrowserPanelSettings(context: Context, private val theme: Rever
     private var message = ""
     private val owned = linkedSetOf<ReverbBrowserPanelRow>()
     init {
-        background = ReverbDesign.appearance.backdrops.pageBackground(theme.palette)
+        background = theme.appearance.backdrops.pageBackground(theme.palette)
         ViewCompat.setAccessibilityPaneTitle(this, title)
-        val heading = theme.paragraph(context, title, ReverbDesign.appearance.toolbars.centeredTitleRole).apply {
+        val heading = theme.paragraph(context, title, theme.appearance.toolbars.centeredTitleRole).apply {
             ViewCompat.setAccessibilityHeading(this, true)
         }
         addView(ReverbTitledTopBarLayout(context, theme.density.density, theme.palette, back, heading, draftActions),
@@ -215,9 +215,9 @@ open class ReverbBrowserPanelSettings(context: Context, private val theme: Rever
     fun addGroup(label: String?, rows: List<ReverbBrowserPanelRow>) {
         check(!panelClosed)
         require(rows.all { it.view.parent == null }) { "Browser rows must be unparented" }
-        val environment = ReverbEnvironment(theme.density, theme.fontResolver, theme.palette).forSettings()
+        val environment = ReverbEnvironment(theme).forSettings()
         label?.let {
-            val recipe = ReverbDesign.appearance.settingsSelectors
+            val recipe = theme.appearance.settingsSelectors
             groups.addView(settingsSectionTitle(context, it, environment).apply {
                 ViewCompat.setAccessibilityHeading(this, true)
                 setPaddingRelative(dp(recipe.recordingSection.sideInsetDp),
@@ -225,7 +225,7 @@ open class ReverbBrowserPanelSettings(context: Context, private val theme: Rever
                     dp(recipe.recordingSection.sideInsetDp), dp(recipe.retentionSection.stackedGapDp))
             })
         }
-        val recipe = ReverbDesign.appearance.groupSurfaces.settingsGroup
+        val recipe = theme.appearance.groupSurfaces.settingsGroup
         groups.addView(recipe.create(context, ReverbTextSurface::invalidate).apply {
             recipe.bind(this, theme.palette)
             rows.forEachIndexed { index, row ->

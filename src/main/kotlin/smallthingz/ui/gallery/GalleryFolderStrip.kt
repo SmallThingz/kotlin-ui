@@ -97,6 +97,7 @@ class GalleryFolderStrip(
         NativeSurface(context, NativeSurfaceStyle(palette.surface, cornerRadiusDp = 12f,
             outlineColor = palette.outline, outlineWidthDp = 1f, focusOutlineColor = palette.accent)) {
         init {
+            setSurfacePreset(palette.surfacePreset)
             isFocusable = true
             isClickable = true
             contentDescription = entry.label

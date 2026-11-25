@@ -7,6 +7,7 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
 import smallthingz.ui.common.mergedButtonGroup
+import smallthingz.ui.components.NativeUiAppearance
 import smallthingz.ui.controls.ControlPalette
 import kotlin.math.roundToInt
 
@@ -18,6 +19,7 @@ import kotlin.math.roundToInt
 class AllDocHomeTopBar(
     context: Context,
     initialPalette: ControlPalette,
+    appearance: NativeUiAppearance,
     licensesLabel: String,
     aboutLabel: String,
     openLabel: String,
@@ -31,7 +33,27 @@ class AllDocHomeTopBar(
     onOpen: () -> Unit,
     onSettings: () -> Unit,
 ) : FrameLayout(context), AutoCloseable {
-    private val actions = AllDocHomeActions(context)
+    constructor(
+        context: Context,
+        initialPalette: ControlPalette,
+        licensesLabel: String,
+        aboutLabel: String,
+        openLabel: String,
+        settingsLabel: String,
+        licensesIcon: Drawable?,
+        identityIcon: Drawable?,
+        openIcon: Drawable?,
+        settingsIcon: Drawable?,
+        onLicenses: () -> Unit,
+        onAbout: () -> Unit,
+        onOpen: () -> Unit,
+        onSettings: () -> Unit,
+    ) : this(context, initialPalette, NativeUiAppearance.Default,
+        licensesLabel, aboutLabel, openLabel, settingsLabel,
+        licensesIcon, identityIcon, openIcon, settingsIcon,
+        onLicenses, onAbout, onOpen, onSettings)
+
+    private val actions = AllDocHomeActions(context, appearance)
     private var palette = initialPalette
     val licenses = actions.header(licensesLabel, licenses = true, action = onLicenses).apply {
         setLeadingIcon(licensesIcon?.mutate())

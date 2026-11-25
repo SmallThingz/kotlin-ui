@@ -15,6 +15,7 @@ import androidx.annotation.DrawableRes
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import smallthingz.ui.components.NativeDeterminateLinearProgress
+import smallthingz.ui.components.NativeForeground
 import smallthingz.ui.components.NativeTextField
 import smallthingz.ui.components.NativeTextFieldStyle
 import smallthingz.ui.components.NativeToolbarActionTone
@@ -100,7 +101,7 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
     val siteAction = ReverbBrowserChromeActionView(context, chromeTheme, site, ::action, ::admitsChromeAction)
     val tabsAction = ReverbBrowserChromeActionView(context, chromeTheme, tabs, ::action, ::admitsChromeAction)
     val menuAction = ReverbBrowserChromeActionView(context, chromeTheme, menu, ::action, ::admitsChromeAction)
-    private val field = ReverbDesign.appearance.compactField.style
+    private val field = chromeTheme.appearance.compactField.style
     // The native editor owns its field surface and focus outline, independently of toolbar actions.
     val addressEditor: NativeTextField = ReverbBrowserChromeAddressEditor(context, chromeTheme.palette.pageControls,
         field.copy(outlined = true)).apply {
@@ -131,14 +132,12 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
     }
     private val status = chromeTheme.paragraph(context, "", NativeTypographyRole.BODY_MEDIUM).apply {
         setPadding(dp(16), dp(8), dp(16), dp(8))
-        background = smallthingz.ui.graphics.NoiseDrawable(chromeTheme.palette.raised).apply {
-            setNoiseIntensity(chromeTheme.palette.surfacePreset?.foregroundGrain ?: 0f)
-        }
+        background = NativeForeground.foregroundBackground(chromeTheme.palette.pageControls)
         accessibilityLiveRegion = ACCESSIBILITY_LIVE_REGION_POLITE
         visibility = GONE
     }
     init {
-        background = ReverbDesign.appearance.backdrops.pageBackground(chromeTheme.palette)
+        background = chromeTheme.appearance.backdrops.pageBackground(chromeTheme.palette)
         addView(chromeToolbar, LayoutParams(-1, -2))
         addView(progress, LayoutParams(-1, -2))
         addView(status, LayoutParams(-1, -2))

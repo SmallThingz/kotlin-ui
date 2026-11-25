@@ -100,8 +100,9 @@ expose the actual shared clip for phase-input and accessibility bindings.
 
 `setJoinedEdges(NativeGroupEdges(first, last))` decorates an individual row in a
 joined vertical group; a null edge binding restores the uniform surface. Joined
-rows retain 16dp corner geometry, raw 1dp side outlines and a physical-pixel top
-separator. `setPaletteImmediately` accepts colors already sampled by a caller's
+rows retain 16dp corner geometry, preset-aware side outlines, defaulting to 1dp,
+and a physical-pixel top separator. `setPaletteImmediately` accepts colors
+already sampled by a caller's
 multi-channel animation. The optional `onPaintedSurfaceChanged` callback observes
 actual fill changes for caller-owned contrast invalidation.
 Use `squareTop` or `squareBottom` on `NativeGroupEdges` for a closed, square border
