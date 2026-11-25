@@ -182,6 +182,7 @@ class NativeActionSheet(
         root.insets(it)
     }
     private var contentViewport: NativeVerticalViewport? = null
+    private var pinnedActionsMode: Boolean? = null
     private var contentScroll:NativeVerticalPhaseBinding?=null
     private var contentScrollAccessibility:AutoCloseable?=null
     private val lifecycleObserver=LifecycleEventObserver {_,event->
@@ -228,6 +229,7 @@ class NativeActionSheet(
         updateWindowParameters()
         updateWindowColors()
         pointer.bind(root,surface,scrim,handle,appContent,dragNode)
+        surface.column.onActionsInViewportChanged = pointer::setActionsInViewport
         onBackPressedDispatcher.addCallback(this,back)
         anchorLifecycle?.addObserver(lifecycleObserver)
         root.addOnAttachStateChangeListener(object:View.OnAttachStateChangeListener {
@@ -250,8 +252,36 @@ class NativeActionSheet(
     }
 
     fun setContent(body:View,actions:View,hitLayouts:List<NativeViewPointerHitLayout>,scrollable:Boolean=false) {
+        check(pinnedActionsMode != true) { "A sheet retains its action layout mode" }
+        pinnedActionsMode = false
         appContent.setContent(body,actions)
-        if(scrollable && contentScroll==null) {
+        if (scrollable) enableContentScroll()
+        pointer.setContentHits(hitLayouts)
+    }
+
+    /**
+     * Keep actions visible when the IME or window height constrains a form. The title and body
+     * scroll together. When the footer is taller than the available area, it joins that viewport
+     * so the actions remain reachable by scrolling. Supply separate hit trees for the two parts.
+     * A retained sheet must keep the same action layout mode across content updates.
+     */
+    fun setContentWithPinnedActions(
+        body: View,
+        actions: View,
+        bodyHitLayouts: List<NativeViewPointerHitLayout>,
+        actionHitLayouts: List<NativeViewPointerHitLayout>,
+    ) {
+        check(pinnedActionsMode != false) { "A sheet retains its action layout mode" }
+        pinnedActionsMode = true
+        appContent.setContent(body, null)
+        surface.column.setPinnedActions(actions, style)
+        enableContentScroll()
+        pointer.setContentHits(bodyHitLayouts)
+        pointer.setPinnedActionHits(actionHitLayouts)
+    }
+
+    private fun enableContentScroll() {
+        if(contentScroll==null) {
             val viewport=NativeVerticalViewport(context,NativeVerticalScrollState(),style.textDensity,
                 runtime.frames,runtime.scope,nested,glowColor=style.palette.onSurfaceVariant)
             val binding=NativeVerticalPhaseBinding(viewport,
@@ -269,7 +299,6 @@ class NativeActionSheet(
                     clip={it.x>=0f&&it.x<viewport.width&&it.y>=0f&&it.y<viewport.height})
             }
         }
-        pointer.setContentHits(hitLayouts)
     }
     /** Callback and title updates never recreate bodies, accepted actions, draft fields or gestures. */
     fun bind(title:String,onDismiss:()->Unit) {
@@ -545,6 +574,7 @@ class NativeActionSheet(
         release {anchorLifecycle?.removeObserver(lifecycleObserver)}
         release {back.remove()}
         release {insets.close()}
+        surface.column.onActionsInViewportChanged = null
         release {pointer.close()}
         contentViewport = null
         release {contentScroll?.close()}
@@ -758,6 +788,8 @@ internal class SheetPointerOwner(private val density:Float):AutoCloseable {
     val geometry=NativeWindowPointerCoordinates {checkNotNull(root)}
     private var sheets=emptyList<NativeViewPointerHitLayout>()
     private var contentHits=emptyList<NativeViewPointerHitLayout>()
+    private var pinnedActionHits=emptyList<NativeViewPointerHitLayout>()
+    private var actionsInViewport = false
     private var fixedContentHits=emptyList<NativeViewPointerHitLayout>()
     private var combinedContentHits=emptyList<NativeViewPointerHitLayout>()
     private var contentWrapper:((List<NativeViewPointerHitLayout>)->NativeViewPointerHitLayout)?=null
@@ -805,20 +837,34 @@ internal class SheetPointerOwner(private val density:Float):AutoCloseable {
         contentHits=value
         refreshContentHits()
     }
+    fun setPinnedActionHits(value: List<NativeViewPointerHitLayout>) {
+        pinnedActionHits = value
+        refreshContentHits()
+    }
+    fun setActionsInViewport(value: Boolean) {
+        if (actionsInViewport == value) return
+        actionsInViewport = value
+        refreshContentHits()
+        // Retire any gesture admitted against the footer's previous hit ancestry.
+        root?.cancelPointerInput()
+    }
     fun wrapContentHits(wrapper:(List<NativeViewPointerHitLayout>)->NativeViewPointerHitLayout) {
         contentWrapper=wrapper
         refreshContentHits()
     }
     private fun refreshContentHits() {
         val wrapper=contentWrapper
-        combinedContentHits=if(wrapper==null)contentHits+fixedContentHits else {
+        combinedContentHits=if(wrapper==null)pinnedActionHits+contentHits+fixedContentHits else {
             // Close scrolls with the app content; the drag handle remains outside the viewport.
-            listOf(wrapper(contentHits+fixedContentHits.dropLast(1)))+fixedContentHits.takeLast(1)
+            val formHits = contentHits + fixedContentHits.dropLast(1)
+            val handleHit = fixedContentHits.takeLast(1)
+            if (actionsInViewport) listOf(wrapper(pinnedActionHits + formHits)) + handleHit
+            else pinnedActionHits + listOf(wrapper(formHits)) + handleHit
         }
     }
     override fun close() {
         root?.cancelPointerInput()
-        sheets=emptyList();contentHits=emptyList();fixedContentHits=emptyList();combinedContentHits=emptyList();root=null
+        sheets=emptyList();contentHits=emptyList();pinnedActionHits=emptyList();fixedContentHits=emptyList();combinedContentHits=emptyList();root=null
         contentWrapper=null
     }
 }
