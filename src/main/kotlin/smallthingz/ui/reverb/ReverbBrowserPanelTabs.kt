@@ -9,6 +9,7 @@ import android.graphics.drawable.Drawable
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.GridLayout
 import android.widget.ImageView
@@ -57,8 +58,22 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
     private val spacing = dp(8)
     private var columns = 1
     private var cardWidth = 0
+    private var cardViewportHeight: Int? = null
     private val grid = GridLayout(context).apply { setPadding(spacing, spacing, spacing, spacing) }
-    private val scroll = ScrollView(context).apply { addView(grid, FrameLayout.LayoutParams(-1, -2)) }
+    private val scroll = object : ScrollView(context) {
+        override fun onMeasure(w: Int, h: Int) {
+            // LinearLayout has already allocated the top bar and inset-owning footer. A grid
+            // row may use this remaining viewport; further rows still scroll normally.
+            val available = if (MeasureSpec.getMode(h) == MeasureSpec.UNSPECIFIED) null else
+                (MeasureSpec.getSize(h) - paddingTop - paddingBottom - grid.paddingTop -
+                    grid.paddingBottom - 2 * (spacing / 2)).coerceAtLeast(0)
+            if (cardViewportHeight != available) {
+                cardViewportHeight = available
+                cards.values.forEach { it.body.requestLayout() }
+            }
+            super.onMeasure(w, h)
+        }
+    }.apply { addView(grid, FrameLayout.LayoutParams(-1, -2)) }
     private val footer = ReverbBottomActionDock(context, theme, newTab)
     init {
         background = ReverbDesign.appearance.backdrops.pageBackground(theme.palette)
@@ -149,6 +164,18 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             titleView.ellipsize = TextUtils.TruncateAt.END
         }
         private val close = ReverbStandardIconButtonView(context, environment, { this@ReverbBrowserPanelTabs })
+        private val header = FrameLayout(context).apply {
+            // Keep SELECT and CLOSE separate. Reserve the close target before measuring the
+            // single-line title, rather than overlaying it or stacking it below long text.
+            addView(row, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_VERTICAL).apply {
+                marginEnd = dp(64)
+            })
+            addView(close, FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER_VERTICAL or Gravity.END).apply {
+                topMargin = dp(8)
+                bottomMargin = dp(8)
+                marginEnd = dp(8)
+            })
+        }
         private val image = object : ImageView(context) {
             private val topFit = Matrix()
             fun alignPreview() {
@@ -165,21 +192,30 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
                 alignPreview()
             }
         }
-        val preview = object : FrameLayout(context) {
-            override fun onMeasure(w: Int, h: Int) {
-                super.onMeasure(w, MeasureSpec.makeMeasureSpec(minOf(MeasureSpec.getSize(w), dp(200)), MeasureSpec.EXACTLY))
-            }
-        }.apply {
+        val preview = FrameLayout(context).apply {
             setOnClickListener { dispatch(ReverbBrowserPanelTabAction.SELECT, this) }
             filterTouchesWhenObscured = true
             isFocusable = false
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             image.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             addView(image, FrameLayout.LayoutParams(-1, -1))
-            addView(close, FrameLayout.LayoutParams(dp(48), dp(48), Gravity.TOP or Gravity.END).apply {
-                topMargin = dp(8)
-                marginEnd = dp(8)
-            })
+        }
+        val body = object : ViewGroup(context) {
+            init { addView(header); addView(preview) }
+            override fun onMeasure(w: Int, h: Int) {
+                val width = MeasureSpec.getSize(w)
+                val exactWidth = MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY)
+                header.measure(exactWidth, MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+                val previewHeight = browserTabPreviewHeight(width, dp(200), cardViewportHeight, header.measuredHeight)
+                preview.measure(exactWidth, MeasureSpec.makeMeasureSpec(previewHeight, MeasureSpec.EXACTLY))
+                // Never shrink text or the close target if the header alone exceeds a short
+                // viewport. The full header remains scrollable, with a zero-height preview.
+                setMeasuredDimension(resolveSize(width, w), header.measuredHeight + preview.measuredHeight)
+            }
+            override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+                header.layout(0, 0, width, header.measuredHeight)
+                preview.layout(0, header.bottom, width, header.bottom + preview.measuredHeight)
+            }
         }
         init {
             close.visual.mergedRowAccessibility.enableStandaloneAccessibility({ !closed }) { snapshot?.closeLabel }
@@ -188,8 +224,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             close.visual.background = smallthingz.ui.graphics.NoiseDrawable(theme.palette.raised).apply {
                 setNoiseIntensity(theme.palette.surfacePreset?.foregroundGrain ?: 0f)
             }
-            surface.addRow(row, NativeGroupLayout.LayoutParams(-1, -2))
-            surface.addRow(preview, NativeGroupLayout.LayoutParams(-1, -2))
+            surface.addRow(body, NativeGroupLayout.LayoutParams(-1, -2))
             gesture.addView(surface, FrameLayout.LayoutParams(-1, -2))
             bind(initial)
         }
