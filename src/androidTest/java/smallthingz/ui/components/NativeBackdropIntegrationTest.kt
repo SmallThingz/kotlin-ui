@@ -1,6 +1,10 @@
 package smallthingz.ui.components
 
 import android.content.Intent
+import android.app.Activity
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.os.Build
 import android.util.TypedValue
 import android.view.View
@@ -15,6 +19,10 @@ import smallthingz.ui.R
 import smallthingz.ui.controls.textSurfaceRange
 import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.reverb.ReverbDesign
+import smallthingz.ui.util.closePreservingPrimaryFailure
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
 class NativeBackdropIntegrationTest {
@@ -69,7 +77,7 @@ class NativeBackdropIntegrationTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        try {
+        withRetiringTestActivity(activity) {
             instrumentation.runOnMainSync {
                 val appearance = NativeUiAppearance.Default
                 val palette = NativeColorScheme.fallback(false)
@@ -99,8 +107,67 @@ class NativeBackdropIntegrationTest {
                 assertEquals(textSurfaceRange(windowColor), window.paintedTextSurface)
                 assertEquals(appearance.backdrops.pageGrainSeed, solidWindow.backdrops.pageGrainSeed)
             }
-        } finally {
-            instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
+}
+
+/** Test-only retirement shared by the backdrop, selector and ZFM fixtures. Cleanup runs on main. */
+internal fun withRetiringTestActivity(
+    activity: Activity,
+    root: () -> View? = { null },
+    cleanup: () -> Unit = {},
+    block: () -> Unit,
+) {
+    check(Looper.myLooper() != Looper.getMainLooper()) { "Fixture waits must run off the main thread" }
+    var failure: Throwable? = null
+    try {
+        block()
+    } catch (error: Throwable) {
+        failure = error
+    } finally {
+        failure = closePreservingPrimaryFailure(failure) { retirementOnMain(5_000L, cleanup) }
+        // Keep finish independent of cleanup, including a failed or timed-out main dispatch.
+        failure = closePreservingPrimaryFailure(failure) {
+            retirementOnMain(5_000L) {
+                if (!activity.isDestroyed && !activity.isFinishing) activity.finish()
+            }
+        }
+        failure = closePreservingPrimaryFailure(failure) {
+            val deadline = SystemClock.uptimeMillis() + 5_000L
+            var lastState = "not sampled"
+            while (true) {
+                val remaining = deadline - SystemClock.uptimeMillis()
+                if (remaining <= 0) throw AssertionError("Exact fixture Activity not retired: $lastState")
+                var retired = false
+                retirementOnMain(remaining) {
+                    val decor = activity.window.peekDecorView()
+                    val ownedRoot = root()
+                    retired = activity.isDestroyed && decor?.isAttachedToWindow != true &&
+                        ownedRoot?.isAttachedToWindow != true
+                    lastState = "destroyed=${activity.isDestroyed}, finishing=${activity.isFinishing}, " +
+                        "decorAttached=${decor?.isAttachedToWindow}, rootAttached=${ownedRoot?.isAttachedToWindow}"
+                }
+                if (retired) break
+                val pause = minOf(16L, deadline - SystemClock.uptimeMillis())
+                if (pause > 0) SystemClock.sleep(pause)
+            }
+        }
+    }
+    failure?.let { throw it }
+}
+
+/** Same bounded dispatch/cancel pattern as GalleryVideoEditorLayoutIntegrationTest. */
+private fun retirementOnMain(timeoutMillis: Long, action: () -> Unit) {
+    check(Looper.myLooper() != Looper.getMainLooper()) { "Fixture waits must run off the main thread" }
+    val handler = Handler(Looper.getMainLooper())
+    val task = FutureTask<Unit> { action() }
+    check(handler.post(task)) { "Main dispatcher rejected fixture work" }
+    try { task.get(timeoutMillis, TimeUnit.MILLISECONDS) }
+    catch (error: ExecutionException) { throw (error.cause ?: error) }
+    finally {
+        if (!task.isDone) {
+            handler.removeCallbacks(task)
+            task.cancel(false)
         }
     }
 }

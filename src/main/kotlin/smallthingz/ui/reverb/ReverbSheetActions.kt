@@ -11,6 +11,7 @@ import smallthingz.ui.geometry.Size
 class ReverbSheetActions(context:Context,private val host:NativeActionSheetContentContext,
                                   initialEnvironment:ReverbTheme,
                                   val buttons:List<ReverbSheetButton>):NativeMergedActionLayout(context, buttons, initialEnvironment.palette),AutoCloseable {
+    init { if (buttons.size > 1) asActionFooter(density = initialEnvironment.density.density) }
     private var environment=initialEnvironment
     private var closed=false
     private val hitChildren=java.util.Collections.unmodifiableList(buttons.asReversed().map{it.hitLayout})
@@ -26,7 +27,10 @@ class ReverbSheetActions(context:Context,private val host:NativeActionSheetConte
         environment=next
         bindPalette(next.palette)
         buttons.forEach { it.bindEnvironment(next) }
-        if(densityChanged)requestLayout()
+        if(densityChanged) {
+            if (isActionFooter) asActionFooter(density = next.density.density)
+            requestLayout()
+        }
     }
     override fun close() {
         if(closed)return

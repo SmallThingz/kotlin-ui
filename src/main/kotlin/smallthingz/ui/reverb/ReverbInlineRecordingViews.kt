@@ -105,7 +105,7 @@ class ReverbInlineRecordingRename(
         environment.sharedFontResolver, actionInput, onCancel)
     private val confirm = NativeMaterialButtonView(context, actionRecipe, environment.textDensity,
         environment.sharedFontResolver, actionInput, onSubmit)
-    private val actions = NativeMergedActionLayout(context, listOf(cancel, confirm), environment.palette)
+    private val actions = NativeMergedActionLayout(context, listOf(cancel, confirm), environment.palette).asActionFooter(density = environment.textDensity.density)
     init {
         orientation = VERTICAL
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -151,6 +151,7 @@ class ReverbInlineRecordingRename(
         support.visibility = if (error == null) GONE else VISIBLE
         value.bindParagraphStyle(support, ReverbTextRole.BODY_SMALL, value.palette.error)
         actions.bindPalette(value.palette)
+        actions.asActionFooter(density = value.textDensity.density)
         cancel.bindTypography(value.textDensity, value.sharedFontResolver)
         confirm.bindTypography(value.textDensity, value.sharedFontResolver)
         cancel.bind(cancelLabel, !busy, value.palette.buttonPalette, onClick = onCancel)

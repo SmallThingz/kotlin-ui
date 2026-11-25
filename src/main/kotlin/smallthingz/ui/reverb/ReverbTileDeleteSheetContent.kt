@@ -29,7 +29,7 @@ class ReverbTileDeleteSheetContent(
     private val confirm = NativeMaterialButtonView(context, recipe, environment.textDensity,
         environment.sharedFontResolver, input, onConfirm)
     private var closed = false
-    val actions = NativeMergedActionLayout(context, listOf(cancel, confirm), environment.palette)
+    val actions = NativeMergedActionLayout(context, listOf(cancel, confirm), environment.palette).asActionFooter(density = environment.textDensity.density)
 
     fun bind(next: ReverbEnvironment, canCancel: Boolean, canConfirm: Boolean) {
         if (closed) return
@@ -37,6 +37,7 @@ class ReverbTileDeleteSheetContent(
         body.setTypography(next.appearance.typography.defaultTextStyle, next.textDensity, next.sharedFontResolver)
         body.animateTextColor(next.palette.onSurface)
         actions.bindPalette(next.palette)
+        actions.asActionFooter(density = next.textDensity.density)
         cancel.bindTypography(next.textDensity, next.sharedFontResolver)
         confirm.bindTypography(next.textDensity, next.sharedFontResolver)
         cancel.bind(cancelLabel, canCancel, next.palette.buttonPalette)

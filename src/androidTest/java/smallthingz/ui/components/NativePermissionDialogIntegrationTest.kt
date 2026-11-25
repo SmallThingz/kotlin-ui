@@ -461,7 +461,10 @@ class NativePermissionDialogIntegrationTest {
                 val visibleDeny = Rect()
                 assertTrue(deny.getLocalVisibleRect(visibleDeny))
                 assertEquals(deny.width, visibleDeny.width())
-                assertEquals(minOf(deny.height, footer.height), visibleDeny.height())
+                val actionFooter = nodes(footer).filterIsInstance<NativeMergedActionLayout>().single()
+                val visualGap = (6f * density).roundToInt()
+                assertEquals(visualGap, actionFooter.height - actionFooter.actionSurface.bottom)
+                assertEquals(minOf(deny.height, (footer.height - visualGap).coerceAtLeast(0)), visibleDeny.height())
                 assertEquals(deny.height, visibleDeny.bottom)
                 for (scroll in scrolls) {
                     val bounds = Rect(0, 0, scroll.width, scroll.height)

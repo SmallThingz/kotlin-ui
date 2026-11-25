@@ -12,6 +12,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeMaterialButtonView
 import smallthingz.ui.components.NativeMenuAccessibilityTestActivity
+import smallthingz.ui.components.withRetiringTestActivity
 
 /** Exercises the public theme factory/binder and actual retained native button, not palette tokens. */
 @RunWith(AndroidJUnit4::class)
@@ -22,7 +23,7 @@ class ZfmThemeButtonConfigurationIntegrationTest {
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         fun main(action: () -> Unit) = instrumentation.runOnMainSync(action)
         var retained: NativeMaterialButtonView? = null
-        try {
+        withRetiringTestActivity(activity, root = { retained }, cleanup = { retained?.close() }) {
             lateinit var root: FrameLayout
             lateinit var initial: ZfmTheme
             var clicks = 0
@@ -95,8 +96,6 @@ class ZfmThemeButtonConfigurationIntegrationTest {
                 assertTrue(button.performClick())
                 assertEquals("The original callback remains installed", 1, clicks)
             }
-        } finally {
-            main { retained?.close(); activity.finish() }
         }
     }
 

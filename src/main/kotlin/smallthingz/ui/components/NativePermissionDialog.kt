@@ -242,8 +242,8 @@ class NativePermissionDialog(
             progress.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             progress.visibility = View.GONE
             addView(progress, row())
-            addView(actionHost(activity, allow, first = true), row(recipe.scopeGapDp))
-            addView(actionHost(activity, deny, first = false), row(recipe.actionGapDp))
+            addView(NativeMergedActionLayout(activity, listOf(allow, deny), colors).asActionFooter(),
+                row(recipe.scopeGapDp))
         }
         val footer = ScrollView(activity).apply { addView(actions) }
         val handle = handleRuntime?.let {
@@ -265,13 +265,13 @@ class NativePermissionDialog(
                     MeasureSpec.makeMeasureSpec(limit / 2, MeasureSpec.AT_MOST),
                 )
                 val handleHeight = handle?.measuredHeight ?: 0
-                val innerHeight = limit - topInset * 2 - handleHeight
+                val innerHeight = limit - topInset - handleHeight
                 val minimumBody = minOf(dp(recipe.contentInsetDp), innerHeight / 3)
                 val footerLimit = innerHeight - minimumBody
                 footer.measure(exact(innerWidth), MeasureSpec.makeMeasureSpec(footerLimit, MeasureSpec.AT_MOST))
                 val remaining = (innerHeight - footer.measuredHeight).coerceAtLeast(0)
                 scroll.measure(exact(innerWidth), MeasureSpec.makeMeasureSpec(remaining, MeasureSpec.AT_MOST))
-                setMeasuredDimension(width, minOf(limit, scroll.measuredHeight + footer.measuredHeight + topInset * 2 + handleHeight))
+                setMeasuredDimension(width, minOf(limit, scroll.measuredHeight + footer.measuredHeight + topInset + handleHeight))
             }
             override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
                 val inset = minOf(dp(recipe.contentInsetDp), width / 8)
@@ -333,29 +333,13 @@ class NativePermissionDialog(
 
     private fun action(activity: Activity, source: NativeButtonRecipe, click: () -> Unit): NativeMaterialButtonView =
         object : NativeMaterialButtonView(activity, source.copy(surface = source.surface.copy(
-            assignedSize = true, minimumHeightDp = recipe.actionMinimumHeightDp, radiusDp = 0f)),
+            assignedSize = false, minimumHeightDp = recipe.actionMinimumHeightDp, radiusDp = 0f)),
             density, fonts, onClick = { if (ownsInputFocus()) click() }) {
             override fun performClick(): Boolean = ownsInputFocus() && super.performClick()
 
             override fun performAccessibilityAction(action: Int, arguments: Bundle?): Boolean {
                 if (action == AccessibilityNodeInfo.ACTION_CLICK && !ownsInputFocus()) return false
                 return super.performAccessibilityAction(action, arguments)
-            }
-        }
-
-    private fun actionHost(activity: Activity, button: NativeMaterialButtonView, first: Boolean): View =
-        object : NativeSurface(activity, NativeSurfaceStyle(Color.TRANSPARENT,
-            cornerRadiusDp = recipe.actionRadiusDp, cornerRadii = NativeCornerRadii(
-                topStartDp = if (first) recipe.actionRadiusDp else recipe.actionSeamRadiusDp,
-                topEndDp = if (first) recipe.actionRadiusDp else recipe.actionSeamRadiusDp,
-                bottomStartDp = if (first) recipe.actionSeamRadiusDp else recipe.actionRadiusDp,
-                bottomEndDp = if (first) recipe.actionSeamRadiusDp else recipe.actionRadiusDp))) {
-            init { addView(button) }
-            override fun onMeasure(w: Int, h: Int) {
-                val width = MeasureSpec.getSize(w)
-                val height = maxOf(dp(button.minimumTouchTargetDp), button.intrinsicHeight(width))
-                button.measure(exact(width), exact(height))
-                setMeasuredDimension(width, height)
             }
         }
 
