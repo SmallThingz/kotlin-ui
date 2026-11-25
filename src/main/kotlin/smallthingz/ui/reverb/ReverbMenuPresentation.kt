@@ -12,6 +12,7 @@ internal fun NativeColorScheme.menuColors() = NativeMenuColors(NativeAnchoredMen
     surfacePreset?.foregroundGrain ?: 0f)
 internal object ReverbMenuIcons : NativeMenuIcons<ReverbIcon> {
     override val check = ReverbIcon.Check
-    override fun create(context: Context, icon: ReverbIcon, color: Int): View = ReverbGlyphView(context, icon, color)
+    override fun create(context: Context, icon: ReverbIcon, color: Int): View =
+        ReverbGlyphView(context, icon, color).apply { useTextSurfaceContrast = true }
     override fun bind(view: View, icon: ReverbIcon, color: Int) = (view as ReverbGlyphView).bind(icon, color)
 }

@@ -32,6 +32,7 @@ object NativeTextSurface {
         var surface = 0L
         var found = false
         while (parent != null) {
+            if (parent is NativeMenuSurface) return if (found) surface else parent.paintedTextSurface
             if (parent is NativeTextSurfaceScope) settings = true
             if (!found) {
                 if (parent is NativeGroupLayout) {

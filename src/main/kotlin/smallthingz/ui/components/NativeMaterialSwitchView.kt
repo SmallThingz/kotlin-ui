@@ -34,7 +34,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * Released M3 Switch(checked, onCheckedChange = null, enabled). Thumb content is opt-in.
+ * Shared switch with a constant 24dp thumb in every state. Thumb content is opt-in.
  * The parent owns the row's click target, checked semantics and press feedback. This View adds
  * no click listener, focus stop, minimum 48dp target, ripple or platform Switch styling.
  *
@@ -69,7 +69,7 @@ class NativeMaterialSwitchView(
 
     private var customOutlineWidthDp: Float? = null
     private var customOutlineColor = 0
-    private var sizeMotion: SwitchFloatMotion? = null
+    private var thumbSize = 0
     private var offsetMotion: SwitchFloatMotion? = null
     private var framePosted = false
     private val choreographer = Choreographer.getInstance()
@@ -194,25 +194,16 @@ class NativeMaterialSwitchView(
             it.measure(size, size)
         }
 
-        val targetSize = (if (visuallyPressed) 28f else if (checked) 24f else 16f) * density
-        // Preserve the source's px -> dp -> px ordering, rather than algebraically simplifying it.
-        val minBound = ((32f - targetSize / density) / 2f) * density
-        val maxBound = ((52f - 24f) - (32f - 24f) / 2f) * density
-        val targetOffset = when {
-            visuallyPressed && checked -> maxBound - 2f * density
-            visuallyPressed -> 2f * density
-            checked -> maxBound
-            else -> minBound
-        }
-        val size = sizeMotion
+        thumbSize = (THUMB_SIZE_DP * density).toInt()
+        val minBound = ((32f - THUMB_SIZE_DP) / 2f) * density
+        val maxBound = ((52f - THUMB_SIZE_DP) - (32f - THUMB_SIZE_DP) / 2f) * density
+        val targetOffset = if (checked) maxBound else minBound
         val offset = offsetMotion
-        if (size == null || offset == null) {
-            // Initial state is already at its target: the release has no entrance animation.
-            sizeMotion = SwitchFloatMotion(targetSize)
+        if (offset == null) {
+            // Initial state is already at its target: there is no entrance animation.
             offsetMotion = SwitchFloatMotion(targetOffset)
         } else {
             val scale = readCachedAnimatorDurationScale(context)
-            size.retarget(targetSize, snap = visuallyPressed, durationScale = scale)
             offset.retarget(targetOffset, snap = visuallyPressed, durationScale = scale)
             postFrameIfNeeded()
         }
@@ -225,7 +216,6 @@ class NativeMaterialSwitchView(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val size = sizeMotion ?: return
         val offset = offsetMotion ?: return
         val originX = ((width - trackWidth) / 2f).roundToInt().toFloat()
         val originY = ((height - trackHeight) / 2f).roundToInt().toFloat()
@@ -236,8 +226,8 @@ class NativeMaterialSwitchView(
             radius, radius, trackPaint)
         trackGrain?.draw(canvas, originX, originY, originX + trackWidth, originY + trackHeight, radius, trackPaint.alpha)
 
-        // ThumbNode truncates its animated pixel size/offset; it does not round them or animate dp.
-        val actualSize = size.value.toInt()
+        // Preserve pixel truncation for the fixed diameter and animated offset.
+        val actualSize = thumbSize
         val logicalOffset = offset.value.toInt()
         val thumbX = if (layoutDirection == LAYOUT_DIRECTION_RTL) {
             trackWidth - actualSize - logicalOffset
@@ -302,7 +292,6 @@ class NativeMaterialSwitchView(
         framePosted = false
         if (!isAttachedToWindow) return
         val scale = readCachedAnimatorDurationScale(context)
-        sizeMotion?.frame(frameTimeNanos, scale)
         offsetMotion?.frame(frameTimeNanos, scale)
         invalidate()
         postFrameIfNeeded()
@@ -310,7 +299,7 @@ class NativeMaterialSwitchView(
 
     private fun postFrameIfNeeded() {
         if (isAttachedToWindow && !framePosted &&
-            (sizeMotion?.isRunning == true || offsetMotion?.isRunning == true)
+            offsetMotion?.isRunning == true
         ) {
             framePosted = true
             choreographer.postFrameCallback(this)
@@ -325,12 +314,12 @@ class NativeMaterialSwitchView(
     override fun onDetachedFromWindow() {
         choreographer.removeFrameCallback(this)
         framePosted = false
-        sizeMotion?.stop()
         offsetMotion?.stop()
         super.onDetachedFromWindow()
     }
 
     private companion object {
+        const val THUMB_SIZE_DP = 24f
         const val PAINT_FLAGS = Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG
     }
 }

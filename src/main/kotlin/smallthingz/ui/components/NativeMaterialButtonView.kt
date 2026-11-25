@@ -111,6 +111,11 @@ open class NativeMaterialButtonView private constructor(
     private var indicationInk = Color.TRANSPARENT
     private var inputReady = false
     var compactPadding = false
+        set(value) {
+            if (field == value) return
+            field = value
+            content.requestLayout()
+        }
     val label = ParagraphView(context, textStyle, density, resolver, displayedInk)
     private val labelChildren = if (style.showLabel) listOf(label) else emptyList()
     private var accessibilityChildren: List<View> = labelChildren

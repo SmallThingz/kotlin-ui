@@ -132,9 +132,8 @@ class ReverbIncidentsContentView(
         addItemDecoration(object : RecyclerView.ItemDecoration() {
             override fun getItemOffsets(outRect: Rect, view: View, parent: RecyclerView, state: RecyclerView.State) {
                 val position = parent.getChildAdapterPosition(view)
-                val joined = this@ReverbIncidentsContentView.adapter.joinsNext(position)
-                val hasNext = position >= 0 && position < state.itemCount - 1
-                outRect.set(0, 0, 0, if (hasNext && !joined) dp(2f) else 0)
+                val hasGap = this@ReverbIncidentsContentView.adapter.hasGapAfter(position)
+                outRect.set(0, 0, 0, if (hasGap) dp(2f) else 0)
             }
         })
     }
@@ -711,6 +710,7 @@ private class IncidentsAdapter(
         val row: ReverbIncidentOccurrence? = null,
         val heading: String? = null,
         val edges: NativeGroupEdges? = null,
+        val gapAfter: Boolean = edges == null || edges.last || edges.squareBottom,
     )
     private data class DayKey(val day: Long)
     private data class HeadingKey(val day: Long, val key: String)
@@ -754,6 +754,8 @@ private class IncidentsAdapter(
                     }
                 }
             }
+            // DiffUtil must see a change when a surviving day end gains or loses its trailing gap.
+            if (isNotEmpty()) this[lastIndex] = last().copy(gapAfter = false)
         }
         val difference = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
             override fun getOldListSize() = old.size
@@ -815,9 +817,7 @@ private class IncidentsAdapter(
         appearance = value
         notifyItemRangeChanged(0, itemCount)
     }
-    fun joinsNext(position: Int): Boolean = items.getOrNull(position)?.edges?.let {
-        !it.last && !it.squareBottom
-    } == true
+    fun hasGapAfter(position: Int): Boolean = items.getOrNull(position)?.gapAfter == true
 
     override fun getItemCount() = items.size
     override fun getItemId(position: Int) = items[position].id

@@ -93,8 +93,8 @@ class ReverbOnboardingScreenLayout(private val density: Density) {
         }
 
         fun measureLoading(indicator: View, width: Int, height: Int, density: Float) {
-            val size = (40 * density).roundToInt()
-            indicator.measure(exact(minOf(width, size)), exact(minOf(height, size)))
+            val size = minOf(width, height, (40 * density).roundToInt())
+            indicator.measure(exact(size), exact(size))
         }
 
         fun layoutLoading(indicator: View, width: Int, height: Int) {

@@ -49,6 +49,23 @@ class ReverbIncidentDayGroupingIntegrationTest {
         f.assertRows(dayLabel("Yesterday"), top("Error A"), bottom("old-a"))
     }
 
+    @Test fun appendingAndRemovingTheOldestDateUpdatesTheRetainedDayEndGap() = withFixture { f ->
+        val newer = day(2, "Newer date", group("A", "a"))
+        val older = day(1, "Older date", group("A", "old-a"))
+        f.bind(newer)
+        val dayEndId = f.idAt(2)
+        f.assertBottomGap(2, 0)
+
+        f.bind(newer, older)
+        f.assertRows(dayLabel("Newer date"), top("Error A"), bottom("a", gap = 2),
+            dayLabel("Older date"), top("Error A"), bottom("old-a"))
+        assertEquals(dayEndId, f.idAt(2))
+
+        f.bind(newer)
+        f.assertBottomGap(2, 0)
+        assertEquals(dayEndId, f.idAt(2))
+    }
+
     @Test fun deletingFirstAndLastMessagesRebindsSurvivingCornersAndReinsertionFlattensThem() = withFixture { f ->
         val a = group("A", "a")
         val b = group("B", "b1", "b2")
@@ -134,6 +151,12 @@ class ReverbIncidentDayGroupingIntegrationTest {
 
         fun idAt(position: Int) = adapter.getItemId(position)
         fun ids() = List(adapter.itemCount, ::idAt)
+
+        fun assertBottomGap(position: Int, gap: Int) {
+            val row = checkNotNull(list.findViewHolderForAdapterPosition(position)).itemView
+            assertEquals("Gap after row $position", dp(gap),
+                checkNotNull(list.layoutManager).getDecoratedBottom(row) - row.bottom)
+        }
 
         fun click(label: String) {
             val action = descendants(panel).filterIsInstance<ReverbToolbarActionView>()

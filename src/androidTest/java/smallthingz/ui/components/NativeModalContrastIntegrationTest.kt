@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Rect
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EdgeEffect
@@ -22,6 +23,9 @@ import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.reverb.ReverbAboutContentView
 import smallthingz.ui.reverb.ReverbAboutDetails
 import smallthingz.ui.reverb.ReverbDesign
+import smallthingz.ui.reverb.ReverbGlyphView
+import smallthingz.ui.reverb.ReverbIcon
+import smallthingz.ui.reverb.ReverbMenuIcons
 import smallthingz.ui.reverb.ReverbTheme
 import smallthingz.ui.reverb.menuColors
 import smallthingz.ui.reverb.reverbActionSheetStyle
@@ -95,6 +99,101 @@ class NativeModalContrastIntegrationTest {
             val choiceColors = palette(true).menuColors()
             menu.bind(NativeMenuChoices("One", listOf("One", "Two")) { it }, choiceColors) {}
             assertRetainedGlow(choiceColors.muted)
+        } finally { menu.close(); runtime.close() }
+    }
+
+    @Test fun reverbMenuGlyphsKeepContrastAcrossRetainedPaletteFrames() = instrumentation.runOnMainSync {
+        val context = instrumentation.targetContext
+        val runtime = NativeModalWindowRuntime(context)
+        val appearance = ReverbDesign.appearance
+        val light = palette(false)
+        val dark = palette(true)
+        val menu = NativeMenuContent(context, Density(1f), appearance.typography.buttonLabelStyle,
+            createFontFamilyResolver(context), light.menuColors(), appearance.modals.anchoredPanel,
+            ReverbMenuIcons, NativeVerticalScrollState(), runtime.frames, runtime.scope, { false })
+        fun semanticTints(scheme: NativeColorScheme) = listOf(scheme.onSurface, scheme.onSurfaceVariant, scheme.error)
+        fun bind(scheme: NativeColorScheme) {
+            val (share, copy, delete) = semanticTints(scheme)
+            menu.bindActions(listOf(
+                NativeMenuAction("Share", ReverbIcon.Share, scheme.onSurface, share) {},
+                NativeMenuAction("Copy", ReverbIcon.Copy, scheme.onSurface, copy) {},
+                NativeMenuAction("Delete", ReverbIcon.Delete, scheme.error, delete) {},
+            ), scheme.menuColors())
+            menu.measure(atMost(320), atMost(320))
+            menu.layout(0, 0, menu.measuredWidth, menu.measuredHeight)
+        }
+        fun glyphs() = descendants(menu).filterIsInstance<ReverbGlyphView>()
+        try {
+            bind(light)
+            val retainedRows = menu.column.rows.toList()
+            val retainedGlyphs = glyphs()
+            val views = listOf(menu) + retainedRows + retainedGlyphs
+            fun bounds() = views.map { Rect(it.left, it.top, it.right, it.bottom) }
+            val initialBounds = bounds()
+            fun assertRetainedGeometry() {
+                assertEquals(retainedRows, menu.column.rows)
+                assertEquals(retainedGlyphs, glyphs())
+                assertEquals(initialBounds, bounds())
+            }
+            fun paintedTints() = retainedGlyphs.map(::opaqueMenuGlyphTint)
+            assertEquals(semanticTints(light), paintedTints())
+
+            // Drive the real paint owners synchronously. Detached palette binds settle immediately.
+            val fillField = NativeMenuSurface::class.java.getDeclaredField("fillMotion").apply { isAccessible = true }
+            val tintField = ReverbGlyphView::class.java.getDeclaredField("colorTransition").apply { isAccessible = true }
+            val fillMotion = fillField.get(menu) as ViewColorTransition
+            val tintMotions = retainedGlyphs.map { tintField.get(it) as ViewColorTransition }
+            for ((from, to, tenth) in listOf(Triple(light, dark, 4), Triple(dark, light, 3))) {
+                bind(to)
+                assertRetainedGeometry()
+                val fromFill = from.menuColors().surfaceContainerHigh
+                val toFill = to.menuColors().surfaceContainerHigh
+                val samples = ColorTransition(intArrayOf(fromFill, *semanticTints(from).toIntArray()))
+                samples.retarget(intArrayOf(toFill, *semanticTints(to).toIntArray()), 0L)
+                samples.frame(ColorTransition.DURATION_NANOS * tenth / 10)
+                assertTrue(samples.isInterpolating)
+                val fill = samples.color(0)
+                assertNotEquals(fromFill, fill)
+                assertNotEquals(toFill, fill)
+                val rawTints = tintMotions.indices.map { samples.color(it + 1) }
+                fillMotion.snap(fill)
+                tintMotions.forEachIndexed { index, motion -> motion.snap(rawTints[index]) }
+
+                val grain = to.menuColors().grainIntensity
+                val underlay = menu.paintedTextSurface
+                assertEquals(grainRange(fill, grain), underlay)
+                val painted = paintedTints()
+                for ((index, raw) in rawTints.withIndex()) {
+                    assertTrue("The uncorrected tint must have low contrast", ColorUtils.calculateContrast(raw, fill) < 3.0)
+                    assertNotEquals("A palette frame must correct the actual glyph pixels", raw, painted[index])
+                    assertTrue(ColorUtils.calculateContrast(painted[index], (underlay ushr 32).toInt()) >= 4.5)
+                    assertTrue(ColorUtils.calculateContrast(painted[index], underlay.toInt()) >= 4.5)
+                }
+
+                // Replay the old adapter's opt-out on the same glyph to verify the pixel probe.
+                val share = retainedGlyphs.first()
+                share.useTextSurfaceContrast = false
+                assertEquals(rawTints.first(), opaqueMenuGlyphTint(share))
+                share.useTextSurfaceContrast = true
+                assertEquals(painted, paintedTints())
+                assertTrue(retainedGlyphs.none { it.isDirty })
+
+                // Keep the glyph tint motions idle while publishing two kinds of underlay changes.
+                fillMotion.snap(Color.WHITE)
+                assertTrue("A fill-only update must dirty the glyph leaves", retainedGlyphs.all { it.isDirty })
+                val lightUnderlay = menu.paintedTextSurface
+                val repainted = paintedTints()
+                assertNotEquals(painted, repainted)
+                assertEquals(rawTints.map { textSurfaceForeground(lightUnderlay, it) }, repainted)
+                assertTrue(retainedGlyphs.none { it.isDirty })
+                menu.bindGrain(if (grain == 0f) .5f else 0f)
+                assertNotEquals(lightUnderlay, menu.paintedTextSurface)
+                assertTrue("A grain-only update must dirty the glyph leaves", retainedGlyphs.all { it.isDirty })
+
+                bind(to)
+                assertEquals(semanticTints(to), paintedTints())
+                assertRetainedGeometry()
+            }
         } finally { menu.close(); runtime.close() }
     }
 
@@ -256,6 +355,18 @@ class NativeModalContrastIntegrationTest {
     private fun descendants(view: View): List<View> = buildList {
         add(view)
         if (view is ViewGroup) for (index in 0 until view.childCount) addAll(descendants(view.getChildAt(index)))
+    }
+
+    private fun opaqueMenuGlyphTint(glyph: ReverbGlyphView): Int {
+        val bitmap = Bitmap.createBitmap(glyph.width, glyph.height, Bitmap.Config.ARGB_8888)
+        try {
+            glyph.draw(Canvas(bitmap))
+            val pixels = IntArray(glyph.width * glyph.height)
+            bitmap.getPixels(pixels, 0, glyph.width, 0, 0, glyph.width, glyph.height)
+            val opaqueColors = pixels.filter { Color.alpha(it) == 255 }.toSet()
+            assertEquals("Expected one opaque glyph tint", 1, opaqueColors.size)
+            return opaqueColors.single()
+        } finally { bitmap.recycle() }
     }
 
     private fun assertInk(label: ParagraphView, ink: Int) {

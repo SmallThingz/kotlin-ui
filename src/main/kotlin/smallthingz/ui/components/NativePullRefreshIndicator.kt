@@ -76,11 +76,12 @@ class NativePullRefreshSurface(
     }
 
     override fun onMeasure(w: Int, h: Int) {
-        val size = (style.glyphDp * density).roundToInt()
-        for (i in 0 until childCount) getChildAt(i).measure(
-            MeasureSpec.makeMeasureSpec(size.coerceAtMost(MeasureSpec.getSize(w)), MeasureSpec.EXACTLY),
-            MeasureSpec.makeMeasureSpec(size.coerceAtMost(MeasureSpec.getSize(h)), MeasureSpec.EXACTLY))
-        setMeasuredDimension(MeasureSpec.getSize(w), MeasureSpec.getSize(h))
+        val width = MeasureSpec.getSize(w)
+        val height = MeasureSpec.getSize(h)
+        val size = minOf(width, height, (style.glyphDp * density).roundToInt())
+        val glyphSpec = MeasureSpec.makeMeasureSpec(size, MeasureSpec.EXACTLY)
+        for (i in 0 until childCount) getChildAt(i).measure(glyphSpec, glyphSpec)
+        setMeasuredDimension(width, height)
     }
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         for (i in 0 until childCount) {

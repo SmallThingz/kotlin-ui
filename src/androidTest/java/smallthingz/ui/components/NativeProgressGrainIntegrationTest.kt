@@ -79,6 +79,28 @@ class NativeProgressGrainIntegrationTest {
         assertTrue("Alpha updates must not retain old grain", pixels(view).all { it == 0 })
     }
 
+    @Test fun pullRefreshGlyphStaysSquareInAConstrainedSurface() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync {
+            val context = instrumentation.targetContext
+            val surface = NativePullRefreshSurface(context, 1f, NativePullRefreshIndicatorStyle(), Color.WHITE)
+            val glyph = View(context)
+            surface.addView(glyph)
+
+            fun assertGlyph(width: Int, height: Int, expectedSize: Int, left: Int, top: Int) {
+                size(surface, width, height)
+                assertEquals(expectedSize, glyph.width)
+                assertEquals(expectedSize, glyph.height)
+                assertEquals(left, glyph.left)
+                assertEquals(top, glyph.top)
+            }
+
+            assertGlyph(40, 40, 16, 12, 12)
+            assertGlyph(40, 12, 12, 14, 0)
+            assertGlyph(12, 40, 12, 0, 14)
+        }
+    }
+
     @Test fun circularGrainPreservesRotatedArcHoleCapsAndNonSquareClipping() = withShader { context ->
         val scope = CoroutineScope(SupervisorJob())
         val clock = object : MonotonicFrameClock {

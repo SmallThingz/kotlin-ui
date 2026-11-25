@@ -74,6 +74,111 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
         }
     }
 
+    /** Real group rebinds retire each popup while retaining the field and its selection. */
+    @Test fun defaultLightAndAmoledOutlinePathsMatchAcrossDensities() {
+        for (scale in listOf(1f, 1.5f, 2.625f)) {
+            val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
+                NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            lateinit var root: FrameLayout
+            lateinit var group: smallthingz.ui.common.DropdownGroup
+            lateinit var dropdownField: smallthingz.ui.common.DropdownField<Int>
+            lateinit var lightTheme: smallthingz.ui.common.ControlTheme
+            val content = smallthingz.ui.common.DropdownContent("Options", 20, (0 until 40).toList()) { "Choice $it" }
+            val selections = ArrayList<Int>()
+            var cleanupGroup: smallthingz.ui.common.DropdownGroup? = null
+            var cleanupField: smallthingz.ui.common.DropdownField<Int>? = null
+            try {
+                main {
+                    val appearance = NativeUiAppearance.Default.copy(anchoredDropdown =
+                        NativeUiAppearance.Default.anchoredDropdown.copy(expandMillis = 0, settleMillis = 0, collapseMillis = 0))
+                    lightTheme = smallthingz.ui.common.ControlTheme(appearance,
+                        appearance.resolveColorScheme(activity, false), Density(scale), createFontFamilyResolver(activity))
+                    root = FrameLayout(activity)
+                    group = smallthingz.ui.common.DropdownGroup(lightTheme, { root }, { true })
+                    cleanupGroup = group
+                    dropdownField = group.field(activity, content) { selections += it }
+                    cleanupField = dropdownField
+                    root.addView(dropdownField.view, FrameLayout.LayoutParams((280 * scale).roundToInt(),
+                        (64 * scale).roundToInt(), Gravity.CENTER))
+                    activity.setContentView(root)
+                }
+                await("Field window not ready") {
+                    dropdownField.view.isAttachedToWindow && dropdownField.view.height > 0 && activity.hasWindowFocus()
+                }
+                val retainedField = dropdownField.view
+                var firstFieldBounds: android.graphics.Rect? = null
+                var firstPath: android.graphics.RectF? = null
+                var previousWheel: ViewGroup? = null
+                for (dark in listOf(false, true, false)) {
+                    main {
+                        val colors = lightTheme.appearance.resolveColorScheme(activity, dark)
+                        group.bindTheme(lightTheme.withColorScheme(colors))
+                        dropdownField.bind(content)
+                        assertFalse("Theme rebind must retire the previous popup", group.isExpanded)
+                        previousWheel?.let { assertFalse(it.isAttachedToWindow) }
+                    }
+                    await("Rebound field layout pending") { !retainedField.isLayoutRequested }
+                    lateinit var wheel: ViewGroup
+                    lateinit var popup: NativeAnchoredDropdown
+                    main {
+                        assertSame(retainedField, dropdownField.view)
+                        val bounds = android.graphics.Rect(retainedField.left, retainedField.top,
+                            retainedField.right, retainedField.bottom)
+                        if (firstFieldBounds == null) firstFieldBounds = bounds else assertEquals(firstFieldBounds, bounds)
+                        assertEquals(content, field(dropdownField, "content"))
+                        group.open(dropdownField, content)
+                        assertTrue(group.isExpanded)
+                        popup = field(checkNotNull(field(group, "current")), "dropdown") as NativeAnchoredDropdown
+                        wheel = (root.getChildAt(1) as ViewGroup).getChildAt(1) as ViewGroup
+                        previousWheel?.let { assertNotSame(it, wheel) }
+                    }
+                    await("Reopened wheel geometry missing") { wheel.width > 0 && wheel.height > 0 }
+                    main {
+                        val bitmap = android.graphics.Bitmap.createBitmap(wheel.width, wheel.height,
+                            android.graphics.Bitmap.Config.ARGB_8888)
+                        try {
+                            val canvas = android.graphics.Canvas(bitmap)
+                            fun drawBounds(expectedStroke: Float): android.graphics.RectF {
+                                wheel.draw(canvas)
+                                assertEquals(expectedStroke, (field(wheel, "paint") as android.graphics.Paint).strokeWidth, .001f)
+                                return android.graphics.RectF().also {
+                                    (field(wheel, "path") as android.graphics.Path).computeBounds(it, true)
+                                    assertFalse("Actual drawn clip must be nonempty", it.isEmpty)
+                                    assertEquals(expectedStroke / 2f, it.left, .001f)
+                                    assertEquals(wheel.width - expectedStroke / 2f, it.right, .001f)
+                                }
+                            }
+                            fun rows() = (0 until wheel.childCount).map { index -> wheel.getChildAt(index).let {
+                                listOf(it.left.toFloat(), it.top.toFloat(), it.right.toFloat(), it.bottom.toFloat(), it.translationY)
+                            } }
+                            val defaultWidth = popup.outlineWidthDp
+                            if (dark) assertEquals(1f, checkNotNull(defaultWidth), 0f) else assertNull(defaultWidth)
+                            val defaultPath = drawBounds(scale)
+                            if (firstPath == null) firstPath = defaultPath else assertEquals(firstPath, defaultPath)
+                            val beforeRows = rows()
+                            // Exercise the renderer's existing internal overrides without inventing a field reset API.
+                            popup.outlineWidthDp = 0f
+                            drawBounds(0f)
+                            popup.outlineWidthDp = 2f
+                            drawBounds(2f * scale)
+                            popup.outlineWidthDp = defaultWidth
+                            assertEquals(defaultPath, drawBounds(scale))
+                            assertEquals(beforeRows, rows())
+                            assertEquals(content, field(dropdownField, "content"))
+                            assertTrue(selections.isEmpty())
+                        } finally { bitmap.recycle() }
+                        previousWheel = wheel
+                    }
+                }
+            } finally {
+                main {
+                    try { cleanupGroup?.close() }
+                    finally { try { cleanupField?.close() } finally { activity.finish() } }
+                }
+            }
+        }
+    }
+
     @Test fun accessibilityDismissClosesWithoutSelecting() {
         for (policy in DropdownSelectionPolicy.values()) scenario(policy) { f ->
             main {

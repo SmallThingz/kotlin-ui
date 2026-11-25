@@ -16,6 +16,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import smallthingz.ui.reverb.onboarding.ReverbOnboardingScreenLayout
 import smallthingz.ui.unit.Density
 
 @RunWith(AndroidJUnit4::class)
@@ -58,6 +59,20 @@ class NativeOnboardingPresentationIntegrationTest {
         } finally {
             bitmap.recycle()
         }
+    }
+
+    @Test fun loadingSpinnerFitsAndStaysCenteredWhenEitherWindowAxisIsConstrained() = main {
+        val spinner = View(context)
+        fun assertBounds(width: Int, height: Int, density: Float, expected: Rect) {
+            ReverbOnboardingScreenLayout.measureLoading(spinner, width, height, density)
+            ReverbOnboardingScreenLayout.layoutLoading(spinner, width, height)
+            assertEquals(expected, Rect(spinner.left, spinner.top, spinner.right, spinner.bottom))
+        }
+
+        assertBounds(120, 96, 1f, Rect(40, 28, 80, 68))
+        assertBounds(120, 24, 1f, Rect(48, 0, 72, 24))
+        assertBounds(24, 120, 1f, Rect(0, 48, 24, 72))
+        assertBounds(160, 160, 2f, Rect(40, 40, 120, 120))
     }
 
     @Test fun pagerChildClipKeepsVerticalShadowMarginAndExactHorizontalBounds() = main {

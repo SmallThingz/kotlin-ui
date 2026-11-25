@@ -622,7 +622,7 @@ class NativeAnchoredDropdown(
             }
 
             private fun updateRevealPath(stroke: Float? = customOutlineStroke()) {
-                val inset = stroke?.div(2f) ?: .5f
+                val inset = (stroke ?: density.density) / 2f
                 rectangle.set(inset, revealTop + inset, width - inset, revealBottom - inset)
                 for (corner in 0..3) {
                     val geometry = checkNotNull(viewport)

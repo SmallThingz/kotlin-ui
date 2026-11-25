@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
+import android.view.View
 import android.view.ViewTreeObserver
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -96,6 +97,52 @@ class NativeButtonWindowRecipeIntegrationTest {
                         assertTrue(save.label.measuredWidth > defaultTrimWidth)
                     }
                     export.close(); cancel.close(); save.close()
+                }
+            }
+        }
+    }
+
+    @Test fun changingCompactPaddingRepositionsContentAtIdenticalAssignedBoundsInBothPalettes() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync {
+            val context = instrumentation.targetContext
+            val density = Density(context)
+            val resolver = createFontFamilyResolver(context)
+            val recipe = NativeUiAppearance.Default.buttons.footerContinue
+            fun dp(value: Int) = (value * density.density).roundToInt()
+            fun exact(size: Int) = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY)
+
+            for (darkTheme in listOf(false, true)) {
+                val palette = NativeColorScheme.fallback(darkTheme).buttonPalette
+                val glyph = ColorDrawable(Color.WHITE)
+                val button = NativeMaterialButtonView(context, recipe, density, resolver) {}.apply {
+                    layoutDirection = View.LAYOUT_DIRECTION_LTR
+                    setLeadingIcon(glyph)
+                    bind("Continue to the next screen", true, palette)
+                }
+                try {
+                    val width = button.preferredWidth(compact = true)
+                    val height = dp(96)
+                    val intrinsicLabelWidth = button.label.maxIntrinsicTextWidth()
+
+                    for (compact in listOf(false, true, false)) {
+                        button.compactPadding = compact
+                        button.measure(exact(width), exact(height))
+                        button.layout(0, 0, width, height)
+
+                        val inset = dp(if (compact) 12 else 24)
+                        val message = "darkTheme=$darkTheme compact=$compact"
+                        assertEquals(message, width, button.measuredWidth)
+                        assertEquals(message, height, button.measuredHeight)
+                        assertEquals(message, inset, glyph.bounds.left)
+                        assertEquals(message, dp(19), glyph.bounds.width())
+                        assertEquals(message, dp(19), glyph.bounds.height())
+                        assertEquals(message, dp(7), button.label.left - glyph.bounds.right)
+                        assertEquals(message, inset, width - button.label.right)
+                        assertEquals(message, intrinsicLabelWidth - 2 * (inset - dp(12)), button.label.width)
+                    }
+                } finally {
+                    button.close()
                 }
             }
         }

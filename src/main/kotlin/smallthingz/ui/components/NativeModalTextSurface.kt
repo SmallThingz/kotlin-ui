@@ -40,7 +40,10 @@ internal object NativeModalTextSurface {
 
     fun invalidate(owner: View) {
         if (owner is NativeSurface || owner is NativeMaterialButtonView || owner.background != null) return
-        if (owner is ParagraphView && owner.paintedTextSurface != null) owner.invalidate()
+        when (owner) {
+            is ParagraphView -> if (owner.paintedTextSurface != null) owner.invalidate()
+            is NativeTextSurfaceTarget -> owner.invalidateTextSurfaceInk()
+        }
         if (owner is ViewGroup) for (index in 0 until owner.childCount) invalidate(owner.getChildAt(index))
     }
 }
