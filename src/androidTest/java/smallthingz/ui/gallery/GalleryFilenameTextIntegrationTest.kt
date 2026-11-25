@@ -124,9 +124,10 @@ class GalleryFilenameTextIntegrationTest {
     @Test fun noBreakSpanSuppressesLegalBreakInsideExtension() {
         org.junit.Assume.assumeTrue(Build.VERSION.SDK_INT >= 35)
         instrumentation.runOnMainSync {
-            val filename = "head-longword.part-xx"
-            val earlierBreak = filename.indexOf('-') + 1
-            val suffixBreak = filename.lastIndexOf('-') + 1
+            // Ordinary space/CJK boundaries avoid Minikin's separate hard-hyphen policy.
+            val filename = "head longword.画像"
+            val earlierBreak = filename.indexOf(' ') + 1
+            val suffixBreak = filename.lastIndex
             val breaks = BreakIterator.getLineInstance(Locale.US).apply { setText(filename) }
             assertTrue("Ordinary break before the final segment", breaks.isBoundary(earlierBreak))
             assertTrue("Ordinary break inside the extension", breaks.isBoundary(suffixBreak))
