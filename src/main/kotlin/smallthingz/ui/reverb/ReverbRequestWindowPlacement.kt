@@ -3,6 +3,7 @@ package smallthingz.ui.reverb
 import android.view.Gravity
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.FrameLayout
 import kotlin.math.roundToInt
 
 /**
@@ -22,6 +23,10 @@ class ReverbRequestWindowPlacement private constructor(val width: Int, val y: In
         }
 
     companion object {
+        /** Placement in the existing unstyled holder; window and content lifetime remain host-owned. */
+        fun contentParameters(): FrameLayout.LayoutParams =
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+
         /** Top request panels share the permission recipe's width cap and exterior window inset. */
         fun forAvailableWidth(availableWidthPx: Int, density: Float): ReverbRequestWindowPlacement {
             require(availableWidthPx > 0 && density.isFinite() && density > 0f)
