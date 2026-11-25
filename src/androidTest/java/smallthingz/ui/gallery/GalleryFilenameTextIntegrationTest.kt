@@ -2,17 +2,18 @@ package smallthingz.ui.gallery
 
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.icu.text.BreakIterator
 import android.os.Build
 import android.text.Layout
 import android.text.Selection
 import android.text.Spannable
 import android.text.Spanned
-import android.text.style.LineBreakConfigSpan
+import android.text.style.ReplacementSpan
 import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
-import androidx.annotation.RequiresApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
@@ -93,6 +94,18 @@ class GalleryFilenameTextIntegrationTest {
     private fun assertExactSelectionAndAccessibility(view: GalleryFilenameText, expected: String) {
         assertTrue(view.isTextSelectable)
         val buffer = view.text as Spannable
+        val spans = buffer.getSpans(0, buffer.length, ReplacementSpan::class.java)
+        if (spans.isNotEmpty()) {
+            val dot = buffer.getSpanStart(spans.single())
+            // Noneditable Details deliberately treats the extension as one selection unit.
+            // Do not promise per-character caret positions inside a ReplacementSpan.
+            if (expected.all { it.code < 128 }) {
+                assertEquals("Native cursor must step across the atomic extension: ${diagnostics(view)}",
+                    dot, checkNotNull(view.layout).getOffsetToLeftOf(expected.length))
+            }
+            Selection.setSelection(buffer, dot, expected.length)
+            assertEquals(expected.substring(dot), buffer.subSequence(view.selectionStart, view.selectionEnd).toString())
+        }
         Selection.setSelection(buffer, 0, expected.length)
         assertEquals(expected, buffer.subSequence(view.selectionStart, view.selectionEnd).toString())
         // This checks the native copy source without writing the device clipboard.
@@ -109,15 +122,44 @@ class GalleryFilenameTextIntegrationTest {
     }
 
     @Test fun extensionAndExactNameAtNormalAndLargeFontWidths() = instrumentation.runOnMainSync {
-        // The JPEG can enter emergency wrapping. Its text, selection and span still have to survive.
         for (font in listOf(1f, 2f)) {
             val view = label(context(font), name)
             for (width in listOf(240, 280, 312, 360)) {
                 measure(view, width)
+                assertExtensionSpan(view, name.lastIndexOf('.'))
                 assertFits(view, name)
+                assertExtensionTogether(view)
                 assertExactSelectionAndAccessibility(view, name)
             }
-            if (Build.VERSION.SDK_INT >= 35) assertExtensionSpan(view, name.lastIndexOf('.'))
+        }
+    }
+
+    @Test fun protectsAnActuallySplitNaturalExtensionWithoutRewriting() {
+        instrumentation.runOnMainSync {
+            for (font in listOf(1f, 2f)) {
+                val context = context(font)
+                val natural = NativeText(context, GalleryDesign.palette(context, true).pageControls, style).apply {
+                    layoutParams = ViewGroup.LayoutParams(-1, -2)
+                    setTextIsSelectable(true)
+                    text = name
+                }
+                val guarded = label(context, name)
+                val dot = name.lastIndexOf('.')
+                var exercised = false
+                for (width in 180..360) {
+                    measure(natural, width)
+                    val layout = checkNotNull(natural.layout)
+                    if (layout.getLineForOffset(dot) == layout.getLineForOffset(name.lastIndex)) continue
+                    measure(guarded, width)
+                    assertExtensionSpan(guarded, dot)
+                    assertFits(guarded, name)
+                    assertExtensionTogether(guarded)
+                    assertExactSelectionAndAccessibility(guarded, name)
+                    exercised = true
+                    break
+                }
+                assertTrue("Must exercise a naturally split extension at font=$font, not a vacuous happy path", exercised)
+            }
         }
     }
 
@@ -166,6 +208,7 @@ class GalleryFilenameTextIntegrationTest {
                 assertFits(guarded, filename)
                 assertEquals(diagnostics(guarded), 2, guardedLayout.lineCount)
                 assertEquals(diagnostics(guarded), earlierBreak, guardedLayout.getLineStart(1))
+                assertExtensionSpan(guarded, filename.lastIndexOf('.'))
                 assertExtensionTogether(guarded)
                 assertExactSelectionAndAccessibility(guarded, filename)
             }
@@ -184,7 +227,9 @@ class GalleryFilenameTextIntegrationTest {
                 retained.applyStyle(nextStyle)
                 for (width in listOf(312, 180, 360, 312)) {
                     measure(retained, width)
+                    assertExtensionSpan(retained, name.lastIndexOf('.'))
                     assertFits(retained, name)
+                    assertExtensionTogether(retained)
                     assertSame(buffer, retained.text)
                     assertEquals(name.lastIndexOf('.'), retained.selectionStart)
                     assertEquals(name.length, retained.selectionEnd)
@@ -207,8 +252,31 @@ class GalleryFilenameTextIntegrationTest {
     @Test fun overwideExtensionAndNamesWithoutExtensionKeepAllCharacters() = instrumentation.runOnMainSync {
         for (font in listOf(1f, 2f)) {
             val view = label(context(font), name)
+            measure(view, 120)
+            val buffer = view.text as Spannable
+            val dot = name.lastIndexOf('.')
+            Selection.setSelection(buffer, dot, name.length)
+            view.setPadding(7, 0, 5, 0)
+            val density = view.resources.displayMetrics.density
+            val tightWidth = (view.paint.measureText(name, dot, name.length) / density).toInt()
+            measure(view, tightWidth) // Padding makes the suffix itself too wide.
+            assertNoExtensionSpan(view)
+            assertFits(view, name)
+            assertSame(buffer, view.text)
+            assertEquals(dot, view.selectionStart)
+            assertEquals(name.length, view.selectionEnd)
+            measure(view, 120)
+            assertExtensionSpan(view, dot)
+            assertExtensionTogether(view)
+            assertFits(view, name)
+            assertSame(buffer, view.text)
+            assertEquals(dot, view.selectionStart)
+            assertEquals(name.length, view.selectionEnd)
+            assertExactSelectionAndAccessibility(view, name)
+            view.setPadding(0, 0, 0, 0)
             val longName = "fixture." + "longextension".repeat(12)
-            for (value in listOf(longName, ".nomedia", "no-extension", "trailing.", "מסמך.jpg", "image.\ntext", "", name)) {
+            for (value in listOf(longName, ".nomedia", "no-extension", "trailing.",
+                "מסמך.jpg", "صورة.jpg", "image.תמונה", "image.صورة", "image.\ntext", "", name)) {
                 view.bindName(value)
                 measure(view, 120)
                 assertFits(view, value)
@@ -216,17 +284,51 @@ class GalleryFilenameTextIntegrationTest {
                 if (value == longName) {
                     val layout = checkNotNull(view.layout)
                     assertTrue("Overwide suffix must fall back to wrapping, not clipping", layout.lineCount > 1)
-                }
+                    assertNoExtensionSpan(view)
+                } else if (value in listOf("מסמך.jpg", "صورة.jpg", "image.תמונה", "image.صورة", name)) {
+                    assertExtensionSpan(view, value.lastIndexOf('.'))
+                    assertExtensionTogether(view)
+                    assertNativeSuffixDrawing(view)
+                } else assertNoExtensionSpan(view)
             }
         }
     }
 
-    @RequiresApi(35)
     private fun assertExtensionSpan(view: GalleryFilenameText, dot: Int) {
         val text = view.text as Spanned
-        val spans = text.getSpans(0, text.length, LineBreakConfigSpan::class.java)
-        assertEquals(1, spans.size)
+        val spans = text.getSpans(0, text.length, ReplacementSpan::class.java)
+        assertEquals(diagnostics(view), 1, spans.size)
         assertEquals(dot, text.getSpanStart(spans.single()))
         assertEquals(text.length, text.getSpanEnd(spans.single()))
+    }
+
+    private fun assertNoExtensionSpan(view: GalleryFilenameText) {
+        val text = view.text as Spanned
+        assertEquals(diagnostics(view), 0, text.getSpans(0, text.length, ReplacementSpan::class.java).size)
+    }
+
+    /** Native standalone suffix is the shaping/bidi oracle, including non-Latin extensions. */
+    private fun assertNativeSuffixDrawing(view: GalleryFilenameText) {
+        val buffer = view.text as Spanned
+        val span = buffer.getSpans(0, buffer.length, ReplacementSpan::class.java).single()
+        val start = buffer.getSpanStart(span)
+        val natural = NativeText(view.context, GalleryDesign.palette(view.context, true).pageControls, style).apply {
+            text = buffer.subSequence(start, buffer.length).toString()
+            setTextColor(view.currentTextColor)
+        }
+        measure(natural, 120)
+        val layout = checkNotNull(natural.layout)
+        assertEquals(1, layout.lineCount)
+        val expected = Bitmap.createBitmap(layout.width, layout.height, Bitmap.Config.ARGB_8888)
+        val actual = Bitmap.createBitmap(layout.width, layout.height, Bitmap.Config.ARGB_8888)
+        try {
+            layout.draw(Canvas(expected))
+            val pixels = IntArray(expected.width * expected.height)
+            expected.getPixels(pixels, 0, expected.width, 0, 0, expected.width, expected.height)
+            assertTrue("Native suffix oracle must contain ink", pixels.any { it ushr 24 != 0 })
+            span.draw(Canvas(actual), buffer, start, buffer.length, layout.getLineLeft(0),
+                layout.getLineTop(0), layout.getLineBaseline(0), layout.getLineBottom(0), natural.paint)
+            assertTrue("Suffix must render as native text, including bidi shaping: ${natural.text}", expected.sameAs(actual))
+        } finally { expected.recycle(); actual.recycle() }
     }
 }
