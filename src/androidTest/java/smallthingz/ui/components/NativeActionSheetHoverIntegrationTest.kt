@@ -287,18 +287,27 @@ class NativeActionSheetHoverIntegrationTest {
     }
 
     private fun awaitSettledLayout(fixture: Fixture) {
+        lateinit var state: NativeActionSheetState
+        main {
+            state = NativeActionSheet::class.java.getDeclaredField("state")
+                .apply { isAccessible = true }.get(fixture.sheet) as NativeActionSheetState
+        }
         val end = SystemClock.uptimeMillis() + 4000L
         do {
             var settled = false
             main {
                 val atAnchor = if (fixture.entryEdge == NativeDialogEdge.TOP) fixture.surface.top == 0
                     else fixture.surface.bottom == fixture.root.sourceSemanticsHeight
-                settled = fixture.editor.isLaidOut && fixture.scrim.opacity >= .99f && atAnchor
+                // Pixel-rounded placement can reach the anchor before show() commits EXPANDED.
+                // A handle tap during that gap requests show() again instead of dismissal.
+                settled = state.currentValue == NativeSheetValue.EXPANDED &&
+                    state.targetValue == NativeSheetValue.EXPANDED && !state.animationRunning &&
+                    fixture.editor.isLaidOut && fixture.scrim.opacity >= .99f && atAnchor
             }
             if (settled) return
             Thread.sleep(20)
         } while (SystemClock.uptimeMillis() < end)
-        error("Sheet never reached the visible anchor")
+        error("Sheet never finished opening at the visible anchor")
     }
 
     private fun assertBackdropDoesNotCoverSheet(fixture: Fixture) {

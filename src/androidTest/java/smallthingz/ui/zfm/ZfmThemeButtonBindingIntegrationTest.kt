@@ -50,6 +50,8 @@ class ZfmThemeButtonBindingIntegrationTest {
         // Verify these inputs denote distinct roles on the device instead of testing an ambiguous color collision.
         assertEquals(3, setOf(light.accent, light.ink, light.error).size)
         val roles: List<(ZfmTheme) -> Int> = listOf({ it.accent }, { it.ink }, { it.error }, { explicit })
+        // Keyed tags require an app resource ID; use one unrelated to button binding state.
+        val callerTagKey = smallthingz.ui.R.string.tooltip_label
         for (role in roles) {
             val button = light.button(activity, "Action", foreground = role(light)) {}
             mount(root, button)
@@ -58,7 +60,7 @@ class ZfmThemeButtonBindingIntegrationTest {
             val callerTag = Any()
             val keyedTag = Any()
             button.tag = callerTag
-            button.setTag(android.R.id.text1, keyedTag)
+            button.setTag(callerTagKey, keyedTag)
             assertEquals(role(light), ink(button))
             for (next in listOf(dark, light)) {
                 rebind(root, button) { next.bindButton(button) }
@@ -71,7 +73,7 @@ class ZfmThemeButtonBindingIntegrationTest {
                 assertSame(label, button.label)
                 assertSame(endpoint, button.nativeClickEndpoint)
                 assertSame(callerTag, button.tag)
-                assertSame(keyedTag, button.getTag(android.R.id.text1))
+                assertSame(keyedTag, button.getTag(callerTagKey))
                 assertEquals("Action", button.label.getText())
             }
         }
