@@ -61,9 +61,9 @@ class ReverbRecordingRenameSheet(
     private val field = ReverbRenameFieldView(anchor.context, dialog.contentContext, environment,
         initialName, initialError, readName, onEdit, onConfirm)
     private val cancel = ReverbSheetButton(anchor.context, dialog.contentContext, environment.theme, false,
-        cancelLabel, onDismiss)
+        cancelLabel, onDismiss, leadingIcon = ReverbIcon.Close)
     private val confirm = ReverbSheetButton(anchor.context, dialog.contentContext, environment.theme, true,
-        title, onConfirm)
+        title, onConfirm, leadingIcon = ReverbIcon.Edit)
     private val actions = ReverbSheetActions(anchor.context, dialog.contentContext, environment.theme, listOf(cancel, confirm))
     private var closed = false
 

@@ -42,9 +42,16 @@ open class NativeProgressActionView(
         importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO
         clipChildren=false;clipToPadding=false;addView(visual)
     }
+    private var reserveStableIcon = leadingIcon != null
+    internal fun reserveStableLeadingIcon() {
+        if (reserveStableIcon) return
+        reserveStableIcon = true
+        requestLayout()
+    }
     fun bind(text:String,enabled:Boolean,next:NativeSettingsVisualEnvironment) {
         environment=next;visual.bind(text,enabled,next)
     }
+    internal fun setLeadingActionIcon(icon: Drawable?) = visual.setLeadingIcon(icon)
     fun bindProgress(progress:Float?,running:Boolean) = visual.bindProgress(progress,running)
 
     override val actionMinimumWidthPx: Int get() = max(visual.actionMinimumWidthPx,
@@ -61,14 +68,18 @@ open class NativeProgressActionView(
         var stableHeight=minimum
         sizingLabel?.let {label->
             label.setTypography(environment.appearance.typography.buttonLabelStyle,environment.textDensity,environment.sharedFontResolver)
-            val padding=2*(environment.appearance.calibration.actionSurface.horizontalPaddingDp *
-                environment.textDensity.density).roundToInt()
-            val textWidth=if(MeasureSpec.getMode(w)==MeasureSpec.UNSPECIFIED)unspecified()
-                else atMost((MeasureSpec.getSize(w)-padding).coerceAtLeast(0))
-            stableLabels.forEach {text->
-                label.setText(text);label.measure(textWidth,unspecified())
-                stableHeight=max(stableHeight,label.measuredHeight+2*(environment.appearance.calibration.actionSurface.verticalPaddingDp *
-                    environment.textDensity.density).roundToInt())
+            val style = environment.appearance.calibration.actionSurface
+            val density = environment.textDensity.density
+            val iconSize = if (reserveStableIcon) (style.iconSizeDp * density).roundToInt() else 0
+            val iconGap = if (reserveStableIcon) (style.iconGapDp * density).roundToInt() else 0
+            val padding = 2 * (style.horizontalPaddingDp * density).roundToInt()
+            val textWidth = if (MeasureSpec.getMode(w) == MeasureSpec.UNSPECIFIED) unspecified()
+                else atMost((MeasureSpec.getSize(w) - padding - iconSize - iconGap).coerceAtLeast(0))
+            val vertical = 2 * (style.verticalPaddingDp * density).roundToInt()
+            stableLabels.forEach { text ->
+                label.setText(text)
+                label.measure(textWidth, unspecified())
+                stableHeight = max(stableHeight, max(iconSize, label.measuredHeight) + vertical)
             }
         }
         val measuredW=resolveSize(max(minimum,visual.measuredWidth),w)

@@ -8,6 +8,14 @@ import android.graphics.Color
 import kotlin.math.roundToInt
 import smallthingz.ui.common.SegmentOption
 import smallthingz.ui.reverb.settings.ReverbQuickTileEditor
+import smallthingz.ui.reverb.settings.ReverbCalibrationGraph
+import smallthingz.ui.reverb.settings.ReverbCalibrationGraphPalette
+import smallthingz.ui.reverb.settings.ReverbSettingsActionView
+import smallthingz.ui.reverb.settings.ReverbSilenceCalibrationActions
+import smallthingz.ui.reverb.settings.ReverbSilenceCalibrationLabels
+import smallthingz.ui.reverb.settings.ReverbSilenceCalibrationState
+import smallthingz.ui.reverb.settings.ReverbSilenceSettingsView
+import smallthingz.ui.text.view.ParagraphView
 import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
@@ -35,6 +43,103 @@ class NativeMergedActionLayoutIntegrationTest {
     private val context get() = instrumentation.targetContext
     private fun environment() = ReverbEnvironment(Density(1f, 2f), createFontFamilyResolver(context),
         NativeDarkSurfacePreset.Amoled.colorScheme().resolve(true, 30) { error("No resources") })
+
+    @Test fun filledAndTextActionsShareInsetsAndMinimumWithoutEqualWidths() = instrumentation.runOnMainSync {
+        val env = environment()
+        val recipes = env.appearance.buttons
+        for (density in listOf(1f, 1.25f)) {
+            val textDensity = Density(density, 2f)
+            fun dp(value: Int) = (value * density).roundToInt()
+            val buttons = listOf(recipes.text, recipes.destructive).map { recipe ->
+                NativeMaterialButtonView(context, recipe, textDensity, env.sharedFontResolver) {}
+            }
+            try {
+                val row = NativeMergedActionLayout(context, buttons, env.palette).asActionFooter(density)
+                val roles = buttons.map { it.mergedRowAccessibility.roleView }
+                for (label in listOf("", "Cancel", "Clear", "Save a copy")) {
+                    buttons.forEach { it.bind(label, true, env.palette.buttonPalette) }
+                    measure(row, 1600)
+                    assertEquals(buttons[0].width, buttons[1].width)
+                    for (button in buttons) {
+                        assertEquals(dp(48), button.actionMinimumWidthPx)
+                        assertEquals(maxOf(dp(48), 2 * dp(12) + button.label.measuredWidth), button.width)
+                        assertEquals(button.preferredWidth(false), button.width)
+                        assertEquals(button.preferredWidth(false), button.preferredWidth(true))
+                    }
+                }
+                buttons[0].bind("Cancel", true, env.palette.buttonPalette)
+                buttons[1].bind("Save a copy", false, env.palette.buttonPalette)
+                for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
+                    row.layoutDirection = direction
+                    measure(row, 1600)
+                    assertTrue(buttons[1].width > buttons[0].width)
+                    assertEquals(buttons.sumOf { it.width }, row.actionSurface.width)
+                    assertEquals(dp(6), row.height - row.actionSurface.bottom)
+                    buttons.forEachIndexed { index, button ->
+                        assertSame(roles[index], button.mergedRowAccessibility.roleView)
+                        val paragraph = checkNotNull(button.label.currentParagraph)
+                        assertFalse(paragraph.didExceedMaxLines)
+                        assertEquals(button.label.getText().length, paragraph.getLineEnd(paragraph.lineCount - 1))
+                    }
+                    assertTrue(buttons[0].isEnabled)
+                    assertFalse(buttons[1].isEnabled)
+                    assertFalse(buttons[1].performClick())
+                }
+            } finally { buttons.forEach { it.close() } }
+        }
+    }
+
+    @Test fun joiningNormalizesCustomLabelGeometryButPreservesStandaloneAndIcons() = instrumentation.runOnMainSync {
+        val env = environment()
+        val recipes = env.appearance.buttons
+        // Local resources deliberately differ from the retained button density; no device setting changes.
+        val geometryContext = context.createConfigurationContext(
+            android.content.res.Configuration(context.resources.configuration).apply { densityDpi = 320 })
+        assertEquals(2f, geometryContext.resources.displayMetrics.density, 0f)
+        val custom = recipes.text.copy(surface = recipes.text.surface.copy(
+            minimumWidthDp = 96, horizontalPaddingDp = 28))
+        val buttons = listOf(recipes.text, custom, recipes.footerContinue, recipes.raisedIcon).map { recipe ->
+            NativeMaterialButtonView(geometryContext, recipe, Density(1.25f), env.sharedFontResolver) {}.apply {
+                bind("Save a copy", true, env.palette.buttonPalette)
+            }
+        }
+        fun dp(value: Int) = (value * 1.25f).roundToInt()
+        try {
+            assertEquals(maxOf(dp(96), 2 * dp(28) + buttons[1].label.maxIntrinsicTextWidth()),
+                buttons[1].preferredWidth(false))
+            assertTrue(buttons[1].preferredWidth(false) > buttons[0].preferredWidth(false))
+            // Standalone assigned controls still use resource-density insets and obey the assigned bounds.
+            assertEquals(2 * (recipes.footerContinue.surface.horizontalPaddingDp * 2f).roundToInt() +
+                buttons[2].label.maxIntrinsicTextWidth(), buttons[2].preferredWidth(false))
+            buttons[2].measure(View.MeasureSpec.makeMeasureSpec(240, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(80, View.MeasureSpec.EXACTLY))
+            assertEquals(240, buttons[2].measuredWidth)
+            assertEquals(80, buttons[2].measuredHeight)
+            val iconWidth = buttons[3].preferredWidth(false)
+            buttons.forEach { it.joinActionSurface() }
+            buttons.take(3).forEach {
+                it.bindTypography(Density(1f), env.sharedFontResolver)
+                it.bindTypography(Density(1.25f), env.sharedFontResolver)
+            }
+            assertEquals(iconWidth, buttons[3].preferredWidth(false))
+            assertEquals(dp(48), iconWidth)
+            val expectedWidth = buttons[0].preferredWidth(false)
+            val narrow = dp(100)
+            val expectedHeight = buttons[0].intrinsicHeight(narrow)
+            for (button in buttons.take(3)) {
+                assertEquals(dp(48), button.actionMinimumWidthPx)
+                assertEquals(expectedWidth, button.preferredWidth(false))
+                assertEquals(expectedWidth, button.preferredWidth(true))
+                assertEquals(expectedHeight, button.intrinsicHeight(narrow))
+                button.measure(View.MeasureSpec.makeMeasureSpec(narrow, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+                assertEquals(expectedHeight, button.measuredHeight)
+                button.measure(View.MeasureSpec.makeMeasureSpec(dp(1000), View.MeasureSpec.AT_MOST),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+                assertEquals(expectedWidth, button.measuredWidth)
+            }
+        } finally { buttons.forEach { it.close() } }
+    }
 
     @Test fun narrowLargeTextRtlDisabledAndGoneActionsKeepIndependentGeometry() = instrumentation.runOnMainSync {
         val env = environment()
@@ -99,6 +204,114 @@ class NativeMergedActionLayoutIntegrationTest {
             measure(row, 180)
             assertEquals(0, row.height)
         } finally { buttons.forEach { it.close() } }
+    }
+
+    @Test fun confirmationContentHasTopClearanceAndBalancedActionGap() = instrumentation.runOnMainSync {
+        val base = environment()
+        for (density in listOf(1f, 1.25f)) for (custom in listOf(false, true)) {
+            val recipe = if (custom) base.appearance.modals.sheet.copy(
+                topPaddingDp = 11f, actionsGapDp = 9f, bodyGapDp = 13f,
+                horizontalPaddingDp = 27f, bottomPaddingDp = 29f,
+            ) else base.appearance.modals.sheet
+            val env = ReverbEnvironment.withTestAppearance(Density(density, 2f), base.sharedFontResolver,
+                base.palette, base.appearance.copy(modals = base.appearance.modals.copy(sheet = recipe)))
+            val root = FrameLayout(context)
+            fun dp(value: Int) = (value * density).roundToInt()
+            fun check(dialog: NativeActionSheet) {
+                // Read the actual retained content, then assert laid-out edges rather than recipe fields.
+                val content = NativeActionSheet::class.java.getDeclaredField("appContent")
+                    .apply { isAccessible = true }.get(dialog) as NativeSheetContent
+                val header = content.getChildAt(0)
+                val body = content.getChildAt(1)
+                val actions = content.getChildAt(2) as NativeMergedActionLayout
+                for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
+                    content.layoutDirection = direction
+                    for (width in listOf(dp(220), dp(600))) {
+                        measure(content, width)
+                        assertEquals(direction, content.layoutDirection)
+                        assertEquals(dp(if (custom) 11 else 6), header.top)
+                        assertEquals(dp(if (custom) 13 else 12), body.top - header.bottom)
+                        assertEquals(dp(if (custom) 9 else 6),
+                            actions.top + actions.actionSurface.top - body.bottom)
+                        assertEquals(dp(6), content.height - actions.top - actions.actionSurface.bottom)
+                        assertEquals(dp(if (custom) 27 else 24), body.left)
+                        assertEquals(width - body.left, body.right)
+                        assertTrue(body.height > 0)
+                        assertTrue(actions.actionSurface.height > 0)
+                        assertEquals(0, content.height - actions.bottom)
+                    }
+                }
+            }
+            fun checkOwner(owner: AutoCloseable) {
+                try {
+                    check(owner.javaClass.getDeclaredField("dialog").apply { isAccessible = true }
+                        .get(owner) as NativeActionSheet)
+                } finally { owner.close() }
+            }
+            // Both actual capture routes use this same presentation with distinct titles/messages.
+            for (title in listOf("Discard one-shot?", "Discard loop?")) {
+                checkOwner(ReverbTextSheet(root, env.theme, title, "Discard the captured audio?", {}) { host ->
+                    listOf(ReverbSheetButton(context, host, env.theme, false, "Cancel", {}),
+                        ReverbSheetButton(context, host, env.theme, true, "Discard", {},
+                            leadingIcon = ReverbIcon.Delete, errorColors = true))
+                })
+            }
+            checkOwner(ReverbRecordingRenameSheet(root, env, "Rename", "Cancel", "Recording", null,
+                { "Recording" }, { true }, {}, {}, {}))
+            checkOwner(ReverbConfirmationSheet(root, env.theme, "Confirm", "Confirm this operation?",
+                "Cancel", "Confirm", {}, {}))
+            val dialog = createReverbActionSheet(root, env.theme, "Delete tile?", {})
+            val tile = ReverbTileDeleteSheetContent(context, env, { root }, "Delete this tile?", "Cancel", "Delete", {}, {})
+            try {
+                tile.bind(env, canCancel = true, canConfirm = true)
+                dialog.setContent(tile.body, tile.actions, emptyList(), scrollable = true)
+                check(dialog)
+            } finally { try { dialog.dismiss() } finally { tile.close() } }
+        }
+    }
+
+    @Test fun inlineRenameSharesSheetClearanceAndRetainsFieldInsetsOnRebind() = instrumentation.runOnMainSync {
+        val base = environment()
+        for (density in listOf(1f, 1.25f)) for (fieldPadding in listOf(16f, 19f)) {
+            val appearance = base.appearance.copy(outlinedField = base.appearance.outlinedField.copy(paddingDp = fieldPadding))
+            fun environment(custom: Boolean) = ReverbEnvironment.withTestAppearance(Density(density, 2f),
+                base.sharedFontResolver, base.palette, if (!custom) appearance else appearance.copy(
+                    modals = appearance.modals.copy(sheet = appearance.modals.sheet.copy(topPaddingDp = 11f, actionsGapDp = 9f))))
+            val env = environment(false)
+            val runtime = NativeModalWindowRuntime(context)
+            val rename = ReverbInlineRecordingRename(context, env, runtime.scope, FrameLayout(context),
+                "Name", "Cancel", "Save", { "Recording" }, {}, {}, {})
+            val field = rename.outlinedField
+            val editor = rename.editor
+            val footer = descendants(rename).filterIsInstance<NativeMergedActionLayout>().single()
+            fun dp(value: Float) = (value * density).roundToInt()
+            try {
+                for (custom in listOf(false, true, false)) for (error in listOf(null, "Name already exists")) {
+                    rename.bind(environment(custom), "Recording", error, false)
+                    for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
+                        rename.layoutDirection = direction
+                        for (width in listOf(dp(220f), dp(600f))) {
+                            measure(rename, width)
+                            assertSame(field, rename.outlinedField)
+                            assertSame(editor, rename.editor)
+                            assertSame(footer, descendants(rename).filterIsInstance<NativeMergedActionLayout>().single())
+                            assertEquals(dp(if (custom) 11f else 6f), field.top)
+                            assertEquals(dp(fieldPadding), field.left)
+                            assertEquals(width - dp(fieldPadding), field.right)
+                            assertEquals(dp(fieldPadding), field.paddingTop)
+                            assertEquals(dp(fieldPadding), field.paddingBottom)
+                            val lastBody = if (error == null) field else rename.getChildAt(1)
+                            assertEquals(dp(if (custom) 9f else 6f), footer.top - lastBody.bottom)
+                            assertEquals(dp(6f), rename.height - footer.top - footer.actionSurface.bottom)
+                            assertTrue(field.height >= dp(56f))
+                            descendants(footer).filterIsInstance<NativeMaterialButtonView>().forEach {
+                                assertTrue(it.height >= dp(48f))
+                            }
+                        }
+                    }
+                }
+            } finally { try { rename.close() } finally { runtime.close() } }
+        }
     }
 
     @Suppress("DEPRECATION")
@@ -172,7 +385,8 @@ class NativeMergedActionLayoutIntegrationTest {
         val env = environment()
         val root = FrameLayout(context)
         val sheet = ReverbTextSheet(root, env.theme, "Clear buffer", "Delete this buffer?", {}) { host ->
-            listOf(ReverbSheetButton(context, host, env.theme, false, "Cancel", host.requestAnimatedDismiss),
+            listOf(ReverbSheetButton(context, host, env.theme, false, "Cancel", host.requestAnimatedDismiss,
+                    leadingIcon = ReverbIcon.Close),
                 ReverbSheetButton(context, host, env.theme, true, "Clear buffer", {},
                     leadingIcon = ReverbIcon.Delete, errorColors = true))
         }
@@ -181,6 +395,29 @@ class NativeMergedActionLayoutIntegrationTest {
             val actions = sheet.javaClass.getDeclaredField("actions").apply { isAccessible = true }.get(sheet)
             assertTrue(actions is NativeMergedActionLayout)
             val row = actions as ReverbSheetActions
+            val surfaces = row.buttons.map { it.accessibilitySemanticView as NativeMaterialButtonView }
+            assertEquals(ReverbIcon.Close, actionGlyph(surfaces[0])?.icon)
+            assertEquals(ReverbIcon.Delete, actionGlyph(surfaces[1])?.icon)
+            measure(row, 1600)
+            val geometry = env.appearance.buttons.text.surface
+            val extra = 2 * joinedActionSurface.horizontalPaddingDp + geometry.iconSizeDp + geometry.iconGapDp
+            // This fixture binds density1/fontScale2: both actual glyph slots and insets are identical.
+            for (surface in surfaces) {
+                assertTrue(surface.label.measuredWidth + extra >= surface.actionMinimumWidthPx)
+                assertEquals(extra, surface.width - surface.label.measuredWidth)
+            }
+            assertEquals(surfaces[1].label.measuredWidth - surfaces[0].label.measuredWidth,
+                surfaces[1].width - surfaces[0].width)
+            row.buttons[1].bind("Save a copy", true) {}
+            measure(row, 1600)
+            assertTrue(surfaces[1].width > surfaces[0].width)
+            assertEquals(extra, surfaces[1].width - surfaces[1].label.measuredWidth)
+            val paragraph = checkNotNull(surfaces[1].label.currentParagraph)
+            assertFalse(paragraph.didExceedMaxLines)
+            assertEquals("Save a copy".length, paragraph.getLineEnd(paragraph.lineCount - 1))
+            measure(row, 160)
+            assertEquals(row.buttons[0].bottom, row.buttons[1].top)
+            row.buttons[1].bind("Clear buffer", true) {}
             measure(row, 160)
             assertTrue(row.isActionFooter)
             assertEquals(6, row.height - row.actionSurface.bottom)
@@ -200,6 +437,120 @@ class NativeMergedActionLayoutIntegrationTest {
             assertTrue(descendants(tile.actions).filterIsInstance<NativeMaterialButtonView>()[0].isEnabled)
             assertFalse(descendants(tile.actions).filterIsInstance<NativeMaterialButtonView>()[1].isEnabled)
         } finally { sheet.close(); tile.close() }
+    }
+
+    private fun actionGlyph(button: NativeMaterialButtonView): ReverbIconDrawable? =
+        NativeMaterialButtonView::class.java.getDeclaredField("icon").apply { isAccessible = true }
+            .get(button) as ReverbIconDrawable?
+
+    @Test fun tileDeleteGlyphRetintsInPlaceAndRebindsAtNewDensity() = instrumentation.runOnMainSync {
+        val palette = NativeColorScheme.fallback(false)
+        val env = ReverbEnvironment(Density(1f), createFontFamilyResolver(context), palette)
+        val tile = ReverbTileDeleteSheetContent(context, env, { null }, "Tile?", "Cancel", "Delete", {}, {})
+        fun checkInk(glyph: ReverbIconDrawable, ink: Int) {
+            val bounds = glyph.bounds
+            assertTrue(bounds.width() > 0 && bounds.height() > 0)
+            val bitmap = Bitmap.createBitmap(bounds.width(), bounds.height(), Bitmap.Config.ARGB_8888)
+            try {
+                val canvas = Canvas(bitmap)
+                canvas.translate(-bounds.left.toFloat(), -bounds.top.toFloat())
+                glyph.draw(canvas)
+                val pixels = IntArray(bitmap.width * bitmap.height)
+                bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+                // Compare the fully covered fill, including alpha, in the same premultiplied format.
+                bitmap.eraseColor(ink)
+                assertTrue(Color.alpha(ink) > 0)
+                assertEquals(bitmap.getPixel(0, 0), pixels.maxBy { Color.alpha(it) })
+            } finally { bitmap.recycle() }
+        }
+        try {
+            tile.bind(env, true, true)
+            measure(tile.actions, 400)
+            val (cancel, delete) = descendants(tile.actions).filterIsInstance<NativeMaterialButtonView>()
+            assertEquals(ReverbIcon.Close, actionGlyph(cancel)?.icon)
+            val glyph = checkNotNull(actionGlyph(delete))
+            assertEquals(ReverbIcon.Delete, glyph.icon)
+            val normalInk = env.appearance.buttons.text.contentColor(palette.buttonPalette, true)
+            val disabledInk = env.appearance.buttons.text.contentColor(palette.buttonPalette, false)
+            assertNotEquals(normalInk, disabledInk)
+            checkInk(glyph, normalInk)
+            tile.bind(env, true, false)
+            assertFalse(delete.isEnabled)
+            assertSame(glyph, actionGlyph(delete))
+            checkInk(glyph, disabledInk)
+
+            val dense = ReverbEnvironment(Density(2f), env.sharedFontResolver, palette)
+            tile.bind(dense, true, false)
+            measure(tile.actions, 800)
+            val rebound = checkNotNull(actionGlyph(delete))
+            assertNotSame(glyph, rebound)
+            assertEquals(glyph.intrinsicWidth * 2, rebound.intrinsicWidth)
+            assertEquals(ReverbIcon.Delete, rebound.icon)
+            checkInk(rebound, disabledInk)
+        } finally { tile.close() }
+    }
+
+    @Test fun calibrationKeepsInitialLargeFontHitboxThroughHeldAndCancellableStates() = instrumentation.runOnMainSync {
+        val env = environment() // density 1, font scale 2
+        fun state(running: Boolean, held: Boolean) = object : ReverbSilenceCalibrationState {
+            override val checked = true
+            override val enabled = true
+            override val calibrationAllowed = true
+            override val clearance = 5f
+            override val calibrating = running
+            override val holdingCalibration = held
+            override val calibrationProgress: Float? = null
+            override val calibrationError: String? = null
+            override val calibrationUnavailableReason: String? = null
+        }
+        val actions = object : ReverbSilenceCalibrationActions {
+            override fun checkedChanged(checked: Boolean) = error("Unexpected edit")
+            override fun clearanceChanged(clearance: Float) = error("Unexpected edit")
+            override fun calibrate() = error("Unexpected action")
+            override fun beginHeld(): Boolean = error("Unexpected action")
+            override fun completeTap() = error("Unexpected action")
+            override fun finishHeld() = error("Unexpected action")
+            override fun cancel() = error("Unexpected action")
+        }
+        val labels = ReverbSilenceCalibrationLabels("Silence", "Calibrate", "Hold", "Release",
+            "Cancel sampling", "Sampling", "Fit", View.generateViewId(), { "Reset" }, Int::toString, Int::toString)
+        val runtime = NativeModalWindowRuntime(context)
+        val graphView = View(context)
+        val section = object : ReverbSilenceSettingsView(context, state(false, false), env, { null }, runtime.scope,
+            labels, NativeArcDialRange(0f, 10f, 5f), { object : ReverbCalibrationGraph {
+                override val view = graphView
+                override fun bind(palette: ReverbCalibrationGraphPalette, editable: Boolean) = Unit
+                override fun close() = Unit
+            } }, actions) {
+            fun update(running: Boolean, held: Boolean) = bind(state(running, held), env, graphChanged = false)
+        }
+        try {
+            val action = descendants(section).filterIsInstance<ReverbSettingsActionView>().single()
+            val visual = action.getChildAt(0) as NativeMaterialButtonView
+            // Give the localized Cancel label just enough space for one bare line.
+            val text = ParagraphView(context, env.appearance.typography.buttonLabelStyle, env.textDensity,
+                env.sharedFontResolver, env.palette.ink).apply { setText(labels.cancel) }
+            val width = text.maxIntrinsicTextWidth() + 2 * env.appearance.calibration.actionSurface.horizontalPaddingDp
+            measure(action, width)
+            val initialHeight = action.height
+            val firstLabelHeight = action.textView.height
+            assertNull(actionGlyph(visual))
+            fun expect(label: String, icon: ReverbIcon?) {
+                measure(action, width)
+                assertEquals(label, action.textView.getText())
+                assertEquals(icon, actionGlyph(visual)?.icon)
+                assertEquals(initialHeight, action.height)
+                assertEquals(initialHeight, visual.height)
+            }
+            expect(labels.calibrate, null)
+            section.update(true, true)
+            expect(labels.releaseToFinish, null)
+            section.update(true, false)
+            expect(labels.cancel, ReverbIcon.Close)
+            assertTrue("The icon forced a real second line", action.textView.height > firstLabelHeight)
+            section.update(false, false)
+            expect(labels.calibrate, null)
+        } finally { try { section.close() } finally { runtime.close() } }
     }
 
     @Test fun mergedRenameKeepsTwoAccessibilityActionsAndBusyAdmission() {

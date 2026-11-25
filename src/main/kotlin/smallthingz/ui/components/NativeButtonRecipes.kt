@@ -106,7 +106,7 @@ private val enabledIcon = NativeButtonPaint(NativeButtonColorRole.TRANSPARENT, N
     indication = NativeButtonColorRole.CONTENT)
 private val roundedIconSurface = NativeMaterialButtonStyle(0, verticalPaddingDp = 0,
     minimumWidthDp = 48, minimumHeightDp = 48, iconSizeDp = 24, radiusDp = 14f, showLabel = false)
-private val joinedActionSurface = NativeMaterialButtonStyle(horizontalPaddingDp = 12, iconSizeDp = 18, radiusDp = 0f,
+internal val joinedActionSurface = NativeMaterialButtonStyle(horizontalPaddingDp = 12, iconSizeDp = 18, radiusDp = 0f,
     minimumWidthDp = 48, minimumHeightDp = 48)
 
 /** Joined confirm/cancel controls over one raised surface. */

@@ -13,6 +13,7 @@ import smallthingz.ui.components.unspecified
 import smallthingz.ui.input.NativeAndroidInteropHost
 import smallthingz.ui.input.NativeAndroidInteropRequests
 import smallthingz.ui.reverb.ReverbEnvironment
+import smallthingz.ui.reverb.ReverbIcon
 import kotlin.math.roundToInt
 
 /** Shared segmented header, duration body, and a fixed footer inside the inline tile editor. */
@@ -38,7 +39,7 @@ open class ReverbQuickTileEditor<T : Any>(
     private val loading = tileStatus(context, "", environment)
     private val warning = tileStatus(context, "", environment)
     private val message = tileStatus(context, "", environment)
-    private val cancel = ReverbSettingsActionView(context, environment, inputRoot, action = onCancel)
+    private val cancel = ReverbSettingsActionView(context, environment, inputRoot, leadingIcon = ReverbIcon.Close, action = onCancel)
     private val save = ReverbSettingsActionView(context, environment, inputRoot, action = onSave)
     private var wheelView: View? = null
     private val footer = NativeMergedActionLayout(context, listOf(cancel, save), environment.palette).asActionFooter(density = environment.textDensity.density)

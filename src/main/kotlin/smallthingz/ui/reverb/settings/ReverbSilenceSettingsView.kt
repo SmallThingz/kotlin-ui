@@ -15,6 +15,8 @@ import smallthingz.ui.input.phase.NativeDragPointerEvent
 import smallthingz.ui.input.phase.NativePointerPass
 import smallthingz.ui.input.phase.NativeViewPhasePointerNode
 import smallthingz.ui.reverb.ReverbEnvironment
+import smallthingz.ui.reverb.ReverbIcon
+import smallthingz.ui.reverb.ReverbIconDrawable
 
 /** The app supplies graph data and edits. The library owns graph ink, layout and controls. */
 interface ReverbCalibrationGraph : AutoCloseable {
@@ -129,6 +131,7 @@ private class SilenceBody(
 ) : ReverbCalibrationBodyLayout(context, environment), NativeExpansionContent {
     override val view: View get() = this
     private var state = initial
+    private var cancelIconDensity = 0f
     private val configuration = ViewConfiguration.get(context)
     private var closed = false
     private val calibrate: ReverbSettingsActionView = ReverbSettingsActionView(context, environment, inputRoot,
@@ -138,7 +141,7 @@ private class SilenceBody(
             if (canCancel()) actions()?.cancel()
             else if (canBegin()) actions()?.calibrate()
         }
-    }
+    }.also { it.reserveStableLeadingIcon() }
     private val fit = NativeArcValueDial(context, environment, fitRange, labels.fitDescription, labels.fitResetActionId,
         labels.fitReset, labels.formatFit, labels.describeFit) { clearance ->
         if (canEdit()) actions()?.clearanceChanged(clearance)
@@ -186,6 +189,12 @@ private class SilenceBody(
             state.holdingCalibration -> labels.releaseToFinish
             canCancel() -> labels.cancel
             else -> labels.calibrate
+        }
+        val iconDensity = if (canCancel()) environment.textDensity.density else 0f
+        if (cancelIconDensity != iconDensity) {
+            calibrate.setLeadingActionIcon(if (iconDensity > 0f)
+                ReverbIconDrawable(ReverbIcon.Close, iconDensity, environment.palette.ink) else null)
+            cancelIconDensity = iconDensity
         }
         calibrate.bind(label, enabled, environment)
         calibrate.setActionDescription(if (canBegin()) "${labels.calibrate}. ${labels.instructions}" else null)
