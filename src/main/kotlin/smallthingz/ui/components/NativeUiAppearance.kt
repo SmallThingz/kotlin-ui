@@ -172,6 +172,26 @@ data class NativeSettingsSelectorStyle(
     ): NativeThemeSelector = NativeThemeSelector(context, palette, selected, palette.content,
         SettingsThemePresentation(context, this, palette, textDensity, fontResolver,
             onPaintedSurfaceChanged, titlePaintedSurface), textDensity.density, inputAllowed, segmented, onSelectionRequest)
+
+    /**
+     * The same localized Theme row inside a host that already owns the section's side gutters.
+     * Only the row's outer horizontal inset is omitted; choice text/icon padding is unchanged.
+     * Use [createThemeSelector] for a full-width section whose row must own those gutters.
+     */
+    fun createThemeSelectorInInsetSection(
+        context: Context,
+        palette: ControlPalette,
+        selected: NativeThemeMode,
+        textDensity: Density,
+        fontResolver: FontFamily.Resolver,
+        inputAllowed: () -> Boolean = { true },
+        onPaintedSurfaceChanged: (View) -> Unit = {},
+        titlePaintedSurface: ((View) -> Long)? = null,
+        onSelectionRequest: (NativeThemeMode) -> Boolean,
+    ): NativeThemeSelector = NativeThemeSelector(context, palette, selected, palette.content,
+        SettingsThemePresentation(context, this, palette, textDensity, fontResolver,
+            onPaintedSurfaceChanged, titlePaintedSurface), textDensity.density, inputAllowed, segmented,
+        onSelectionRequest, sectionInsetByHost = true)
 }
 
 data class NativeRetentionSectionLayout(
