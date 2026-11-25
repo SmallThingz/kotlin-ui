@@ -35,6 +35,8 @@ import smallthingz.ui.controls.StateColorSurface
 import smallthingz.ui.controls.ControlStyle
 import smallthingz.ui.controls.selectionForeground
 import smallthingz.ui.controls.selectionIndication
+import smallthingz.ui.graphics.ViewGrain
+import smallthingz.ui.graphics.bindGrainLayer
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -299,6 +301,7 @@ class NativeChip(
     private val density: Float get() = resources.displayMetrics.density
     private val configuration = ChoiceConfiguration(context)
     private val indicatorPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var indicatorGrain: ViewGrain? = null
     private var typography: ChoiceTypography? = null
     private var visualInsetPx = 0
     internal val selectedFillInset: Int get() = visualInsetPx
@@ -488,8 +491,11 @@ class NativeChip(
         val color = indicatorColor
         indicatorPaint.color = color
         indicatorPaint.alpha = if (isEnabled) Color.alpha(color) else Color.alpha(color) / 2
-        canvas.drawRect(indicatorLeft, max(0f, height - choiceStyle.indicatorHeightDp * density),
+        val indicatorTop = max(0f, height - choiceStyle.indicatorHeightDp * density)
+        canvas.drawRect(indicatorLeft, indicatorTop,
             indicatorLeft + indicatorWidth, height.toFloat(), indicatorPaint)
+        indicatorGrain?.draw(canvas, indicatorLeft, indicatorTop,
+            indicatorLeft + indicatorWidth, height.toFloat(), coverage = indicatorPaint.alpha)
     }
 
     // Both call sites run synchronously inside this chip's onDraw. The clipped ink passes
@@ -681,6 +687,9 @@ class NativeChip(
 
     private fun paintPalette() {
         palettePaint = ControlStyle(context, currentPalette)
+        // The underline is foreground paint even when this choice has no selected fill.
+        indicatorGrain = bindGrainLayer(indicatorGrain,
+            if (choiceStyle.indicatorHeightDp > 0f) currentPalette.surfacePreset?.foregroundGrain ?: 0f else 0f)
         fun roleColor(role: NativeTextRole?, fallback: Int): Int =
             if (role == null) fallback else currentPalette.roleColor(role)
         fun colors(normal: Int, selected: Int): ColorStateList {
