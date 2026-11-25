@@ -11,6 +11,8 @@ import smallthingz.ui.components.NativeColorScheme
 /** Product artwork supported by the shared toolbar and About panel. */
 sealed interface ReverbProductIdentity {
     data object Reverb : ReverbProductIdentity
+    /** Original launcher artwork, including adaptive icon layers; never palette-tinted. */
+    data class Launcher(@DrawableRes val drawable: Int) : ReverbProductIdentity
     data class Monochrome(@DrawableRes val drawable: Int) : ReverbProductIdentity
 }
 
@@ -36,10 +38,17 @@ internal class ReverbIdentityMarkView(context: Context) : FrameLayout(context) {
         if (value != identity) {
             identity = value
             reverb.visibility = if (value == ReverbProductIdentity.Reverb) VISIBLE else GONE
-            monochrome.visibility = if (value is ReverbProductIdentity.Monochrome) VISIBLE else GONE
-            monochrome.setImageResource((value as? ReverbProductIdentity.Monochrome)?.drawable ?: 0)
+            monochrome.visibility = if (value != ReverbProductIdentity.Reverb) VISIBLE else GONE
+            monochrome.setImageResource(when (value) {
+                is ReverbProductIdentity.Monochrome -> value.drawable
+                is ReverbProductIdentity.Launcher -> value.drawable
+                ReverbProductIdentity.Reverb -> 0
+            })
         }
         reverb.refreshResourcePalette()
-        monochrome.setColorFilter(ReverbDesign.appearance.toolbars.contentColor(palette))
+        monochrome.imageTintList = null
+        if (value is ReverbProductIdentity.Monochrome) {
+            monochrome.setColorFilter(ReverbDesign.appearance.toolbars.contentColor(palette))
+        } else monochrome.clearColorFilter()
     }
 }

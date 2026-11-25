@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
+import kotlin.math.roundToInt
 import smallthingz.ui.R
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeToolbarActionTone
@@ -28,6 +29,40 @@ open class ReverbTopBarLayout(
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
         bindToolbar(density, palette)
+    }
+
+    private var launcherIdentity = false
+
+    internal fun bindLauncherIdentity(launcher: Boolean) {
+        if (launcherIdentity == launcher) return
+        launcherIdentity = launcher
+        requestLayout()
+    }
+
+    override fun onMeasure(w: Int, h: Int) {
+        super.onMeasure(w, h)
+        if (!launcherIdentity) return
+        val size = (48f * touchDensity).roundToInt()
+        for (index in 0 until childCount) {
+            val child = getChildAt(index)
+            if ((child.layoutParams as? ActionLayoutParams)?.slot == Slot.CENTER) {
+                val exact = MeasureSpec.makeMeasureSpec(size, MeasureSpec.EXACTLY)
+                child.measure(exact, exact)
+            }
+        }
+    }
+
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        super.onLayout(changed, l, t, r, b)
+        if (!launcherIdentity) return
+        for (index in 0 until childCount) {
+            val child = getChildAt(index)
+            if ((child.layoutParams as? ActionLayoutParams)?.slot == Slot.CENTER) {
+                val x = leftInsetPx + ((width - leftInsetPx - rightInsetPx - child.measuredWidth) / 2f).roundToInt()
+                val y = child.top + ((child.height - child.measuredHeight) / 2f).roundToInt()
+                child.layout(x, y, x + child.measuredWidth, y + child.measuredHeight)
+            }
+        }
     }
 
     fun addToolbarSlot(view: View, slot: Slot, index: Int = -1) {
@@ -94,6 +129,7 @@ class ReverbTopBar(
              insets: NativeTopBarInsets = NativeTopBarInsets(0, 0, 0)) {
         slots.bindToolbar(theme.density.density, theme.palette, insets.top)
         slots.setActionInsets(insets.left, insets.right)
+        slots.bindLauncherIdentity((center as? ReverbTopBarCenterContent.Product)?.identity is ReverbProductIdentity.Launcher)
         val product = center is ReverbTopBarCenterContent.Product
         this.start.bind(theme, start, product)
         this.end.bind(theme, end, product)
