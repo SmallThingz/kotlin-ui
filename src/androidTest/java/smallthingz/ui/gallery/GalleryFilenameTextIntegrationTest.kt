@@ -2,7 +2,9 @@ package smallthingz.ui.gallery
 
 import android.content.Context
 import android.content.res.Configuration
+import android.icu.text.BreakIterator
 import android.os.Build
+import android.text.Layout
 import android.text.Selection
 import android.text.Spannable
 import android.text.Spanned
@@ -107,45 +109,64 @@ class GalleryFilenameTextIntegrationTest {
     }
 
     @Test fun extensionAndExactNameAtNormalAndLargeFontWidths() = instrumentation.runOnMainSync {
+        // The JPEG can enter emergency wrapping. Its text, selection and span still have to survive.
         for (font in listOf(1f, 2f)) {
             val view = label(context(font), name)
             for (width in listOf(240, 280, 312, 360)) {
                 measure(view, width)
                 assertFits(view, name)
-                if (Build.VERSION.SDK_INT >= 35) assertExtensionTogether(view)
                 assertExactSelectionAndAccessibility(view, name)
             }
             if (Build.VERSION.SDK_INT >= 35) assertExtensionSpan(view, name.lastIndexOf('.'))
         }
     }
 
-    @Test fun protectsAnActuallySplitNaturalExtensionWithoutRewriting() {
-        // Pre35 intentionally has no no-break contract. The other tests still verify its
-        // exact text and natural layout; do not record this API35 behavior as a pre35 pass.
+    @Test fun noBreakSpanSuppressesLegalBreakInsideExtension() {
         org.junit.Assume.assumeTrue(Build.VERSION.SDK_INT >= 35)
         instrumentation.runOnMainSync {
+            val filename = "head-longword.part-xx"
+            val earlierBreak = filename.indexOf('-') + 1
+            val suffixBreak = filename.lastIndexOf('-') + 1
+            val breaks = BreakIterator.getLineInstance(Locale.US).apply { setText(filename) }
+            assertTrue("Ordinary break before the final segment", breaks.isBoundary(earlierBreak))
+            assertTrue("Ordinary break inside the extension", breaks.isBoundary(suffixBreak))
+
             for (font in listOf(1f, 2f)) {
                 val context = context(font)
                 val natural = NativeText(context, GalleryDesign.palette(context, true).pageControls, style).apply {
                     layoutParams = ViewGroup.LayoutParams(-1, -2)
+                    setSingleLine(false)
+                    ellipsize = null
                     setTextIsSelectable(true)
-                    text = name
+                    breakStrategy = Layout.BREAK_STRATEGY_SIMPLE
+                    text = filename
                 }
-                val guarded = label(context, name)
-                val dot = name.lastIndexOf('.')
-                var exercised = false
-                for (width in 180..360) {
-                    measure(natural, width)
-                    val layout = checkNotNull(natural.layout)
-                    if (layout.getLineForOffset(dot) == layout.getLineForOffset(name.lastIndex)) continue
-                    measure(guarded, width)
-                    assertFits(guarded, name)
-                    assertExtensionTogether(guarded)
-                    assertExactSelectionAndAccessibility(guarded, name)
-                    exercised = true
-                    break
+                val guarded = label(context, filename).apply {
+                    breakStrategy = Layout.BREAK_STRATEGY_SIMPLE
                 }
-                assertTrue("Must exercise a naturally split extension at font=$font, not a vacuous happy path", exercised)
+                val minimumWidth = maxOf(natural.paint.measureText(filename, 0, suffixBreak),
+                    natural.paint.measureText(filename, earlierBreak, filename.length))
+                val fullWidth = natural.paint.measureText(filename)
+                val contentWidth = ((minimumWidth + fullWidth) / 2).roundToInt()
+                assertTrue("Plain prefix and complete tail must fit, with the full name wrapping at font=$font",
+                    contentWidth >= minimumWidth && contentWidth < fullWidth)
+                // The fixture context is mdpi, so the pixel width is also the dp width.
+                val width = contentWidth + natural.compoundPaddingLeft + natural.compoundPaddingRight
+                measure(natural, width)
+                val naturalLayout = checkNotNull(natural.layout)
+                assertEquals(contentWidth, naturalLayout.width)
+                assertFits(natural, filename)
+                assertEquals(diagnostics(natural), 2, naturalLayout.lineCount)
+                assertEquals(diagnostics(natural), suffixBreak, naturalLayout.getLineStart(1))
+
+                measure(guarded, width)
+                val guardedLayout = checkNotNull(guarded.layout)
+                assertEquals(contentWidth, guardedLayout.width)
+                assertFits(guarded, filename)
+                assertEquals(diagnostics(guarded), 2, guardedLayout.lineCount)
+                assertEquals(diagnostics(guarded), earlierBreak, guardedLayout.getLineStart(1))
+                assertExtensionTogether(guarded)
+                assertExactSelectionAndAccessibility(guarded, filename)
             }
         }
     }
@@ -163,7 +184,6 @@ class GalleryFilenameTextIntegrationTest {
                 for (width in listOf(312, 180, 360, 312)) {
                     measure(retained, width)
                     assertFits(retained, name)
-                    if (Build.VERSION.SDK_INT >= 35) assertExtensionTogether(retained)
                     assertSame(buffer, retained.text)
                     assertEquals(name.lastIndexOf('.'), retained.selectionStart)
                     assertEquals(name.length, retained.selectionEnd)
