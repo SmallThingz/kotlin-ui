@@ -9,6 +9,7 @@ import android.os.Build
 import android.text.Layout
 import android.text.Selection
 import android.text.Spannable
+import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.ReplacementSpan
 import android.view.View
@@ -22,6 +23,7 @@ import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeText
 import smallthingz.ui.text.NativeTypographyRole
 import java.util.Locale
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 /** Detached native layout/selection only: no Activity, clipboard, media or global settings. */
@@ -30,6 +32,12 @@ class GalleryFilenameTextIntegrationTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val name = "turnbull-heal-preview-861084e2_edited_3.jpg"
     private val style = GalleryDesign.textStyle(NativeTypographyRole.TITLE_MEDIUM)
+
+    private fun onMain(action: () -> Unit) {
+        var result: Result<Unit>? = null
+        instrumentation.runOnMainSync { result = runCatching(action) }
+        checkNotNull(result).getOrThrow()
+    }
 
     private fun context(font: Float): Context {
         val base = instrumentation.targetContext
@@ -96,15 +104,15 @@ class GalleryFilenameTextIntegrationTest {
         val buffer = view.text as Spannable
         val spans = buffer.getSpans(0, buffer.length, ReplacementSpan::class.java)
         if (spans.isNotEmpty()) {
-            val dot = buffer.getSpanStart(spans.single())
-            // Noneditable Details deliberately treats the extension as one selection unit.
+            val unitStart = buffer.getSpanStart(spans.single())
+            // Noneditable Details deliberately treats the fitting terminal unit as atomic.
             // Do not promise per-character caret positions inside a ReplacementSpan.
             if (expected.all { it.code < 128 }) {
-                assertEquals("Native cursor must step across the atomic extension: ${diagnostics(view)}",
-                    dot, checkNotNull(view.layout).getOffsetToLeftOf(expected.length))
+                assertEquals("Native cursor must step across the atomic terminal unit: ${diagnostics(view)}",
+                    unitStart, checkNotNull(view.layout).getOffsetToLeftOf(expected.length))
             }
-            Selection.setSelection(buffer, dot, expected.length)
-            assertEquals(expected.substring(dot), buffer.subSequence(view.selectionStart, view.selectionEnd).toString())
+            Selection.setSelection(buffer, unitStart, expected.length)
+            assertEquals(expected.substring(unitStart), buffer.subSequence(view.selectionStart, view.selectionEnd).toString())
         }
         Selection.setSelection(buffer, 0, expected.length)
         assertEquals(expected, buffer.subSequence(view.selectionStart, view.selectionEnd).toString())
@@ -121,21 +129,44 @@ class GalleryFilenameTextIntegrationTest {
         assertEquals(expected.length, view.selectionEnd)
     }
 
-    @Test fun extensionAndExactNameAtNormalAndLargeFontWidths() = instrumentation.runOnMainSync {
+    @Test fun extensionAndExactNameAtNormalAndLargeFontWidths() = onMain {
         for (font in listOf(1f, 2f)) {
-            val view = label(context(font), name)
-            for (width in listOf(240, 280, 312, 360)) {
-                measure(view, width)
-                assertExtensionSpan(view, name.lastIndexOf('.'))
-                assertFits(view, name)
-                assertExtensionTogether(view)
-                assertExactSelectionAndAccessibility(view, name)
+            val context = context(font)
+            for ((filename, unitStart) in listOf(name to name.lastIndexOf('_'),
+                "export-copy-27.jpg" to "export-copy-27.jpg".lastIndexOf('-'))) {
+                val view = label(context, filename)
+                for (width in listOf(240, 280, 312, 360)) {
+                    measure(view, width)
+                    assertExtensionSpan(view, unitStart)
+                    assertFits(view, filename)
+                    assertExtensionTogether(view)
+                    assertBasenameOnExtensionLine(view)
+                    assertExactSelectionAndAccessibility(view, filename)
+
+                    // Old extension-only policy, using the same native span drawing/metrics.
+                    // This compares actual layouts, not the new range-selection algorithm.
+                    val span = (view.text as Spanned).getSpans(0, filename.length,
+                        ReplacementSpan::class.java).single()
+                    val baseline = NativeText(context, GalleryDesign.palette(context, true).pageControls, style).apply {
+                        layoutParams = ViewGroup.LayoutParams(-1, -2)
+                        setSingleLine(false)
+                        ellipsize = null
+                        setTextIsSelectable(true)
+                        text = SpannableString(filename).apply {
+                            setSpan(span, filename.lastIndexOf('.'), filename.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        }
+                    }
+                    measure(baseline, width)
+                    assertFits(baseline, filename)
+                    assertTrue("No extra line for these fixtures: ${diagnostics(view)} baseline=${diagnostics(baseline)}",
+                        checkNotNull(view.layout).lineCount <= checkNotNull(baseline.layout).lineCount)
+                }
             }
         }
     }
 
     @Test fun protectsAnActuallySplitNaturalExtensionWithoutRewriting() {
-        instrumentation.runOnMainSync {
+        onMain {
             for (font in listOf(1f, 2f)) {
                 val context = context(font)
                 val natural = NativeText(context, GalleryDesign.palette(context, true).pageControls, style).apply {
@@ -151,7 +182,8 @@ class GalleryFilenameTextIntegrationTest {
                     val layout = checkNotNull(natural.layout)
                     if (layout.getLineForOffset(dot) == layout.getLineForOffset(name.lastIndex)) continue
                     measure(guarded, width)
-                    assertExtensionSpan(guarded, dot)
+                    assertExtensionSpan(guarded, name.lastIndexOf('_'))
+                    assertBasenameOnExtensionLine(guarded)
                     assertFits(guarded, name)
                     assertExtensionTogether(guarded)
                     assertExactSelectionAndAccessibility(guarded, name)
@@ -165,7 +197,7 @@ class GalleryFilenameTextIntegrationTest {
 
     @Test fun atomicExtensionKeepsPairedCjkSuffixTogether() {
         org.junit.Assume.assumeTrue(Build.VERSION.SDK_INT >= 35)
-        instrumentation.runOnMainSync {
+        onMain {
             // Ordinary space/CJK boundaries avoid Minikin's separate hard-hyphen policy.
             val filename = "head longword.画像"
             val earlierBreak = filename.indexOf(' ') + 1
@@ -217,7 +249,7 @@ class GalleryFilenameTextIntegrationTest {
         }
     }
 
-    @Test fun resizeAndStyleRefreshRetainSelectionAndMatchFreshLayout() = instrumentation.runOnMainSync {
+    @Test fun resizeAndStyleRefreshRetainSelectionAndMatchFreshLayout() = onMain {
         for (font in listOf(1f, 2f)) {
             val context = context(font)
             val retained = label(context, name)
@@ -227,17 +259,42 @@ class GalleryFilenameTextIntegrationTest {
             for (nextStyle in listOf(style.copy(sizeSp = style.sizeSp + 4f,
                 lineHeightSp = style.lineHeightSp?.plus(6f)), style)) {
                 retained.applyStyle(nextStyle)
-                for (width in listOf(312, 180, 360, 312)) {
+                // Refresh style metrics, then exercise larger unit -> suffix only -> no span -> restored.
+                measure(retained, 312)
+                val dot = name.lastIndexOf('.')
+                val unitStart = name.lastIndexOf('_')
+                val suffixWidth = ceil(retained.paint.measureText(name, dot, name.length).toDouble()).toInt()
+                val unitWidth = ceil(retained.paint.measureText(name, unitStart, name.length).toDouble()).toInt()
+                assertTrue("Distinct width fallback fixtures", unitWidth > suffixWidth && unitWidth <= 180)
+                val padding = retained.compoundPaddingLeft + retained.compoundPaddingRight
+                for ((width, expectedStart) in listOf(312 to unitStart, 180 to unitStart,
+                    360 to unitStart, 312 to unitStart, (suffixWidth + padding) to dot,
+                    (suffixWidth - 1 + padding) to -1, 312 to unitStart)) {
                     measure(retained, width)
-                    assertExtensionSpan(retained, name.lastIndexOf('.'))
+                    if (expectedStart >= 0) {
+                        assertExtensionSpan(retained, expectedStart)
+                        assertExtensionTogether(retained)
+                        if (expectedStart == unitStart) assertBasenameOnExtensionLine(retained)
+                    } else assertNoExtensionSpan(retained)
                     assertFits(retained, name)
-                    assertExtensionTogether(retained)
                     assertSame(buffer, retained.text)
                     assertEquals(name.lastIndexOf('.'), retained.selectionStart)
                     assertEquals(name.length, retained.selectionEnd)
                     val fresh = label(context, name).apply { applyStyle(nextStyle) }
                     measure(fresh, width)
                     assertFits(fresh, name)
+                    val measuredHeight = retained.measuredHeight
+                    val ends = checkNotNull(retained.layout).let { layout ->
+                        (0 until layout.lineCount).map { layout.getLineEnd(it) }
+                    }
+                    measure(retained, width)
+                    assertEquals("Repeated ordinary measure is stable", measuredHeight, retained.measuredHeight)
+                    assertEquals(ends, checkNotNull(retained.layout).let { layout ->
+                        (0 until layout.lineCount).map { layout.getLineEnd(it) }
+                    })
+                    assertSame(buffer, retained.text)
+                    assertEquals(dot, retained.selectionStart)
+                    assertEquals(name.length, retained.selectionEnd)
                     val actual = checkNotNull(retained.layout)
                     val expected = checkNotNull(fresh.layout)
                     assertEquals(diagnostics(retained), fresh.measuredHeight, retained.measuredHeight)
@@ -251,7 +308,7 @@ class GalleryFilenameTextIntegrationTest {
         }
     }
 
-    @Test fun overwideExtensionAndNamesWithoutExtensionKeepAllCharacters() = instrumentation.runOnMainSync {
+    @Test fun overwideExtensionAndNamesWithoutExtensionKeepAllCharacters() = onMain {
         for (font in listOf(1f, 2f)) {
             val view = label(context(font), name)
             measure(view, 120)
@@ -268,7 +325,8 @@ class GalleryFilenameTextIntegrationTest {
             assertEquals(dot, view.selectionStart)
             assertEquals(name.length, view.selectionEnd)
             measure(view, 120)
-            assertExtensionSpan(view, dot)
+            assertExtensionSpan(view, name.lastIndexOf('_'))
+            assertBasenameOnExtensionLine(view)
             assertExtensionTogether(view)
             assertFits(view, name)
             assertSame(buffer, view.text)
@@ -278,7 +336,8 @@ class GalleryFilenameTextIntegrationTest {
             view.setPadding(0, 0, 0, 0)
             val longName = "fixture." + "longextension".repeat(12)
             for (value in listOf(longName, ".nomedia", "no-extension", "trailing.",
-                "מסמך.jpg", "صورة.jpg", "image.תמונה", "image.صورة", "image.\ntext", "", name)) {
+                "מסמך.jpg", "صورة.jpg", "image.תמונה", "image.صورة", "מסמך_3.jpg", "image_3.תמונה",
+                "image-final part.jpg", "image-part!.jpg", "_3.jpg", "image_.jpg", "image.\ntext", "", name)) {
                 view.bindName(value)
                 measure(view, 120)
                 assertFits(view, value)
@@ -287,20 +346,43 @@ class GalleryFilenameTextIntegrationTest {
                     val layout = checkNotNull(view.layout)
                     assertTrue("Overwide suffix must fall back to wrapping, not clipping", layout.lineCount > 1)
                     assertNoExtensionSpan(view)
-                } else if (value in listOf("מסמך.jpg", "صورة.jpg", "image.תמונה", "image.صورة", name)) {
-                    assertExtensionSpan(view, value.lastIndexOf('.'))
+                } else if (value in listOf("מסמך.jpg", "صورة.jpg", "image.תמונה", "image.صورة",
+                    "מסמך_3.jpg", "image_3.תמונה", "image-final part.jpg", "image-part!.jpg", "_3.jpg", "image_.jpg", name)) {
+                    assertExtensionSpan(view, if (value == name) name.lastIndexOf('_') else value.lastIndexOf('.'))
                     assertExtensionTogether(view)
                     assertNativeSuffixDrawing(view)
                 } else assertNoExtensionSpan(view)
             }
+
+            // The wider unit would hide the first strong letter from Android's bidi analysis.
+            val numericPrefix = "123-abc.jpg"
+            val hyphen = numericPrefix.indexOf('-')
+            view.textDirection = View.TEXT_DIRECTION_FIRST_STRONG_RTL
+            view.bindName(numericPrefix)
+            measure(view, 312)
+            val layout = checkNotNull(view.layout)
+            assertTrue("The wider unit must fit in the bidi fixture",
+                ceil(view.paint.measureText(numericPrefix, hyphen, numericPrefix.length).toDouble()) <= layout.width)
+            assertEquals(diagnostics(view), Layout.DIR_LEFT_TO_RIGHT, layout.getParagraphDirection(0))
+            assertExtensionSpan(view, numericPrefix.lastIndexOf('.'))
+            assertExtensionTogether(view)
+            assertFits(view, numericPrefix)
+            assertExactSelectionAndAccessibility(view, numericPrefix)
         }
     }
 
-    private fun assertExtensionSpan(view: GalleryFilenameText, dot: Int) {
+    private fun assertBasenameOnExtensionLine(view: GalleryFilenameText) {
+        val dot = view.text.toString().lastIndexOf('.')
+        val layout = checkNotNull(view.layout)
+        assertEquals("Final basename character must accompany the extension: ${diagnostics(view)}",
+            layout.getLineForOffset(dot - 1), layout.getLineForOffset(view.text.length - 1))
+    }
+
+    private fun assertExtensionSpan(view: GalleryFilenameText, start: Int) {
         val text = view.text as Spanned
         val spans = text.getSpans(0, text.length, ReplacementSpan::class.java)
         assertEquals(diagnostics(view), 1, spans.size)
-        assertEquals(dot, text.getSpanStart(spans.single()))
+        assertEquals(start, text.getSpanStart(spans.single()))
         assertEquals(text.length, text.getSpanEnd(spans.single()))
     }
 
@@ -322,15 +404,17 @@ class GalleryFilenameTextIntegrationTest {
         val layout = checkNotNull(natural.layout)
         assertEquals(1, layout.lineCount)
         val expected = Bitmap.createBitmap(layout.width, layout.height, Bitmap.Config.ARGB_8888)
-        val actual = Bitmap.createBitmap(layout.width, layout.height, Bitmap.Config.ARGB_8888)
         try {
             layout.draw(Canvas(expected))
             val pixels = IntArray(expected.width * expected.height)
             expected.getPixels(pixels, 0, expected.width, 0, 0, expected.width, expected.height)
             assertTrue("Native suffix oracle must contain ink", pixels.any { it ushr 24 != 0 })
-            span.draw(Canvas(actual), buffer, start, buffer.length, layout.getLineLeft(0),
-                layout.getLineTop(0), layout.getLineBaseline(0), layout.getLineBottom(0), natural.paint)
-            assertTrue("Suffix must render as native text, including bidi shaping: ${natural.text}", expected.sameAs(actual))
-        } finally { expected.recycle(); actual.recycle() }
+            val actual = Bitmap.createBitmap(layout.width, layout.height, Bitmap.Config.ARGB_8888)
+            try {
+                span.draw(Canvas(actual), buffer, start, buffer.length, layout.getLineLeft(0),
+                    layout.getLineTop(0), layout.getLineBaseline(0), layout.getLineBottom(0), natural.paint)
+                assertTrue("Suffix must render as native text, including bidi shaping: ${natural.text}", expected.sameAs(actual))
+            } finally { actual.recycle() }
+        } finally { expected.recycle() }
     }
 }
