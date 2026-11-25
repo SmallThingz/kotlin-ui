@@ -1,6 +1,7 @@
 package smallthingz.ui.graphics
 
 import android.graphics.Canvas
+import android.graphics.Xfermode
 import android.graphics.drawable.Drawable
 import android.view.View
 
@@ -9,8 +10,8 @@ internal class ViewGrain(private val view: View) : Drawable.Callback {
     private val grain = NoiseDrawable().apply { callback = this@ViewGrain }
 
     fun setIntensity(intensity: Float) = grain.setNoiseIntensity(intensity)
-    fun draw(canvas: Canvas, left: Float, top: Float, right: Float, bottom: Float, corner: Float = 0f, coverage: Int = 255) =
-        grain.drawGrain(canvas, left, top, right, bottom, corner, coverage)
+    fun draw(canvas: Canvas, left: Float, top: Float, right: Float, bottom: Float, corner: Float = 0f, coverage: Int = 255, blend: Xfermode? = null) =
+        grain.drawGrain(canvas, left, top, right, bottom, corner, coverage, blend)
     fun draw(canvas: Canvas, path: android.graphics.Path, coverage: Int = 255) = grain.drawGrain(canvas, path, coverage)
     fun surfaceRange(color: Int, coverage: Int = 255): Long = grain.surfaceRange(color, coverage)
 

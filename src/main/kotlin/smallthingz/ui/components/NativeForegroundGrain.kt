@@ -2,6 +2,7 @@ package smallthingz.ui.components
 
 import android.graphics.Canvas
 import android.graphics.RectF
+import android.graphics.Xfermode
 import android.view.View
 import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.graphics.ViewGrain
@@ -22,15 +23,21 @@ class NativeForegroundGrain {
     }
 
     /** The caller retains its fill, bounds, rounded geometry and outline. */
-    fun draw(canvas: Canvas, view: View, bounds: RectF, cornerRadius: Float, fillColor: Int) {
+    fun draw(canvas: Canvas, view: View, bounds: RectF, cornerRadius: Float, fillColor: Int): Unit {
+        draw(canvas, view, bounds, cornerRadius, fillColor, null)
+    }
+
+    /** Internal callers may mask grain within their own bounded layer. */
+    internal fun draw(canvas: Canvas, view: View, bounds: RectF, cornerRadius: Float, fillColor: Int,
+        blend: Xfermode?): Boolean {
         // Retain a flat drawing owner too, so first-time grain enablement schedules its redraw.
         if (owner !== view) {
             owner = view
             grain = null
         }
-        if (intensity == 0f || fillColor ushr 24 == 0) return
+        if (intensity == 0f || fillColor ushr 24 == 0) return false
         val layer = grain ?: view.bindGrainLayer(null, intensity).also { grain = it }
-        layer?.draw(canvas, bounds.left, bounds.top, bounds.right, bounds.bottom,
-            cornerRadius, fillColor ushr 24)
+        return layer?.draw(canvas, bounds.left, bounds.top, bounds.right, bounds.bottom,
+            cornerRadius, fillColor ushr 24, blend) ?: false
     }
 }

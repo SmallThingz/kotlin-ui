@@ -20,7 +20,8 @@ class AllDocSelectionHandlePainter {
     private val grain = NativeForegroundGrain()
     private val bounds = RectF()
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val mask = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP) }
+    private val overlay = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP) }
+    private val grainMask = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
     private var palette: ControlPalette? = null
     private var colorOwner: View? = null
     private var noisy = false
@@ -44,14 +45,17 @@ class AllDocSelectionHandlePainter {
             grain.draw(canvas, owner, bounds, 0f, Color.WHITE)
             return
         }
-        // Both layers are bounded by the small handle, never the page or document viewport.
-        val shape = canvas.saveLayer(bounds, null)
+        // Direct artwork establishes the caller's exact raster alpha. A tight saveLayer can
+        // quantize an antialiased edge differently, so use it only for the bounded grain overlay.
+        artwork.draw(canvas)
+        val ink = canvas.saveLayer(bounds, overlay)
         try {
             artwork.draw(canvas)
-            val ink = canvas.saveLayer(bounds, mask)
-            try { grain.draw(canvas, owner, bounds, 0f, Color.WHITE) }
-            finally { canvas.restoreToCount(ink) }
-        } finally { canvas.restoreToCount(shape) }
+            if (!grain.draw(canvas, owner, bounds, 0f, Color.WHITE, grainMask)) {
+                // Pending shaders and zero-effective grain must leave the direct artwork exact.
+                canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+            }
+        } finally { canvas.restoreToCount(ink) }
     }
 
     /** Worksheet rings use app ink and the same shared grain, independently of page paper. */

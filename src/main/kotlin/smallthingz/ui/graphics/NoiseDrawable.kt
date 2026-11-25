@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.PixelFormat
+import android.graphics.Xfermode
 import android.graphics.drawable.Drawable
 import androidx.annotation.ColorInt
 import kotlin.math.roundToInt
@@ -102,16 +103,23 @@ class NoiseDrawable(
         }
     }
 
-    /** Paint just the shared grain over a shape already filled by its owner. */
+    /** Paint shared grain over the owner's shape; report false when no draw was issued. */
     internal fun drawGrain(canvas: Canvas, left: Float, top: Float, right: Float, bottom: Float,
-        corner: Float = 0f, coverage: Int = 255) {
-        if (right <= left || bottom <= top || !prepareGrain(coverage)) return
+        corner: Float = 0f, coverage: Int = 255, blend: Xfermode? = null): Boolean {
+        if (right <= left || bottom <= top || !prepareGrain(coverage)) return false
         val alpha = noisePaint.alpha
-        noisePaint.alpha = (alpha * coverage + 127) / 255
+        // Ordinary drawing leaves the cached paint mode untouched.
+        val previousBlend = if (blend != null) noisePaint.xfermode else null
         try {
+            noisePaint.alpha = (alpha * coverage + 127) / 255
+            if (blend != null) noisePaint.xfermode = blend
             if (corner > 0f) canvas.drawRoundRect(left, top, right, bottom, corner, corner, noisePaint)
             else canvas.drawRect(left, top, right, bottom, noisePaint)
-        } finally { noisePaint.alpha = alpha }
+            return true
+        } finally {
+            noisePaint.alpha = alpha
+            if (blend != null) noisePaint.xfermode = previousBlend
+        }
     }
 
     /** Use the owner's retained geometry, avoiding a second path and per-frame clip. */
