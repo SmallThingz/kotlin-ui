@@ -3,6 +3,9 @@ package smallthingz.ui.components
 import android.app.Activity
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -112,6 +115,41 @@ class ReverbPermissionNoticesAccessibilityIntegrationTest {
         }
     }
 
+    @Test fun collapsedAndExpandedRowsKeepLightAndCustomWarningFill() {
+        val light = NativeColorScheme.fallback(darkTheme = false)
+        for (palette in listOf(light, light.copy(surfaceContainerLow = 0xffc9e3d2.toInt()))) {
+            withNotice(palette) { f ->
+                val kind = ReverbPermissionOnboardingKind.NOTIFICATIONS
+                main { f.notice.bind(listOf(state(kind))) }
+                awaitNotice(f)
+                fun assertRowFill(row: View) {
+                    assertTrue(row.width > 4 && row.height > 0)
+                    // Blank start inset, clear of the outer outline, glyph and action.
+                    val sample = Rect(4, row.height / 2, 5, row.height / 2 + 1)
+                    f.notice.view.offsetDescendantRectToMyCoords(row, sample)
+                    val bitmap = Bitmap.createBitmap(f.notice.view.width, f.notice.view.height, Bitmap.Config.ARGB_8888)
+                    try {
+                        f.notice.view.draw(Canvas(bitmap))
+                        assertEquals(ReverbDesign.appearance.groupSurfaces.settingsWarning.fillColor(palette),
+                            bitmap.getPixel(sample.left, sample.top))
+                    } finally { bitmap.recycle() }
+                }
+                main {
+                    assertFalse(f.notice.isExpanded)
+                    assertRowFill(f.notice.summaryView)
+                    assertTrue(click(button(f.notice.summaryView)))
+                }
+                awaitNotice(f, kind)
+                main {
+                    assertTrue(f.notice.isExpanded)
+                    assertRowFill(f.notice.summaryView)
+                    assertRowFill(checkNotNull(f.notice.noticeView(kind)))
+                    assertTrue(f.requests.isEmpty())
+                }
+            }
+        }
+    }
+
     @Test fun sourceGeometryTakeoverDoesNotFallBackToNativeBoundsAfterRelease() = withNotice { f ->
         main { f.notice.bind(listOf(state(ReverbPermissionOnboardingKind.NOTIFICATIONS))) }
         awaitNotice(f)
@@ -129,26 +167,29 @@ class ReverbPermissionNoticesAccessibilityIntegrationTest {
         }
     }
 
-    private class Fixture(val activity: Activity) {
+    private class Fixture(val activity: Activity, palette: NativeColorScheme? = null) {
         val requests = mutableListOf<ReverbPermissionOnboardingKind>()
         private val context = activity.createConfigurationContext(Configuration(activity.resources.configuration).apply {
             densityDpi = 160
             fontScale = 1f
         })
-        val notice = ReverbPermissionNotices(context, ReverbDesign.theme(context, dark = false)) { requests.add(it) }
+        private val baseTheme = ReverbDesign.theme(context, dark = false)
+        private val theme = if (palette == null) baseTheme else
+            ReverbDesign.windowTheme(baseTheme.density, baseTheme.fontResolver, palette)
+        val notice = ReverbPermissionNotices(context, theme) { requests.add(it) }
         val root = FrameLayout(activity).apply {
             addView(notice.view, FrameLayout.LayoutParams(-1, -2))
         }
     }
 
-    private fun withNotice(assertions: (Fixture) -> Unit) {
+    private fun withNotice(palette: NativeColorScheme? = null, assertions: (Fixture) -> Unit) {
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         var fixture: Fixture? = null
         var failure: Throwable? = null
         try {
             main {
-                fixture = Fixture(activity)
+                fixture = Fixture(activity, palette)
                 activity.setContentView(checkNotNull(fixture).root)
             }
             val mounted = checkNotNull(fixture)

@@ -26,6 +26,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import smallthingz.ui.controls.textSurfaceRange
 import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
@@ -233,6 +234,41 @@ class NativeStandaloneSharedControlsIntegrationTest {
             assertSame(field, group.view.pointerContent.getChildAt(0))
             assertEquals(dark.field, group.view.paintedFillColor)
             assertEquals(dark.error, field.supportingView.currentTextColor)
+
+            val editor = field.editor
+            val editable = editor.text
+            val surface = group.view
+            val flat = dark.copy(surfaceContainerLow = Color.BLACK, onSurface = Color.WHITE, surfacePreset = null)
+            group.bindPalette(flat)
+            val density = context.resources.displayMetrics.density
+            surface.measure(View.MeasureSpec.makeMeasureSpec((240 * density).roundToInt(), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+            surface.layout(0, 0, surface.measuredWidth, surface.measuredHeight)
+            fun outlinePixel(): Int {
+                val bitmap = Bitmap.createBitmap(surface.width, surface.height, Bitmap.Config.ARGB_8888)
+                try {
+                    surface.draw(Canvas(bitmap))
+                    return bitmap.getPixel((2 * density).toInt(), surface.height / 2)
+                } finally { bitmap.recycle() }
+            }
+            assertEquals(Color.BLACK, outlinePixel())
+            assertEquals(textSurfaceRange(Color.BLACK), surface.paintedTextSurface)
+            val preset = NativeDarkSurfacePreset.Amoled.copy(foregroundGrain = .5f,
+                borderWidthDp = 3f, borderLightness = 1f)
+            group.bindPalette(flat.copy(surfacePreset = preset))
+            assertSame(surface, group.view)
+            assertSame(field, surface.pointerContent.getChildAt(0))
+            assertSame(editor, field.editor)
+            assertSame(editable, editor.text)
+            assertEquals(textSurfaceRange(Color.BLACK, 0xff090909.toInt()), surface.paintedTextSurface)
+            assertEquals(Color.WHITE, outlinePixel())
+            group.bindPalette(flat)
+            assertEquals(textSurfaceRange(Color.BLACK), surface.paintedTextSurface)
+            assertEquals(Color.BLACK, outlinePixel())
+            assertSame(surface, group.view)
+            assertSame(field, surface.pointerContent.getChildAt(0))
+            assertSame(editor, field.editor)
+            assertSame(editable, editor.text)
         }
 
     @Test fun initiallyBlackGroupSeedsInkWithoutANewFillAndKeepsDisabledOpacity() =
