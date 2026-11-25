@@ -74,7 +74,10 @@ class ZfmFilenameText(
             super.onMeasure(widthMeasureSpec, heightMeasureSpec)
         }
         val raw = layout ?: return
-        if (directory || raw.lineCount != 2 || raw.getEllipsisCount(1) == 0) return
+        // DynamicLayout can retain backing lines past TextView's two visible lines.
+        val rawLineCount = raw.lineCount
+        if (directory || rawLineCount < 2 ||
+            (rawLineCount == 2 && raw.getEllipsisCount(1) == 0)) return
 
         val fitted = suffixText(raw)
         if (fitted != null) {

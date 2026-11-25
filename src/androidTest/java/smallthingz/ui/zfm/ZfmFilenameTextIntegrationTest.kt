@@ -101,6 +101,33 @@ class ZfmFilenameTextIntegrationTest {
         }
     }
 
+    @Test fun watchedFilenameKeepsSuffixOnBindAndWidthChange() = main {
+        val context = context(1f)
+        val style = NativeTextStyle(14f)
+        val watcher = object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+            override fun afterTextChanged(s: Editable?) = Unit
+        }
+        for (watchBeforeBind in listOf(true, false)) {
+            val view = label(context, style, if (watchBeforeBind) "" else longName)
+            if (!watchBeforeBind) {
+                measure(view, 220)
+                assertVisibleSuffix(view)
+            }
+            view.addTextChangedListener(watcher)
+            try {
+                if (watchBeforeBind) {
+                    view.bindName(longName, directory = false)
+                    measure(view, 220)
+                    assertVisibleSuffix(view)
+                }
+                measure(view, 180)
+                assertVisibleSuffix(view)
+            } finally { view.removeTextChangedListener(watcher) }
+        }
+    }
+
     @Test fun widthRoundTripAndStyleChangesMatchFreshInstances() = main {
         for (font in listOf(1f, 2f)) {
             val context = context(font)
