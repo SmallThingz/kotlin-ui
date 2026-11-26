@@ -18,6 +18,8 @@ version = '0.1.0'
 
 import com.android.build.api.variant.ResValue
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import javax.inject.Inject
+import org.gradle.process.ExecOperations
 kotlin { compilerOptions { jvmTarget = JvmTarget.JVM_17; freeCompilerArgs.add('-jvm-default=no-compatibility') } }
 android {
     namespace = 'smallthingz.ui'
@@ -45,10 +47,10 @@ dependencies {
 }
 
 // Android starting windows need a packaged color before the Kotlin palette can run.
-def amoledSource = layout.projectDirectory.file('src/main/kotlin/smallthingz/ui/components/NativeDarkSurfaces.kt')
+def amoledSource = layout.projectDirectory.file('src/main/kotlin/smallthingz/ui/components/NativeDarkSurfaceRecipe.kt')
 def amoledBackground = providers.fileContents(amoledSource).asText.map { source ->
     def level = source =~ /(?m)^internal const val DEFAULT_AMOLED_BACKGROUND_LEVEL = ([0-9]+)\r?$/
-    def maximum = source =~ /(?m)^private const val MAX_DARK_SURFACE_LEVEL = ([0-9]+)f\r?$/
+    def maximum = source =~ /(?m)^internal const val MAX_DARK_SURFACE_LEVEL = ([0-9]+)f\r?$/
     if (!level.find() || !maximum.find()) {
         throw new GradleException("Missing AMOLED background level or limit in $amoledSource.asFile")
     }
@@ -62,8 +64,55 @@ def amoledBackground = providers.fileContents(amoledSource).asText.map { source 
     def channel = String.format('%02X', backgroundLevel)
     new ResValue('#' + channel * 3, 'Derived from the library AMOLED background level.')
 }
+
+// Compile only the pure recipe, original noise generator and host PNG/XML writer. This build-only
+// toolchain never enters the Android runtime classpath and has no dependency on Android outputs.
+// Public native_amoled_foreground_background is fixed AMOLED identity, not a window palette.
+// generateNativeForegroundResources regenerates its platform XML and full nodpi tile from source.
+def foregroundCompiler = configurations.create('nativeForegroundCompiler') {
+    canBeConsumed = false
+    canBeResolved = true
+    visible = false
+}
+dependencies { nativeForegroundCompiler 'org.jetbrains.kotlin:kotlin-compiler-embeddable:2.3.0' }
+
+abstract class GenerateNativeForegroundResources extends DefaultTask {
+    @Classpath abstract ConfigurableFileCollection getCompilerClasspath()
+    @InputFiles @PathSensitive(PathSensitivity.RELATIVE) abstract ConfigurableFileCollection getSources()
+    @OutputDirectory abstract DirectoryProperty getOutputDirectory()
+    @Inject abstract ExecOperations getExecOperations()
+
+    @TaskAction void generate() {
+        def classes = new File(temporaryDir, 'classes')
+        classes.mkdirs()
+        execOperations.javaexec {
+            classpath = compilerClasspath
+            mainClass = 'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler'
+            maxHeapSize = '256m'
+            args '-no-stdlib', '-no-reflect', '-jvm-target', '17',
+                '-classpath', compilerClasspath.asPath, '-d', classes.absolutePath
+            args sources.files.collect { it.absolutePath }.sort()
+        }.assertNormalExitValue()
+        execOperations.javaexec {
+            classpath compilerClasspath, classes
+            mainClass = 'smallthingz.ui.tools.ExportNativeForegroundResourcesKt'
+            maxHeapSize = '128m'
+            systemProperty 'java.awt.headless', 'true'
+            args outputDirectory.get().asFile.absolutePath
+        }.assertNormalExitValue()
+    }
+}
+
+def generateForeground = tasks.register('generateNativeForegroundResources', GenerateNativeForegroundResources) {
+    compilerClasspath.from(foregroundCompiler)
+    sources.from(amoledSource,
+        layout.projectDirectory.file('src/main/kotlin/smallthingz/ui/graphics/ProceduralNoise.kt'),
+        layout.projectDirectory.file('scripts/foreground-resource-exporter/ExportNativeForegroundResources.kt'))
+    outputDirectory.set(layout.buildDirectory.dir('generated/nativeForeground/res'))
+}
 androidComponents {
     onVariants(selector().all()) { variant ->
+        variant.sources.res.addGeneratedSourceDirectory(generateForeground, { task -> task.outputDirectory })
         def key = variant.makeResValueKey('color', 'native_default_amoled_background')
         variant.resValues.put(key, amoledBackground)
     }
@@ -78,7 +127,8 @@ tasks.register('verifyReverbBrandPlate', Exec) {
     inputs.file(exporter)
     inputs.files(fileTree('src/main/kotlin/smallthingz/ui') {
         include 'components/NativeColorScheme.kt', 'components/NativeDarkSurfaces.kt',
-            'components/NativeDarkSurfacePreset.kt', 'components/NativeDefaultColorScheme.kt',
+            'components/NativeDarkSurfaceRecipe.kt', 'components/NativeDarkSurfacePreset.kt',
+            'components/NativeDefaultColorScheme.kt',
             'components/NativeGroupSurfaceRecipes.kt', 'graphics/ProceduralNoise.kt'
     })
     inputs.files(fileTree('src/main/res') {

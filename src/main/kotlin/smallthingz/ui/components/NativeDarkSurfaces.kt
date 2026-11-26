@@ -6,12 +6,6 @@ import kotlin.math.roundToInt
 /** Dark surface treatments. Content, accent, and feedback colors belong to the base scheme. */
 enum class NativeDarkSurfaces { GRAY, TINTED, AMOLED }
 
-private const val MAX_DARK_SURFACE_LEVEL = 72f
-
-// The library build verifies the packaged startup color against this level.
-internal const val DEFAULT_AMOLED_BACKGROUND_LEVEL = 0
-internal const val DEFAULT_AMOLED_BACKGROUND_LIGHTNESS = DEFAULT_AMOLED_BACKGROUND_LEVEL / MAX_DARK_SURFACE_LEVEL
-
 /** Customize dark fills while keeping the base resolver's light scheme and surface paint policy. */
 fun NativeColorSchemeResolver.withDarkSurfaces(
     style: NativeDarkSurfaces,
@@ -59,10 +53,10 @@ fun NativeColorScheme.withDarkSurfaces(
         }
     val gray = style == NativeDarkSurfaces.GRAY
     // Scale the foreground roles together so changing lightness preserves their relative depth.
-    val foregroundScale = foregroundLightness?.let { it * MAX_DARK_SURFACE_LEVEL / if (gray) 61f else 54f }
-        ?: if (style == NativeDarkSurfaces.AMOLED) 0f else 1f
+    val foregroundScale = NativeDarkSurfaceRecipe.foregroundScale(foregroundLightness, gray,
+        style == NativeDarkSurfaces.AMOLED)
     fun foreground(grayLevel: Int, tintedLevel: Int) =
-        tone(((if (gray) grayLevel else tintedLevel) * foregroundScale).roundToInt().coerceAtMost(255))
+        tone(NativeDarkSurfaceRecipe.foregroundLevel(grayLevel, tintedLevel, gray, foregroundScale))
 
     val backdrop = tone(backdropLevel)
     return copy(
@@ -73,7 +67,7 @@ fun NativeColorScheme.withDarkSurfaces(
         surfaceBright = foreground(61, 54),
         surfaceDim = backdrop,
         surfaceContainer = foreground(41, 35),
-        surfaceContainerHigh = foreground(49, 42),
+        surfaceContainerHigh = tone(NativeDarkSurfaceRecipe.raisedLevel(gray, foregroundScale)),
         surfaceContainerHighest = foreground(57, 50),
         surfaceContainerLow = foreground(34, 29),
         surfaceContainerLowest = foreground(19, 15),

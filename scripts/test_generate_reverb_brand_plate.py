@@ -11,9 +11,11 @@ class BrandPlateTest(unittest.TestCase):
         return [(plate.ROOT / name).read_text(encoding="utf-8") for name in plate.SOURCE_FILES]
 
     def test_amoled_level_rounds_the_kotlin_float_literal_before_multiplication(self):
-        *palette, _ = self.sources()
-        palette[2] = re.sub(r"foregroundLightness = \d*\.?\d+f", "foregroundLightness = .0075f", palette[2])
-        colors, _ = plate.exported_colors(*palette)
+        scheme, dark_surfaces, recipe, preset, defaults, groups, _ = self.sources()
+        recipe, changed = re.subn(r"amoledForegroundLightness = \d*\.?\d+f",
+                                  "amoledForegroundLightness = .0075f", recipe)
+        self.assertEqual(changed, 1)
+        colors, _ = plate.exported_colors(scheme, dark_surfaces, recipe, preset, defaults, groups)
         # Binary32 arithmetic yields 0.4999999403953552; a Double literal rounds up instead.
         self.assertEqual(colors["values-night"][0], "#000000")
 

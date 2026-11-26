@@ -14,6 +14,7 @@ KOTLIN = "src/main/kotlin/smallthingz/ui"
 SOURCE_FILES = tuple(f"{KOTLIN}/{name}.kt" for name in (
     "components/NativeColorScheme",
     "components/NativeDarkSurfaces",
+    "components/NativeDarkSurfaceRecipe",
     "components/NativeDarkSurfacePreset",
     "components/NativeDefaultColorScheme",
     "components/NativeGroupSurfaceRecipes",
@@ -35,20 +36,27 @@ def float32(value):
     return struct.unpack("!f", struct.pack("!f", value))[0]
 
 
-def exported_colors(scheme, dark_surfaces, preset, defaults, groups):
+def exported_colors(scheme, dark_surfaces, recipe, preset, defaults, groups):
     require_pattern(r"recordingInfoRow: NativeGroupSurfaceRecipe = NativeGroupSurfaceRecipe\([^\n]*NativeGroupFill\.HIGHEST", groups)
     require_pattern(r"HIGHEST -> colors\.surfaceContainerHighest", groups)
     require_pattern(r"val ink: Int get\(\) = onSurface", scheme)
     require_pattern(r"NativeGrainPreset\(backgroundGrain, foregroundGrain\)", defaults)
     require_pattern(r"darkColors = NativeDarkSurfacePreset\.Amoled\.colorScheme\(\)", defaults)
     require_pattern(r"val Amoled = NativeDarkSurfacePreset\(NativeDarkSurfaces\.AMOLED,", preset)
-    lightness = float32(float(require_pattern(r"foregroundLightness = (\d*\.?\d+)f", preset)[1]))
-    intensity = require_pattern(r"foregroundGrain = (\d*\.?\d+)f", preset)[1]
-    maximum = float32(float(require_pattern(r"const val MAX_DARK_SURFACE_LEVEL = (\d+)f", dark_surfaces)[1]))
+    require_pattern(r"foregroundLightness = NativeDarkSurfaceRecipe\.amoledForegroundLightness", preset)
+    require_pattern(r"foregroundGrain = NativeDarkSurfaceRecipe\.amoledForegroundGrain", preset)
+    lightness = float32(float(require_pattern(r"const val amoledForegroundLightness = (\d*\.?\d+)f", recipe)[1]))
+    intensity = require_pattern(r"const val amoledForegroundGrain = (\d*\.?\d+)f", recipe)[1]
+    maximum = float32(float(require_pattern(r"const val MAX_DARK_SURFACE_LEVEL = (\d+)f", recipe)[1]))
     divisor = float32(float(require_pattern(
-        r"it \* MAX_DARK_SURFACE_LEVEL / if \(gray\) \d+f else (\d+)f", dark_surfaces)[1]))
+        r"it \* MAX_DARK_SURFACE_LEVEL / if \(gray\) \d+f else (\d+)f", recipe)[1]))
     level = int(require_pattern(r"surfaceContainerHighest = foreground\(\d+, (\d+)\)", dark_surfaces)[1])
-    require_pattern(r"tone\(\(\(if \(gray\) grayLevel else tintedLevel\) \* foregroundScale\)\.roundToInt\(\)\.coerceAtMost\(255\)\)", dark_surfaces)
+    require_pattern(r"NativeDarkSurfaceRecipe\.foregroundScale\(foregroundLightness, gray,\s*style == NativeDarkSurfaces\.AMOLED\)",
+                    dark_surfaces)
+    require_pattern(r"tone\(NativeDarkSurfaceRecipe\.foregroundLevel\(grayLevel, tintedLevel, gray, foregroundScale\)\)",
+                    dark_surfaces)
+    require_pattern(r"\(\(if \(gray\) grayLevel else tintedLevel\) \* scale\)\.roundToInt\(\)\.coerceAtMost\(255\)",
+                    recipe)
     require_pattern(r"if \(style == NativeDarkSurfaces\.TINTED\)[\s\S]*?\.roundToInt\(\) else level", dark_surfaces)
     foreground_scale = float32(float32(lightness * maximum) / divisor)
     channel = min(255, math.floor(float32(float32(level) * foreground_scale) + .5))
