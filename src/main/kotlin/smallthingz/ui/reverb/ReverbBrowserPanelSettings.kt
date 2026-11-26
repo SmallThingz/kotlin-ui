@@ -17,7 +17,6 @@ import smallthingz.ui.reverb.settings.ReverbSettingsToggle
 import smallthingz.ui.reverb.settings.bindSectionTitle
 import smallthingz.ui.reverb.settings.settingsSectionTitle
 import smallthingz.ui.text.view.ParagraphView
-import smallthingz.ui.text.NativeTypographyRole
 import kotlin.math.roundToInt
 
 /** A shared row handle, not an arbitrary application View slot. */
@@ -198,12 +197,6 @@ open class ReverbBrowserPanelSettings(context: Context, private var theme: Rever
         orientation = VERTICAL
         setPaddingRelative(dp(16), dp(12), dp(16), dp(16))
     }
-    private val feedback = createReverbSupportingParagraph(context, "", NativeTypographyRole.BODY_SMALL, theme).apply {
-        setPaddingRelative(dp(16), dp(8), dp(16), 0)
-        accessibilityLiveRegion = ACCESSIBILITY_LIVE_REGION_POLITE
-        visibility = GONE
-    }
-    private var message = ""
     private val owned = linkedSetOf<ReverbBrowserPanelRow>()
     private val sectionHeadings = mutableListOf<ParagraphView>()
     private val groupSurfaces = mutableListOf<NativeGroupLayout>()
@@ -213,7 +206,7 @@ open class ReverbBrowserPanelSettings(context: Context, private var theme: Rever
     private val toolbar = ReverbTitledTopBarLayout(context, theme.density.density, theme.palette, back, heading,
         draftActions, style = theme.appearance.toolbars)
 
-    /** Repaint in place without replaying draft bindings, selections, feedback or focus handoff. */
+    /** Repaint in place without replaying draft bindings, selections or focus handoff. */
     fun bindTheme(theme: ReverbTheme) {
         if (panelClosed || this.theme === theme) return
         cancelBrowserPanelInput()
@@ -222,7 +215,6 @@ open class ReverbBrowserPanelSettings(context: Context, private var theme: Rever
         toolbar.bindTitledToolbar(theme.density.density, theme.palette)
         back.bindTheme(theme); undo.bindTheme(theme); apply.bindTheme(theme)
         theme.bindParagraph(heading, theme.appearance.toolbars.centeredTitleRole)
-        theme.bindSupportingParagraph(feedback, NativeTypographyRole.BODY_SMALL)
         val environment = ReverbEnvironment(theme).forSettings()
         sectionHeadings.forEach { bindSectionTitle(it, environment) }
         groupSurfaces.forEach { theme.appearance.groupSurfaces.settingsGroup.bind(it, theme.palette) }
@@ -233,7 +225,6 @@ open class ReverbBrowserPanelSettings(context: Context, private var theme: Rever
         background = theme.appearance.backdrops.pageBackground(theme.palette)
         ViewCompat.setAccessibilityPaneTitle(this, title)
         addView(toolbar, LayoutParams(-1, -2))
-        addView(feedback, LayoutParams(-1, -2))
         addView(ScrollView(context).apply { isFillViewport = true; addView(groups, FrameLayout.LayoutParams(-1, -2)) },
             LayoutParams(-1, 0, 1f))
         bindPendingActions(false)
@@ -248,14 +239,6 @@ open class ReverbBrowserPanelSettings(context: Context, private var theme: Rever
         }
         undo.visibility = if (dirty) VISIBLE else GONE
         apply.visibility = undo.visibility
-    }
-    fun showMessage(value: String) {
-        if (panelClosed) return
-        message = value; feedback.setText(value); feedback.visibility = VISIBLE
-    }
-    fun clearMessage(value: String) {
-        if (message != value || panelClosed) return
-        message = ""; feedback.setText(""); feedback.visibility = GONE
     }
     fun addGroup(label: String?, rows: List<ReverbBrowserPanelRow>) {
         check(!panelClosed)
