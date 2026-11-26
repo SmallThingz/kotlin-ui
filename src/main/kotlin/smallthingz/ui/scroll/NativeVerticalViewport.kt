@@ -248,22 +248,24 @@ class NativeVerticalViewport(
         invalidateOutline()
     }
 
-    override fun draw(canvas: Canvas) {
+    private inline fun withViewportClip(canvas: Canvas, drawContent: () -> Unit) {
         if (canvas.isHardwareAccelerated) {
-            super.draw(canvas) // Source-shaped hardware outline clips the whole draw subtree.
+            drawContent() // RenderNode owns the hardware outline clip.
         } else {
             val save = canvas.save()
             try {
                 canvas.clipRect(-crossAxisInflation, 0, width + crossAxisInflation, height)
-                super.draw(canvas)
+                drawContent()
             } finally {
                 canvas.restoreToCount(save)
             }
         }
     }
 
-    override fun dispatchDraw(canvas: Canvas) {
-        // Released AndroidOverscroll updates containerSize at draw, not measure/size callbacks.
+    override fun draw(canvas: Canvas) = withViewportClip(canvas) { super.draw(canvas) }
+
+    override fun dispatchDraw(canvas: Canvas) = withViewportClip(canvas) {
+        // A parent can dispatch directly to a backgroundless ViewGroup's children.
         overscroll.measured(width, height)
         overscroll.draw(canvas) { super.dispatchDraw(it) }
     }
