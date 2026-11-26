@@ -196,11 +196,21 @@ class ReverbSettingsPermissionReviewRow(
     private val actionResource: Int,
     private val actionDescriptionResource: Int,
     request: () -> Unit,
+    standaloneAccessibility: Boolean = false,
 ) : ViewGroup(context), AutoCloseable {
+    /** Preserve existing positional, trailing-lambda and JVM constructor callers. */
+    constructor(context: Context, environment: ReverbEnvironment, inputRoot: () -> View?,
+        glyph: ReverbIcon, titleResource: Int, actionResource: Int, actionDescriptionResource: Int,
+        request: () -> Unit) : this(context, environment, inputRoot, glyph, titleResource,
+            actionResource, actionDescriptionResource, request, false)
+
     private val icon = ReverbGlyphView(context, glyph, environment.palette.tertiary)
     private val title = environment.paragraph(context, context.getString(titleResource),
         ReverbTextRole.BODY_MEDIUM, environment.palette.onSurface)
-    private val action = ReverbSettingsActionView(context, environment, inputRoot, action = request)
+    private val action = ReverbSettingsActionView(context, environment, inputRoot, action = request).apply {
+        // Ordinary native Settings hosts opt in; Reverb keeps its source-geometry owner.
+        if (standaloneAccessibility) enableStandaloneAccessibility()
+    }
     private var rowHeight = 0
     private var firstGap = 0
     private var secondGap = 0
