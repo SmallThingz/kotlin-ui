@@ -23,9 +23,12 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.R
 import smallthingz.ui.reverb.ReverbDesign
+import smallthingz.ui.reverb.ReverbEnvironment
+import smallthingz.ui.reverb.ReverbIcon
 import smallthingz.ui.reverb.ReverbPermissionNotices
 import smallthingz.ui.reverb.ReverbPermissionOnboardingKind
 import smallthingz.ui.reverb.ReverbPermissionOnboardingState
+import smallthingz.ui.reverb.settings.ReverbSettingsPermissionReviewRow
 import smallthingz.ui.text.view.NativePlainTextViewGeometry
 import smallthingz.ui.text.view.NativeTextSemanticsClip
 import smallthingz.ui.text.view.NativeTextSemanticsClipPolicy
@@ -37,6 +40,80 @@ import java.util.concurrent.TimeUnit
 /** Ordinary attached native host: no source-geometry binder or real permission request. */
 @RunWith(AndroidJUnit4::class)
 class ReverbPermissionNoticesAccessibilityIntegrationTest {
+    @Test fun settingsReviewRowDefaultRetainsSourceHostOwnership() = withNotice { f ->
+        var row: ReverbSettingsPermissionReviewRow? = null
+        var requests = 0
+        try {
+            main {
+                val environment = ReverbEnvironment(f.activity, false).forSettings()
+                // Existing trailing-lambda constructor must remain source compatible.
+                row = ReverbSettingsPermissionReviewRow(f.activity, environment, { null },
+                    ReverbIcon.BackgroundWarning, R.string.reverb_settings_background_use_restricted,
+                    R.string.reverb_settings_background_review, R.string.reverb_settings_background_review) { requests++ }
+                f.root.removeAllViews()
+                f.root.addView(checkNotNull(row), FrameLayout.LayoutParams(-1, -2))
+                checkNotNull(row).bind(environment, true)
+            }
+            await("Default settings row attached", { viewState(checkNotNull(row)) }) { ready(checkNotNull(row)) }
+            main {
+                val action = button(checkNotNull(row))
+                assertNull(action.createAccessibilityNodeInfo())
+                assertFalse(click(action))
+                assertEquals(0, requests)
+                val lease = action.mergedRowAccessibility.bindGeometry(NativePlainTextViewGeometry(f.root,
+                    NativeTextSemanticsClipPolicy { NativeTextSemanticsClip.Unclipped })) { true }
+                try {
+                    assertAction(action, f.activity.getString(R.string.reverb_settings_background_review))
+                    assertTrue(click(action))
+                    assertEquals(1, requests)
+                } finally { lease.close() }
+                assertNull(action.createAccessibilityNodeInfo())
+            }
+        } finally { main { row?.close() } }
+    }
+
+    @Test fun settingsReviewRowOptInExposesOnlyLiveEnabledActionAndRetiresAfterHostTakeover() = withNotice { f ->
+        var row: ReverbSettingsPermissionReviewRow? = null
+        var requests = 0
+        lateinit var environment: ReverbEnvironment
+        try {
+            main {
+                environment = ReverbEnvironment(f.activity, false).forSettings()
+                row = ReverbSettingsPermissionReviewRow(f.activity, environment, { null },
+                    ReverbIcon.BackgroundWarning, R.string.reverb_settings_background_use_restricted,
+                    R.string.reverb_settings_background_review, R.string.reverb_settings_background_review,
+                    request = { requests++ }, standaloneAccessibility = true)
+                f.root.removeAllViews()
+                f.root.addView(checkNotNull(row), FrameLayout.LayoutParams(-1, -2))
+                checkNotNull(row).bind(environment, true)
+            }
+            await("Standalone settings row attached", { viewState(checkNotNull(row)) }) { ready(checkNotNull(row)) }
+            main {
+                val current = checkNotNull(row)
+                val action = button(current)
+                assertAction(action, f.activity.getString(R.string.reverb_settings_background_review))
+                assertEquals(1, exposedActions(current))
+                assertTrue(click(action)); assertEquals(1, requests)
+                current.bind(environment, false)
+                assertFalse(checkNotNull(action.createAccessibilityNodeInfo()).isEnabled)
+                assertFalse(click(action)); assertEquals(1, requests)
+                current.bind(environment, true)
+                current.visibility = View.GONE
+                assertNull(action.createAccessibilityNodeInfo())
+                assertFalse(click(action)); assertEquals(1, requests)
+                current.visibility = View.VISIBLE
+                val lease = action.mergedRowAccessibility.bindGeometry(NativePlainTextViewGeometry(f.root,
+                    NativeTextSemanticsClipPolicy { NativeTextSemanticsClip.Unclipped })) { true }
+                try { assertTrue(checkNotNull(action.createAccessibilityNodeInfo()).isVisibleToUser) }
+                finally { lease.close() }
+                assertNull(action.createAccessibilityNodeInfo())
+                assertFalse(click(action)); assertEquals(1, requests)
+                current.close()
+                assertNull(action.createAccessibilityNodeInfo())
+            }
+        } finally { main { row?.close() } }
+    }
+
     @Test fun standaloneActionsRequestEachKindAndRetireOnDisableGrantAndRevocation() = withNotice { f ->
         for (kind in ReverbPermissionOnboardingKind.entries) {
             val state = state(kind)
