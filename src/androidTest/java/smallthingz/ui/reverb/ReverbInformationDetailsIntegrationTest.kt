@@ -23,7 +23,6 @@ import smallthingz.ui.components.NativeInputGate
 import smallthingz.ui.components.NativeMaterialButtonView
 import smallthingz.ui.components.NativeMenuAccessibilityTestActivity
 import smallthingz.ui.components.NativeToggleRow
-import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.text.view.ParagraphView
 import smallthingz.ui.util.closePreservingPrimaryFailure
 
@@ -61,6 +60,7 @@ class ReverbInformationDetailsIntegrationTest {
             assertFalse(f.row.performLongClick())
             f.installDetails()
             f.list.bind(emptyList(), "No integrations")
+            assertFalse(f.row.isAttachedToWindow)
             assertFalse(f.row.performLongClick())
             assertFalse(longAction(f.row))
             f.list.close()
@@ -149,9 +149,14 @@ class ReverbInformationDetailsIntegrationTest {
             assertFalse(f.row.hasWindowFocus())
             sheet!!.close()
         }
-        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        val focusDeadline = SystemClock.uptimeMillis() + 5_000L
+        while (SystemClock.uptimeMillis() < focusDeadline &&
+            !main { f.row.isAttachedToWindow && f.row.hasWindowFocus() }) {
+            SystemClock.sleep(16)
+        }
         main {
-            assertTrue(f.row.hasWindowFocus())
+            assertTrue("Anchor did not regain window focus after dismissal",
+                f.row.isAttachedToWindow && f.row.hasWindowFocus())
             touch(f.row, MotionEvent.ACTION_UP)
             f.row.onKeyUp(KeyEvent.KEYCODE_ENTER, KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
             assertEquals(listOf("new:provider"), f.details)
@@ -177,16 +182,21 @@ class ReverbInformationDetailsIntegrationTest {
             val width = View.MeasureSpec.makeMeasureSpec(180, View.MeasureSpec.EXACTLY)
             val height = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
             summary.measure(width, height)
+            val unlimitedLines = checkNotNull(summary.currentParagraph).lineCount
             val unlimitedHeight = summary.measuredHeight
+            assertTrue(unlimitedLines > 4)
             f.installDetails()
             summary.measure(width, height)
-            val fourLines = f.theme.paragraph(f.activity, "A\nA\nA\nA", NativeTypographyRole.BODY_SMALL)
-            fourLines.measure(width, height)
-            assertEquals(fourLines.measuredHeight, summary.measuredHeight)
+            val preview = checkNotNull(summary.currentParagraph)
+            assertEquals(4, preview.lineCount)
+            assertTrue("The fourth preview line must be ellipsized", preview.isLineEllipsized(3))
             assertTrue(unlimitedHeight > summary.measuredHeight)
             assertEquals(full, summary.getText())
             f.list.bindDetails(Int.MAX_VALUE, "", null)
             summary.measure(width, height)
+            val restored = checkNotNull(summary.currentParagraph)
+            assertEquals(unlimitedLines, restored.lineCount)
+            assertFalse(restored.isLineEllipsized(restored.lineCount - 1))
             assertEquals(unlimitedHeight, summary.measuredHeight)
             assertEquals(full, summary.getText())
         }

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Paint
 import android.os.Build
+import android.text.BoringLayout
 import android.text.Layout
 import android.view.View
 import android.view.ViewGroup
@@ -57,20 +58,34 @@ class ZfmFileGridMetricsIntegrationTest {
         val contentWidth = cellWidth - 2 * padding
         val titleWidth = Layout.getDesiredWidth("Documents", title.paint)
         val detailWidth = detailSamples.maxOf { Layout.getDesiredWidth(it, detail.paint) }
+        val titleIntrinsic = intrinsicContentWidth(title)
+        val detailIntrinsic = detailSamples.maxOf { sample ->
+            detail.text = sample
+            intrinsicContentWidth(detail)
+        }
+        val titleBoundsPolicy = if (Build.VERSION.SDK_INT >= 35) title.useBoundsForWidth.toString() else "unavailable"
         val metrics = "cell=$cellWidth content=$contentWidth padding=$padding " +
             "fontScale=${context.resources.configuration.fontScale} " +
             "titleDesired=$titleWidth detailDesired=$detailWidth " +
+            "titleIntrinsic=$titleIntrinsic detailIntrinsic=$detailIntrinsic " +
+            "titleUseBounds=$titleBoundsPolicy targetSdk=${context.applicationInfo.targetSdkVersion} " +
             "titleAdvance=${title.paint.measureText("Documents")} " +
             "titleSpacing=${title.letterSpacing} detailSpacing=${detail.letterSpacing}"
-        assertEquals("Recipe width uses the actual title and detail layout metrics: $metrics",
+        assertEquals("Recipe width matches the actual title and detail intrinsic widths: $metrics",
             maxOf((108 * context.resources.displayMetrics.density).roundToInt(),
-                ceil(maxOf(titleWidth, detailWidth)).toInt() + 2 * padding), cellWidth)
+                maxOf(titleIntrinsic, detailIntrinsic) + 2 * padding), cellWidth)
         assertTrue("Documents desired width fits the padded helper width: $metrics", titleWidth <= contentWidth)
         assertLineFits(title, "Documents", contentWidth, metrics)
         for (sample in detailSamples) {
             detail.text = sample
             assertLineFits(detail, sample, contentWidth, metrics)
         }
+    }
+
+    private fun intrinsicContentWidth(view: NativeText): Int {
+        view.measure(View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+        return view.measuredWidth - view.compoundPaddingLeft - view.compoundPaddingRight
     }
 
     private fun assertLineFits(view: NativeText, expectedText: String, width: Int, metrics: String) {
@@ -82,8 +97,13 @@ class ZfmFileGridMetricsIntegrationTest {
         val advance = view.paint.measureText(expectedText)
         val desired = Layout.getDesiredWidth(expectedText, view.paint)
         val lineWidth = layout.getLineWidth(0)
+        val boring = BoringLayout.isBoring(expectedText, view.paint)
+        val bounds = if (Build.VERSION.SDK_INT >= 35) boring?.drawingBoundingBox else null
+        val boundsPolicy = if (Build.VERSION.SDK_INT >= 35) view.useBoundsForWidth.toString() else "unavailable"
         val diagnostic = "$metrics text=$expectedText viewWidth=${view.width} " +
             "compoundContent=$content advance=$advance desired=$desired line=$lineWidth " +
+            "boringAdvance=${boring?.width} bounds=$bounds useBounds=$boundsPolicy " +
+            "targetSdk=${view.context.applicationInfo.targetSdkVersion} sdk=${Build.VERSION.SDK_INT} " +
             "layout=${layout.javaClass.simpleName} paintWeight=${view.paint.typeface.weight} " +
             "textSize=${view.textSize} textScaleX=${view.textScaleX} spacing=${view.letterSpacing}"
         assertEquals("Exact padded width: $diagnostic", width, view.width)

@@ -112,8 +112,10 @@ abstract class NativeClickableRow(
 
     override fun performClick() = canActivate() && super.performClick()
     override fun performLongClick(): Boolean {
+        // Android's fallback may ask the parent to open a context menu.
+        if (!isAttachedToWindow) return false
         val action = rowLongClick ?: return super.performLongClick()
-        return rowInputEnabled && isAttachedToWindow && isShown && hasWindowFocus() && action()
+        return rowInputEnabled && isShown && hasWindowFocus() && action()
     }
     override fun onTouchEvent(event: MotionEvent) = input.touch(event)
     override fun onKeyDown(code: Int, event: KeyEvent) =

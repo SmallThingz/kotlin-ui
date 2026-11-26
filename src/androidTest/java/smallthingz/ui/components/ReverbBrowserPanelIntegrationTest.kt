@@ -38,7 +38,11 @@ class ReverbBrowserPanelIntegrationTest {
     }
     private fun activity() = instrumentation.startActivitySync(Intent(instrumentation.context,
         NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    private fun main(block: () -> Unit) = instrumentation.runOnMainSync(block)
+    private fun main(block: () -> Unit) {
+        var result: Result<Unit>? = null
+        instrumentation.runOnMainSync { result = runCatching(block) }
+        checkNotNull(result).getOrThrow()
+    }
     private fun idle() = instrumentation.waitForIdleSync()
 
     @Test fun settingsBindSilentlyAndRetainedRowsRequireFreshOwnerAdmission() {

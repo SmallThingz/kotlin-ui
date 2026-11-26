@@ -2,6 +2,8 @@ package smallthingz.ui.zfm
 
 import android.content.Context
 import android.graphics.Paint
+import android.os.Build
+import android.text.BoringLayout
 import android.text.Layout
 import android.text.TextPaint
 import smallthingz.ui.components.NativeTextStyle
@@ -30,6 +32,7 @@ data class ZfmFileGridRecipe(
         val density = Density(context)
         val fonts = createFontFamilyResolver(context)
         val paint = TextPaint(Paint.ANTI_ALIAS_FLAG)
+        val boringMetrics = BoringLayout.Metrics()
         fun useTypography(style: NativeTextStyle) {
             // Keep configuration weight adjustment and match NativeText's italic/tracking.
             paint.typeface = fonts.resolve(FontFamily.system(style.fontFamily), FontWeight(style.weight),
@@ -40,13 +43,22 @@ data class ZfmFileGridRecipe(
                 if (emWidth.isFinite() && emWidth != 0f) with(density) { it.sp.toPx() } / emWidth else 0f
             } ?: style.letterSpacing
         }
+        fun sampleWidth(text: String): Float {
+            val metrics = BoringLayout.isBoring(text, paint, boringMetrics)
+                ?: return Layout.getDesiredWidth(text, paint)
+            if (Build.VERSION.SDK_INT >= 35) {
+                // Match bounds-aware TextView's intrinsic width, including negative left ink.
+                val bounds = metrics.drawingBoundingBox
+                return maxOf(bounds.right, metrics.width.toFloat()) - minOf(bounds.left, 0f)
+            }
+            return metrics.width.toFloat()
+        }
         useTypography(titleStyle)
         // Fit a usual folder name and keep a size or status word intact on its own line.
-        // TextLine metrics match NativeText's Layout, including tracked run edges.
-        val nameWidth = Layout.getDesiredWidth("Documents", paint)
+        val nameWidth = sampleWidth("Documents")
         useTypography(detailStyle)
-        val textWidth = maxOf(nameWidth, Layout.getDesiredWidth("1023 MiB", paint), Layout.getDesiredWidth("99.9 MiB", paint),
-            Layout.getDesiredWidth("incomplete", paint), Layout.getDesiredWidth("unavailable", paint))
+        val textWidth = maxOf(nameWidth, sampleWidth("1023 MiB"), sampleWidth("99.9 MiB"),
+            sampleWidth("incomplete"), sampleWidth("unavailable"))
         return maxOf(compactWidth, ceil(textWidth).toInt() + 2 * dp(horizontalPaddingDp))
     }
 
