@@ -1,16 +1,20 @@
 package smallthingz.ui.reverb
 
 import android.content.Context
+import android.content.res.ColorStateList
+import android.graphics.Canvas
 import android.text.TextUtils
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ImageView
 import android.widget.ScrollView
 import smallthingz.ui.components.NativeGroupLayout
-import smallthingz.ui.components.NativeSettingsRow
-import smallthingz.ui.components.NativeSettingsRowStyle
-import smallthingz.ui.components.NativeTextRole
-import smallthingz.ui.controls.ControlPalette
+import smallthingz.ui.components.NativeMenuIcons
+import smallthingz.ui.components.NativeMenuRowView
+import smallthingz.ui.components.NativeModalTextSurface
+import smallthingz.ui.components.NativeTextSurfaceTarget
+import smallthingz.ui.controls.textSurfaceForeground
 import smallthingz.ui.text.NativeTypographyRole
 import kotlin.math.roundToInt
 
@@ -53,9 +57,9 @@ internal class ReverbBrowserChromeMenuBody(context: Context, theme: ReverbTheme,
         // Every popup kind shares the anchored panel's foreground fill, grain and outer clip.
         // Reverb's ordinary RECORDINGS click menu uses content ink for both labels and icons.
         content.rows.forEach { item ->
-            val row = ReverbBrowserChromeMenuRow(context, theme, menuColors, item, onAction)
+            val row = ReverbBrowserChromeMenuRow(context, theme, item, onAction)
             owned.add(row)
-            addView(row, LayoutParams(-1, -2))
+            addView(row.view, LayoutParams(-1, -2))
         }
     }
     override fun close() {
@@ -65,33 +69,77 @@ internal class ReverbBrowserChromeMenuBody(context: Context, theme: ReverbTheme,
     }
 }
 
-/** Snapshot menu row: ordinary icon ink is independent of the muted supporting text role. */
-private class ReverbBrowserChromeMenuRow(context: Context, theme: ReverbTheme, colors: ControlPalette,
-    private val item: ReverbBrowserChromeRow, onAction: (String) -> Unit,
-) : NativeSettingsRow(context, colors, NativeSettingsRowStyle(
-    iconRole = NativeTextRole.CONTENT,
-    // NativeMenuRowView.bindAction preserves supplied ink while disabling input.
-    dimDisabledContent = false,
-)), AutoCloseable {
-    private val icon = item.icon?.drawable(context, theme)
+/** Snapshot admission and lifetime around the same row used by ordinary Reverb click menus. */
+private class ReverbBrowserChromeMenuRow(context: Context, theme: ReverbTheme,
+    item: ReverbBrowserChromeRow, onAction: (String) -> Unit,
+) : AutoCloseable {
     private var callback: ((String) -> Unit)? = onAction
     private var closed = false
-    init {
+    private val icons = object : NativeMenuIcons<ReverbBrowserChromeIcon?> {
+        override val check: ReverbBrowserChromeIcon? = null
+        override fun create(context: Context, icon: ReverbBrowserChromeIcon?, color: Int): View =
+            ReverbBrowserChromeMenuIcon(context, theme).apply { bind(icon, color) }
+        override fun bind(view: View, icon: ReverbBrowserChromeIcon?, color: Int) =
+            (view as ReverbBrowserChromeMenuIcon).bind(icon, color)
+    }
+    val view = NativeMenuRowView(context, ReverbDesign.appearance.typography.buttonLabelStyle,
+        theme.density, theme.fontResolver, theme.palette.menuColors(), icons,
+        interestedParent = { interestedScrollParent() }).apply {
         filterTouchesWhenObscured = true
-        isEnabled = item.enabled
-        titleView.maxLines = 2; titleView.ellipsize = TextUtils.TruncateAt.END
-        detailView.maxLines = 1; detailView.ellipsize = TextUtils.TruncateAt.END
-        bind(item.title, item.detail, icon, onClick = item.id?.let { id -> {
-            if (!closed && browserPanelAdmitsInput() && !closed) callback?.invoke(id)
-        } })
+        bindContent(item.title, item.detail, ReverbDesign.appearance.typography[NativeTypographyRole.BODY_SMALL],
+            item.icon, item.enabled, theme.palette.menuColors(), item.id?.let { id -> {
+                if (!this@ReverbBrowserChromeMenuRow.closed && browserPanelAdmitsInput() &&
+                    !this@ReverbBrowserChromeMenuRow.closed) callback?.invoke(id)
+            } })
+    }
+    private fun interestedScrollParent(): Boolean {
+        var ancestor = view.parent as? View
+        while (ancestor != null) {
+            if (ancestor is ScrollView) return ancestor.canScrollVertically(-1) || ancestor.canScrollVertically(1)
+            ancestor = ancestor.parent as? View
+        }
+        return false
     }
     override fun close() {
         if (closed) return
         closed = true
         callback = null
-        cancelBrowserPanelInput()
-        isEnabled = false
-        bind(item.title, item.detail, icon)
+        view.close()
+        view.isEnabled = false
+    }
+}
+
+/** A nullable browser icon never substitutes a checkmark or reserves a leading slot. */
+private class ReverbBrowserChromeMenuIcon(context: Context, private val theme: ReverbTheme) : FrameLayout(context) {
+    init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO; isFocusable = false }
+    fun bind(icon: ReverbBrowserChromeIcon?, color: Int) {
+        removeAllViews()
+        val glyph = when (icon) {
+            is ReverbBrowserChromeIcon.Shared -> ReverbMenuIcons.create(context, icon.icon, color).also {
+                ReverbMenuIcons.bind(it, icon.icon, color)
+            }
+            is ReverbBrowserChromeIcon.Resource -> ReverbBrowserChromeMenuResourceIcon(context, theme, icon, color)
+            null -> null
+        }
+        glyph?.let { addView(it, LayoutParams(-1, -1)) }
+    }
+}
+
+/** Resource glyphs pair their ink with the actual foreground surface, as shared menu glyphs do. */
+private class ReverbBrowserChromeMenuResourceIcon(context: Context, theme: ReverbTheme,
+    icon: ReverbBrowserChromeIcon.Resource, private val ink: Int,
+) : ImageView(context), NativeTextSurfaceTarget {
+    private var paintedInk: Int? = null
+    init {
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+        scaleType = ScaleType.CENTER_INSIDE
+        setImageDrawable(icon.drawable(context, theme, ink))
+    }
+    override fun invalidateTextSurfaceInk() = invalidate()
+    override fun onDraw(canvas: Canvas) {
+        val color = textSurfaceForeground(NativeModalTextSurface.sample(this), ink)
+        if (paintedInk != color) { paintedInk = color; imageTintList = ColorStateList.valueOf(color) }
+        super.onDraw(canvas)
     }
 }
 

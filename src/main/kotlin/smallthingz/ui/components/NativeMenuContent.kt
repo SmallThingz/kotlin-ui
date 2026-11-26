@@ -174,7 +174,7 @@ internal class NativeMenuRowView<I>(
     context: Context,
     style: TextStyle,
     private val density: Density,
-    resolver: FontFamily.Resolver,
+    private val resolver: FontFamily.Resolver,
     palette: NativeMenuColors,
     private val icons: NativeMenuIcons<I>,
     private val interestedParent: (MotionEvent) -> Boolean,
@@ -206,6 +206,8 @@ internal class NativeMenuRowView<I>(
     private var actionCheck: NativeMenuCheckState? = null
     private var action: (() -> Unit)? = null
     private var closed = false
+    private var supportingText: ParagraphView? = null
+    private var customContent = false
 
     init {
         clipChildren = false
@@ -229,6 +231,7 @@ internal class NativeMenuRowView<I>(
     private fun dp(value: Float) = (value * density.density).roundToInt()
 
     fun bind(label: String, selected: Boolean, palette: NativeMenuColors, action: () -> Unit) {
+        resetCustomContent()
         this.action = action
         val selectionChanged = this.selected != selected || actionCheck != null
         this.selected = selected
@@ -246,6 +249,7 @@ internal class NativeMenuRowView<I>(
     }
 
     fun bindAction(value: NativeMenuAction<I>, palette: NativeMenuColors) {
+        resetCustomContent()
         action = value.onClick
         val checkState = (icons as? NativeCheckableMenuIcons<I>)?.checkState(value.icon)
         val selectionChanged = actionCheck != checkState || selected != (checkState?.checked == true)
@@ -263,8 +267,63 @@ internal class NativeMenuRowView<I>(
         if (selectionChanged) publishSelectionChange()
     }
 
+    /** Plain snapshot actions may omit an icon and include muted supporting text. */
+    fun bindContent(label: String, detail: String?, detailStyle: TextStyle, icon: I?, enabled: Boolean,
+                    palette: NativeMenuColors, action: (() -> Unit)?) {
+        customContent = true
+        this.action = action
+        val selectionChanged = selected || actionCheck != null
+        selected = false
+        actionCheck = null
+        leading = icon != null
+        isEnabled = enabled
+        isClickable = action != null
+        isFocusable = action != null
+        importantForAccessibility = if (action != null) IMPORTANT_FOR_ACCESSIBILITY_YES else IMPORTANT_FOR_ACCESSIBILITY_NO
+        ViewCompat.setScreenReaderFocusable(this, action != null)
+        text.importantForAccessibility = if (action != null) IMPORTANT_FOR_ACCESSIBILITY_NO else IMPORTANT_FOR_ACCESSIBILITY_AUTO
+        text.setText(label)
+        text.animateTextColor(palette.ink)
+        if (icon != null) icons.bind(check, icon, palette.ink)
+        check.visibility = if (leading) VISIBLE else GONE
+        val supporting = detail?.takeIf { it.isNotEmpty() }
+        if (supporting != null) {
+            val paragraph = supportingText ?: ParagraphView(context, detailStyle, density, resolver, palette.muted).also {
+                NativeModalTextSurface.bindTree(it)
+                ViewCompat.setScreenReaderFocusable(it, false)
+                it.setTextLayout(maxLines = 1, overflow = smallthingz.ui.text.style.TextOverflow.Ellipsis)
+                supportingText = it
+                addView(it)
+            }
+            paragraph.setTypography(detailStyle, density, resolver)
+            paragraph.setText(supporting)
+            paragraph.animateTextColor(palette.muted)
+            paragraph.importantForAccessibility = text.importantForAccessibility
+            paragraph.visibility = VISIBLE
+        } else supportingText?.visibility = GONE
+        contentDescription = if (action != null) listOfNotNull(label, supporting).joinToString(", ") else null
+        indication.updateColor(palette.ink)
+        input.bind(if (action == null) null else NativeClickBinding(this, enabled, { performClick() }))
+        requestLayout()
+        if (selectionChanged) publishSelectionChange()
+    }
+
+    /** Original bindings retain their original shape, labels and merged accessibility policy. */
+    private fun resetCustomContent() {
+        if (!customContent) return
+        customContent = false
+        supportingText?.visibility = GONE
+        contentDescription = null
+        isClickable = true
+        isFocusable = true
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
+        ViewCompat.setScreenReaderFocusable(this, true)
+        text.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_AUTO
+    }
+
     fun maxIntrinsicWidth(): Int =
-        (text.maxIntrinsicTextWidth() + 2 * (if (leading) dp(12f) else horizontal) +
+        (max(text.maxIntrinsicTextWidth(), supportingText?.takeIf { it.visibility == VISIBLE }?.maxIntrinsicTextWidth() ?: 0) +
+            2 * (if (leading) dp(12f) else horizontal) +
             if (leading || selected || actionCheck != null) dp(24f) + dp(12f) else 0)
             .coerceIn(dp(112f), dp(280f))
 
@@ -277,7 +336,10 @@ internal class NativeMenuRowView<I>(
         val gap = if (hasIcon) min(dp(12f), (inner - iconWidth).coerceAtLeast(0)) else 0
         if (hasIcon) check.measure(exact(iconWidth), exact(dp(24f)))
         text.measure(atMost((inner-iconWidth-gap).coerceAtLeast(0)), unspecified())
-        val height = max(dp(48f), max(text.measuredHeight, if (hasIcon) check.measuredHeight else 0) +
+        val detail = supportingText?.takeIf { it.visibility == VISIBLE }
+        detail?.measure(atMost((inner-iconWidth-gap).coerceAtLeast(0)), unspecified())
+        val textHeight = text.measuredHeight + (detail?.measuredHeight ?: 0)
+        val height = max(dp(48f), max(textHeight, if (hasIcon) check.measuredHeight else 0) +
             if (leading) 0 else 2 * vertical)
         setMeasuredDimension(width, resolveSize(height, h))
     }
@@ -287,8 +349,15 @@ internal class NativeMenuRowView<I>(
         val inset = if (leading) dp(12f) else horizontal
         val textStart = inset + if (leading) check.measuredWidth + dp(12f) else 0
         val textX = if (rtl) width - textStart - text.measuredWidth else textStart
-        val textY = ((height-text.measuredHeight)/2f).roundToInt()
+        val detail = supportingText?.takeIf { it.visibility == VISIBLE }
+        val textHeight = text.measuredHeight + (detail?.measuredHeight ?: 0)
+        val textY = ((height-textHeight)/2f).roundToInt()
         text.layout(textX,textY,textX+text.measuredWidth,textY+text.measuredHeight)
+        detail?.let {
+            val x = if (rtl) width - textStart - it.measuredWidth else textStart
+            val y = textY + text.measuredHeight
+            it.layout(x, y, x + it.measuredWidth, y + it.measuredHeight)
+        }
         if (leading || selected || actionCheck != null) {
             val logicalStart = if (leading) inset else width-inset-check.measuredWidth
             val x = if (rtl) width-logicalStart-check.measuredWidth else logicalStart
@@ -335,9 +404,10 @@ internal class NativeMenuRowView<I>(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         input.attached()
-        if (!closed) input.bind(NativeClickBinding(this, isEnabled, { performClick() }))
+        if (!closed && (!customContent || action != null)) input.bind(NativeClickBinding(this, isEnabled, { performClick() }))
     }
     override fun onDetachedFromWindow() { input.detached(); super.onDetachedFromWindow() }
+    override fun onCancelPendingInputEvents() { super.onCancelPendingInputEvents(); input.cancel() }
     override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
         super.onInitializeAccessibilityNodeInfo(info)
         val state = actionCheck
