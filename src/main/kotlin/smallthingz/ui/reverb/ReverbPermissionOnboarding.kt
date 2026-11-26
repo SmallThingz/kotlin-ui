@@ -207,6 +207,9 @@ open class ReverbPermissionOnboardingScreen(
 
     fun showUnavailable() { unavailable.visibility = View.VISIBLE }
 
+    /** Retire a previous launch failure only after the host observes a successful retry. */
+    fun clearUnavailable() { unavailable.visibility = View.GONE }
+
     override fun onMeasure(w: Int, h: Int) {
         val width = MeasureSpec.getSize(w)
         val height = MeasureSpec.getSize(h)

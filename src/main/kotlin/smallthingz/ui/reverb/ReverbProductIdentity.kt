@@ -2,13 +2,16 @@ package smallthingz.ui.reverb
 
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.Canvas
 import android.graphics.Matrix
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
-import android.widget.FrameLayout
 import android.widget.ImageView
 import androidx.annotation.DrawableRes
+import smallthingz.ui.components.MarkPlateOutline
 import smallthingz.ui.components.NativeColorScheme
+import smallthingz.ui.components.NativeDarkSurfacePreset
+import smallthingz.ui.components.NativeRoundedClipLayout
 
 /** Product artwork supported by the shared toolbar and About panel. */
 sealed interface ReverbProductIdentity {
@@ -17,11 +20,13 @@ sealed interface ReverbProductIdentity {
     data class Launcher @JvmOverloads constructor(
         @DrawableRes val drawable: Int,
         val artworkBounds: ReverbLauncherArtworkBounds? = null,
+        /** Circle and fixed AMOLED thin outline; original resource colors remain unchanged. */
+        val circularOutline: Boolean = false,
     ) : ReverbProductIdentity
     data class Monochrome(@DrawableRes val drawable: Int) : ReverbProductIdentity
 }
 
-internal class ReverbIdentityMarkView(context: Context) : FrameLayout(context) {
+internal class ReverbIdentityMarkView(context: Context) : NativeRoundedClipLayout(context) {
     private val reverb = ReverbBrandMarkView(context)
     private val monochrome = object : ImageView(context) {
         private val artworkMatrix = Matrix()
@@ -52,8 +57,10 @@ internal class ReverbIdentityMarkView(context: Context) : FrameLayout(context) {
     }
     private var identity: ReverbProductIdentity = ReverbProductIdentity.Reverb
     private var launcherConfiguration: Configuration? = null
+    private var launcherOutline: MarkPlateOutline? = null
 
     init {
+        setRoundedClippingEnabled(false)
         descendantFocusability = FOCUS_BLOCK_DESCENDANTS
         reverb.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         monochrome.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -71,8 +78,40 @@ internal class ReverbIdentityMarkView(context: Context) : FrameLayout(context) {
         launcherConfiguration = Configuration(resources.configuration)
     }
 
+    private fun bindLauncherOutline(value: ReverbProductIdentity) {
+        val enabled = value is ReverbProductIdentity.Launcher && value.circularOutline
+        setRoundedClippingEnabled(enabled)
+        if (enabled) {
+            if (launcherOutline == null) {
+                val preset = NativeDarkSurfacePreset.Amoled
+                launcherOutline = MarkPlateOutline(preset.borderColor, preset.borderWidthDp)
+                updateLauncherOutline()
+                invalidate()
+            }
+        } else if (launcherOutline != null) {
+            launcherOutline = null
+            invalidate()
+        }
+    }
+
+    private fun updateLauncherOutline() {
+        launcherOutline?.update(width.toFloat(), height.toFloat(), resources.displayMetrics.density,
+            minOf(width, height) / 2f)
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        updateLauncherOutline()
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        super.dispatchDraw(canvas)
+        launcherOutline?.draw(canvas)
+    }
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        updateLauncherOutline()
         (identity as? ReverbProductIdentity.Launcher)?.let {
             refreshLauncherArtwork(it)
             monochrome.alignArtwork()
@@ -80,6 +119,7 @@ internal class ReverbIdentityMarkView(context: Context) : FrameLayout(context) {
     }
 
     fun bind(value: ReverbProductIdentity, palette: NativeColorScheme) {
+        bindLauncherOutline(value)
         val changed = value != identity
         if (changed) {
             identity = value
