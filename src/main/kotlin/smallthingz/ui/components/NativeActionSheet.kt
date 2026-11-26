@@ -285,6 +285,7 @@ class NativeActionSheet(
         if(contentScroll==null) {
             val viewport=NativeVerticalViewport(context,NativeVerticalScrollState(),style.textDensity,
                 runtime.frames,runtime.scope,nested,glowColor=style.palette.onSurfaceVariant)
+            viewport.owner.localPageScroll = true
             val binding=NativeVerticalPhaseBinding(viewport,
                 {android.view.ViewConfiguration.get(context).scaledTouchSlop.toFloat()},
                 {android.view.ViewConfiguration.get(context).scaledMaximumFlingVelocity.toFloat()},dragNode::interested)

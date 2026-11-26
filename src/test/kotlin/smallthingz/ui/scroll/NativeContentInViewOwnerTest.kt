@@ -163,6 +163,50 @@ class NativeContentInViewOwnerTest {
         assertFalse(fixture.state.isScrollInProgress)
     }
 
+    @Test(timeout = 5_000) fun sheetPagingStaysLocalWhileDragsAndGenericPagesStillTransfer() = runBlocking {
+        val fixture = Fixture(this)
+        fixture.state.measured(439, 504)
+        val surplus = mutableListOf<Float>()
+        fixture.consumePostScroll = { available ->
+            surplus += available
+            available
+        }
+        suspend fun page(amount: Float): Float {
+            val action = async(NoMotion, start = CoroutineStart.UNDISPATCHED) {
+                fixture.owner.semanticsScrollBy(amount)
+            }
+            fixture.frames.advanceUntil { action.isCompleted }
+            return action.await()
+        }
+
+        fixture.owner.localPageScroll = true
+        assertEquals(65f, page(439f), 0f)
+        assertEquals(65, fixture.state.value)
+        assertEquals(-65f, page(-439f), 0f)
+        assertEquals(0, fixture.state.value)
+        assertTrue(surplus.isEmpty())
+
+        suspend fun key(down: Boolean) {
+            assertTrue(fixture.owner.pageKey(down, true, false, true, this@runBlocking))
+            yield()
+        }
+        key(true)
+        assertEquals(65, fixture.state.value)
+        key(false)
+        assertEquals(0, fixture.state.value)
+        key(false)
+        assertTrue(surplus.isEmpty())
+
+        fixture.owner.drag { scrollBy(20f) }
+        assertEquals(listOf(20f), surplus)
+        fixture.owner.localPageScroll = false
+        assertEquals(439f, page(439f), 0f)
+        assertEquals(listOf(20f, -374f), surplus)
+        key(false)
+        assertEquals(0, fixture.state.value)
+        assertEquals(listOf(20f, -374f, 374f), surplus)
+    }
+
     @Test(timeout = 5_000) fun userInputCancelsSemanticsDefaultMutationWithoutFinishingTheDrag() = runBlocking {
         val fixture = Fixture(this)
         val action = launch(start = CoroutineStart.UNDISPATCHED) {
@@ -246,9 +290,11 @@ class NativeContentInViewOwnerTest {
         val frames = ControlledFrames()
         var focus: () -> Rect? = { null }
         private val nodeScope = CoroutineScope(scope.coroutineContext + frames + NoMotion)
+        var consumePostScroll: (Float) -> Float = { 0f }
         private val engine = NativeVerticalScrollEngine(state, object : NativeVerticalScrollHost {
             override fun preScroll(availableY: Float, source: NativeVerticalScrollSource) = 0f
-            override fun postScroll(consumedY: Float, availableY: Float, source: NativeVerticalScrollSource) = 0f
+            override fun postScroll(consumedY: Float, availableY: Float, source: NativeVerticalScrollSource) =
+                consumePostScroll(availableY)
             override fun positionChanged(value: Int) = Unit
         })
         val owner = NativeVerticalScrollOwner(engine, exponentialDecay(), frames,
