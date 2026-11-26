@@ -221,6 +221,94 @@ class ReverbBrowserChromeIntegrationTest {
         } finally { main { modal?.dismiss(); installed?.close(); activity.finish() } }
     }
 
+    @Test fun failureReasonAndRetryScrollTogetherAndRetireWithoutTouchingRenderer() {
+        val activity = activity()
+        var installedChrome: ReverbBrowserChrome? = null
+        var installedPage: ReverbBrowserChromeFailurePage? = null
+        lateinit var chrome: ReverbBrowserChrome
+        lateinit var page: ReverbBrowserChromeFailurePage
+        var admitted = true
+        var retireOnAdmission = false
+        var retries = 0
+        val message = (1..60).joinToString("\n") { "Complete failure reason line $it: example.test could not be reached." }
+        try {
+            main {
+                val context = activity.createConfigurationContext(Configuration(activity.resources.configuration).apply { fontScale = 2f })
+                val theme = ReverbDesign.theme(context, false)
+                val action = ReverbBrowserChromeAction("site", "Site", ReverbBrowserChromeIcon.Shared(ReverbIcon.Browser))
+                chrome = ReverbBrowserChrome(context, theme, "Address", action,
+                    action.copy(id = "tabs"), action.copy(id = "menu"))
+                installedChrome = chrome
+                chrome.layoutDirection = View.LAYOUT_DIRECTION_RTL
+                chrome.attachRenderer(View(context))
+                page = ReverbBrowserChromeFailurePage(context, theme, message, "Retry this page",
+                    inputAllowed = {
+                        if (retireOnAdmission) page.close()
+                        admitted
+                    }, onRetry = { retries++ })
+                installedPage = page
+                chrome.attachFailurePage(page)
+                activity.setContentView(chrome)
+            }
+            awaitReady(page)
+            main {
+                val renderer = chrome.pageHost.getChildAt(0)
+                val density = page.resources.displayMetrics.density
+                fun layout() {
+                    chrome.measure(View.MeasureSpec.makeMeasureSpec((224 * density).toInt(), View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec((320 * density).toInt(), View.MeasureSpec.EXACTLY))
+                    chrome.layout(0, 0, chrome.measuredWidth, chrome.measuredHeight)
+                }
+                layout()
+                assertEquals(3, chrome.childCount)
+                assertSame(chrome.pageHost, chrome.getChildAt(2))
+                assertSame(chrome.pageHost, page.parent)
+                val scroll = page.descendants().filterIsInstance<ScrollView>().single()
+                val reason = page.descendants().filterIsInstance<smallthingz.ui.text.view.ParagraphView>()
+                    .single { it.getText() == message }
+                val retry = page.descendants().filterIsInstance<NativeMaterialButtonView>().single()
+                assertEquals(message, reason.getText())
+                assertTrue(reason.height > scroll.height)
+                assertTrue(scroll.canScrollVertically(1))
+                val top = Rect(0, 0, reason.width, reason.height).also { chrome.offsetDescendantRectToMyCoords(reason, it) }.top
+                val toolbarBottom = chrome.chromeToolbar.bottom
+                scroll.scrollTo(0, scroll.getChildAt(0).height)
+                val position = scroll.scrollY
+                assertTrue(position > 0)
+                val scrolledTop = Rect(0, 0, reason.width, reason.height)
+                    .also { chrome.offsetDescendantRectToMyCoords(reason, it) }.top
+                assertEquals(top - position, scrolledTop)
+                assertEquals(toolbarBottom, chrome.chromeToolbar.bottom)
+                assertTrue(retry.getGlobalVisibleRect(Rect()))
+                admitted = false
+                retry.performClick()
+                assertEquals(0, retries)
+                admitted = true
+                retry.performClick()
+                assertEquals(1, retries)
+                assertTrue(retry.requestFocus())
+                retry.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
+                page.bindTheme(ReverbDesign.theme(page.context, true))
+                layout()
+                retry.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+                assertSame(scroll, page.descendants().filterIsInstance<ScrollView>().single())
+                assertEquals(position, scroll.scrollY)
+                assertEquals(message, reason.getText())
+                assertEquals(1, retries)
+                assertSame(renderer, chrome.pageHost.getChildAt(0))
+                assertSame(chrome.pageHost, renderer.parent)
+                retireOnAdmission = true
+                retry.performClick()
+                retry.performClick()
+                assertEquals("Retirement during admission and later stale clicks must not retry", 1, retries)
+            }
+        } finally { main {
+            installedPage?.close()
+            installedChrome?.close()
+            activity.finish()
+        } }
+    }
+
     @Test fun narrowRtlChromeRetainsEditorValueSelectionAndRendererHost() {
         val activity = activity()
         var chrome: ReverbBrowserChrome? = null
@@ -239,7 +327,7 @@ class ReverbBrowserChromeIntegrationTest {
                 for (width in listOf(224, 320)) {
                     view.layoutDirection = View.LAYOUT_DIRECTION_RTL
                     view.bindSiteAction(action, "Unverified")
-                    view.bindLoading(.5f, 1L, true, true); view.bindBrowserStatus("Status", true)
+                    view.bindLoading(.5f, 1L, true, true)
                     val pixels = (width * theme.density.density).toInt()
                     view.measure(View.MeasureSpec.makeMeasureSpec(pixels, View.MeasureSpec.EXACTLY),
                         View.MeasureSpec.makeMeasureSpec((800 * theme.density.density).toInt(), View.MeasureSpec.EXACTLY))
