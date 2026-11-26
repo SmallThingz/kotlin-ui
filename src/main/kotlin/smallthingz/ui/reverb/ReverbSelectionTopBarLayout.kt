@@ -10,7 +10,7 @@ import smallthingz.ui.components.nativeMinimumInteractiveVisualOffset
 import kotlin.math.roundToInt
 
 /** Keeps selection wrappers on Reverb's compact visual slots, including odd pixel sizes. */
-open class ReverbSelectionTopBarLayout internal constructor(
+open class ReverbSelectionTopBarLayout(
     context: Context,
     private val start: View,
     private val title: View,
