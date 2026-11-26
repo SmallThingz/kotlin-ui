@@ -185,7 +185,7 @@ class ReverbBrowserToolbarIntegrationTest {
             assertTrue(connection.setComposingText("draft.test", 1))
             chrome.bindTabCount("2 tabs")
             chrome.bindLoading(.5f, 1L, true, true)
-            chrome.bindBrowserStatus("Loading", true)
+            chrome.bindTheme(ReverbDesign.theme(chrome.context, true))
             layout(chrome, chrome.width)
             assertSame("Chrome updates must preserve the live Editable", editable, editor.text)
             assertTrue(editor.hasFocus())

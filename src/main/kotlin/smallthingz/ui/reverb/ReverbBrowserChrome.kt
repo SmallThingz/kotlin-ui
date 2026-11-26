@@ -17,14 +17,12 @@ import androidx.annotation.DrawableRes
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import smallthingz.ui.components.NativeDeterminateLinearProgress
-import smallthingz.ui.components.NativeForeground
 import smallthingz.ui.components.NativeTextField
 import smallthingz.ui.components.NativeTextFieldStyle
 import smallthingz.ui.components.NativeToolbarActionTone
 import smallthingz.ui.components.NativeToolbarBackground
 import smallthingz.ui.components.acceptsNativeInput
 import smallthingz.ui.controls.ControlPalette
-import smallthingz.ui.text.NativeTypographyRole
 import kotlin.math.roundToInt
 
 /** Existing shared glyphs are preferred; a resource is semantic icon content, not a style override. */
@@ -145,17 +143,10 @@ open class ReverbBrowserChrome(context: Context, private var chromeTheme: Reverb
         visibility = INVISIBLE
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
     }
-    private val status = chromeTheme.paragraph(context, "", NativeTypographyRole.BODY_MEDIUM).apply {
-        setPadding(dp(16), dp(8), dp(16), dp(8))
-        background = NativeForeground.foregroundBackground(chromeTheme.palette.pageControls)
-        accessibilityLiveRegion = ACCESSIBILITY_LIVE_REGION_POLITE
-        visibility = GONE
-    }
     init {
         background = chromeTheme.appearance.backdrops.pageBackground(chromeTheme.palette)
         addView(chromeToolbar, LayoutParams(-1, -2))
         addView(progress, LayoutParams(-1, -2))
-        addView(status, LayoutParams(-1, -2))
         addView(pageHost, LayoutParams(-1, 0, 1f))
     }
     /** Repaint retained presentation only; never bind editor text or touch renderer ownership. */
@@ -170,8 +161,6 @@ open class ReverbBrowserChrome(context: Context, private var chromeTheme: Reverb
         siteAction.bindTheme(theme); tabsAction.bindTheme(theme); menuAction.bindTheme(theme)
         (addressEditor as ReverbBrowserChromeAddressEditor).bindTheme(theme)
         progress.bindTheme(theme)
-        theme.bindParagraph(status, NativeTypographyRole.BODY_MEDIUM)
-        status.background = NativeForeground.foregroundBackground(theme.palette.pageControls)
         ReverbTextSurface.invalidate(this)
     }
     /** Retained-owner admission while a shared modal owns window focus. The modal must gate its own input. */
@@ -193,11 +182,6 @@ open class ReverbBrowserChrome(context: Context, private var chromeTheme: Reverb
         progress.bind(value, chromeTheme.palette.primary, chromeTheme.palette.pageControls.outline, chromeTheme.density.density,
             operationId = operation, terminal = !loading)
     }
-    fun bindBrowserStatus(message: String, visible: Boolean) {
-        if (panelClosed) return
-        status.setText(message)
-        status.visibility = if (visible && message.isNotEmpty()) VISIBLE else GONE
-    }
     /** Insets remaining after the outer frame and any panel-owned bottom action dock. */
     fun applyContentSafeInsets(insets: Insets) {
         if (panelClosed) return
@@ -209,6 +193,7 @@ open class ReverbBrowserChrome(context: Context, private var chromeTheme: Reverb
     /** Renderer and shared panels are semantic content slots, not caller-configurable geometry. */
     fun attachRenderer(renderer: View) { pageHost.addView(renderer, FrameLayout.LayoutParams(-1, -1)) }
     fun attachStartPage(content: ReverbBrowserChromeStartPage) { pageHost.addView(content, FrameLayout.LayoutParams(-1, -1)) }
+    fun attachFailurePage(content: ReverbBrowserChromeFailurePage) { pageHost.addView(content, FrameLayout.LayoutParams(-1, -1)) }
     fun attachBrowserPanel(panel: ReverbBrowserPanelLayout) { addView(panel, LayoutParams(-1, 0, 1f)) }
     fun attachToBrowserHost(host: FrameLayout) { host.addView(this, FrameLayout.LayoutParams(-1, -1)) }
     override fun close() {
