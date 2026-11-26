@@ -48,6 +48,28 @@ class NativeScrollIndicatorGeometryTest {
         assertSame(custom, defaults.copy(scrollIndicator = custom).copy().scrollIndicator)
     }
 
+    @Test fun contentGutterClearsActualThumbGeometryAtFractionalDensities() {
+        for (density in listOf(.75f, 1f, 1.125f, 1.33125f, 2.625f, 3.5f)) {
+            for (style in listOf(NativeScrollIndicatorStyle.Default,
+                NativeScrollIndicatorStyle(widthDp = 2.3f, rightInsetDp = 1.7f, minThumbHeightDp = 11f))) {
+                val gutter = style.contentGutterPx(density)
+                for (width in listOf(3, 80, 317)) for (offset in listOf(0, 125, 250)) {
+                    withNativeScrollIndicatorThumb(width, 93, 343, 93, offset,
+                        style.widthDp * density, style.rightInsetDp * density, style.minThumbHeightDp * density) { left, _, _, _ ->
+                        org.junit.Assert.assertTrue("Content must end before the inward AA edge",
+                            width - gutter <= left - 1f)
+                        if (left > 1f) org.junit.Assert.assertTrue("Gutter is outward-rounded, not an arbitrary large inset",
+                            left - (width - gutter) < 2.001f)
+                    }
+                }
+            }
+        }
+        assertEquals(6, NativeScrollIndicatorStyle.Default.contentGutterPx(1.125f))
+        assertEquals(12, NativeScrollIndicatorStyle.Default.contentGutterPx(2.625f))
+        assertEquals(0, NativeScrollIndicatorStyle.Default.contentGutterPx(Float.NaN))
+        assertEquals(0, NativeScrollIndicatorStyle(widthDp = 0f).contentGutterPx(1f))
+    }
+
     private data class Thumb(val left: Float, val top: Float, val right: Float, val bottom: Float)
 
     private fun thumb(
