@@ -11,7 +11,11 @@ import smallthingz.ui.util.closePreservingPrimaryFailure
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** Source callback set; the optional Range gesture factory retains the editor's generation owner. */
+/**
+ * The begin and shuttle callbacks take signed source seconds per wall second. The shuttle
+ * callback's second argument is the pending source delta in seconds.
+ * The optional Range gesture factory retains the editor's generation owner.
+ */
 data class SpringFineSeekBinding(
     override val enabled: Boolean,
     override val isPlaying: Boolean,
@@ -289,16 +293,19 @@ class NativeSpringFineSeekState(
         if (session != null) {
             val captured = checkNotNull(frameBinding)
             val previous = lastDragFrame
-            lastDragFrame = frameNanos
-            if (previous == 0L) { session.perform {}; return }
-            val elapsed = (frameNanos - previous).coerceAtMost(50_000_000L)
+            if (frameNanos > previous) lastDragFrame = frameNanos
+            val wallElapsed = frameNanos - previous
+            if (previous == 0L || wallElapsed <= 0L) { session.perform {}; return }
+            val elapsed = wallElapsed.coerceAtMost(50_000_000L)
             val liveX = horizontalPull
             val liveY = rangeFineTuneConstrainedY(rawVerticalPull, liveX)
             val rate = rangeFineTuneShuttleRate(liveX, liveY, captured.durationSeconds)
-            session.frame(rangeFineTuneDeltaSeconds(rangeFineTuneSeekPull(liveX), liveY,
-                captured.durationSeconds, elapsed / 1_000_000_000f), elapsed,
+            val deltaSeconds = rate * (elapsed / 1_000_000_000f)
+            // Keep the seek's hitch cap while reporting speed against the full wall interval.
+            val shuttleRate = rate * (elapsed.toFloat() / wallElapsed)
+            session.frame(deltaSeconds, elapsed,
                 onCommit = { captured.onFineAdjust(it, .04f) },
-                onShuttle = { captured.onUpdateFineAdjustShuttle(rate, it) })
+                onShuttle = { captured.onUpdateFineAdjustShuttle(shuttleRate, it) })
             return
         }
         if (!returning) return
