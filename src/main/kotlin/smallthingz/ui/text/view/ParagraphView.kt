@@ -462,6 +462,9 @@ class ParagraphView(
         if (!isAttachedToWindow || observedIntrinsics === current) return
         clearFontObservation()
         observedIntrinsics = current
+        // This immutable construction snapshot cannot become stale when readiness completes.
+        // A loading snapshot still takes the observer + post-registration race check below.
+        if (current.emojiProcessed) return
         val invalidateFonts = {
             // Emoji readiness can arrive during measure; defer until that traversal finishes.
             post {
