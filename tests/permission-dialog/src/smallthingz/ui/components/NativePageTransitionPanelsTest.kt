@@ -13,12 +13,16 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.LooperMode
 import org.robolectric.util.ReflectionHelpers
 
 /** Source-authored host checks; compositor/predictive parity requires separate qualification. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w360dp-h640dp-mdpi")
+// Robolectric's native window session supplies ADD_FLAG_APP_VISIBLE to the real ViewRoot.
+// Legacy graphics leaves that flag unset by default, even for an attached/shown Activity.
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class NativePageTransitionPanelsTest {
     private fun layout(host: FrameLayout) {
