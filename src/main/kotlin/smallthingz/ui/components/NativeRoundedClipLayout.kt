@@ -17,6 +17,7 @@ open class NativeRoundedClipLayout(
 ) : FrameLayout(context) {
     private val path = if (softwareClip) Path() else null
     private val bounds = if (softwareClip) RectF() else null
+    private var roundedClippingEnabled = true
 
     init {
         // A backgroundless ViewGroup can skip draw() and dispatch straight to its children.
@@ -27,6 +28,15 @@ open class NativeRoundedClipLayout(
                 outline.setRoundRect(0, 0, view.width, view.height, resolvedRadius(view.width, view.height))
             }
         }
+    }
+
+    /** Retained identity hosts can opt out without changing other users' clipping policy. */
+    protected fun setRoundedClippingEnabled(enabled: Boolean) {
+        if (roundedClippingEnabled == enabled) return
+        roundedClippingEnabled = enabled
+        clipToOutline = enabled
+        invalidateOutline()
+        invalidate()
     }
 
     protected fun setClipRadiusPx(value: Float?) {
@@ -57,7 +67,7 @@ open class NativeRoundedClipLayout(
 
     override fun draw(canvas: Canvas) {
         // Detached views drawn into another view's hardware canvas have no outline clip.
-        if (path == null || (canvas.isHardwareAccelerated && isAttachedToWindow)) super.draw(canvas) else {
+        if (!roundedClippingEnabled || path == null || (canvas.isHardwareAccelerated && isAttachedToWindow)) super.draw(canvas) else {
             val checkpoint = canvas.save()
             try {
                 canvas.clipPath(path)

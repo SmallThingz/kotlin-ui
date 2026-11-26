@@ -115,3 +115,40 @@ Six focused pure-JVM geometry controls cover canonical and asymmetric ink,
 resize/density, ordinary full bounds, unmeasured/nonintrinsic/subnormal inputs,
 and invalid bounds. They do not establish Android draw/accessibility behavior;
 combined Android compilation and actual visual fit remain pending.
+
+## Opt-in circular Launcher outline
+
+`ReverbProductIdentity.Launcher(drawable, artworkBounds = null, circularOutline = false)`
+adds an explicit presentation option. The default keeps the existing unoutlined
+launcher presentation. Existing one- and two-argument JVM constructors remain
+available through `@JvmOverloads`; rebuild Kotlin consumers because the data-class
+`copy` and default-constructor ABI gains a property.
+
+For a complete adaptive icon, pass the same canonical resource used by the app
+manifest and leave `artworkBounds` unset:
+
+```kotlin
+ReverbProductIdentity.Launcher(R.mipmap.ic_launcher, circularOutline = true)
+```
+
+The shared identity host applies `NativeRoundedClipLayout`'s circular clip and
+uses the same retained `MarkPlateOutline` painter as the Reverb brand mark. Its
+color and width come from `NativeDarkSurfacePreset.Amoled`, as in
+`setReverbBrandOutline(true)`, independently of the window palette. The painter
+runs after the artwork, with the existing shared control-border geometry and
+rounding. No second glyph renderer, bitmap cache, or app wrapper is introduced.
+
+The drawable is still loaded from application resources and drawn by the same
+untinted ImageView. Paths, fill colors, texture, adaptive layers and platform
+adaptive-mask behavior remain resource-owned. A fixed-dark icon in both themes
+must therefore use fixed-dark resources; this option does not recolor arbitrary
+light-qualified artwork. Do not apply original-foreground ink bounds to an
+adaptive wrapper. The outer circle does not remove the adaptive drawable's own
+mask or imply identical launcher-process rasterization.
+
+The option follows the identity into both the product toolbar and its About
+panel. It changes neither the existing identity slot nor action, focus or
+accessibility ownership. Rebinding to an unoutlined Launcher, Monochrome or Reverb
+removes the added decoration. Size/configuration changes refresh the outline
+geometry; the shared clip retains its attached-hardware and detached/software
+paths. Default Reverb and Monochrome rendering policies remain unchanged.
