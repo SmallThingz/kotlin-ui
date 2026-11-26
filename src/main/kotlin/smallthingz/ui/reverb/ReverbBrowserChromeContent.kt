@@ -152,12 +152,24 @@ private fun browserChromeRow(context: Context, theme: ReverbTheme, item: ReverbB
     }
 
 /** History content is a snapshot; admission and navigation remain with its current browser owner. */
-class ReverbBrowserChromeStartPage(context: Context, theme: ReverbTheme, title: String,
+class ReverbBrowserChromeStartPage(context: Context, private var theme: ReverbTheme, title: String,
     recentHeading: String?, rows: List<ReverbBrowserChromeRow>, inputAllowed: () -> Boolean, onAction: (String) -> Unit,
 ) : ReverbBrowserPanelLayout(context) {
     private var admission: (() -> Boolean)? = inputAllowed
     private var callback: ((String) -> Unit)? = onAction
     private val owned = mutableListOf<ReverbBrowserPanelSettingRow>()
+    private val headings = mutableListOf<Pair<smallthingz.ui.text.view.ParagraphView, NativeTypographyRole>>()
+    private lateinit var group: NativeGroupLayout
+    fun bindTheme(theme: ReverbTheme) {
+        if (panelClosed || this.theme === theme) return
+        cancelBrowserPanelInput()
+        this.theme = theme
+        background = theme.appearance.backdrops.pageBackground(theme.palette)
+        headings.forEach { (view, role) -> theme.bindParagraph(view, role) }
+        theme.appearance.groupSurfaces.settingsGroup.bind(group, theme.palette)
+        owned.forEach { it.applyPalette(theme.palette.settingsControls) }
+        ReverbTextSurface.invalidate(this)
+    }
     init {
         fun dp(value: Int) = (value * theme.density.density).roundToInt()
         background = ReverbDesign.appearance.backdrops.pageBackground(theme.palette)
@@ -165,15 +177,18 @@ class ReverbBrowserChromeStartPage(context: Context, theme: ReverbTheme, title: 
             orientation = VERTICAL
             setPaddingRelative(dp(16), dp(36), dp(16), dp(24))
             addView(theme.paragraph(context, title, NativeTypographyRole.DISPLAY_SMALL).apply {
+                headings.add(this to NativeTypographyRole.DISPLAY_SMALL)
                 isAccessibilityHeading = true
                 setPaddingRelative(dp(16), 0, dp(16), dp(8))
             })
             recentHeading?.let { addView(theme.paragraph(context, it, NativeTypographyRole.TITLE_LARGE).apply {
+                headings.add(this to NativeTypographyRole.TITLE_LARGE)
                 isAccessibilityHeading = true
                 setPaddingRelative(dp(16), dp(14), dp(16), dp(4))
             }, LayoutParams(-1, -2).apply { topMargin = dp(12) }) }
             val recipe = ReverbDesign.appearance.groupSurfaces.settingsGroup
             addView(recipe.create(context, ReverbTextSurface::invalidate).apply {
+                group = this
                 recipe.bind(this, theme.palette)
                 rows.forEachIndexed { index, item ->
                     val row = browserChromeRow(context, theme, item) { id ->

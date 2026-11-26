@@ -44,8 +44,8 @@ data class ReverbBrowserPanelTab<Key : Any>(
 enum class ReverbBrowserPanelTabAction { BACK, NEW, SELECT, CLOSE }
 
 /** Candidate tab overview contract, built from Reverb toolbar, group and action recipes. */
-open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme: ReverbTheme,
-    title: String, backLabel: String, newLabel: String,
+open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private var theme: ReverbTheme,
+    title: String, backLabel: String, private val newLabel: String,
 ) : ReverbBrowserPanelLayout(context) {
     var onTabAction: ((Key?, ReverbBrowserPanelTabAction) -> Unit)? = null
     /**
@@ -60,7 +60,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             field = value
             cards.values.forEach { it.bindReorderActions() }
         }
-    private val environment = ReverbEnvironment(theme)
+    private var environment = ReverbEnvironment(theme)
     private val back = browserPanelToolbarAction(context, theme, backLabel, ReverbIcon.Back) {
         if (!panelClosed) onTabAction?.invoke(null, ReverbBrowserPanelTabAction.BACK)
     }
@@ -159,13 +159,28 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         addView(grid, FrameLayout.LayoutParams(-1, -2))
     }
     private val footer = ReverbBottomActionDock(context, theme, newTab)
+    private val toolbar = ReverbTitledTopBarLayout(context, theme.density.density, theme.palette, back, heading,
+        Space(context), style = theme.appearance.toolbars)
+
+    /** Retain keyed cards, previews, order, scroll and independent accessibility/keyboard focus. */
+    fun bindTheme(theme: ReverbTheme) {
+        if (panelClosed || this.theme === theme) return
+        cancelBrowserPanelInput()
+        this.theme = theme
+        environment = ReverbEnvironment(theme)
+        background = theme.appearance.backdrops.pageBackground(theme.palette)
+        toolbar.bindTitledToolbar(theme.density.density, theme.palette)
+        back.bindTheme(theme)
+        theme.bindParagraph(heading, theme.appearance.toolbars.centeredTitleRole)
+        newTab.bind(newLabel, newTab.isEnabled, theme.palette.buttonPalette, onClick = ::newTabRequested)
+        cards.values.forEach { it.bindTheme() }
+        ReverbTextSurface.invalidate(this)
+    }
     init {
         background = theme.appearance.backdrops.pageBackground(theme.palette)
         ViewCompat.setAccessibilityPaneTitle(this, title)
         ViewCompat.setAccessibilityHeading(heading, true)
-        addView(ReverbTitledTopBarLayout(context, theme.density.density, theme.palette, back, heading, Space(context),
-            style = theme.appearance.toolbars),
-            LayoutParams(-1, -2))
+        addView(toolbar, LayoutParams(-1, -2))
         addView(scroll, LayoutParams(-1, 0, 1f))
         addView(footer, LayoutParams(-1, -2))
     }
@@ -505,6 +520,19 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             if (!closed && !panelClosed && !reorder.dragging && before.enabled && cards[before.key] === this &&
                 source.browserPanelAdmitsInput() && !closed && !panelClosed && snapshot === before && cards[before.key] === this)
                 onTabAction?.invoke(before.key, action)
+        }
+        fun bindTheme() {
+            if (closed) return
+            val entry = snapshot ?: return
+            row.bindTheme(theme)
+            surface.setSurfacePreset(theme.palette.surfacePreset)
+            surface.setPaletteImmediately(recipe.fillColor(theme.palette),
+                if (entry.current) theme.palette.primary else recipe.borderColor(theme.palette))
+            close.visual.background = NativeForeground.foregroundBackground(theme.palette.pageControls)
+            close.bind(environment, ReverbIcon.Close, entry.closeLabel, entry.enabled, theme.palette.muted, theme.palette.ink) {
+                dispatch(ReverbBrowserPanelTabAction.CLOSE, close.visual)
+            }
+            if (entry.preview == null) image.imageTintList = ColorStateList.valueOf(theme.palette.muted)
         }
         fun bind(entry: ReverbBrowserPanelTab<Key>) {
             if (closed) return

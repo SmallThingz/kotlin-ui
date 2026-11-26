@@ -14,12 +14,17 @@ import smallthingz.ui.components.NativeChoice
 import smallthingz.ui.components.NativeLabeledSegmentedLayout
 import smallthingz.ui.components.NativeSettingsRow
 import smallthingz.ui.reverb.settings.ReverbSettingsToggle
+import smallthingz.ui.reverb.settings.bindSectionTitle
 import smallthingz.ui.reverb.settings.settingsSectionTitle
+import smallthingz.ui.text.view.ParagraphView
 import smallthingz.ui.text.NativeTypographyRole
 import kotlin.math.roundToInt
 
 /** A shared row handle, not an arbitrary application View slot. */
-sealed interface ReverbBrowserPanelRow : AutoCloseable { val view: View }
+sealed interface ReverbBrowserPanelRow : AutoCloseable {
+    val view: View
+    fun bindTheme(theme: ReverbTheme)
+}
 
 data class ReverbBrowserPanelSetting(
     val title: String,
@@ -38,6 +43,11 @@ class ReverbBrowserPanelSettingRow(context: Context, theme: ReverbTheme,
     private var callback: ((String) -> Unit)? = onAction
     private var closed = false
     init { filterTouchesWhenObscured = true; bindContent(initial) }
+    override fun bindTheme(theme: ReverbTheme) {
+        if (closed) return
+        cancelBrowserPanelInput()
+        applyPalette(theme.palette.settingsControls)
+    }
     fun bindContent(next: ReverbBrowserPanelSetting) {
         if (closed) return
         if (content.actionId != next.actionId || !next.enabled) cancelBrowserPanelInput()
@@ -65,7 +75,7 @@ fun reverbBrowserPanelSiteIdentity(context: Context, theme: ReverbTheme, origin:
         titleView.textDirection = View.TEXT_DIRECTION_LTR
     }
 
-class ReverbBrowserPanelToggle internal constructor(context: Context, private val theme: ReverbTheme,
+class ReverbBrowserPanelToggle internal constructor(context: Context, private var theme: ReverbTheme,
     val id: String, initial: ToggleState, onChange: (String, Boolean) -> Unit,
 ) : ReverbBrowserPanelRow {
     private var state = initial
@@ -77,6 +87,12 @@ class ReverbBrowserPanelToggle internal constructor(context: Context, private va
             callback?.invoke(id, value)
     }
     override val view: View get() = toggle.view
+    override fun bindTheme(theme: ReverbTheme) {
+        if (closed || this.theme === theme) return
+        view.cancelBrowserPanelInput()
+        this.theme = theme
+        toggle.bind(state, theme)
+    }
     fun bind(state: ToggleState) {
         if (closed) return
         this.state = state
@@ -93,7 +109,7 @@ data class ReverbBrowserPanelOption(
 )
 
 /** Capsule with optional labeled heading and an independently admitted Android-recovery action. */
-class ReverbBrowserPanelChoice internal constructor(context: Context, private val theme: ReverbTheme,
+class ReverbBrowserPanelChoice internal constructor(context: Context, private var theme: ReverbTheme,
     val id: String, private val label: String?, options: List<ReverbBrowserPanelOption>, selected: String,
     onSelect: (String, String) -> Boolean, onAction: (String) -> Unit,
 ) : ReverbBrowserPanelLayout(context), ReverbBrowserPanelRow {
@@ -135,6 +151,15 @@ class ReverbBrowserPanelChoice internal constructor(context: Context, private va
         selector.onSelectionRequest = request
         bind(options, selected)
     }
+    override fun bindTheme(theme: ReverbTheme) {
+        if (panelClosed || this.theme === theme) return
+        cancelBrowserPanelInput()
+        this.theme = theme
+        selector.applyPalette(theme.palette.settingsControls)
+        heading?.let { bindSectionTitle(it, ReverbEnvironment(theme).forSettings()) }
+        recovery.bindTheme(theme)
+        ReverbTextSurface.invalidate(this)
+    }
     fun bind(options: List<ReverbBrowserPanelOption>, selected: String, recovery: ReverbBrowserPanelSetting? = null) {
         if (panelClosed) return
         require(options.map { it.id }.toSet().size == options.size && options.any { it.id == selected })
@@ -154,7 +179,7 @@ class ReverbBrowserPanelChoice internal constructor(context: Context, private va
 enum class ReverbBrowserPanelSettingsAction { BACK, UNDO, APPLY }
 
 /** Candidate browser Settings presentation; drafts, permission recovery and persistence stay in the host. */
-open class ReverbBrowserPanelSettings(context: Context, private val theme: ReverbTheme, title: String,
+open class ReverbBrowserPanelSettings(context: Context, private var theme: ReverbTheme, title: String,
     backLabel: String, undoLabel: String, applyLabel: String,
 ) : ReverbBrowserPanelLayout(context) {
     var onPanelAction: ((ReverbBrowserPanelSettingsAction) -> Unit)? = null
@@ -180,15 +205,34 @@ open class ReverbBrowserPanelSettings(context: Context, private val theme: Rever
     }
     private var message = ""
     private val owned = linkedSetOf<ReverbBrowserPanelRow>()
+    private val sectionHeadings = mutableListOf<ParagraphView>()
+    private val groupSurfaces = mutableListOf<NativeGroupLayout>()
+    private val heading = theme.paragraph(context, title, theme.appearance.toolbars.centeredTitleRole).apply {
+        ViewCompat.setAccessibilityHeading(this, true)
+    }
+    private val toolbar = ReverbTitledTopBarLayout(context, theme.density.density, theme.palette, back, heading,
+        draftActions, style = theme.appearance.toolbars)
+
+    /** Repaint in place without replaying draft bindings, selections, feedback or focus handoff. */
+    fun bindTheme(theme: ReverbTheme) {
+        if (panelClosed || this.theme === theme) return
+        cancelBrowserPanelInput()
+        this.theme = theme
+        background = theme.appearance.backdrops.pageBackground(theme.palette)
+        toolbar.bindTitledToolbar(theme.density.density, theme.palette)
+        back.bindTheme(theme); undo.bindTheme(theme); apply.bindTheme(theme)
+        theme.bindParagraph(heading, theme.appearance.toolbars.centeredTitleRole)
+        theme.bindSupportingParagraph(feedback, NativeTypographyRole.BODY_SMALL)
+        val environment = ReverbEnvironment(theme).forSettings()
+        sectionHeadings.forEach { bindSectionTitle(it, environment) }
+        groupSurfaces.forEach { theme.appearance.groupSurfaces.settingsGroup.bind(it, theme.palette) }
+        owned.forEach { it.bindTheme(theme) }
+        ReverbTextSurface.invalidate(this)
+    }
     init {
         background = theme.appearance.backdrops.pageBackground(theme.palette)
         ViewCompat.setAccessibilityPaneTitle(this, title)
-        val heading = theme.paragraph(context, title, theme.appearance.toolbars.centeredTitleRole).apply {
-            ViewCompat.setAccessibilityHeading(this, true)
-        }
-        addView(ReverbTitledTopBarLayout(context, theme.density.density, theme.palette, back, heading, draftActions,
-            style = theme.appearance.toolbars),
-            LayoutParams(-1, -2))
+        addView(toolbar, LayoutParams(-1, -2))
         addView(feedback, LayoutParams(-1, -2))
         addView(ScrollView(context).apply { isFillViewport = true; addView(groups, FrameLayout.LayoutParams(-1, -2)) },
             LayoutParams(-1, 0, 1f))
@@ -220,6 +264,7 @@ open class ReverbBrowserPanelSettings(context: Context, private val theme: Rever
         label?.let {
             val recipe = theme.appearance.settingsSelectors
             groups.addView(settingsSectionTitle(context, it, environment).apply {
+                sectionHeadings.add(this)
                 ViewCompat.setAccessibilityHeading(this, true)
                 setPaddingRelative(dp(recipe.recordingSection.sideInsetDp),
                     if (groups.childCount > 0) dp(recipe.recordingSection.titleTopInsetDp) else 0,
@@ -228,6 +273,7 @@ open class ReverbBrowserPanelSettings(context: Context, private val theme: Rever
         }
         val recipe = theme.appearance.groupSurfaces.settingsGroup
         groups.addView(recipe.create(context, ReverbTextSurface::invalidate).apply {
+            groupSurfaces.add(this)
             recipe.bind(this, theme.palette)
             rows.forEachIndexed { index, row ->
                 addRow(row.view, NativeGroupLayout.LayoutParams(-1, -2).apply { dividerTop = index > 0 })

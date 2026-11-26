@@ -41,7 +41,7 @@ internal fun ReverbBrowserChromeIcon.drawable(context: Context, theme: ReverbThe
 data class ReverbBrowserChromeAction(val id: String, val label: String, val icon: ReverbBrowserChromeIcon, val enabled: Boolean = true)
 
 /** Canonical toolbar action with current semantic content and independent input retirement. */
-class ReverbBrowserChromeActionView internal constructor(context: Context, private val theme: ReverbTheme,
+class ReverbBrowserChromeActionView internal constructor(context: Context, private var theme: ReverbTheme,
     initial: ReverbBrowserChromeAction, onAction: (String) -> Unit,
     inputAllowed: () -> Boolean = { true },
 ) : ReverbToolbarActionView(context, theme.density.density, theme.palette, { null }, initial.label,
@@ -56,6 +56,12 @@ class ReverbBrowserChromeActionView internal constructor(context: Context, priva
         // Browser controls share their parent's material, while each keeps a full input target.
         bindStyle(theme.appearance.toolbars.action.copy(sizeDp = 48f, glyphDp = 22f))
         bindContent(initial)
+    }
+    internal fun bindTheme(next: ReverbTheme) {
+        if (closed || theme === next) return
+        theme = next
+        bound = false
+        bindContent(action)
     }
     fun bindContent(next: ReverbBrowserChromeAction) {
         if (closed) return
@@ -93,7 +99,7 @@ class ReverbBrowserChromeActionView internal constructor(context: Context, priva
 }
 
 /** Presentation-only browser chrome. The host owns the editor's navigation and all renderer lifecycle. */
-open class ReverbBrowserChrome(context: Context, private val chromeTheme: ReverbTheme,
+open class ReverbBrowserChrome(context: Context, private var chromeTheme: ReverbTheme,
     addressHint: String, site: ReverbBrowserChromeAction, tabs: ReverbBrowserChromeAction, menu: ReverbBrowserChromeAction,
 ) : ReverbBrowserPanelLayout(context) {
     var onChromeAction: ((String) -> Unit)? = null
@@ -116,6 +122,7 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
         hint = addressHint
     }
     val pageHost = FrameLayout(context)
+    private lateinit var toolbarBackground: NativeToolbarBackground
     val chromeToolbar: View = ReverbBrowserPanelSwipe(context, { dp(56).toFloat() },
         canSwipe = { !panelClosed && browserPanelAdmitsInput() && canSwipeToolbar?.invoke() == true },
         onSwipe = { if (!panelClosed && canSwipeToolbar?.invoke() == true) onToolbarSwipe?.invoke(it) }).apply {
@@ -123,7 +130,7 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             val recipe = chromeTheme.appearance.toolbars
-            NativeToolbarBackground(this, recipe, chromeTheme.palette) { ReverbTextSurface.invalidate(this) }
+            toolbarBackground = NativeToolbarBackground(this, recipe, chromeTheme.palette) { ReverbTextSurface.invalidate(this) }
             minimumHeight = recipe.compactHeightPx(chromeTheme.density.density)
             val inset = (recipe.centeredPaddingDp * chromeTheme.density.density).roundToInt()
             setPaddingRelative(inset, 0, inset, 0)
@@ -133,8 +140,7 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
             addView(menuAction)
         }, FrameLayout.LayoutParams(-1, -2))
     }
-    private val progress = NativeDeterminateLinearProgress(context, chromeTheme.palette.primary,
-        chromeTheme.palette.pageControls.outline, chromeTheme.density.density).apply {
+    private val progress = ReverbBrowserChromeProgress(context, chromeTheme).apply {
         bindSurfacePreset(chromeTheme.palette.surfacePreset)
         visibility = INVISIBLE
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -151,6 +157,22 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
         addView(progress, LayoutParams(-1, -2))
         addView(status, LayoutParams(-1, -2))
         addView(pageHost, LayoutParams(-1, 0, 1f))
+    }
+    /** Repaint retained presentation only; never bind editor text or touch renderer ownership. */
+    fun bindTheme(theme: ReverbTheme) {
+        if (panelClosed || chromeTheme === theme) return
+        // Retire toolbar presses/swipes only. pageHost contains caller-owned WebViews;
+        // retained start/settings/tab panels retire their own input in their bindTheme.
+        chromeToolbar.cancelBrowserPanelInput()
+        chromeTheme = theme
+        background = theme.appearance.backdrops.pageBackground(theme.palette)
+        toolbarBackground.bind(theme.appearance.toolbars, theme.palette)
+        siteAction.bindTheme(theme); tabsAction.bindTheme(theme); menuAction.bindTheme(theme)
+        (addressEditor as ReverbBrowserChromeAddressEditor).bindTheme(theme)
+        progress.bindTheme(theme)
+        theme.bindParagraph(status, NativeTypographyRole.BODY_MEDIUM)
+        status.background = NativeForeground.foregroundBackground(theme.palette.pageControls)
+        ReverbTextSurface.invalidate(this)
     }
     /** Retained-owner admission while a shared modal owns window focus. The modal must gate its own input. */
     protected fun browserActionOwnerPresent(owner: View): Boolean {
@@ -218,6 +240,12 @@ private class ReverbBrowserChromeAddressEditor(context: Context, palette: Contro
         filters = filters.filterNot { it is InputFilter.LengthFilter }.toTypedArray() + userLimit
         setSingleLine(true)
     }
+    fun bindTheme(theme: ReverbTheme) {
+        // Palette binding leaves Editable, composing spans, selection and input listeners intact.
+        applyPalette(theme.palette.pageControls)
+        focusPaint.color = theme.palette.pageControls.accent
+        invalidate()
+    }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (!isFocused || !isEnabled) return
@@ -238,5 +266,16 @@ private class ReverbBrowserChromeAddressEditor(context: Context, palette: Contro
         // Native ACTION_SET_TEXT uses setText too, but is user input rather than an owner bind.
         accessibilityInput++
         return try { super.performAccessibilityAction(action, arguments) } finally { accessibilityInput-- }
+    }
+}
+
+/** Paint-only progress binding preserves its operation, authoritative value and motion. */
+private class ReverbBrowserChromeProgress(context: Context, theme: ReverbTheme) :
+    NativeDeterminateLinearProgress(context, theme.palette.primary,
+        theme.palette.pageControls.outline, theme.density.density) {
+    fun bindTheme(theme: ReverbTheme) {
+        bindSurfacePreset(theme.palette.surfacePreset)
+        if (bindAppearance(theme.palette.primary, theme.palette.pageControls.outline, theme.density.density)) requestLayout()
+        invalidate()
     }
 }

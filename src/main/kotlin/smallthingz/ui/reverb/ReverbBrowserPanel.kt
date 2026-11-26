@@ -63,12 +63,26 @@ open class ReverbBrowserPanelLayout(context: Context) : LinearLayout(context), N
 }
 
 internal fun browserPanelToolbarAction(context: Context, theme: ReverbTheme, label: String,
-    icon: ReverbIcon, onAction: () -> Unit): ReverbToolbarActionView =
-    ReverbToolbarActionView(context, theme.density.density, theme.palette, { null }, label, rolePresent = true).apply {
-        setGlyph(ReverbIconDrawable(icon, theme.density.density, sampledIconTint), sampledIconTint)
+    icon: ReverbIcon, onAction: () -> Unit) = ReverbBrowserPanelToolbarAction(context, theme, label, icon, onAction)
+
+/** Retained browser panel action with the same shared toolbar recipe and input gate. */
+internal class ReverbBrowserPanelToolbarAction(context: Context, theme: ReverbTheme, label: String,
+    private val icon: ReverbIcon, private val onAction: () -> Unit,
+) : ReverbToolbarActionView(context, theme.density.density, theme.palette, { null }, label, rolePresent = true) {
+    init {
         accessibilityAction.filterTouchesWhenObscured = true
         accessibilityAction.tooltipText = label
-        bindToolbarAction(theme.density.density, theme.palette, true, NativeToolbarActionTone.MUTED) {
+        bindTheme(theme)
+    }
+    override fun onCancelPendingInputEvents() {
+        super.onCancelPendingInputEvents()
+        cancelInput()
+    }
+    fun bindTheme(theme: ReverbTheme) {
+        cancelInput()
+        setGlyph(ReverbIconDrawable(icon, theme.density.density, sampledIconTint), sampledIconTint)
+        bindToolbarAction(theme.density.density, theme.palette, isEnabled, NativeToolbarActionTone.MUTED) {
             if (browserPanelAdmitsInput()) onAction()
         }
     }
+}
