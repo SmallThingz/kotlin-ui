@@ -4,21 +4,19 @@ import android.content.Context
 import smallthingz.ui.text.NativeTypographyRole
 import kotlin.math.roundToInt
 
-/** Pure sizing shared by both app pickers; one extra column without jumping to six on phones. */
+/** Original four-column phone sizing shared by both application pickers. */
 internal object NativeApplicationGridSizing {
-    const val cellMinWidthDp = 64f
+    const val cellMinWidthDp = 80f
     // Measured at mdpi/default font scale: Arabic/mixed labels need 44dp for two
-    // fallback-font lines. Budget 3dp top + 32dp icon + 2dp gap + 44dp text +
-    // 3dp bottom = 84dp; retain fallback line spacing and the full icon.
-    const val cellMinHeightDp = 84f
-    const val maxColumns = 7
-    private const val preferredCellWidthDp = 80f
+    // fallback-font lines. Budget 3dp top + 36dp icon + 2dp gap + 44dp text +
+    // 3dp bottom = 88dp; retain fallback line spacing and the full icon.
+    const val cellMinHeightDp = 88f
+    const val maxColumns = 6
 
     fun columns(widthDp: Float, fontScale: Float): Int {
         val scale = fontScale.coerceAtLeast(1f)
-        val desired = (widthDp / (preferredCellWidthDp * scale)).toInt() + 1
         val fitting = (widthDp / (cellMinWidthDp * scale)).toInt()
-        return minOf(desired, fitting).coerceIn(1, maxColumns)
+        return fitting.coerceIn(1, maxColumns)
     }
 
     fun heightDp(fontScale: Float): Float = cellMinHeightDp * fontScale.coerceAtLeast(1f)
@@ -26,14 +24,15 @@ internal object NativeApplicationGridSizing {
 
 /** Shared geometry and checked-control styling for installed-application grids. */
 class NativeApplicationGridRecipe internal constructor(appearance: NativeUiAppearance) {
-    val iconSizeDp = 32f
+    val iconSizeDp = 36f
     val iconLabelGapDp = 2f
     val contentInsetDp = 3f
-    val horizontalInsetDp = 3f
-    // A 64dp cell leaves 16dp beside its centered 32dp icon: 14dp badge +
-    // 1dp end inset + 1dp clear space. This is decorative, not the checked target.
-    val markerSizeDp = 14f
-    val markerInsetDp = 1f
+    val horizontalInsetDp = 4f
+    // A minimum-width 80dp cell leaves 22dp beside its centered 36dp icon:
+    // an 18dp badge and 4dp inset. Place at the physical top-right in both LTR
+    // and RTL (not logical END); the badge is decorative, not the checked target.
+    val markerSizeDp = 18f
+    val markerInsetDp = 4f
     val labelMaxLines = 2
     val unavailableIconAlpha = .55f
     val cellMinWidthDp = NativeApplicationGridSizing.cellMinWidthDp
