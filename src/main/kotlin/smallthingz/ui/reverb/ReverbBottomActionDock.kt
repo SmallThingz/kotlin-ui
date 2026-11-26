@@ -10,7 +10,8 @@ class ReverbBottomActionDock(
     context: Context,
     theme: ReverbTheme,
     action: NativeMaterialButtonView,
-) : NativeBottomActionDock(context, theme.density, action) {
+) : NativeBottomActionDock(context, theme.density, action,
+    horizontalInsetDp = theme.appearance.settingsSelectors.retentionSection.sideInsetDp) {
     companion object {
         /** Optional construction recipe; the dock also accepts an existing retained button. */
         fun buttonStyle(theme: ReverbTheme): NativeButtonRecipe = theme.appearance.buttons.filled.let {
