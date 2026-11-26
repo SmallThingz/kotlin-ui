@@ -139,6 +139,44 @@ class ProceduralNoiseTest {
         assertNull(cache.failureOrNull())
         assertEquals(1, completions)
     }
+    @Test fun readyBeforeSubscriptionIsAcquiredWithoutWaitingForAnotherInvalidation() {
+        val value = Any()
+        var published: Any? = null
+        var reads = 0
+        var subscribed = false
+        val result = readOrObserveNoise(
+            read = {
+                reads++
+                val seen = published
+                // Worker settles immediately after the first read returned its snapshot.
+                published = value
+                seen
+            },
+            observe = { if (published == null) subscribed = true },
+        )
+        assertSame(value, result)
+        assertFalse(subscribed)
+        assertEquals(2, reads)
+    }
+
+    @Test fun pendingPublicationKeepsItsObserverAndNextDrawAcquiresValue() {
+        val value = Any()
+        var published: Any? = null
+        var subscribed = 0
+        assertNull(readOrObserveNoise({ published }, { subscribed++ }))
+        assertEquals(1, subscribed)
+        published = value
+        assertSame(value, readOrObserveNoise({ published }, { subscribed++ }))
+        assertEquals(1, subscribed)
+    }
+
+    @Test fun alreadyReadyDrawDoesNotSubscribeOrReadTwice() {
+        val value = Any()
+        var reads = 0
+        assertSame(value, readOrObserveNoise({ reads++; value }, { fail("No subscription needed") }))
+        assertEquals(1, reads)
+    }
+
     @Test fun retirementBeforeQueuedWorkPreventsAllocationAndCompletion() {
         var generated = 0
         var completed = 0

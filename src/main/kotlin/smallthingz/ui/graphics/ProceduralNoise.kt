@@ -33,6 +33,13 @@ private fun fillNoisePixels(pixels: IntArray, initialState: Int): Int {
     return state
 }
 
+/** Close the ready-publication gap between a cache miss and observer registration. */
+internal inline fun <T> readOrObserveNoise(read: () -> T?, observe: () -> Unit): T? =
+    read() ?: run {
+        observe()
+        read()
+    }
+
 /** One generation. Failure is terminal; retirement rejects late work and drops the published value. */
 internal class NoiseTileCache<T>(private val generate: () -> T) {
     private var started = false
