@@ -350,7 +350,7 @@ class ViewClickController(
         val keyCode = event.keyCode // Do not retain a potentially recycled KeyEvent in delayed work.
         return when (event.action) {
             KeyEvent.ACTION_DOWN -> {
-                if (keys.containsKey(keyCode)) return false // Do not emit repeated Press interactions.
+                if (event.repeatCount != 0 || keys.containsKey(keyCode)) return false // Only an initial DOWN may acquire key ownership.
                 val gesture = KeyGesture(generation, NativePressToken(pointerCenterX, pointerCenterY))
                 keys[keyCode] = gesture
                 enqueue(gesture.generation) { deliverPress(gesture.press) }
