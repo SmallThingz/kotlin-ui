@@ -166,11 +166,21 @@ open class NativeLayeredMarkView(
         updateGeometry()
     }
 
-    override fun onDetachedFromWindow() {
+    private fun releaseRasterCache() {
         // Drop our references; do not recycle a bitmap still referenced by a hardware display list.
         bitmap = null
         cacheCanvas = null
         cacheDirty = true
+        invalidate()
+    }
+
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility != VISIBLE) releaseRasterCache()
+    }
+
+    override fun onDetachedFromWindow() {
+        releaseRasterCache()
         super.onDetachedFromWindow()
     }
 

@@ -8,17 +8,19 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Process
 import android.util.Log
+import androidx.annotation.MainThread
 import java.lang.ref.WeakReference
 
 /**
  * Process-shared deterministic grain: one 1024-square ARGB bitmap and at most two cached shaders.
  *
- * [prepare] schedules at most one background daemon, including on failure; it never blocks drawing.
+ * [prepare] schedules at most one background daemon per generation, including on failure.
+ * Explicit UI-hidden retirement permits a new generation; drawing never waits for its worker.
  * Generation reuses one 64 KiB pixel strip. There is no disk cache or asset copy.
  * Pending drawables are weakly held and invalidated on the main thread after generation settles.
  */
 object NoiseTexture {
-    private val tile = NoiseTileCache {
+    private fun newTile() = NoiseTileCache {
         val bitmap = Bitmap.createBitmap(NOISE_TILE_SIZE, NOISE_TILE_SIZE, Bitmap.Config.ARGB_8888)
         try {
             bitmap.density = Bitmap.DENSITY_NONE
@@ -36,13 +38,16 @@ object NoiseTexture {
             throw failure
         }
     }
+    private var tile = newTile()
     private val main = Handler(Looper.getMainLooper())
+    private val drawables = mutableListOf<WeakReference<NoiseDrawable>>()
     private val pending = mutableListOf<WeakReference<NoiseDrawable>>()
     private var backgroundShader: BitmapShader? = null
     private var topBarShader: BitmapShader? = null
 
     fun prepare() {
-        tile.start(execute = { work ->
+        val generation = synchronized(this) { tile }
+        generation.start(execute = { work ->
             Thread({
                 try {
                     Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
@@ -52,19 +57,50 @@ object NoiseTexture {
                 work()
             }, "smallthingz-ui-noise").apply { isDaemon = true }.start()
         }, onComplete = {
-            tile.failureOrNull()?.let { Log.e("SmallthingzNoise", "Unable to generate background grain", it) }
+            generation.failureOrNull()?.let { Log.e("SmallthingzNoise", "Unable to generate background grain", it) }
             main.post {
-                val notify = synchronized(this) { pending.toList().also { pending.clear() } }
+                val notify = synchronized(this) {
+                    if (tile !== generation) return@post
+                    pending.toList().also { pending.clear() }
+                }
                 notify.forEach { it.get()?.invalidateSelf() }
             }
         })
+    }
+
+    internal fun register(drawable: NoiseDrawable) {
+        synchronized(this) {
+            drawables.removeAll { it.get() == null }
+            drawables.add(WeakReference(drawable))
+        }
+    }
+
+    /**
+     * Release reconstructible grain only after the host establishes that ALL windows in this
+     * process are hidden (for example its TRIM_MEMORY_UI_HIDDEN boundary). Never call on a single
+     * Activity pause/stop or focus loss: a floating/overlay window may still be visible.
+     * Published bitmaps are not recycled; rendering can retain old display-list references.
+     */
+    @MainThread
+    fun releaseUiResources() {
+        check(Looper.myLooper() === Looper.getMainLooper()) { "Grain retirement requires the UI thread" }
+        val owners = synchronized(this) {
+            tile.retire()
+            tile = newTile()
+            backgroundShader = null
+            topBarShader = null
+            pending.clear()
+            drawables.removeAll { it.get() == null }
+            drawables.mapNotNull { it.get() }
+        }
+        owners.forEach { it.releaseUiResources() }
     }
 
     internal fun observe(drawable: NoiseDrawable) {
         synchronized(this) {
             if (tile.valueOrNull() == null && tile.failureOrNull() == null) {
                 pending.removeAll { it.get() == null }
-                pending.add(WeakReference(drawable))
+                if (pending.none { it.get() === drawable }) pending.add(WeakReference(drawable))
             }
         }
         prepare()

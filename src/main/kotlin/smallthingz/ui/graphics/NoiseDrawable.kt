@@ -48,6 +48,7 @@ class NoiseDrawable(
     private fun grainSurfaceRange(color: Int): Long = surfaceRange(color)
 
     init {
+        NoiseTexture.register(this)
         backgroundColor?.let { backgroundPaint.color = it }
         if (seed != null) NoiseTexture.observe(this)
     }
@@ -130,10 +131,19 @@ class NoiseDrawable(
         try { canvas.drawPath(path, noisePaint) } finally { noisePaint.alpha = alpha }
     }
 
+    /** Hidden-process retirement must clear each Paint as well as the shared shader cache. */
+    internal fun releaseUiResources() {
+        noisePaint.shader = null
+        invalidateSelf()
+    }
+
     private fun prepareGrain(coverage: Int): Boolean {
         if (noisePaint.alpha == 0 || coverage == 0) return false
         val currentSeed = seed ?: return false
-        if (noisePaint.shader == null) noisePaint.shader = NoiseTexture.shader(currentSeed)
+        if (noisePaint.shader == null) {
+            noisePaint.shader = readOrObserveNoise(
+                { NoiseTexture.shader(currentSeed) }, { NoiseTexture.observe(this) })
+        }
         // Until generation completes, leave the owner's exact fill visible.
         return noisePaint.shader != null
     }

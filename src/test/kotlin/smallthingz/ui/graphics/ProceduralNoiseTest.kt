@@ -139,4 +139,120 @@ class ProceduralNoiseTest {
         assertNull(cache.failureOrNull())
         assertEquals(1, completions)
     }
+    @Test fun readyBeforeSubscriptionIsAcquiredWithoutWaitingForAnotherInvalidation() {
+        val value = Any()
+        var published: Any? = null
+        var reads = 0
+        var subscribed = false
+        val result = readOrObserveNoise(
+            read = {
+                reads++
+                val seen = published
+                // Worker settles immediately after the first read returned its snapshot.
+                published = value
+                seen
+            },
+            observe = { if (published == null) subscribed = true },
+        )
+        assertSame(value, result)
+        assertFalse(subscribed)
+        assertEquals(2, reads)
+    }
+
+    @Test fun pendingPublicationKeepsItsObserverAndNextDrawAcquiresValue() {
+        val value = Any()
+        var published: Any? = null
+        var subscribed = 0
+        assertNull(readOrObserveNoise({ published }, { subscribed++ }))
+        assertEquals(1, subscribed)
+        published = value
+        assertSame(value, readOrObserveNoise({ published }, { subscribed++ }))
+        assertEquals(1, subscribed)
+    }
+
+    @Test fun alreadyReadyDrawDoesNotSubscribeOrReadTwice() {
+        val value = Any()
+        var reads = 0
+        assertSame(value, readOrObserveNoise({ reads++; value }, { fail("No subscription needed") }))
+        assertEquals(1, reads)
+    }
+
+    @Test fun retirementBeforeQueuedWorkPreventsAllocationAndCompletion() {
+        var generated = 0
+        var completed = 0
+        var queued: (() -> Unit)? = null
+        val cache = NoiseTileCache { generated++; Any() }
+        cache.start({ queued = it }, { completed++ })
+        cache.retire()
+        cache.retire()
+        checkNotNull(queued).invoke()
+        cache.start({ fail("Retired generation was rescheduled") }, { completed++ })
+        assertEquals(0, generated)
+        assertEquals(0, completed)
+        assertNull(cache.valueOrNull())
+        assertNull(cache.failureOrNull())
+    }
+
+    @Test fun retirementDuringGenerationRejectsLateValueWithoutBlockingReplacement() {
+        val entered = CountDownLatch(1)
+        val finish = CountDownLatch(1)
+        val done = CountDownLatch(1)
+        val workerFailure = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        val completions = AtomicInteger()
+        val oldValue = Any()
+        val old = NoiseTileCache {
+            entered.countDown()
+            check(finish.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            oldValue
+        }
+        old.start({ work ->
+            Thread {
+                try { work() } catch (failure: Throwable) { workerFailure.set(failure) }
+                finally { done.countDown() }
+            }.start()
+        }, { completions.incrementAndGet() })
+        try {
+            assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            old.retire()
+            val replacementValue = Any()
+            val replacement = NoiseTileCache { replacementValue }
+            replacement.start({ it() }, { completions.incrementAndGet() })
+            assertSame(replacementValue, replacement.valueOrNull())
+            finish.countDown()
+            assertTrue(done.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            assertNull(workerFailure.get())
+            assertNull(old.valueOrNull())
+            assertNull(old.failureOrNull())
+            assertEquals(1, completions.get())
+            assertSame(replacementValue, replacement.valueOrNull())
+        } finally { finish.countDown() }
+    }
+
+    @Test fun retirementDropsPublishedValueAndReplacementGeneratesOnlyOnce() {
+        val value = Any()
+        val old = NoiseTileCache { value }
+        old.start({ it() }, {})
+        assertSame(value, old.valueOrNull())
+        old.retire()
+        assertNull(old.valueOrNull())
+        old.start({ fail("Retired published cache restarted") }, {})
+        var generated = 0
+        val replacement = NoiseTileCache { generated++; value }
+        repeat(3) { replacement.start({ it() }, {}) }
+        assertEquals(1, generated)
+        assertSame(value, replacement.valueOrNull())
+    }
+
+    @Test fun retirementDuringFailedGenerationDoesNotRetainFailureOrNotify() {
+        lateinit var cache: NoiseTileCache<Any>
+        cache = NoiseTileCache {
+            cache.retire()
+            throw IllegalStateException("Retired work failed")
+        }
+        cache.start({ it() }, { fail("Retired generation notified observers") })
+        assertNull(cache.valueOrNull())
+        assertNull(cache.failureOrNull())
+        cache.start({ fail("Retired failed generation restarted") }, {})
+    }
+
 }

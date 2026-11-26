@@ -185,6 +185,19 @@ open class CachedPathIconDrawable private constructor(
         return bitmap
     }
 
+    override fun setVisible(visible: Boolean, restart: Boolean): Boolean {
+        val changed = super.setVisible(visible, restart)
+        if (!visible && maskBitmap != null) {
+            // A display list can still own the old bitmap. Rebuild lazily on the next draw.
+            maskBitmap = null
+            maskCanvas = null
+            renderedWidth = 0f
+            renderedHeight = 0f
+            invalidateSelf()
+        }
+        return changed
+    }
+
     override fun getIntrinsicWidth(): Int = intrinsicSize
 
     override fun getIntrinsicHeight(): Int = intrinsicSize
