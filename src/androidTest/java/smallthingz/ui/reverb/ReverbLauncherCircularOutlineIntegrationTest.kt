@@ -1,6 +1,7 @@
 package smallthingz.ui.reverb
 
 import android.annotation.SuppressLint
+import android.app.Dialog
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
@@ -18,10 +19,12 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.TypedValue
 import android.view.PixelCopy
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
+import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -84,10 +87,10 @@ class ReverbLauncherCircularOutlineIntegrationTest {
     }
 
     @Test fun fullAdaptiveResourceStaysUntintedAndItsLayersAreNotReplacedByDecoration() = main {
-        val context = fixtureContext(213, transparentBrand = false) {
+        fun adaptiveArtwork() =
             AdaptiveIconDrawable(ColorDrawable(ART), GradientDrawable(
                 GradientDrawable.Orientation.TL_BR, intArrayOf(Color.RED, Color.YELLOW, Color.BLUE)))
-        }
+        val context = fixtureContext(213, transparentBrand = false, createIcon = ::adaptiveArtwork)
         val mark = ReverbIdentityMarkView(context)
         layout(mark, 97, 97)
         for (dark in listOf(false, true)) for (outline in listOf(false, true)) {
@@ -104,7 +107,7 @@ class ReverbLauncherCircularOutlineIntegrationTest {
             assertEquals(ImageView.ScaleType.FIT_CENTER, image.scaleType)
             val reference = ImageView(context).apply {
                 scaleType = ImageView.ScaleType.FIT_CENTER
-                setImageDrawable(context.resources.getDrawable(FIXTURE_ICON, null))
+                setImageDrawable(adaptiveArtwork())
             }
             layout(reference, image.width, image.height)
             val before = software(image)
@@ -209,9 +212,11 @@ class ReverbLauncherCircularOutlineIntegrationTest {
         bind(false)
         layoutWidth(header, 480)
         val image = launcherImage(header)
+        val artwork = image.drawable
         bind(true)
         layoutWidth(header, 480)
         assertSame("Opt-in must retain the ImageView renderer", image, launcherImage(header))
+        assertSame("Opt-in must retain the already loaded artwork", artwork, image.drawable)
         assertNull(image.imageTintList)
         assertNull(image.colorFilter)
         val action = visibleDescendants(header).single {
@@ -276,26 +281,39 @@ class ReverbLauncherCircularOutlineIntegrationTest {
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         var host: LinearLayout? = null
-        withRetiringTestActivity(activity, root = { host }) {
+        var dialog: Dialog? = null
+        withRetiringTestActivity(activity, root = { host }, cleanup = { dialog?.dismiss() }) {
             lateinit var attached: ReverbIdentityMarkView
             lateinit var plain: ReverbIdentityMarkView
             lateinit var detached: ReverbIdentityMarkView
             lateinit var drawer: DetachedDrawer
             lateinit var context: FixtureContext
+            lateinit var fixtureWindow: Window
             main {
-                context = fixtureContext(213, transparentBrand = false, base = activity) { ColorDrawable(ART) }
+                // Expanded Dark Theme can alter pixels in light windows despite View opt-outs.
+                val fixture = Dialog(activity, android.R.style.Theme_Material_NoActionBar).also { dialog = it }
+                if (Build.VERSION.SDK_INT >= 29) {
+                    val lightTheme = TypedValue()
+                    assertTrue(fixture.context.theme.resolveAttribute(android.R.attr.isLightTheme, lightTheme, true))
+                    assertEquals(TypedValue.TYPE_INT_BOOLEAN, lightTheme.type)
+                    assertEquals("PixelCopy fixture requires a dark window theme", 0, lightTheme.data)
+                }
+                fixtureWindow = requireNotNull(fixture.window)
+                fixtureWindow.addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
+                context = fixtureContext(213, transparentBrand = false, base = fixture.context) { ColorDrawable(ART) }
                 attached = ReverbIdentityMarkView(context)
                 plain = ReverbIdentityMarkView(context)
                 detached = ReverbIdentityMarkView(context)
                 layout(detached, 64, 64)
                 drawer = DetachedDrawer(context, detached)
-                host = LinearLayout(activity).apply {
+                host = LinearLayout(fixture.context).apply {
                     orientation = LinearLayout.HORIZONTAL
                     setPadding(8, 8, 8, 8)
                     if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
                     for (view in listOf(attached, plain, drawer)) addView(view, LinearLayout.LayoutParams(64, 64))
                 }
-                activity.setContentView(requireNotNull(host), ViewGroup.LayoutParams(208, 80))
+                fixture.setContentView(requireNotNull(host), ViewGroup.LayoutParams(208, 80))
+                fixture.show()
             }
             for ((outlined, marker) in listOf(true to Color.MAGENTA, false to Color.CYAN)) {
                 main {
@@ -308,7 +326,7 @@ class ReverbLauncherCircularOutlineIntegrationTest {
                     drawer.invalidate()
                 }
                 val root = requireNotNull(host)
-                withBitmap(windowPixels(activity.window, root, marker)) { image ->
+                withBitmap(windowPixels(fixtureWindow, root, marker)) { image ->
                     val origins = ArrayList<Triple<Int, Int, Boolean>>()
                     main {
                         assertTrue("This case requires actual attached hardware drawing", root.isHardwareAccelerated)
@@ -326,6 +344,41 @@ class ReverbLauncherCircularOutlineIntegrationTest {
                                 image.getPixel(left + x, top + y))
                     }
                 }
+            }
+            main { assertRetainedOutlineRefreshesOnAttach(requireNotNull(host)) }
+        }
+    }
+
+    @Suppress("DEPRECATION") // Change only the synthetic Resources owned by the detached mark.
+    private fun assertRetainedOutlineRefreshesOnAttach(host: LinearLayout) {
+        val lowDensity = fixtureContext(160, transparentBrand = false, base = host.context) { ColorDrawable(ART) }
+        val highDensity = fixtureContext(320, transparentBrand = false, base = host.context) { ColorDrawable(ART) }
+        val identity = ReverbProductIdentity.Launcher(FIXTURE_ICON, circularOutline = true)
+        val retained = ReverbIdentityMarkView(lowDensity)
+        val size = 64
+        val params = LinearLayout.LayoutParams(size, size)
+        retained.bind(identity, ReverbDesign.theme(lowDensity, dark = false).palette)
+        host.addView(retained, params)
+        assertTrue(retained.isAttachedToWindow)
+        assertEquals(1f, retained.resources.displayMetrics.density, 0f)
+        layout(retained, size, size)
+        withBitmap(software(retained)) { before ->
+            host.removeView(retained)
+            assertFalse(retained.isAttachedToWindow)
+            lowDensity.fixtureResources.updateConfiguration(highDensity.resources.configuration,
+                highDensity.resources.displayMetrics)
+            assertEquals(2f, retained.resources.displayMetrics.density, 0f)
+            assertEquals(size, retained.width)
+            assertEquals(size, retained.height)
+            host.addView(retained, params)
+            assertTrue(retained.isAttachedToWindow)
+            layout(retained, size, size)
+            val fresh = ReverbIdentityMarkView(highDensity)
+            fresh.bind(identity, ReverbDesign.theme(highDensity, dark = false).palette)
+            layout(fresh, size, size)
+            withBitmaps(software(retained), software(fresh)) { actual, expected ->
+                assertFalse("Different densities must draw different outline widths", before.sameAs(expected))
+                assertTrue("Reattaching at the same pixel bounds must refresh the outline", actual.sameAs(expected))
             }
         }
     }

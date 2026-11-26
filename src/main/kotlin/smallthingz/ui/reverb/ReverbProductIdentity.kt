@@ -99,6 +99,15 @@ internal class ReverbIdentityMarkView(context: Context) : NativeRoundedClipLayou
             minOf(width, height) / 2f)
     }
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        // A retained mark can miss a density change while detached and keep the same pixel bounds.
+        if (launcherOutline != null) {
+            updateLauncherOutline()
+            invalidate()
+        }
+    }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         updateLauncherOutline()
@@ -120,8 +129,8 @@ internal class ReverbIdentityMarkView(context: Context) : NativeRoundedClipLayou
 
     fun bind(value: ReverbProductIdentity, palette: NativeColorScheme) {
         bindLauncherOutline(value)
-        val changed = value != identity
-        if (changed) {
+        val previous = identity
+        if (value != previous) {
             identity = value
             reverb.visibility = if (value == ReverbProductIdentity.Reverb) VISIBLE else GONE
             monochrome.visibility = if (value != ReverbProductIdentity.Reverb) VISIBLE else GONE
@@ -132,7 +141,10 @@ internal class ReverbIdentityMarkView(context: Context) : NativeRoundedClipLayou
             }
             if (value !is ReverbProductIdentity.Launcher) launcherConfiguration = null
         }
-        if (value is ReverbProductIdentity.Launcher) refreshLauncherArtwork(value, force = changed)
+        if (value is ReverbProductIdentity.Launcher) {
+            refreshLauncherArtwork(value, force = previous !is ReverbProductIdentity.Launcher ||
+                previous.drawable != value.drawable)
+        }
         if (value == ReverbProductIdentity.Reverb) reverb.refreshResourcePalette()
         monochrome.imageTintList = null
         if (value is ReverbProductIdentity.Monochrome) {
