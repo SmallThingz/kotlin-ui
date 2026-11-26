@@ -1,6 +1,8 @@
 package smallthingz.ui.reverb
 
 import android.content.Context
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.View
 import android.widget.LinearLayout
 import smallthingz.ui.components.NativeGroupLayout
@@ -50,7 +52,7 @@ class ReverbControlScreenSections(private val context: Context, environment: Rev
     }
 
     fun connection(selector: View, body: View, guide: View?): View = column().apply {
-        layoutParams = row().apply { topMargin = dp(heading.titleTopInsetDp + spacing.trailingInsetDp) }
+        layoutParams = row().apply { topMargin = dp(spacing.stackedGapDp) }
         addView(selector, row())
         guide?.let { addView(it, row().apply {
             marginStart = dp(spacing.sideInsetDp)
@@ -94,7 +96,8 @@ class ReverbControlScreenSections(private val context: Context, environment: Rev
             row(disableBuiltIn, divided = true)
         }
         return ReverbControlScreenBrowser(column().apply {
-            layoutParams = row().apply { topMargin = dp(heading.titleTopInsetDp + spacing.trailingInsetDp) }
+            // The preceding shared theme selector owns this section boundary.
+            layoutParams = row()
             addView(selection, row())
             addView(installed, row().apply { topMargin = dp(spacing.bodyGapDp) })
         }, installed)
@@ -105,10 +108,12 @@ class ReverbControlScreenSections(private val context: Context, environment: Rev
         addView(title(label), row())
         addView(group().apply {
             row(enabled)
-            row(notifications)
             row(overlay, divided = true)
-            row(overlayPermission)
         }, row())
+        // Permission requests own their warning-card surface, rather than inheriting
+        // a toggle group's ordinary paint or appearing as a loose button underneath.
+        addView(notifications, row().apply { topMargin = dp(spacing.stackedGapDp) })
+        addView(overlayPermission, row().apply { topMargin = dp(spacing.stackedGapDp) })
     }
 
     fun debuggingDisclosure(message: String, actions: View): View = group(appearance.groupSurfaces.settingsWarning).apply {
@@ -141,11 +146,19 @@ class ReverbControlScreenConnectionBody internal constructor(
     override val acceptsNativeInput get() = inputAllowed()
     val note = NativeText(context, theme.palette.pageControls,
         theme.appearance.typography.nativeTextStyle(NativeTypographyRole.BODY_SMALL), NativeTextRole.MUTED).apply {
+        visibility = GONE
         accessibilityLiveRegion = ACCESSIBILITY_LIVE_REGION_POLITE
         val spacing = theme.appearance.settingsSelectors.retentionSection
         fun dp(value: Int) = (value * theme.density.density).roundToInt()
         setPaddingRelative(dp(spacing.sideInsetDp), dp(spacing.stackedGapDp),
             dp(spacing.sideInsetDp), dp(spacing.trailingInsetDp))
+        addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) {
+                visibility = if (text.isNullOrEmpty()) GONE else VISIBLE
+            }
+            override fun afterTextChanged(text: Editable?) = Unit
+        })
     }
     init {
         orientation = VERTICAL

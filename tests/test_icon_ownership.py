@@ -20,7 +20,10 @@ class IconOwnershipTest(unittest.TestCase):
                 name = match.group(1)
                 self.assertNotIn(name, found, 'Duplicate geometry owner')
                 found[name] = hashlib.sha256(match.group().encode()).hexdigest()
-        self.assertEqual(manifest['paths'], found)
+        extension = json.loads((PROVENANCE / 'credential-visibility.json').read_text())
+        self.assertEqual({'visibilityPath', 'visibilityOffPath'}, set(extension['paths']))
+        self.assertFalse(set(manifest['paths']) & set(extension['paths']))
+        self.assertEqual({**manifest['paths'], **extension['paths']}, found)
 
     def test_common_api_has_no_reverb_or_runtime_vector_dependency(self):
         for source in (KOTLIN / 'icons').glob('*.kt'):

@@ -33,6 +33,12 @@ Library/Incidents morph receives private copies of the common paths. Existing ap
 typealiases remain valid. Prefer upstream names in new common components rather
 than introducing Reverb names as the standard API.
 
+The credential Reveal action uses `MaterialRoundedIcon.Visibility` /
+`VisibilityOff`, exposed as `ReverbIcon.Eye` / `EyeOff`. Its revealed Boolean
+chooses the glyph; the localized Show/Hide label remains an accessibility
+description. Both use the same pinned Rounded1.7.8 pack, with the additional
+source and native-path hashes in `credential-visibility.json` beside `SOURCE.json`.
+
 ## Provenance and exceptions
 
 - `src/main/resource-provenance/reverb-icons/SOURCE.json` records the historical

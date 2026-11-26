@@ -37,16 +37,15 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import smallthingz.ui.components.NativeButtonTouchTarget
 import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.NativeInputGate
 import smallthingz.ui.components.NativeLabeledTextField
-import smallthingz.ui.components.NativeMaterialButtonView
 import smallthingz.ui.components.NativeMenuAccessibilityTestActivity
 import smallthingz.ui.reverb.ReverbDesign
 import smallthingz.ui.reverb.ReverbGlyphView
 import smallthingz.ui.reverb.ReverbIcon
 import smallthingz.ui.reverb.ReverbStandardIconButtonView
+import smallthingz.ui.text.view.ParagraphView
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
@@ -181,6 +180,7 @@ class CredentialFieldGroupIntegrationTest {
                 val clientNode = checkNotNull(client.createAccessibilityNodeInfo())
                 try {
                     assertFalse(clientNode.isEditable)
+                    assertEquals(android.widget.TextView::class.java.name, clientNode.className)
                     assertTrue(clientNode.isPassword)
                     assertFalse(clientNode.actionList.contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_TEXT))
                 } finally {
@@ -312,20 +312,17 @@ class CredentialFieldGroupIntegrationTest {
                         assertTrue(node.isEnabled)
                         assertTrue(node.isClickable)
                     } finally { node.recycle() }
-                    when (control) {
-                        is NativeButtonTouchTarget -> {
-                            assertEquals("Afficher", control.button.label.getText())
-                            assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO, control.importantForAccessibility)
-                            assertTrue(control.filterTouchesWhenObscured)
-                        }
-                        is ReverbStandardIconButtonView -> {
-                            assertTrue(control.filterTouchesWhenObscured)
-                            assertTrue(control.visual.filterTouchesWhenObscured)
-                            assertNull(control.background)
-                            assertNull(control.visual.background)
-                            assertGlyph(control, if (target.action == CredentialFieldAction.COPY) ReverbIcon.Copy else ReverbIcon.Reset)
-                        }
-                    }
+                    assertTrue(control is ReverbStandardIconButtonView)
+                    val icon = control as ReverbStandardIconButtonView
+                    assertTrue(icon.filterTouchesWhenObscured)
+                    assertTrue(icon.visual.filterTouchesWhenObscured)
+                    assertNull(icon.background)
+                    assertNull(icon.visual.background)
+                    assertGlyph(icon, when (target.action) {
+                        CredentialFieldAction.REVEAL -> ReverbIcon.Eye
+                        CredentialFieldAction.COPY -> ReverbIcon.Copy
+                        CredentialFieldAction.REROLL -> ReverbIcon.Reset
+                    })
                     click.performClick()
                 }
                 assertEquals(targets, calls)
@@ -470,9 +467,9 @@ class CredentialFieldGroupIntegrationTest {
                             assertEquals(px(24), icon.visual.glyph.width)
                             assertTrue(icon.left >= 0 && icon.right <= row.width)
                         }
-                        val reveal = controls.first() as NativeButtonTouchTarget
+                        val reveal = controls.first() as ReverbStandardIconButtonView
                         assertEquals(px(48), reveal.height)
-                        assertEquals(px(40), reveal.button.height)
+                        assertEquals(px(40), reveal.visual.height)
                         assertTrue(reveal.width >= px(48))
                     }
                 }
@@ -489,7 +486,8 @@ class CredentialFieldGroupIntegrationTest {
                 group.bind(listOf(CredentialFieldState(Field.CONNECTOR, state.value, revealed = true)),
                     admitted.map { CredentialActionState(it.target, if (it.target.action == CredentialFieldAction.REVEAL) "Hide" else it.label) })
                 assertNull(editor.transformationMethod)
-                assertEquals("Hide", (controls.first() as NativeButtonTouchTarget).button.label.getText())
+                assertEquals("Hide", (controls.first() as ReverbStandardIconButtonView).visual.glyph.contentDescription)
+                assertGlyph(controls.first() as ReverbStandardIconButtonView, ReverbIcon.EyeOff)
                 assertTrue(editor.hasFocus())
                 assertEquals(2, editor.selectionStart)
                 assertEquals(7, editor.selectionEnd)
@@ -523,7 +521,7 @@ class CredentialFieldGroupIntegrationTest {
         lateinit var host: AdmissionHost
         lateinit var field: NativeLabeledTextField
         lateinit var row: LinearLayout
-        lateinit var button: NativeMaterialButtonView
+        lateinit var button: View
         lateinit var retainedText: Editable
         var wide = 0
         var narrow = 0
@@ -539,7 +537,7 @@ class CredentialFieldGroupIntegrationTest {
                 installed.bind(listOf(state), admitted)
                 field = descendants(installed.view).filterIsInstance<NativeLabeledTextField>().single()
                 row = field.trailingHost.getChildAt(0) as LinearLayout
-                button = descendants(row).filterIsInstance<NativeMaterialButtonView>().single()
+                button = (row.getChildAt(0) as ReverbStandardIconButtonView).visual
                 field.editor.showSoftInputOnFocus = false
                 // Record routing without opening an IME or letting a misrouted tap edit the fixture.
                 field.editor.setOnTouchListener { _, event -> editorEvents += event.actionMasked; true }
@@ -590,12 +588,12 @@ class CredentialFieldGroupIntegrationTest {
                         assertTrue(field.editor.hasFocus())
                         assertEquals(2, field.editor.selectionStart)
                         assertEquals(7, field.editor.selectionEnd)
-                        val target = button.parent as NativeButtonTouchTarget
+                        val target = button.parent as ReverbStandardIconButtonView
                         assertEquals(px(48), target.height)
                         assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO, target.importantForAccessibility)
                         assertRevealAccessibilityChild(target, button)
                         assertEquals("Show", button.createAccessibilityNodeInfo()?.contentDescription?.toString())
-                        val icons = descendants(row).filterIsInstance<ReverbStandardIconButtonView>().toList()
+                        val icons = descendants(row).filterIsInstance<ReverbStandardIconButtonView>().drop(1).toList()
                         for ((icon, expected) in icons.zip(listOf(copy, reroll))) {
                             calls.clear(); editorEvents.clear()
                             val bounds = boundsIn(host, icon.visual)
@@ -613,7 +611,7 @@ class CredentialFieldGroupIntegrationTest {
             }
             awaitDraw(host)
             main {
-                val bounds = boundsIn(host, button.parent as NativeButtonTouchTarget)
+                val bounds = boundsIn(host, button.parent as ReverbStandardIconButtonView)
                 calls.clear(); editorEvents.clear()
                 assertTrue(rootTap(host, bounds.exactCenterX(), bounds.top + .5f))
                 assertTrue("Disabled Reveal consumes its target without invoking an action", calls.isEmpty())
@@ -621,12 +619,12 @@ class CredentialFieldGroupIntegrationTest {
                 requireNotNull(group).bind(listOf(state), admitted)
             }
             awaitDraw(host)
-            lateinit var target: NativeButtonTouchTarget
+            lateinit var target: ReverbStandardIconButtonView
             var downTime = 0L
             var pendingX = 0f
             var pendingY = 0f
             main {
-                target = button.parent as NativeButtonTouchTarget
+                target = button.parent as ReverbStandardIconButtonView
                 val bounds = boundsIn(host, target)
                 pendingX = bounds.exactCenterX(); pendingY = bounds.top + .5f
                 downTime = SystemClock.uptimeMillis()
@@ -639,7 +637,7 @@ class CredentialFieldGroupIntegrationTest {
                 dispatchFinger(host, MotionEvent.ACTION_UP, pendingX, pendingY, downTime)
                 assertTrue("Hiding Reveal retires the pending gesture", calls.isEmpty())
                 assertEquals(View.GONE, target.visibility)
-                assertEquals(View.GONE, button.visibility)
+                assertFalse(button.isShown)
                 assertEquals(px(48), row.width)
                 assertSame(row, field.trailingHost.getChildAt(0))
                 assertEquals(1, (0 until row.childCount).count { row.getChildAt(it).visibility == View.VISIBLE })
@@ -665,7 +663,8 @@ class CredentialFieldGroupIntegrationTest {
                 assertTrue(target.isShown)
                 assertFalse(field.editor.isEnabled)
                 assertNull(field.editor.transformationMethod)
-                assertEquals("Hide", button.label.getText())
+                assertEquals("Hide", target.visual.glyph.contentDescription)
+                assertGlyph(target, ReverbIcon.EyeOff)
                 calls.clear(); editorEvents.clear()
                 val bounds = boundsIn(host, target)
                 assertTrue(rootTap(host, bounds.exactCenterX(), bounds.top + .5f))
@@ -908,8 +907,6 @@ class CredentialFieldGroupIntegrationTest {
                 assertEquals(listOf(failures[1]), failure?.suppressed?.toList())
                 assertTrue(fields.all { it.editor.text.isNullOrEmpty() && !it.editor.isEnabled })
                 assertEquals(View.GONE, group.view.visibility)
-                assertTrue(descendants(group.view).filterIsInstance<NativeMaterialButtonView>()
-                    .all { it.visibility == View.GONE })
                 assertTrue(descendants(group.view).filterIsInstance<ReverbStandardIconButtonView>()
                     .all { it.visibility == View.GONE })
                 group.bind(listOf(CredentialFieldState(Field.CONNECTOR, "retired bind"),
@@ -959,13 +956,166 @@ class CredentialFieldGroupIntegrationTest {
         }
     }
 
+    @Test fun revealGlyphUsesFieldStateNotLocalizedActionLabelAndHasNoVisibleText() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.context, NativeMenuAccessibilityTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val reveal = CredentialActionTarget(Field.CONNECTOR, CredentialFieldAction.REVEAL)
+        val calls = mutableListOf<CredentialActionTarget<Field>>()
+        val edits = mutableListOf<String>()
+        lateinit var group: CredentialFieldGroup<Field>
+        var created = false
+        try {
+            instrumentation.runOnMainSync {
+                group = CredentialFieldGroup(activity, ReverbDesign.theme(activity, false).controls,
+                    listOf(CredentialFieldSpec(Field.CONNECTOR, "Credential")), setOf(reveal),
+                    onAction = { calls += it }) { _, value -> edits += value }
+                created = true
+                group.bind(listOf(CredentialFieldState(Field.CONNECTOR, "synthetic-value")),
+                    listOf(CredentialActionState(reveal, "Masquer")))
+                descendants(group.view).filterIsInstance<NativeLabeledTextField>().single()
+                    .editor.showSoftInputOnFocus = false
+                activity.setContentView(group.view)
+            }
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {
+                val editor = descendants(group.view).filterIsInstance<NativeLabeledTextField>().single().editor
+                val action = descendants(group.view).filterIsInstance<ReverbStandardIconButtonView>().single()
+                assertTrue(editor.requestFocus())
+                editor.setSelection(2, 6)
+                val text = editor.text
+                assertFalse(descendants(action).any { it is ParagraphView })
+                for (revealed in listOf(false, true, false)) {
+                    // Deliberately identical localized label: it must not determine the glyph.
+                    group.bind(listOf(CredentialFieldState(Field.CONNECTOR, "synthetic-value", revealed = revealed)),
+                        listOf(CredentialActionState(reveal, "Masquer")))
+                    group.bindTheme(ReverbDesign.theme(activity, revealed).controls)
+                    assertGlyph(action, if (revealed) ReverbIcon.EyeOff else ReverbIcon.Eye)
+                    assertEquals("Masquer", action.visual.glyph.contentDescription)
+                    val node = checkNotNull(action.visual.createAccessibilityNodeInfo())
+                    try { assertEquals("Masquer", node.contentDescription?.toString()) } finally { node.recycle() }
+                    assertEquals(!revealed, editor.transformationMethod is PasswordTransformationMethod)
+                    assertSame(text, editor.text)
+                    assertTrue(editor.hasFocus())
+                    assertEquals(2, editor.selectionStart)
+                    assertEquals(6, editor.selectionEnd)
+                    action.visual.performClick()
+                }
+                assertEquals(listOf(reveal, reveal, reveal), calls)
+                assertTrue(edits.isEmpty())
+                group.close()
+                action.visual.performClick()
+                assertEquals(3, calls.size)
+                assertTrue(editor.text.isNullOrEmpty())
+            }
+        } finally {
+            instrumentation.runOnMainSync { try { if (created) group.close() } finally { activity.finish() } }
+        }
+    }
+
+    private enum class GroupField { FIRST, SECOND, GENERATED, READ_ONLY }
+
+    @Test fun labeledCategoryBreaksKeepIncidentGeometryAndReadOnlyCopySemantics() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.context, NativeMenuAccessibilityTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val copy = CredentialActionTarget(GroupField.READ_ONLY, CredentialFieldAction.COPY)
+        val calls = mutableListOf<CredentialActionTarget<GroupField>>()
+        val edits = mutableListOf<String>()
+        lateinit var group: CredentialFieldGroup<GroupField>
+        var created = false
+        try {
+            instrumentation.runOnMainSync {
+                group = CredentialFieldGroup(activity, ReverbDesign.theme(activity, false).controls, listOf(
+                    CredentialFieldSpec(GroupField.FIRST, "First", groupLabel = "Manual inputs"),
+                    CredentialFieldSpec(GroupField.SECOND, "Second"),
+                    CredentialFieldSpec(GroupField.GENERATED, "Generated", editable = false,
+                        startsGroup = true, groupLabel = "Generate"),
+                    CredentialFieldSpec(GroupField.READ_ONLY, "Address", keyboard = CredentialKeyboard.URI,
+                        editable = false, startsGroup = true, groupLabel = "Read-only")),
+                    setOf(copy), onAction = { calls += it }) { _, value -> edits += value }
+                created = true
+                group.bind(GroupField.values().map {
+                    CredentialFieldState(it, "synthetic-" + it.name,
+                        supportingText = if (it == GroupField.READ_ONLY) "Lecture seule" else null)
+                }, listOf(CredentialActionState(copy, "Copier")))
+                descendants(group.view).filterIsInstance<NativeLabeledTextField>().forEach {
+                    it.editor.showSoftInputOnFocus = false
+                }
+                activity.setContentView(group.view)
+            }
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {
+                val host = group.view as LinearLayout
+                val groups = (0 until host.childCount).map { host.getChildAt(it) as NativeGroupLayout }
+                val fields = descendants(host).filterIsInstance<NativeLabeledTextField>().toList()
+                val first = fields.first().editor
+                assertTrue(first.requestFocus())
+                first.setSelection(1, 4)
+                val text = first.text
+                val labels = listOf("Manual inputs", "Generate", "Read-only")
+                for (dark in listOf(false, true)) {
+                    group.bindTheme(ReverbDesign.theme(activity, dark).controls)
+                    val density = activity.resources.displayMetrics.density
+                    host.measure(View.MeasureSpec.makeMeasureSpec((320f * density).roundToInt(), View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+                    host.layout(0, 0, host.measuredWidth, host.measuredHeight)
+                    assertEquals(3, groups.size)
+                    assertEquals(0, groups.first().top)
+                    assertEquals(host.height, groups.last().bottom)
+                    for ((left, right) in groups.zipWithNext()) assertEquals((2f * density).roundToInt(), right.top - left.bottom)
+                    for ((index, surface) in groups.withIndex()) {
+                        assertEquals(index != 0, surface.containsVisualPoint(.5f, .5f))
+                        assertEquals(index != groups.lastIndex, surface.containsVisualPoint(.5f, surface.height - .5f))
+                        val heading = surface.pointerContent.getChildAt(0) as ParagraphView
+                        assertEquals(labels[index], heading.getText())
+                        assertEquals((12f * density).roundToInt(), heading.paddingStart)
+                        assertEquals((8f * density).roundToInt(), heading.paddingTop)
+                        assertEquals((5f * density).roundToInt(), heading.paddingBottom)
+                        val node = checkNotNull(heading.createAccessibilityNodeInfo())
+                        try { if (Build.VERSION.SDK_INT >= 28) assertTrue(node.isHeading) } finally { node.recycle() }
+                    }
+                    assertSame(text, first.text)
+                    assertTrue(first.hasFocus())
+                    assertEquals(1, first.selectionStart)
+                    assertEquals(4, first.selectionEnd)
+                    assertEquals(fields[1].editor.id, first.nextFocusForwardId)
+                    assertEquals(View.NO_ID, fields[1].editor.nextFocusForwardId)
+                    val readOnly = fields.last().editor
+                    val node = checkNotNull(readOnly.createAccessibilityNodeInfo())
+                    try {
+                        assertEquals(android.widget.TextView::class.java.name, node.className)
+                        assertFalse(node.isEditable)
+                        assertFalse(node.isFocusable)
+                        assertFalse(node.actionList.contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_TEXT))
+                    } finally { node.recycle() }
+                    assertNull(readOnly.keyListener)
+                    assertFalse(readOnly.requestFocus())
+                    assertFalse(readOnly.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                        putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "rejected")
+                    }))
+                    assertTrue(descendants(fields.last()).filterIsInstance<ParagraphView>().any { it.getText() == "Lecture seule" })
+                    val action = descendants(fields.last()).filterIsInstance<ReverbStandardIconButtonView>().single()
+                    action.visual.performClick()
+                }
+                assertEquals(listOf(copy, copy), calls)
+                assertTrue(edits.isEmpty())
+                group.close()
+                assertTrue(fields.all { it.editor.text.isNullOrEmpty() })
+            }
+        } finally {
+            instrumentation.runOnMainSync { try { if (created) group.close() } finally { activity.finish() } }
+        }
+    }
+
     private fun clickTarget(view: View): View = when (view) {
-        is NativeButtonTouchTarget -> view.button
         is ReverbStandardIconButtonView -> view.visual
         else -> view
     }
 
-    private fun assertRevealAccessibilityChild(target: NativeButtonTouchTarget, button: NativeMaterialButtonView) {
+    private fun assertRevealAccessibilityChild(target: ReverbStandardIconButtonView, button: View) {
         assertTrue(button.filterTouchesWhenObscured)
         if (Build.VERSION.SDK_INT >= 34) {
             // Android infers sensitive accessibility data from obscured-touch protection. A direct

@@ -38,7 +38,9 @@ enum class MaterialRoundedIcon(val autoMirrored: Boolean = false) {
     Add,
     Devices,
     LightMode,
-    DarkMode;
+    DarkMode,
+    Visibility,
+    VisibilityOff;
 
     val mask: NativePathIconMask by lazy { MaterialRoundedPaths.mask(this) }
 }

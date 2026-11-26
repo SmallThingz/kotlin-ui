@@ -10,14 +10,21 @@ import android.text.TextWatcher
 import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
 import android.view.View
+import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.core.view.ViewCompat
 import androidx.annotation.MainThread
-import smallthingz.ui.components.NativeButtonTouchTarget
 import smallthingz.ui.components.NativeLabeledTextField
-import smallthingz.ui.components.NativeMaterialButtonView
+import smallthingz.ui.components.NativeGroupEdges
+import smallthingz.ui.components.NativeGroupLayout
+import smallthingz.ui.text.NativeTypographyRole
+import smallthingz.ui.text.font.FontWeight
+import smallthingz.ui.text.view.ParagraphView
+import kotlin.math.roundToInt
 import smallthingz.ui.components.acceptsNativeInput
 import smallthingz.ui.reverb.ReverbEnvironment
 import smallthingz.ui.reverb.ReverbIcon
@@ -35,9 +42,14 @@ class CredentialFieldSpec<ID : Enum<ID>>(
     val editable: Boolean = true,
     /** Editor limit, including any extra character used by callers to detect length overflow. */
     val maxInputLength: Int? = null,
+    /** A 2dp incident-style break before this field; the first field always begins a group. */
+    val startsGroup: Boolean = false,
+    /** Optional public category heading, allowed only on the first field of a subgroup. */
+    val groupLabel: String? = null,
 ) {
     init {
         require(maxInputLength == null || maxInputLength > 0)
+        require(groupLabel == null || groupLabel.isNotBlank())
     }
 }
 
@@ -79,12 +91,15 @@ class CredentialFieldGroup<ID : Enum<ID>>(
     private var editCallback: ((ID, String) -> Unit)? = onEdit
     private var actionCallback: ((CredentialActionTarget<ID>) -> Unit)? = onAction
     private var actionStates = emptyMap<CredentialActionTarget<ID>, CredentialActionState<ID>>()
+    // Retain only reveal flags; never duplicate authoritative credential values.
+    private var revealedFields = emptySet<ID>()
     private var iconEnvironment = ReverbEnvironment(theme.density, theme.fontResolver, theme.colors)
 
     init {
         val ids = fields.map { it.id }.toSet()
         require(ids.isNotEmpty() && ids.size == fields.size)
         require(actions.all { it.field in ids })
+        require(this.fields.drop(1).all { it.groupLabel == null || it.startsGroup })
     }
 
     private val editors = this.fields.associate { spec ->
@@ -109,8 +124,14 @@ class CredentialFieldGroup<ID : Enum<ID>>(
                     accessibilityDelegate = object : View.AccessibilityDelegate() {
                         override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
                             super.onInitializeAccessibilityNodeInfo(host, info)
+                            info.className = TextView::class.java.name
                             info.isEditable = false
                             info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_TEXT)
+                        }
+
+                        override fun onInitializeAccessibilityEvent(host: View, event: AccessibilityEvent) {
+                            super.onInitializeAccessibilityEvent(host, event)
+                            event.className = TextView::class.java.name
                         }
 
                         override fun performAccessibilityAction(host: View, action: Int, arguments: Bundle?): Boolean =
@@ -144,60 +165,83 @@ class CredentialFieldGroup<ID : Enum<ID>>(
             }
         }
     }
-    private val joined = recipe.createGroup(context, theme.colors, *editors.values.toTypedArray())
-    private val buttons = actions.sortedWith(compareBy({ it.field.ordinal }, { it.action.ordinal })).associateWith { target ->
-        val button: View = when (target.action) {
-            CredentialFieldAction.REVEAL -> NativeMaterialButtonView(
-                context, theme.appearance.buttons.neutralText, theme.density, theme.fontResolver,
-            ) { dispatchAction(target) }
-            CredentialFieldAction.COPY, CredentialFieldAction.REROLL -> ReverbStandardIconButtonView(
-                context, iconEnvironment, { joined.view },
-            ).apply {
-                visual.filterTouchesWhenObscured = true
-                visual.mergedRowAccessibility.enableStandaloneAccessibility({ !closed }) {
-                    visual.glyph.contentDescription
-                }
+    private val fieldGroups = buildList<MutableList<CredentialFieldSpec<ID>>> {
+        for (spec in this@CredentialFieldGroup.fields) {
+            if (isEmpty() || spec.startsGroup) add(mutableListOf())
+            last().add(spec)
+        }
+    }
+    private val joined = fieldGroups.map { specs ->
+        recipe.createGroup(context, theme.colors, *specs.map { editors.getValue(it.id) }.toTypedArray())
+    }
+    private val headings = fieldGroups.mapIndexed { index, specs ->
+        specs.first().groupLabel?.let { label ->
+            ParagraphView(context, theme.appearance.typography[NativeTypographyRole.BODY_MEDIUM]
+                .copy(fontWeight = FontWeight.SemiBold), theme.density, theme.fontResolver, theme.colors.ink).apply {
+                setText(label)
+                ViewCompat.setAccessibilityHeading(this, true)
+                joined[index].view.addRow(0, this, NativeGroupLayout.LayoutParams(-1, -2))
+                (editors.getValue(specs.first().id).layoutParams as NativeGroupLayout.LayoutParams).dividerTop = true
             }
         }
-        button.apply {
+    }
+    val view: View = if (joined.size == 1) joined.single().view else LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        isBaselineAligned = false
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        for (group in joined) addView(group.view, LinearLayout.LayoutParams(-1, -2))
+    }
+    private val buttons = actions.sortedWith(compareBy({ it.field.ordinal }, { it.action.ordinal })).associateWith { target ->
+        ReverbStandardIconButtonView(context, iconEnvironment, { view }).apply {
+            visual.filterTouchesWhenObscured = true
+            visual.mergedRowAccessibility.enableStandaloneAccessibility({ !closed }) {
+                visual.glyph.contentDescription
+            }
             visibility = View.GONE
             filterTouchesWhenObscured = true
         }
-    }
-    private val actionHosts = buttons.mapValues { (_, button) ->
-        if (button is NativeMaterialButtonView) NativeButtonTouchTarget(button).apply {
-            visibility = button.visibility
-            filterTouchesWhenObscured = true
-        } else button
     }
     private val trailingRows = buttons.entries.groupBy { it.key.field }.mapValues { (_, entries) ->
         object : LinearLayout(context) {
             override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
                 super.onWindowFocusChanged(hasWindowFocus)
-                if (!hasWindowFocus) for ((_, button) in entries) {
-                    when (button) {
-                        is NativeMaterialButtonView -> button.cancelInput()
-                        is ReverbStandardIconButtonView -> button.cancelInput()
-                    }
-                }
+                if (!hasWindowFocus) for ((_, button) in entries) button.cancelInput()
             }
         }.apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             isBaselineAligned = false
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            for ((target, button) in entries) {
-                // Constrain a long Show/Hide label before shrinking the standard icon footprints.
-                // Its canonical target owns the 48dp strip around the intrinsic 40dp button,
-                // before the field's fallback touch delegate can route that strip to the editor.
-                addView(actionHosts.getValue(target),
-                    LinearLayout.LayoutParams(-2, -2, if (button is NativeMaterialButtonView) 1f else 0f))
+            for ((_, button) in entries) addView(button, LinearLayout.LayoutParams(-2, -2))
+        }
+    }
+
+    private fun bindGroupGeometry() {
+        for (heading in headings) heading?.apply {
+            setTypography(theme.appearance.typography[NativeTypographyRole.BODY_MEDIUM]
+                .copy(fontWeight = FontWeight.SemiBold), theme.density, theme.fontResolver)
+            setTextColor(theme.colors.ink)
+            val horizontal = (12f * theme.density.density).roundToInt()
+            setPaddingRelative(horizontal, (8f * theme.density.density).roundToInt(),
+                horizontal, (5f * theme.density.density).roundToInt())
+        }
+        if (joined.size == 1) return
+        val gap = (2f * theme.density.density).roundToInt()
+        for ((index, group) in joined.withIndex()) {
+            // Reverb incident topic breaks: solid square caps inside, rounded outside ends.
+            group.view.setJoinedEdges(NativeGroupEdges(first = index == 0, last = index == joined.lastIndex,
+                squareTop = index > 0, squareBottom = index < joined.lastIndex))
+            val params = group.view.layoutParams as LinearLayout.LayoutParams
+            val margin = if (index == 0) 0 else gap
+            if (params.topMargin != margin) {
+                params.topMargin = margin
+                group.view.layoutParams = params
             }
         }
     }
-    val view: View = joined.view
 
     init {
+        bindGroupGeometry()
         val ordered = this.fields.filter { it.editable }.map { editors.getValue(it.id) }
         for ((index, field) in ordered.withIndex()) {
             val next = ordered.getOrNull(index + 1)?.editor
@@ -223,6 +267,7 @@ class CredentialFieldGroup<ID : Enum<ID>>(
             binding = false
         }
 
+        revealedFields = states.filter { it.revealed }.mapTo(mutableSetOf()) { it.id }
         actionStates = byAction
         for ((action, button) in buttons) bindAction(action, button, byAction[action])
         for ((id, row) in trailingRows) {
@@ -234,9 +279,9 @@ class CredentialFieldGroup<ID : Enum<ID>>(
         if (closed || this.theme === theme) return
         this.theme = theme
         iconEnvironment = ReverbEnvironment(theme.density, theme.fontResolver, theme.colors)
-        joined.bindPalette(theme.colors)
+        for (group in joined) group.bindPalette(theme.colors)
+        bindGroupGeometry()
         for ((action, button) in buttons) {
-            if (button is NativeMaterialButtonView) button.bindTypography(theme.density, theme.fontResolver)
             bindAction(action, button, actionStates[action])
         }
     }
@@ -253,6 +298,7 @@ class CredentialFieldGroup<ID : Enum<ID>>(
         editCallback = null
         actionCallback = null
         actionStates = emptyMap()
+        revealedFields = emptySet()
         // Host focus/text callbacks may throw or reenter close. Retirement is terminal,
         // but every remaining field/action must still release its retained state.
         var failure = closePreservingPrimaryFailure(null, ::dismissKeyboard)
@@ -266,8 +312,7 @@ class CredentialFieldGroup<ID : Enum<ID>>(
         for ((action, button) in buttons) {
             failure = closePreservingPrimaryFailure(failure) { bindAction(action, button, null) }
             failure = closePreservingPrimaryFailure(failure) {
-                if (button is NativeMaterialButtonView) button.close()
-                if (button is ReverbStandardIconButtonView) button.cancelInput()
+                button.cancelInput()
             }
         }
         failure = closePreservingPrimaryFailure(failure) { view.visibility = View.GONE }
@@ -289,20 +334,18 @@ class CredentialFieldGroup<ID : Enum<ID>>(
     private fun canDispatchEdit(editor: View) =
         !closed && !binding && editor.isEnabled && editor.isAttachedToWindow && editor.isShown
 
-    private fun bindAction(target: CredentialActionTarget<ID>, button: View, state: CredentialActionState<ID>?) {
+    private fun bindAction(target: CredentialActionTarget<ID>, button: ReverbStandardIconButtonView,
+        state: CredentialActionState<ID>?) {
         val enabled = !closed && state?.enabled == true
         button.visibility = if (state == null) View.GONE else View.VISIBLE
-        actionHosts.getValue(target).visibility = button.visibility
-        when (button) {
-            is NativeMaterialButtonView -> button.bind(state?.label.orEmpty(), enabled, theme.colors.buttonPalette)
-            is ReverbStandardIconButtonView -> {
-                if (!enabled) button.cancelInput()
-                button.bind(
-                    iconEnvironment,
-                    if (target.action == CredentialFieldAction.COPY) ReverbIcon.Copy else ReverbIcon.Reset,
-                    state?.label.orEmpty(), enabled, theme.colors.muted, theme.colors.ink,
-                ) { dispatchAction(target) }
-            }
+        if (!enabled) button.cancelInput()
+        val icon = when (target.action) {
+            CredentialFieldAction.REVEAL -> if (target.field in revealedFields) ReverbIcon.EyeOff else ReverbIcon.Eye
+            CredentialFieldAction.COPY -> ReverbIcon.Copy
+            CredentialFieldAction.REROLL -> ReverbIcon.Reset
+        }
+        button.bind(iconEnvironment, icon, state?.label.orEmpty(), enabled, theme.colors.muted, theme.colors.ink) {
+            dispatchAction(target)
         }
     }
 

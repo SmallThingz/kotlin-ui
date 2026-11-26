@@ -41,7 +41,9 @@ enum class ReverbIcon(
     ArrowDropDown(MaterialRoundedIcon.ArrowDropDown),
     Add(MaterialRoundedIcon.Add),
     GitHub,
-    Browser;
+    Browser,
+    Eye(MaterialRoundedIcon.Visibility),
+    EyeOff(MaterialRoundedIcon.VisibilityOff);
 
     val mask: NativePathIconMask by lazy { ReverbIconPaths.mask(this) }
 }

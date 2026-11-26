@@ -10,6 +10,8 @@ class MaterialRoundedIconTest {
         assertEquals(MaterialRoundedIcon.Warning, ReverbIcon.Incidents.materialIcon)
         assertEquals(MaterialRoundedIcon.ContentCut, ReverbIcon.Trim.materialIcon)
         assertEquals(MaterialRoundedIcon.GraphicEq, ReverbIcon.Capture.materialIcon)
+        assertEquals(MaterialRoundedIcon.Visibility, ReverbIcon.Eye.materialIcon)
+        assertEquals(MaterialRoundedIcon.VisibilityOff, ReverbIcon.EyeOff.materialIcon)
         assertEquals(
             setOf(MaterialRoundedIcon.ArrowBack, MaterialRoundedIcon.FormatListBulleted, MaterialRoundedIcon.Undo),
             MaterialRoundedIcon.entries.filter { it.autoMirrored }.toSet(),
@@ -25,6 +27,6 @@ class MaterialRoundedIconTest {
             setOf(ReverbIcon.OneShot, ReverbIcon.ExportRange, ReverbIcon.GitHub, ReverbIcon.Browser),
             ReverbIcon.entries.filter { it.materialIcon == null }.toSet(),
         )
-        assertEquals(30, MaterialRoundedIcon.entries.size)
+        assertEquals(32, MaterialRoundedIcon.entries.size)
     }
 }

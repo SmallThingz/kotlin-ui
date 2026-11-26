@@ -56,6 +56,8 @@ internal object MaterialRoundedPaths {
         MaterialRoundedIcon.Devices -> NativePathIconMask(themeSystemPath0)
         MaterialRoundedIcon.LightMode -> NativePathIconMask(themeLightPath0)
         MaterialRoundedIcon.DarkMode -> NativePathIconMask(themeDarkPath0)
+        MaterialRoundedIcon.Visibility -> NativePathIconMask(visibilityPath)
+        MaterialRoundedIcon.VisibilityOff -> NativePathIconMask(visibilityOffPath)
     }
 
     private val settingsPath0: Path by lazy {
@@ -1066,6 +1068,72 @@ internal object MaterialRoundedPaths {
             rCubicTo(-2.98000002f, 0.0f, -5.4000001f, -2.42000008f, -5.4000001f, -5.4000001f)
             rCubicTo(0.0f, -1.05999994f, 0.310000002f, -2.05999994f, 0.839999974f, -2.8900001f)
             cubicTo(12.3900003f, 3.94000006f, 11.8999996f, 2.98000002f, 11.0100002f, 3.04999995f)
+            close()
+        }
+    }
+
+    private val visibilityPath: Path by lazy {
+        Path().apply {
+            fillType = Path.FillType.WINDING
+            moveTo(12f, 4f)
+            cubicTo(7f, 4f, 2.73000002f, 7.11000013f, 1f, 11.5f)
+            cubicTo(2.73000002f, 15.8900003f, 7f, 19f, 12f, 19f)
+            rCubicTo(5f, 0f, 9.27000046f, -3.1099999f, 11f, -7.5f)
+            cubicTo(21.2700005f, 7.11000013f, 17f, 4f, 12f, 4f)
+            close()
+            moveTo(12f, 16.5f)
+            rCubicTo(-2.75999999f, 0f, -5f, -2.24000001f, -5f, -5f)
+            rCubicTo(0f, -2.76000023f, 2.24000001f, -5f, 5f, -5f)
+            rCubicTo(2.76000023f, 0f, 5f, 2.24000001f, 5f, 5f)
+            rCubicTo(0f, 2.76000023f, -2.24000001f, 5f, -5f, 5f)
+            close()
+            moveTo(12f, 8.5f)
+            rCubicTo(-1.65999997f, 0f, -3f, 1.34000003f, -3f, 3f)
+            rCubicTo(0f, 1.65999985f, 1.34000003f, 3f, 3f, 3f)
+            rCubicTo(1.65999985f, 0f, 3f, -1.34000003f, 3f, -3f)
+            rCubicTo(0f, -1.65999985f, -1.34000003f, -3f, -3f, -3f)
+            close()
+        }
+    }
+
+    private val visibilityOffPath: Path by lazy {
+        Path().apply {
+            fillType = Path.FillType.WINDING
+            moveTo(12f, 6.5f)
+            rCubicTo(2.75999999f, 0f, 5f, 2.24000001f, 5f, 5f)
+            rCubicTo(0f, 0.50999999f, -0.100000001f, 1f, -0.239999995f, 1.46000004f)
+            rLineTo(3.05999994f, 3.05999994f)
+            rCubicTo(1.38999999f, -1.23000002f, 2.49000001f, -2.76999998f, 3.18000007f, -4.53000021f)
+            cubicTo(21.2700005f, 7.11000013f, 17f, 4f, 12f, 4f)
+            rCubicTo(-1.26999998f, 0f, -2.49000001f, 0.200000003f, -3.6400001f, 0.569999993f)
+            rLineTo(2.17000008f, 2.17000008f)
+            rCubicTo(0.469999999f, -0.140000001f, 0.959999979f, -0.239999995f, 1.47000003f, -0.239999995f)
+            close()
+            moveTo(2.71000004f, 3.16000009f)
+            rCubicTo(-0.389999986f, 0.389999986f, -0.389999986f, 1.01999998f, 0f, 1.40999997f)
+            rLineTo(1.97000003f, 1.97000003f)
+            cubicTo(3.05999994f, 7.82999992f, 1.76999998f, 9.52999973f, 1f, 11.5f)
+            cubicTo(2.73000002f, 15.8900003f, 7f, 19f, 12f, 19f)
+            rCubicTo(1.51999998f, 0f, 2.97000003f, -0.300000012f, 4.30999994f, -0.819999993f)
+            rLineTo(2.72000003f, 2.72000003f)
+            rCubicTo(0.389999986f, 0.389999986f, 1.01999998f, 0.389999986f, 1.40999997f, 0f)
+            rCubicTo(0.389999986f, -0.389999986f, 0.389999986f, -1.01999998f, 0f, -1.40999997f)
+            lineTo(4.13000011f, 3.16000009f)
+            rCubicTo(-0.389999986f, -0.389999986f, -1.02999997f, -0.389999986f, -1.41999996f, 0f)
+            close()
+            moveTo(12f, 16.5f)
+            rCubicTo(-2.75999999f, 0f, -5f, -2.24000001f, -5f, -5f)
+            rCubicTo(0f, -0.769999981f, 0.180000007f, -1.5f, 0.49000001f, -2.1400001f)
+            rLineTo(1.57000005f, 1.57000005f)
+            rCubicTo(-0.0299999993f, 0.180000007f, -0.0599999987f, 0.370000005f, -0.0599999987f, 0.569999993f)
+            rCubicTo(0f, 1.65999997f, 1.34000003f, 3f, 3f, 3f)
+            rCubicTo(0.200000003f, 0f, 0.379999995f, -0.0299999993f, 0.569999993f, -0.0700000003f)
+            lineTo(14.1400003f, 16f)
+            rCubicTo(-0.649999976f, 0.319999993f, -1.37f, 0.5f, -2.1400001f, 0.5f)
+            close()
+            moveTo(14.9700003f, 11.1700001f)
+            rCubicTo(-0.150000006f, -1.39999998f, -1.25f, -2.49000001f, -2.6400001f, -2.6400001f)
+            rLineTo(2.6400001f, 2.6400001f)
             close()
         }
     }
