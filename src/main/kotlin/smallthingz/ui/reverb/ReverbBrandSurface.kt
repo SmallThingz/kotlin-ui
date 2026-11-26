@@ -6,26 +6,23 @@ import androidx.annotation.MainThread
 import smallthingz.ui.R
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeDarkSurfacePreset
-import smallthingz.ui.components.NativeGroupSurfaceRecipes
-import smallthingz.ui.components.NativeLayeredMarkPalette
 import kotlin.math.roundToInt
 
-/** Use the Library recording-info foreground from the same resolved palette as the host. */
+/** Add the shared thin control outline to the circular toolbar mark. */
 @MainThread
-fun ReverbBrandMarkView.bindReverbBrandSurface(palette: NativeColorScheme) {
-    bindMarkPlate(
-        NativeLayeredMarkPalette(
-            NativeGroupSurfaceRecipes.Default.recordingInfoRow.fillColor(palette),
-            palette.primary,
-            palette.ink,
-        ),
-        ((palette.surfacePreset?.foregroundGrain ?: 0f) * 255f).roundToInt(),
-        createReverbBrandGrain,
-    )
+fun ReverbBrandMarkView.setReverbBrandOutline(enabled: Boolean) {
+    val preset = NativeDarkSurfacePreset.Amoled
+    setMarkPlateOutline(preset.borderColor, if (enabled) preset.borderWidthDp else 0f)
 }
 
+/** The legacy bind retains the fixed dark brand palette when an older host supplies a window palette. */
+@Deprecated("The mark uses fixed dark brand resources. Call refreshResourcePalette() to reload the artwork colors.")
+@MainThread
+@Suppress("UNUSED_PARAMETER")
+fun ReverbBrandMarkView.bindReverbBrandSurface(palette: NativeColorScheme) = refreshResourcePalette()
+
 internal fun ReverbBrandMarkView.bindDefaultReverbBrandSurface() {
-    bindMarkPlate(null, (NativeDarkSurfacePreset.Amoled.foregroundGrain * 255f).roundToInt(), createReverbBrandGrain)
+    bindMarkGrain((NativeDarkSurfacePreset.Amoled.foregroundGrain * 255f).roundToInt(), createReverbBrandGrain)
 }
 
 // The unqualified nodpi bitmap has one configuration-independent pixel tile. Keep its

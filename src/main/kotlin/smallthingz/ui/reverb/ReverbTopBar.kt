@@ -133,7 +133,7 @@ class ReverbTopBar(
         val product = center is ReverbTopBarCenterContent.Product
         this.start.bind(theme, start, product)
         this.end.bind(theme, end, product)
-        mark.bindReverbBrandSurface(theme.palette)
+        mark.refreshResourcePalette()
         if (center == null) {
             if (centerView !== mark) {
                 slots.removeView(centerView)

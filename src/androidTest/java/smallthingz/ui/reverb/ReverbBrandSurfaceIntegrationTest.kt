@@ -4,8 +4,10 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.os.Build
 import android.view.View
+import androidx.core.graphics.ColorUtils
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertArrayEquals
@@ -15,20 +17,24 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.R
 import smallthingz.ui.components.NativeColorScheme
+import smallthingz.ui.components.NativeDarkSurfacePreset
 import smallthingz.ui.components.NativeDefaultColorScheme
-import smallthingz.ui.components.NativeGrainPreset
 import smallthingz.ui.components.NativeGroupSurfaceRecipes
 import smallthingz.ui.components.NativeLayeredMarkPalette
+import smallthingz.ui.geometry.roundedGroupGeometry
 
 @RunWith(AndroidJUnit4::class)
 class ReverbBrandSurfaceIntegrationTest {
-    @Test fun defaultMarkAndLauncherPlatePaintTheSameSharedSurfaceInDayAndNight() = onMain { context ->
-        for (dark in listOf(false, true)) {
-            val themed = context.withNightMode(dark)
-            val palette = colors(themed, dark)
+    @Test fun defaultMarkAndLauncherPlateStayDarkInDayAndNight() = onMain { context ->
+        for (night in listOf(false, true)) {
+            val themed = context.withNightMode(night)
+            val palette = colors(themed, dark = true)
             val fill = NativeGroupSurfaceRecipes.Default.recordingInfoRow.fillColor(palette)
             assertEquals(NativeLayeredMarkPalette(fill, palette.primary, palette.ink), readReverbBrandPalette(themed))
+            assertTrue(ColorUtils.calculateContrast(palette.ink, fill) >= 4.5)
+            assertTrue(ColorUtils.calculateContrast(palette.primary, fill) >= 4.5)
             val mark = renderMark(ReverbBrandMarkView(themed))
+            assertEquals(palette.ink, mark[MAIN_STROKE_PIXEL])
             val launcher = render {
                 checkNotNull(themed.getDrawable(R.drawable.reverb_brand_plate)).apply {
                     setBounds(0, 0, SIZE, SIZE)
@@ -41,34 +47,42 @@ class ReverbBrandSurfaceIntegrationTest {
         }
     }
 
-    @Test fun explicitWindowPaintOverridesOppositeResourceConfigurationInBothDirections() = onMain { context ->
-        for (dark in listOf(false, true)) {
-            val themed = context.withNightMode(dark)
-            val palette = colors(themed, dark)
-            val defaultMark = renderMark(ReverbBrandMarkView(themed))
-            val boundMark = ReverbBrandMarkView(context.withNightMode(!dark)).apply {
-                bindReverbBrandSurface(palette)
-                refreshResourcePalette()
-            }
-            assertArrayEquals(defaultMark, renderMark(boundMark))
+    @Suppress("DEPRECATION")
+    @Test fun legacyWindowPaletteCannotRecolorTheFixedDarkMark() = onMain { context ->
+        for (night in listOf(false, true)) {
+            val mark = ReverbBrandMarkView(context.withNightMode(night))
+            val fixed = renderMark(mark)
+            mark.bindReverbBrandSurface(colors(context.withNightMode(!night), dark = !night))
+            assertArrayEquals(fixed, renderMark(mark))
         }
     }
 
-    @Test fun aGrainOnlyRebindUpdatesThePlateAndPreservesTheGlyph() = onMain { context ->
-        val themed = context.withNightMode(true)
-        val palette = colors(themed, dark = true)
-        val mark = ReverbBrandMarkView(themed)
-        val textured = renderMark(mark)
-        mark.bindReverbBrandSurface(palette.copy(surfacePreset = NativeGrainPreset(0f, 0f)))
-        val flat = renderMark(mark)
-        assertTrue(platePixels(flat).all { it == palette.surfaceContainerHighest })
-        assertTrue(platePixels(textured).any { it != palette.surfaceContainerHighest })
-        // This pixel is in the interior of the opaque main stroke.
-        val mainStroke = 62 * SIZE + 43
-        assertEquals(palette.ink, textured[mainStroke])
-        assertEquals(textured[mainStroke], flat[mainStroke])
-        mark.bindReverbBrandSurface(palette)
-        assertArrayEquals(textured, renderMark(mark))
+    @Test fun homeOutlineUsesTheSharedButtonStrokeAndLeavesTheGlyphIntact() = onMain { context ->
+        val preset = NativeDarkSurfacePreset.Amoled
+        for (night in listOf(false, true)) {
+            val themed = context.withNightMode(night)
+            val mark = ReverbBrandMarkView(themed)
+            val plain = renderMark(mark)
+            mark.setReverbBrandOutline(true)
+            val outlined = renderMark(mark)
+
+            val density = themed.resources.displayMetrics.density
+            val diameter = SIZE.toFloat()
+            val stroke = roundedGroupGeometry(
+                diameter, diameter, density, diameter / (2f * density), preset.borderWidthDp,
+            ).strokeWidth.toInt()
+            val lastRimPixel = (stroke - 1) * SIZE + SIZE / 2
+            val insideRim = (stroke + 1) * SIZE + SIZE / 2
+            assertEquals(Color.TRANSPARENT, outlined[0])
+            assertTrue(plain[lastRimPixel] != preset.borderColor)
+            assertEquals(preset.borderColor, outlined[lastRimPixel])
+            assertEquals(plain[insideRim], outlined[insideRim])
+            assertArrayEquals(platePixels(plain), platePixels(outlined))
+            assertEquals(plain[MAIN_STROKE_PIXEL], outlined[MAIN_STROKE_PIXEL])
+
+            mark.setReverbBrandOutline(false)
+            assertArrayEquals(plain, renderMark(mark))
+        }
     }
 
     private fun colors(context: Context, dark: Boolean): NativeColorScheme =
@@ -113,5 +127,6 @@ class ReverbBrandSurfaceIntegrationTest {
 
     private companion object {
         const val SIZE = 128
+        const val MAIN_STROKE_PIXEL = 62 * SIZE + 43
     }
 }

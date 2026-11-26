@@ -93,7 +93,7 @@ internal class ReverbIdentityMarkView(context: Context) : FrameLayout(context) {
             if (value !is ReverbProductIdentity.Launcher) launcherConfiguration = null
         }
         if (value is ReverbProductIdentity.Launcher) refreshLauncherArtwork(value, force = changed)
-        if (value == ReverbProductIdentity.Reverb) reverb.bindReverbBrandSurface(palette)
+        if (value == ReverbProductIdentity.Reverb) reverb.refreshResourcePalette()
         monochrome.imageTintList = null
         if (value is ReverbProductIdentity.Monochrome) {
             monochrome.setColorFilter(ReverbDesign.appearance.toolbars.contentColor(palette))

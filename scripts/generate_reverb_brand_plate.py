@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export the shared recording-info colors and a small raw grain tile for Android drawables."""
+"""Export the dark recording-info colors and a small raw grain tile for Android drawables."""
 
 import argparse
 import math
@@ -40,7 +40,6 @@ def exported_colors(scheme, dark_surfaces, recipe, preset, defaults, groups):
     require_pattern(r"recordingInfoRow: NativeGroupSurfaceRecipe = NativeGroupSurfaceRecipe\([^\n]*NativeGroupFill\.HIGHEST", groups)
     require_pattern(r"HIGHEST -> colors\.surfaceContainerHighest", groups)
     require_pattern(r"val ink: Int get\(\) = onSurface", scheme)
-    require_pattern(r"NativeGrainPreset\(backgroundGrain, foregroundGrain\)", defaults)
     require_pattern(r"darkColors = NativeDarkSurfacePreset\.Amoled\.colorScheme\(\)", defaults)
     require_pattern(r"val Amoled = NativeDarkSurfacePreset\(NativeDarkSurfaces\.AMOLED,", preset)
     require_pattern(r"foregroundLightness = NativeDarkSurfaceRecipe\.amoledForegroundLightness", preset)
@@ -69,19 +68,20 @@ def exported_colors(scheme, dark_surfaces, recipe, preset, defaults, groups):
         name = require_pattern(rf"^\s*{role} = readColor\(android\.R\.color\.(\w+)\),", block)[1]
         return f"@android:color/{name}"
 
-    light_fallback, dark_fallback = scheme.split("private val LIGHT = ", 1)[1].split("private val DARK = ", 1)
+    dark_fallback = scheme.split("private val DARK = ", 1)[1]
     api34, api31 = scheme.split("private fun dynamic34(", 1)[1].split("private fun dynamic31(", 1)
     day_branch = ") else NativeColorScheme.fallback(false).copy("
-    night34, day34 = api34.split(day_branch, 1)
-    night31, day31 = api31.split(day_branch, 1)
+    night34, _ = api34.split(day_branch, 1)
+    night31, _ = api31.split(day_branch, 1)
+    fallback_colors = (dark_fill, fallback(dark_fallback, "onSurface"), fallback(dark_fallback, "primary"))
     colors = {
-        "values": (fallback(light_fallback, "surfaceContainerHighest"),
-                   fallback(light_fallback, "onSurface"), fallback(light_fallback, "primary")),
-        "values-night": (dark_fill, fallback(dark_fallback, "onSurface"), fallback(dark_fallback, "primary")),
+        "values": fallback_colors,
+        "values-night": fallback_colors,
     }
-    for sdk, day, night in ((31, day31, night31), (34, day34, night34)):
-        colors[f"values-v{sdk}"] = (system(day, "surfaceContainerHighest"), system(day, "onSurface"), system(day, "primary"))
-        colors[f"values-night-v{sdk}"] = (dark_fill, system(night, "onSurface"), system(night, "primary"))
+    for sdk, night in ((31, night31), (34, night34)):
+        dark_colors = (dark_fill, system(night, "onSurface"), system(night, "primary"))
+        colors[f"values-v{sdk}"] = dark_colors
+        colors[f"values-night-v{sdk}"] = dark_colors
     return colors, str(float(intensity))
 
 
