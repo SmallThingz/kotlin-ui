@@ -6,6 +6,7 @@ import android.graphics.Rect
 import android.view.ContextThemeWrapper
 import android.view.View
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -169,7 +170,7 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
             layoutDirection = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
             setPadding(dp(13), dp(17), dp(19), dp(23))
             isSmoothScrollingEnabled = false
-            addView(body, ScrollView.LayoutParams(-1, -2))
+            addView(body, FrameLayout.LayoutParams(-1, -2))
         }
         fun layout() {
             // Force descendant layout: fit/fallback is evaluated here, not on scroll events.
