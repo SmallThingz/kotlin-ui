@@ -20,7 +20,6 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import androidx.core.view.doOnLayout
 import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.text.NativeTypographyRole
@@ -239,10 +238,6 @@ class NativePermissionDialog(
             error.visibility = View.GONE
             addView(error, row(recipe.scopeGapDp))
         }
-        val scroll = ScrollView(activity).apply {
-            isFillViewport = false
-            addView(body)
-        }
         val actions = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             progress.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
@@ -251,50 +246,11 @@ class NativePermissionDialog(
             addView(NativeMergedActionLayout(activity, listOf(allow, deny), colors).asActionFooter(),
                 row(recipe.scopeGapDp))
         }
-        val footer = ScrollView(activity).apply { addView(actions) }
         val handle = handleRuntime?.let {
             createNativeDialogDragHandle(activity, colors, appearance, it, dialog::cancel)
         }
-        // Measure the actions first; only the content relinquishes height when the window shrinks.
-        val panel = object : ViewGroup(activity) {
-            private var topInset = 0
-            override fun onMeasure(w: Int, h: Int) {
-                val width = MeasureSpec.getSize(w)
-                val inset = minOf(dp(recipe.contentInsetDp), width / 8)
-                val innerWidth = (width - inset * 2).coerceAtLeast(1)
-                val visible = Rect().also(host::getWindowVisibleDisplayFrame)
-                val limit = if (MeasureSpec.getMode(h) == MeasureSpec.UNSPECIFIED)
-                    visible.height().coerceAtLeast(1) else MeasureSpec.getSize(h)
-                topInset = minOf(inset, limit / 8)
-                handle?.measure(
-                    MeasureSpec.makeMeasureSpec(innerWidth, MeasureSpec.AT_MOST),
-                    MeasureSpec.makeMeasureSpec(limit / 2, MeasureSpec.AT_MOST),
-                )
-                val handleHeight = handle?.measuredHeight ?: 0
-                val innerHeight = limit - topInset - handleHeight
-                val minimumBody = minOf(dp(recipe.contentInsetDp), innerHeight / 3)
-                val footerLimit = innerHeight - minimumBody
-                footer.measure(exact(innerWidth), MeasureSpec.makeMeasureSpec(footerLimit, MeasureSpec.AT_MOST))
-                val remaining = (innerHeight - footer.measuredHeight).coerceAtLeast(0)
-                scroll.measure(exact(innerWidth), MeasureSpec.makeMeasureSpec(remaining, MeasureSpec.AT_MOST))
-                setMeasuredDimension(width, minOf(limit, scroll.measuredHeight + footer.measuredHeight + topInset + handleHeight))
-            }
-            override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-                val inset = minOf(dp(recipe.contentInsetDp), width / 8)
-                val bodyTop = topInset + (handle?.measuredHeight ?: 0)
-                handle?.let {
-                    val left = (width - it.measuredWidth) / 2
-                    it.layout(left, topInset, left + it.measuredWidth, bodyTop)
-                }
-                scroll.layout(inset, bodyTop, width - inset, bodyTop + scroll.measuredHeight)
-                footer.layout(inset, scroll.bottom, width - inset, scroll.bottom + footer.measuredHeight)
-            }
-        }.apply {
-            handle?.let { addView(it) }
-            addView(scroll)
-            addView(footer)
-            if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
-        }
+        val panel = NativeBoundedDialogContentLayout(activity, body, actions, recipe.contentInsetDp,
+            availableHeight = { Rect().also(host::getWindowVisibleDisplayFrame).height() }, header = handle)
         val surface = NativeSurface(activity, NativeSurfaceStyle(colors.surfaceContainerHigh,
             cornerRadiusDp = recipe.cornerRadiusDp, noise = recipe.noiseSeed != null,
             noiseSeed = recipe.noiseSeed ?: NoiseDrawable.SEED_BACKGROUND)).apply {
@@ -351,7 +307,6 @@ class NativePermissionDialog(
 
     private fun row(top: Int = 0) = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(top) }
     private fun dp(value: Int) = (value * density.density).roundToInt()
-    private fun exact(value: Int) = View.MeasureSpec.makeMeasureSpec(value, View.MeasureSpec.EXACTLY)
 
     private fun sizeWindow() {
         val frame = Rect().also(host::getWindowVisibleDisplayFrame)

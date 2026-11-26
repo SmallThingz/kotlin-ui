@@ -8,6 +8,9 @@ import android.view.View
 import android.view.MotionEvent
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.activity.BackEventCompat
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.OnBackPressedDispatcher
 import androidx.test.filters.SdkSuppress
 import smallthingz.ui.input.phase.NativeClickPhaseHost
 import android.view.ViewGroup
@@ -30,6 +33,118 @@ import kotlin.math.roundToInt
 @RunWith(AndroidJUnit4::class)
 class ReverbIncidentSelectionIntegrationTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
+
+    @Test fun capturedSelectionGestureDoesNotNavigateAfterHistoryClearsModeButFreshBackDoes() = withFixture { f ->
+        f.bind(day(2, "Today", group("A", "a")))
+        var navigationCompletions = 0
+        var selectionStarts = 0
+        var selectionCompletions = 0
+        val dispatcher = OnBackPressedDispatcher(Runnable { navigationCompletions++ })
+        val selectionBack = object : OnBackPressedCallback(false) {
+            override fun handleOnBackStarted(backEvent: BackEventCompat) { selectionStarts++ }
+            override fun handleOnBackPressed() {
+                selectionCompletions++
+                if (!f.panel.consumeSelectionBack()) isEnabled = false
+            }
+        }
+        dispatcher.addCallback(selectionBack)
+        val lease = f.panel.observeSelectionMode { selectionBack.isEnabled = it }
+        try {
+            assertFalse(dispatcher.hasEnabledCallbacks())
+            f.click("Multi-select")
+            assertTrue(dispatcher.hasEnabledCallbacks())
+            // Exercise the actual AndroidX gesture owner; no platform gesture or navigation is sent.
+            dispatcher.dispatchOnBackStarted(BackEventCompat(0f, 0f, 0f, BackEventCompat.EDGE_LEFT))
+            assertEquals(1, selectionStarts)
+            f.publish(ReverbIncidentLoadStatus.READY)
+            assertFalse(f.panel.selectionActive)
+            assertFalse(dispatcher.hasEnabledCallbacks())
+            dispatcher.onBackPressed()
+            assertEquals(1, selectionCompletions)
+            assertEquals(0, navigationCompletions)
+
+            dispatcher.onBackPressed()
+            assertEquals(1, selectionCompletions)
+            assertEquals(1, navigationCompletions)
+        } finally {
+            lease.close()
+            selectionBack.remove()
+        }
+    }
+
+    @Test fun selectionModeObserverTracksZeroSelectionHeaderAndSelectionBackWithoutCountEvents() = withFixture { f ->
+        f.bind(day(2, "Today", group("A", "a")))
+        val modes = mutableListOf<Boolean>()
+        val lease = f.panel.observeSelectionMode { modes += it }
+        try {
+            assertEquals(listOf(false), modes)
+            f.click("Multi-select")
+            f.assertSelected(2, false)
+            assertEquals(listOf(false, true), modes)
+            f.click("Select all")
+            f.click("Deselect all")
+            assertEquals(listOf(false, true), modes)
+            f.click("Clear selection")
+            assertEquals(listOf(false, true, false), modes)
+            f.click("Multi-select")
+            assertTrue(f.panel.consumeSelectionBack())
+            assertFalse(f.panel.consumeSelectionBack())
+            assertEquals(listOf(false, true, false, true, false), modes)
+        } finally { lease.close() }
+    }
+
+    @Test fun selectionModeObserverTracksGroupDeleteAndMutableEmptyButRetainsUnavailableMode() = withFixture { f ->
+        val today = day(2, "Today", group("A", "a"))
+        f.bind(today)
+        val modes = mutableListOf<Boolean>()
+        val lease = f.panel.observeSelectionMode { modes += it }
+        try {
+            assertTrue(f.rowAt(1).performAccessibilityAction(AccessibilityNodeInfo.ACTION_LONG_CLICK, null))
+            assertEquals(listOf(false, true), modes)
+            f.click("Delete selected")
+            assertEquals(listOf("a"), f.deleted.single().map { it.identity })
+            assertEquals(listOf(false, true, false), modes)
+            f.click("Multi-select")
+            f.publish(ReverbIncidentLoadStatus.UNAVAILABLE)
+            assertTrue(f.panel.selectionActive)
+            assertEquals(listOf(false, true, false, true), modes)
+            f.publish(ReverbIncidentLoadStatus.READY)
+            assertFalse(f.panel.selectionActive)
+            assertEquals(listOf(false, true, false, true, false), modes)
+        } finally { lease.close() }
+    }
+
+    @Test fun oldSelectionObserverLeaseCannotClearReplacementEvenForTheSameCallback() = withFixture { f ->
+        f.bind(day(2, "Today", group("A", "a")))
+        val modes = mutableListOf<Boolean>()
+        val changed: (Boolean) -> Unit = { modes += it }
+        val old = f.panel.observeSelectionMode(changed)
+        val current = f.panel.observeSelectionMode(changed)
+        old.close()
+        old.close()
+        f.click("Multi-select")
+        assertEquals(listOf(false, false, true), modes)
+        current.close()
+        assertTrue(f.panel.consumeSelectionBack())
+        assertEquals(listOf(false, false, true), modes)
+        val active = f.panel.observeSelectionMode { modes += it }
+        f.click("Multi-select")
+        f.disposePanel()
+        assertEquals(listOf(false, false, true, false, true), modes)
+        active.close()
+        assertThrows(IllegalStateException::class.java) { f.panel.observeSelectionMode(changed) }
+    }
+
+    @Test fun failedInitialSelectionEmissionDoesNotLeaveTheFailedObserverRegistered() = withFixture { f ->
+        f.bind(day(2, "Today", group("A", "a")))
+        assertThrows(IllegalStateException::class.java) {
+            f.panel.observeSelectionMode { error("Failed observer") }
+        }
+        f.click("Multi-select")
+        val modes = mutableListOf<Boolean>()
+        val lease = f.panel.observeSelectionMode { modes += it }
+        try { assertEquals(listOf(true), modes) } finally { lease.close() }
+    }
 
     @Test @SdkSuppress(minSdkVersion = 29)
     fun titlePhaseLongPressAddsOnlySameDateTopicAndPreservesOtherSelectionsAndCorners() = withFixture { f ->
@@ -170,6 +285,12 @@ class ReverbIncidentSelectionIntegrationTest {
     private class Fixture(val activity: Activity, runtime: NativeModalWindowRuntime) {
         val deleted = mutableListOf<List<Row>>()
         var acknowledgements = 0
+        private var panelDisposed = false
+        fun disposePanel() {
+            if (panelDisposed) return
+            panelDisposed = true
+            panel.dispose()
+        }
         val panel = ReverbIncidentsContentView(activity, ReverbDesign.theme(activity, false), texts,
             ReverbIncidentActions({ acknowledgements++ }, { error("Unexpected deletion") },
                 { deleted += it.map { target -> target as Row } }, { error("Unexpected copy") }), {},
@@ -297,7 +418,7 @@ class ReverbIncidentSelectionIntegrationTest {
         } finally {
             main {
                 failure = closePreservingPrimaryFailure(failure) { fixture?.closeAccessibility() }
-                failure = closePreservingPrimaryFailure(failure) { fixture?.panel?.dispose() }
+                failure = closePreservingPrimaryFailure(failure) { fixture?.disposePanel() }
                 failure = closePreservingPrimaryFailure(failure) { runtime?.close() }
                 failure = closePreservingPrimaryFailure(failure) { activity.finish() }
             }

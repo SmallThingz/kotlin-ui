@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Keep the host checkbox style while suppressing the glyph discarded by NativeChip. -->
+<chip xmlns:android="http://schemas.android.com/apk/res/android"
+    android:button="@empty" />

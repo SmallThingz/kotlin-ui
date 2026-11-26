@@ -19,6 +19,7 @@ import android.text.Spanned
 import android.text.style.CharacterStyle
 import android.text.style.LeadingMarginSpan
 import android.text.style.LineBackgroundSpan
+import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
@@ -29,6 +30,8 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.CheckBox
 import android.widget.CompoundButton
 import android.widget.TextView
+import org.xmlpull.v1.XmlPullParser
+import smallthingz.ui.R
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.controls.StateColorSurface
@@ -210,12 +213,35 @@ private class ChoiceTypography(private val view: TextView, private val style: Na
 }
 
 /** A real checked control; state binding is silent and does not recreate its View. */
-class NativeChip(
+class NativeChip private constructor(
     context: Context,
     palette: ControlPalette,
-    style: NativeChoiceStyle = NativeChoiceStyle(),
-    semantics: NativeChoiceSemantics = NativeChoiceSemantics.CHECKBOX,
-) : CheckBox(context), NativeInputGate, AutoCloseable {
+    style: NativeChoiceStyle,
+    semantics: NativeChoiceSemantics,
+    attributes: AttributeSet?,
+) : CheckBox(context, attributes), NativeInputGate, AutoCloseable {
+    constructor(
+        context: Context,
+        palette: ControlPalette,
+        style: NativeChoiceStyle = NativeChoiceStyle(),
+        semantics: NativeChoiceSemantics = NativeChoiceSemantics.CHECKBOX,
+    ) : this(context, palette, style, semantics, null)
+
+    companion object {
+        internal fun forSegmentedChoice(
+            context: Context,
+            palette: ControlPalette,
+            style: NativeChoiceStyle,
+        ): NativeChip = context.resources.getXml(R.xml.smallthingz_native_chip_attributes).use { attributes ->
+            var event: Int
+            do {
+                event = attributes.next()
+            } while (event != XmlPullParser.START_TAG && event != XmlPullParser.END_DOCUMENT)
+            check(event == XmlPullParser.START_TAG)
+            NativeChip(context, palette, style, NativeChoiceSemantics.CHECKBOX, attributes)
+        }
+    }
+
     override val acceptsNativeInput: Boolean get() = !selectionClosed
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
         if (bubblesPlainControlEscape(keyCode, event)) false else super.onKeyDown(keyCode, event)
@@ -873,7 +899,7 @@ open class NativeSegmentedChoice(
         this.selectedId = selectedId?.takeIf { id -> options.any { it.id == id && semanticsOf(it) != NativeChoiceSemantics.BUTTON } }
         for (option in options) {
             val chip = chips.getOrPut(option.id) {
-                NativeChip(context, choicePalette, choiceStyle).apply {
+                NativeChip.forSegmentedChoice(context, choicePalette, choiceStyle).apply {
                     parentDrawsSelectedFill = selectionIndicator != null
                     id = View.generateViewId()
                     onCheckedChange = { checked -> if (checked) selectFromUser(option.id) }

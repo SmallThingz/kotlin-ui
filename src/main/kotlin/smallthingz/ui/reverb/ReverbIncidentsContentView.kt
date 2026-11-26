@@ -81,7 +81,15 @@ class ReverbIncidentsContentView(
     private val backdrop = appearance.backdrops.attachPage(this, appearance.card.palette, ::bindScrollIndicatorUnderlay)
     private var theme = initialTheme
     private var history = ReverbIncidentHistory()
+    private class SelectionModeObserver(val changed: (Boolean) -> Unit)
+    private var selectionModeObserver: SelectionModeObserver? = null
+    private var selectionObservationClosed = false
     private var selecting = false
+        set(value) {
+            if (field == value) return
+            field = value
+            selectionModeObserver?.changed?.invoke(value)
+        }
     private val selection = linkedMapOf<String, ReverbIncidentTarget>()
     private var clearSheet: ReverbIncidentClearSheet? = null
     private val header = IncidentsHeader(context, initialTheme, texts, inputRoot, ::back,
@@ -151,6 +159,22 @@ class ReverbIncidentsContentView(
     }
 
     val selectionActive: Boolean get() = selecting
+
+    /** One host observes mode for Back admission; replacing/closing an observer never changes selection. */
+    fun observeSelectionMode(changed: (Boolean) -> Unit): AutoCloseable {
+        check(!selectionObservationClosed) { "Incidents content is disposed" }
+        val observer = SelectionModeObserver(changed)
+        selectionModeObserver = observer
+        try {
+            changed(selecting)
+        } catch (failure: Throwable) {
+            if (selectionModeObserver === observer) selectionModeObserver = null
+            throw failure
+        }
+        return AutoCloseable {
+            if (selectionModeObserver === observer) selectionModeObserver = null
+        }
+    }
 
     fun bindHeaderAccessibility(cursor: PlainTextAccessibilityWindowScope, geometry: NativePlainTextViewGeometry,
                                 sourceNode: (View) -> NativeSourceAccessibilityNode): AutoCloseable =
@@ -413,6 +437,8 @@ class ReverbIncidentsContentView(
 
     /** Root owner calls this when the source overlay leaves composition at fully closed progress. */
     fun dispose() {
+        selectionObservationClosed = true
+        selectionModeObserver = null
         var failure = smallthingz.ui.util.closePreservingPrimaryFailure(null, ::dismissClear)
         failure = smallthingz.ui.util.closePreservingPrimaryFailure(failure) {
             removeCallbacks(policyDurationTick)

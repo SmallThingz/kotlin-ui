@@ -206,6 +206,23 @@ class NativeDialogActionsIntegrationTest {
                             parent.offsetDescendantRectToMyCoords(child, rect)
                         }
 
+                    fun assertStableRemeasure(available: Int) {
+                        layout(available)
+                        val naturalBody = body.measuredHeight
+                        val naturalContent = surface.appContent.measuredHeight
+                        val scrollMaximum = viewport.state.maxValue
+                        assertTrue(naturalBody >= body.minimumHeight)
+                        repeat(2) {
+                            // A body requestLayout would invalidate the wrapper and mask this bug.
+                            surface.column.requestLayout()
+                            layout(available)
+                            assertEquals(naturalBody, body.measuredHeight)
+                            assertEquals(naturalContent, surface.appContent.measuredHeight)
+                            assertEquals(naturalContent, surface.appContent.height)
+                            assertEquals(scrollMaximum, viewport.state.maxValue)
+                        }
+                    }
+
                     layout(dp(surface, 640))
                     assertEquals(LinearLayout.VERTICAL, row.orientation)
                     val footer = row.parent as View
@@ -214,13 +231,46 @@ class NativeDialogActionsIntegrationTest {
                     val secondHeight = second.height
                     assertTrue(firstHeight >= dp(surface, 48) && secondHeight >= dp(surface, 48))
                     assertSame(surface.column, footer.parent)
-
-                    layout(naturalHeight + dp(surface, 12))
+                    val handleSpace = surface.column.handle.verticalTouchInsetPx + surface.column.handle.measuredHeight
+                    val usableContent = dp(surface, 48) // Existing shared minimum touch target.
+                    // Footer equality and one spare pixel must not strand the title/form. Also
+                    // cover the exact transition back to a pinned footer, without counting it twice.
+                    for (available in listOf(naturalHeight - 1, naturalHeight, naturalHeight + 1,
+                        naturalHeight + usableContent - 1)) {
+                        layout(available)
+                        assertSame(surface.appContent, footer.parent)
+                        assertEquals(View.GONE, surface.column.handle.visibility)
+                        assertSame(viewport, surface.column.content)
+                        assertEquals(available, viewport.height)
+                        assertTrue(viewport.state.canScrollForward)
+                        assertTrue(body.height >= dp(surface, 200))
+                        assertEquals(firstHeight, first.height)
+                        assertEquals(secondHeight, second.height)
+                    }
+                    layout(naturalHeight + usableContent)
                     assertSame(surface.column, footer.parent)
                     assertEquals(View.GONE, surface.column.handle.visibility)
+                    assertEquals(usableContent, viewport.height)
                     assertEquals(firstHeight, first.height)
                     assertEquals(secondHeight, second.height)
                     assertEquals(bottomInset, surface.height - boundsWithin(surface, footer).bottom)
+
+                    // The optional handle must not eat the form's budget even if handle+footer
+                    // exactly fit, or leave only a single pixel. It returns only after both fit.
+                    for (available in listOf(naturalHeight + handleSpace - 1,
+                        naturalHeight + handleSpace, naturalHeight + handleSpace + 1)) {
+                        layout(available)
+                        assertEquals(View.GONE, surface.column.handle.visibility)
+                        assertTrue(viewport.height >= usableContent)
+                        assertSame(if (available - naturalHeight < usableContent)
+                            surface.appContent else surface.column, footer.parent)
+                    }
+                    for (extra in listOf(-1, 0, 1)) {
+                        layout(naturalHeight + handleSpace + usableContent + extra)
+                        assertSame(surface.column, footer.parent)
+                        assertEquals(if (extra < 0) View.GONE else View.VISIBLE, surface.column.handle.visibility)
+                        assertTrue(viewport.height >= usableContent)
+                    }
 
                     val shortHeight = maxOf(firstHeight, secondHeight) + dp(surface, 3)
                     assertTrue(shortHeight < naturalHeight)
@@ -244,12 +294,72 @@ class NativeDialogActionsIntegrationTest {
                             targetBounds.top >= viewportBounds.top && targetBounds.bottom <= viewportBounds.bottom)
                     }
 
+                    // Exercise cached wrapper specs in both stable modes, then independently
+                    // verify ordinary body updates and repeated overflow/repin transitions.
+                    for (available in listOf(dp(surface, 640), shortHeight, dp(surface, 640), shortHeight)) {
+                        assertStableRemeasure(available)
+                        body.minimumHeight += dp(surface, 20)
+                        body.requestLayout()
+                        assertStableRemeasure(available)
+                    }
                     layout(dp(surface, 640))
                     assertSame(surface.column, footer.parent)
                     assertSame(viewport, surface.column.content)
                     assertEquals(View.VISIBLE, surface.column.handle.visibility)
                     assertEquals(firstHeight, first.height)
                     assertEquals(secondHeight, second.height)
+                }
+            } finally { sheet.dismiss() }
+        }
+    }
+
+    @Test fun shortPinnedContentUsesItsNaturalBudgetInsteadOfForcingAnEmptyTouchTarget() = withSheetActivity { activity ->
+        val context = activity.createConfigurationContext(Configuration(activity.resources.configuration).apply {
+            densityDpi = 160
+            fontScale = 1f
+        })
+        val appearance = NativeUiAppearance.Default
+        val initialStyle = appearance.modals.actionSheetStyle(Density(context), createFontFamilyResolver(context),
+            appearance.resolveColorScheme(context, false))
+        val style = initialStyle.copy(recipe = initialStyle.recipe.copy(topPaddingDp = 0f, bodyGapDp = 0f))
+        for (edge in NativeDialogEdge.values()) {
+            val sheet = NativeActionSheet(View(context), style, "Short", {}, entryEdge = edge)
+            try {
+                val surface = sheet.contentView as NativeSheetSurface
+                val body = FrameLayout(context).apply { minimumHeight = dp(surface, 4) }
+                withPair(context, "Cancel", "OK") { row, first, second ->
+                    sheet.setContentWithPinnedActions(body, row, emptyList(), emptyList())
+                    val viewport = surface.column.content as smallthingz.ui.scroll.NativeVerticalViewport
+                    fun layout(height: Int) {
+                        surface.measure(View.MeasureSpec.makeMeasureSpec(dp(surface, 360), View.MeasureSpec.EXACTLY),
+                            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.AT_MOST))
+                        surface.layout(0, 0, surface.measuredWidth, surface.measuredHeight)
+                    }
+                    layout(dp(surface, 640))
+                    val footer = row.parent as View
+                    val footerHeight = footer.height
+                    val naturalContent = viewport.height
+                    val naturalSheet = surface.height
+                    val handleSpace = surface.column.handle.verticalTouchInsetPx + surface.column.handle.measuredHeight
+                    assertTrue(naturalContent > 0 && naturalContent < dp(surface, 48))
+                    assertFalse(viewport.state.canScrollForward)
+                    layout(footerHeight + naturalContent)
+                    assertSame(surface.column, footer.parent)
+                    assertEquals(View.GONE, surface.column.handle.visibility)
+                    assertEquals(naturalContent, viewport.height)
+                    assertEquals(footerHeight + naturalContent, surface.height)
+                    assertFalse(viewport.state.canScrollForward)
+                    layout(footerHeight + naturalContent - 1)
+                    assertSame(surface.appContent, footer.parent)
+                    assertTrue(viewport.state.canScrollForward)
+                    layout(footerHeight + naturalContent)
+                    assertSame(surface.column, footer.parent)
+                    assertEquals(naturalContent, viewport.height)
+                    layout(footerHeight + naturalContent + handleSpace)
+                    assertEquals(View.VISIBLE, surface.column.handle.visibility)
+                    assertEquals(naturalSheet, surface.height)
+                    assertSame(body, surface.appContent.getChildAt(1))
+                    assertTrue(first.height >= dp(surface, 48) && second.height >= dp(surface, 48))
                 }
             } finally { sheet.dismiss() }
         }
@@ -348,8 +458,13 @@ class NativeDialogActionsIntegrationTest {
         }
     }
 
-    private fun onMain(action: () -> Unit) =
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(action)
+    private fun onMain(action: () -> Unit) {
+        var failure: Throwable? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            try { action() } catch (error: Throwable) { failure = error }
+        }
+        failure?.let { throw it }
+    }
 
     private fun dp(view: View, value: Int) = (value * view.resources.displayMetrics.density).roundToInt()
 

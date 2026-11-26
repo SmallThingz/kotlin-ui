@@ -274,10 +274,24 @@ internal class NativeSheetSurface(
             val footer = pinnedActions
             footer?.measure(sheetSurfaceExact(width), sheetSurfaceUnspecified())
             val naturalFooterHeight = footer?.measuredHeight ?: 0
-            val overflow = footer != null && naturalFooterHeight > remaining
+            // Keep at least one shared minimum touch target of scrollable form visible. Probe only
+            // that bounded height; a shorter form keeps its natural height. The previously moved
+            // footer must not influence this budget or prevent repinning after the window grows.
+            val minimumContent = if (footer == null) 0 else {
+                val target = appContent.minimumTouchTargetPx.roundToInt()
+                appContent.measure(sheetSurfaceExact(width), sheetSurfaceAtMost(target))
+                val height = min(target, appContent.measuredNonFooterHeight)
+                // Restore natural measurement even when the viewport's own specs are unchanged.
+                // Forcing only its child does not invalidate Android's wrapper measure cache.
+                appContent.forceLayout()
+                content.forceLayout()
+                height
+            }
+            val overflow = footer != null && remaining - naturalFooterHeight < minimumContent
             if (footer != null) placeActions(footer, overflow)
             val footerHeight = if (overflow) 0 else naturalFooterHeight
-            val showHandle = footer == null || (!overflow && naturalHandleSpace <= remaining - footerHeight)
+            val showHandle = footer == null ||
+                (!overflow && naturalHandleSpace <= remaining - footerHeight - minimumContent)
             if (footer != null) handle.visibility = if (showHandle) VISIBLE else GONE
             val handleSpace = if (showHandle) naturalHandleSpace else 0
             content.measure(sheetSurfaceExact(width),sheetSurfaceAtMost(max(0,remaining-handleSpace-footerHeight)))
@@ -357,6 +371,8 @@ internal class NativeSheetContent(
     private var body:View?=null
     private var actions:View?=null
     private var overflowFooter: View? = null
+    var measuredNonFooterHeight: Int = 0
+        private set
     private var topHeader=0
     private var topBody=0
     private var topActions=0
@@ -422,6 +438,7 @@ internal class NativeSheetContent(
         val actionsGap=if(pinned) 0 else min((style.recipe.actionsGapDp*density).roundToInt(),remaining);used+=actionsGap;remaining-=actionsGap
         topActions=used
         actions?.let {it.measure(sheetSurfaceExact(inner),childHeight());used+=it.measuredHeight}
+        measuredNonFooterHeight = used + bottom
         overflowFooter?.let { it.measure(sheetSurfaceExact(width), sheetSurfaceUnspecified()); used += it.measuredHeight }
         setMeasuredDimension(width,resolveSize(used+bottom,heightMeasureSpec))
     }
