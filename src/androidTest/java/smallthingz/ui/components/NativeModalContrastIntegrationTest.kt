@@ -1,5 +1,6 @@
 package smallthingz.ui.components
 
+import kotlin.math.roundToInt
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -341,6 +342,172 @@ class NativeModalContrastIntegrationTest {
             assertInk(label, corrected)
             assertEquals(underlay, label.paintedTextSurface!!.asLong)
         } finally { motion.close() }
+    }
+
+    @Test fun sharedHandleContrastTracksSheetAndAboutCurrentPaintWithoutGeometryChanges() = mainChecked {
+        val context = instrumentation.targetContext
+        val runtime = NativeModalWindowRuntime(context)
+        val resolver = createFontFamilyResolver(context)
+        fun theme(dark: Boolean) = ReverbDesign.windowTheme(Density(1f), resolver, palette(dark))
+        val light = theme(false)
+        val dark = theme(true)
+        val handle = NativeSheetDragHandle(context, reverbActionSheetStyle(light), { null }, runtime, {}, {})
+        val sheet = NativeSheetSurface.PaintedSurface(context, reverbActionSheetStyle(light), NativeDialogEdge.BOTTOM)
+        sheet.clip.addView(handle)
+        val about = ReverbAboutContentView(context, light,
+            ReverbAboutDetails("Reverb", "1.0", "Repository", "Open repository", "Unavailable"), {}, { false }, runtime, 0)
+        val aboutHandle = descendants(about).filterIsInstance<NativeSheetDragHandle>().single()
+        val panel = descendants(about).filterIsInstance<NativeFloatingPanelSurface>().single()
+        fun assertMark(target: NativeSheetDragHandle, surface: Long) {
+            target.measure(View.MeasureSpec.makeMeasureSpec(200, View.MeasureSpec.AT_MOST),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+            target.layout(0, 0, target.measuredWidth, target.measuredHeight)
+            assertEquals(32, target.mark.width)
+            assertEquals(2, target.mark.height)
+            assertEquals(34, target.height)
+            assertEquals(surface, NativeModalTextSurface.sample(target.mark, forHandle = true))
+            val bitmap = Bitmap.createBitmap(32, 2, Bitmap.Config.ARGB_8888)
+            try {
+                target.mark.draw(Canvas(bitmap))
+                val ink = bitmap.getPixel(16, 1)
+                assertEquals(255, Color.alpha(ink))
+                for (fill in listOf((surface ushr 32).toInt(), surface.toInt())) {
+                    assertTrue("Shared handle contrast ${ColorUtils.calculateContrast(ink, fill)} below 3:1",
+                        ColorUtils.calculateContrast(ink, fill) >= 3.0)
+                }
+            } finally { bitmap.recycle() }
+        }
+        try {
+            for (next in listOf(light, dark, light)) {
+                sheet.updateStyle(reverbActionSheetStyle(next))
+                handle.updateStyle(reverbActionSheetStyle(next))
+                about.bind(next, ReverbAboutDetails("Reverb", "1.0", "Repository", "Open repository", "Unavailable"))
+                assertMark(handle, sheet.paintedTextSurface)
+                assertMark(aboutHandle, panel.paintedTextSurface)
+            }
+            // Public sheet contentBackground covers the mark as well as the body.
+            val customFill = 0xffdddddd.toInt()
+            val customLayer = FrameLayout(context).apply { background = android.graphics.drawable.ColorDrawable(customFill) }
+            sheet.clip.removeView(handle)
+            sheet.clip.addView(customLayer)
+            customLayer.addView(handle)
+            handle.mark.bindColor(customFill)
+            assertMark(handle, textSurfaceRange(customFill))
+            assertEquals("Ordinary paragraph ownership must not opt into a caller background", 0L,
+                NativeModalTextSurface.sample(handle.mark))
+            customLayer.removeView(handle)
+            sheet.clip.removeView(customLayer)
+            sheet.clip.addView(handle)
+
+            // Drive actual detached paint owners at the same intermediate theme sample.
+            val sheetMotion = (sheet.javaClass.getDeclaredField("colorMotion\$delegate").apply { isAccessible = true }
+                .get(sheet) as Lazy<*>).value as ViewColorTransition
+            val panelMotion = NativeFloatingPanelSurface::class.java.getDeclaredField("fillMotion")
+                .apply { isAccessible = true }.get(panel) as ViewColorTransition
+            for ((from, to) in listOf(light to dark, dark to light)) {
+                val source = reverbActionSheetStyle(from)
+                val destination = reverbActionSheetStyle(to)
+                sheet.updateStyle(destination)
+                handle.updateStyle(destination)
+                about.bind(to, ReverbAboutDetails("Reverb", "1.0", "Repository", "Open repository", "Unavailable"))
+                val samples = ColorTransition(intArrayOf(source.palette.surfaceContainerLow,
+                    from.appearance.modals.floating.surfaceColor(from.palette), source.palette.onSurfaceVariant))
+                samples.retarget(intArrayOf(destination.palette.surfaceContainerLow,
+                    to.appearance.modals.floating.surfaceColor(to.palette), destination.palette.onSurfaceVariant), 0L)
+                samples.frame(ColorTransition.DURATION_NANOS * 3 / 10)
+                assertTrue(samples.isInterpolating)
+                sheetMotion.snap(samples.color(0))
+                panelMotion.snap(samples.color(1))
+                handle.mark.bindColor(samples.color(2))
+                aboutHandle.mark.bindColor(samples.color(2))
+                assertMark(handle, sheet.paintedTextSurface)
+                assertMark(aboutHandle, panel.paintedTextSurface)
+            }
+        } finally {
+            try { handle.close() } finally { try { about.dispose() } finally { runtime.close() } }
+        }
+    }
+
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 30)
+    @Test fun sheetCentersActionsInsideAsymmetricSafeSpanInBothDirections() = mainChecked {
+        val context = instrumentation.targetContext
+        val runtime = NativeModalWindowRuntime(context)
+        val style = reverbActionSheetStyle(ReverbDesign.windowTheme(Density(1f),
+            createFontFamilyResolver(context), palette(false)))
+        val pointer = SheetPointerOwner(1f)
+        val state = NativeActionSheetState({ 1f }, {})
+        val handle = NativeSheetDragHandle(context, style, { null }, runtime, {}, {})
+        val content = NativeSheetContent(context, style, "Confirm", { null }, null, {})
+        val action = NativeMaterialButtonView(context, NativeUiAppearance.Default.buttons.filled,
+            Density(1f), createFontFamilyResolver(context), onClick = {})
+        content.setContent(View(context).apply { minimumHeight = 80 }, action)
+        val surface = NativeSheetSurface(context, style, handle, content, null)
+        val scrim = SheetScrim(context, style.palette.scrim, style.recipe.scrimAlpha, {})
+        val root = SheetRoot(context, pointer, state, surface, scrim, 1f, 640f, {}, {})
+        try {
+            for (rtl in listOf(false, true)) for ((left, right) in listOf(120 to 0, 0 to 120, 80 to 24)) {
+                root.layoutDirection = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+                root.insets(androidx.core.view.WindowInsetsCompat.Builder()
+                    .setInsets(androidx.core.view.WindowInsetsCompat.Type.displayCutout(), androidx.core.graphics.Insets.of(left, 0, right, 0))
+                    .setInsets(androidx.core.view.WindowInsetsCompat.Type.navigationBars(), androidx.core.graphics.Insets.of(0, 0, 0, 40)).build())
+                for (maximum in listOf(640f, 240f)) {
+                    root.bindMaxWidth(maximum)
+                    root.measure(View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(800, View.MeasureSpec.EXACTLY))
+                    state.dispatchRawDelta(-800f)
+                    root.layout(0, 0, 600, 800)
+                    assertEquals(40, surface.insets.contentBottom)
+                    val safeWidth = 600 - left - right
+                    assertEquals(minOf(safeWidth, maximum.toInt()), surface.width)
+                    assertEquals(left + ((safeWidth - surface.width) * .5f).roundToInt(), surface.left)
+                    assertEquals(600, scrim.width)
+                    val bounds = Rect(0, 0, action.width, action.height)
+                    root.offsetDescendantRectToMyCoords(action, bounds)
+                    assertTrue(bounds.left >= left && bounds.right <= 600 - right)
+                    assertTrue(action.width > 0 && action.height > 0)
+                    assertTrue(bounds.bottom <= 800 - 40)
+                }
+            }
+        } finally { try { action.close() } finally { try { handle.close() } finally { try { pointer.close() } finally { runtime.close() } } } }
+    }
+
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 30)
+    @Test fun aboutMergesAsymmetricCutoutsAndBarsWithoutDoublePadding() = mainChecked {
+        val context = instrumentation.targetContext
+        val runtime = NativeModalWindowRuntime(context)
+        val theme = ReverbDesign.windowTheme(Density(1f), createFontFamilyResolver(context), palette(false))
+        val about = ReverbAboutContentView(context, theme,
+            ReverbAboutDetails("Reverb", "1.0", "Repository", "Open repository", "Unavailable"), {}, { false }, runtime, 0)
+        try {
+            for (rtl in listOf(false, true)) for ((left, right) in listOf(120 to 0, 0 to 120)) {
+                about.layoutDirection = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+                androidx.core.view.ViewCompat.dispatchApplyWindowInsets(about, androidx.core.view.WindowInsetsCompat.Builder()
+                    .setInsets(androidx.core.view.WindowInsetsCompat.Type.displayCutout(), androidx.core.graphics.Insets.of(left, 30, right, 0))
+                    .setInsets(androidx.core.view.WindowInsetsCompat.Type.navigationBars(), androidx.core.graphics.Insets.of(16, 0, 0, 40))
+                    .setInsets(androidx.core.view.WindowInsetsCompat.Type.statusBars(), androidx.core.graphics.Insets.of(0, 24, 0, 0)).build())
+                about.measure(View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(900, View.MeasureSpec.AT_MOST))
+                about.layout(0, 0, about.measuredWidth, about.measuredHeight)
+                val surface = about.predictiveMotionTarget
+                val bounds = Rect(0, 0, surface.width, surface.height)
+                about.offsetDescendantRectToMyCoords(surface, bounds)
+                assertEquals(maxOf(16, left), bounds.left)
+                assertEquals(600 - right, bounds.right)
+                assertEquals(30, bounds.top)
+                assertEquals(40, about.height - bounds.bottom)
+                for (action in descendants(about).filter { it is NativeGroupLayout || it is NativeSheetDragHandle }) {
+                    val actionBounds = Rect(0, 0, action.width, action.height)
+                    about.offsetDescendantRectToMyCoords(action, actionBounds)
+                    assertTrue(actionBounds.left >= bounds.left && actionBounds.right <= bounds.right)
+                }
+            }
+        } finally { try { about.dispose() } finally { runtime.close() } }
+    }
+
+    private fun mainChecked(action: () -> Unit) {
+        var result: Result<Unit>? = null
+        instrumentation.runOnMainSync { result = runCatching(action) }
+        checkNotNull(result).getOrThrow()
     }
 
     private fun palette(dark: Boolean): NativeColorScheme = if (dark)

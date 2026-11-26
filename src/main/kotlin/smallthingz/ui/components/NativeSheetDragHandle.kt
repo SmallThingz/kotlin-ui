@@ -171,14 +171,13 @@ class NativeSheetDragHandle(
         failure?.let {throw it}
     }
     override fun getAccessibilityClassName():CharSequence="android.view.View"
-    internal class HandleMark(context:Context,style:NativeActionSheetStyle):View(context) {
+    internal class HandleMark(context:Context,style:NativeActionSheetStyle):View(context), NativeTextSurfaceTarget {
         var sourceNode:(()->NativeSourceAccessibilityNode)?=null
         private val clip=Path()
-        private val paint=Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-            color=sheetColorWithAlpha(style.palette.onSurfaceVariant,.45f)
-        }
-        private val colorMotion:ViewColorTransition by lazy {ViewColorTransition(this,intArrayOf(paint.color),{
-            paint.color=colorMotion.color(0);invalidate()
+        private var ink = style.palette.onSurfaceVariant
+        private val paint=Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG)
+        private val colorMotion:ViewColorTransition by lazy {ViewColorTransition(this,intArrayOf(ink),{
+            ink=colorMotion.color(0);invalidate()
         })}
         init {contentDescription=context.getString(smallthingz.ui.R.string.native_sheet_drag_handle_description)
             importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_YES;isScreenReaderFocusable=false
@@ -190,7 +189,8 @@ class NativeSheetDragHandle(
                 }
             }
         }
-        fun bindColor(color:Int) {colorMotion.retarget(sheetColorWithAlpha(color,.45f))}
+        fun bindColor(color:Int) {colorMotion.retarget(color)}
+        override fun invalidateTextSurfaceInk() = invalidate()
         override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int) {
             val r=minOf(w,h)*.5f
             clip.rewind();clip.addRoundRect(RectF(0f,0f,w.toFloat(),h.toFloat()),r,r,Path.Direction.CW)
@@ -203,6 +203,8 @@ class NativeSheetDragHandle(
             }
         }
         override fun onDraw(canvas:Canvas) {
+            // Resolve the current role against current modal paint, including grain and transitions.
+            paint.color = smallthingz.ui.controls.textSurfaceForeground(NativeModalTextSurface.sample(this, forHandle = true), ink)
             val r=minOf(width,height)*.5f
             canvas.drawRoundRect(0f,0f,width.toFloat(),height.toFloat(),r,r,paint)
         }

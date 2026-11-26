@@ -7,6 +7,7 @@ package smallthingz.ui.components
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.Path
@@ -20,6 +21,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
+import androidx.annotation.VisibleForTesting
 import smallthingz.ui.geometry.Offset
 import smallthingz.ui.geometry.Size
 import smallthingz.ui.input.phase.NativeNestedPointerRoot
@@ -66,13 +68,18 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
     private val hitPoint = Path()
     private val hitIntersection = Path()
     private var bitmap: Bitmap? = null
+    private var maskCanvas: Canvas? = null
     private var surfaceBound = false
     private var colors: ViewColorTransition? = null
     private var displayedBorder = 0
     private var density = resources.displayMetrics.density
     private var fullBorder = false
-    private var borderDirty = true
+    private var borderGeometryDirty = true
+    private var borderMaskAlpha = -1
     private var borderTint = 0
+    @get:VisibleForTesting
+    internal var borderMaskRasterizations = 0
+        private set
     private var style = NativeCaptureControlsStyle.Default
     private var metrics = style.resolve(density, NativeBufferSegmentStyle())
     private var selectors: List<View> = emptyList()
@@ -110,7 +117,7 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
         }
         motion.retarget(palette.field, palette.border)
         publishSurfaceRange()
-        if (this.density != density) borderDirty = true
+        if (this.density != density) borderGeometryDirty = true
         this.density = density
         val nextMetrics = style.resolve(density, segmentStyle)
         if (metrics != nextMetrics) {
@@ -127,10 +134,7 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
     private fun applyColors(background: Int, border: Int) {
         fill.color = background
         publishSurfaceRange()
-        if (displayedBorder != border) {
-            displayedBorder = border
-            borderDirty = true
-        }
+        displayedBorder = border
         invalidate()
     }
 
@@ -153,7 +157,7 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
         captureControlUnionPath(w.toFloat(), h.toFloat(), style, shape)
         shape.computeBounds(bounds, false)
         content.setShape(shape)
-        borderDirty = true
+        borderGeometryDirty = true
     }
 
     override fun onMeasure(w: Int, h: Int) {
@@ -219,13 +223,19 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
         if (!surfaceBound) return
         val color = displayedBorder
         if (width <= 0 || height <= 0) return
-        if (borderDirty) updateBorder(color)
+        val alpha = Color.alpha(color)
+        if (borderGeometryDirty || (!fullBorder && borderMaskAlpha != alpha)) updateBorderMask(alpha)
         if (fullBorder) {
             borderPaint.colorFilter = null
             borderPaint.color = color
             canvas.drawPath(shape, borderPaint)
         } else bitmap?.let { image ->
-            borderPaint.color = android.graphics.Color.BLACK
+            val tint = color or Color.BLACK
+            if (borderTint != tint) {
+                borderColorFilter = PorterDuffColorFilter(tint, PorterDuff.Mode.SRC_IN)
+                borderTint = tint
+            }
+            borderPaint.color = Color.BLACK
             borderPaint.colorFilter = borderColorFilter
             val checkpoint = canvas.save()
             canvas.translate(bounds.left, bounds.top)
@@ -234,11 +244,13 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
         }
     }
 
-    private fun updateBorder(color: Int) {
-        borderDirty = false
+    private fun updateBorderMask(alpha: Int) {
         val strokeWidth = min(ceil(density), ceil(min(width, height) / 2f))
         fullBorder = strokeWidth * 2 > min(width, height)
-        if (fullBorder) return
+        if (fullBorder) {
+            borderGeometryDirty = false
+            return
+        }
         val cacheWidth = ceil(bounds.width()).toInt()
         val cacheHeight = ceil(bounds.height()).toInt()
         if (cacheWidth <= 0 || cacheHeight <= 0) return
@@ -246,36 +258,43 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
         if (image == null || image.width < cacheWidth || image.height < cacheHeight) {
             // Old display lists may retain the old Bitmap; do not recycle it before their retirement.
             image = Bitmap.createBitmap(cacheWidth, cacheHeight, Bitmap.Config.ALPHA_8)
+            maskCanvas = Canvas(image)
             bitmap = image
         }
-        image.eraseColor(android.graphics.Color.TRANSPARENT)
-        val cache = Canvas(image)
-        sourceRect.set(0, 0, cacheWidth, cacheHeight)
-        destinationRect.set(0f, 0f, cacheWidth.toFloat(), cacheHeight.toFloat())
-        mask.rewind()
-        mask.addRect(bounds, Path.Direction.CCW)
-        mask.op(shape, Path.Op.DIFFERENCE)
+        if (borderGeometryDirty) {
+            sourceRect.set(0, 0, cacheWidth, cacheHeight)
+            destinationRect.set(0f, 0f, cacheWidth.toFloat(), cacheHeight.toFloat())
+            mask.rewind()
+            mask.addRect(bounds, Path.Direction.CCW)
+            mask.op(shape, Path.Op.DIFFERENCE)
+        }
+        image.eraseColor(Color.TRANSPARENT)
+        val cache = checkNotNull(maskCanvas)
         val saved = cache.save()
-        cache.clipRect(0, 0, cacheWidth, cacheHeight)
-        cache.translate(-bounds.left, -bounds.top)
-        rasterPaint.color = color
-        rasterPaint.style = Paint.Style.STROKE
-        rasterPaint.strokeWidth = strokeWidth * 2
-        rasterPaint.strokeCap = Paint.Cap.BUTT
-        rasterPaint.strokeJoin = Paint.Join.MITER
-        rasterPaint.strokeMiter = 4f
-        rasterPaint.xfermode = null
-        cache.drawPath(shape, rasterPaint)
-        // DrawScope scale uses the cache's logical size, not the retained larger allocation.
-        cache.scale((cacheWidth + 1f) / cacheWidth, (cacheHeight + 1f) / cacheHeight,
-            cacheWidth / 2f, cacheHeight / 2f)
-        rasterPaint.style = Paint.Style.FILL
-        rasterPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
-        cache.drawPath(mask, rasterPaint)
-        rasterPaint.xfermode = null
-        cache.restoreToCount(saved)
-        borderTint = color or -0x1000000
-        borderColorFilter = PorterDuffColorFilter(borderTint, PorterDuff.Mode.SRC_IN)
+        try {
+            cache.clipRect(0, 0, cacheWidth, cacheHeight)
+            cache.translate(-bounds.left, -bounds.top)
+            // Rasterize opacity with the stroke to preserve edge coverage and rounding.
+            rasterPaint.color = alpha shl 24
+            rasterPaint.style = Paint.Style.STROKE
+            rasterPaint.strokeWidth = strokeWidth * 2
+            rasterPaint.strokeCap = Paint.Cap.BUTT
+            rasterPaint.strokeJoin = Paint.Join.MITER
+            rasterPaint.strokeMiter = 4f
+            cache.drawPath(shape, rasterPaint)
+            // DrawScope scale uses the cache's logical size, not the retained larger allocation.
+            cache.scale((cacheWidth + 1f) / cacheWidth, (cacheHeight + 1f) / cacheHeight,
+                cacheWidth / 2f, cacheHeight / 2f)
+            rasterPaint.style = Paint.Style.FILL
+            rasterPaint.xfermode = CLEAR_MASK
+            cache.drawPath(mask, rasterPaint)
+        } finally {
+            rasterPaint.xfermode = null
+            cache.restoreToCount(saved)
+        }
+        borderMaskAlpha = alpha
+        borderGeometryDirty = false
+        borderMaskRasterizations++
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
@@ -338,6 +357,7 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
 
     private companion object {
         const val FLAGS = Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG
+        val CLEAR_MASK = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
     }
 }
 

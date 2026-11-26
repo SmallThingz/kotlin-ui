@@ -104,7 +104,7 @@ class ReverbIncidentsContentView(
     private val policyDurationTick = Runnable { updatePolicyDuration() }
     private val manager: LinearLayoutManager = object : LinearLayoutManager(context) {
         override fun onLayoutChildren(recycler: RecyclerView.Recycler, state: RecyclerView.State) {
-            if (!state.isPreLayout) {
+            if (!state.isPreLayout && !list.applyPendingScrollIndicatorPlacement(this, state.itemCount)) {
                 savedPosition.pendingForPlacement(state.itemCount)?.let { position ->
                     scrollToPositionWithOffset(position.firstVisibleItemIndex, -position.firstVisibleItemScrollOffset)
                 }

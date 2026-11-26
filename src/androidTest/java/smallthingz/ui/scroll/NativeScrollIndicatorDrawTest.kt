@@ -14,6 +14,7 @@ import android.os.SystemClock
 import android.util.TypedValue
 import android.view.PixelCopy
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.Window
 import android.widget.LinearLayout
@@ -21,6 +22,7 @@ import androidx.core.view.doOnLayout
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -31,6 +33,11 @@ import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeMenuAccessibilityTestActivity
 import smallthingz.ui.components.NativeUiAppearance
 import smallthingz.ui.components.withRetiringTestActivity
+import smallthingz.ui.geometry.Offset
+import smallthingz.ui.input.phase.NativeDragPointerChange
+import smallthingz.ui.input.phase.NativeDragPointerEvent
+import smallthingz.ui.input.phase.NativePointerPass
+import smallthingz.ui.input.pointer.PointerType
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -47,6 +54,7 @@ class NativeScrollIndicatorDrawTest {
                 list.setPadding(7, 0, 13, 0)
                 layout(list, 120, 96)
                 assertEquals(direction, list.layoutDirection)
+                revealAtTop(list)
             }
             assertThumb(mdpi, Rect(116, 0, 118, 24))
             assertThumb(xhdpi, Rect(112, 0, 116, 48))
@@ -65,6 +73,7 @@ class NativeScrollIndicatorDrawTest {
 
         list.adapter = Rows(16)
         layout(list, 120, 96)
+        revealAtTop(list)
         assertThumb(list, Rect(116, 0, 118, 24))
         list.scrollBy(0, 144)
         assertThumb(list, Rect(116, 36, 118, 60))
@@ -131,6 +140,7 @@ class NativeScrollIndicatorDrawTest {
                 assertTrue("Fixture must enter draw suppression before binding", bound.willNotDraw())
                 bound.bindScrollIndicator(style, Color.RED)
                 assertFalse(bound.willNotDraw())
+                revealAtTop(bound)
             }
             assertWindowThumb(activity.window, bound, control, Color.RED)
 
@@ -146,6 +156,13 @@ class NativeScrollIndicatorDrawTest {
                 }
                 assertTrue("Unbound RecyclerView must take its stock reset branch", control.willNotDraw())
                 assertFalse("Bound thumb must keep hardware drawing enabled", bound.willNotDraw())
+                revealAtTop(bound)
+            }
+            assertWindowThumb(activity.window, bound, control, Color.BLUE)
+            assertWindowThumb(activity.window, bound, control, Color.WHITE)
+            main {
+                assertFalse(bound.canStartScrollIndicatorDrag(117f, 12f))
+                revealAtTop(bound)
             }
             assertWindowThumb(activity.window, bound, control, Color.BLUE)
 
@@ -162,6 +179,247 @@ class NativeScrollIndicatorDrawTest {
                 assertFalse("Unbind honors a later draw request from decoration addition", bound.willNotDraw())
             }
         }
+    }
+
+    @Test fun rtlThumbDragStopsKineticsAndSeeksBothEndsWithBoundedRowBinds() {
+        val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
+            NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        var host: LinearLayout? = null
+        withRetiringTestActivity(activity, root = { host }) {
+            val laidOut = CountDownLatch(1)
+            lateinit var list: NativeSourceRecyclerView
+            val rows = Rows(1_000) { position -> if (position < 8) 24 else 160 }
+            main {
+                val root = LinearLayout(activity).also { host = it }
+                list = recycler(activity, 160, View.LAYOUT_DIRECTION_RTL).apply {
+                    val viewport = this
+                    layoutManager = object : LinearLayoutManager(context) {
+                        override fun onLayoutChildren(recycler: RecyclerView.Recycler, state: RecyclerView.State) {
+                            if (!state.isPreLayout) viewport.applyPendingScrollIndicatorPlacement(this, state.itemCount)
+                            super.onLayoutChildren(recycler, state)
+                        }
+                    }
+                    setBackgroundColor(Color.WHITE)
+                    adapter = rows
+                    root.addView(this, LinearLayout.LayoutParams(120, 96))
+                    doOnLayout { laidOut.countDown() }
+                }
+                activity.setContentView(root)
+            }
+            assertTrue(laidOut.await(5, TimeUnit.SECONDS))
+            main {
+                list.bindScrollIndicator(style, Color.RED)
+                revealAtTop(list)
+                assertThumb(list, Rect(116, 0, 118, 24))
+                assertTrue(list.canStartScrollIndicatorDrag(117f, 12f))
+                assertFalse(list.canStartScrollIndicatorDrag(114f, 12f))
+                assertFalse(list.canStartScrollIndicatorDrag(4f, 12f))
+                assertFalse(list.canStartScrollIndicatorDrag(117f, 60f))
+                assertFalse(list.canStartScrollIndicatorDrag(110f, 12f))
+
+                list.setPadding(7, 0, 16, 0)
+                layout(list, 120, 96)
+                assertThumb(list, Rect(116, 0, 118, 24))
+                assertTrue(list.canStartScrollIndicatorDrag(110f, 12f))
+                assertFalse(list.canStartScrollIndicatorDrag(103f, 12f))
+                assertFalse(list.canStartScrollIndicatorDrag(110f, 60f))
+
+                var userScrolls = 0
+                var stops = 0
+                list.sourceOnUserScroll = { userScrolls++ }
+                list.sourceStopScroll = { stops++ }
+                val node = list.scrollIndicatorPointerNode
+                fun pointer(y: Float, previousY: Float, pressed: Boolean, previouslyPressed: Boolean): Boolean {
+                    val position = Offset(110f, y)
+                    val change = NativeDragPointerChange(0L, SystemClock.uptimeMillis(),
+                        position, Offset(110f, previousY), pressed, previouslyPressed, PointerType.Touch, position)
+                    node.dispatch(NativeDragPointerEvent(listOf(change), Offset.Zero), NativePointerPass.INITIAL)
+                    return change.consumed
+                }
+
+                val before = rows.binds
+                assertTrue(pointer(12f, 12f, pressed = true, previouslyPressed = false))
+                assertTrue(list.isScrollIndicatorDragging)
+                assertFalse(list.canStartScrollIndicatorDrag(117f, 12f))
+                assertEquals(1, userScrolls)
+                assertEquals(1, stops)
+                assertFalse(list.canScrollVertically(-1))
+                assertTrue(pointer(48f, 12f, pressed = true, previouslyPressed = true))
+                assertTrue(list.hasPendingScrollIndicatorPlacement)
+                layout(list, 120, 96)
+                val manager = list.layoutManager as LinearLayoutManager
+                assertFalse(list.hasPendingScrollIndicatorPlacement)
+                assertTrue(manager.findFirstVisibleItemPosition() in 400..600)
+                assertTrue("Dragging to the middle bound ${rows.binds - before} rows", rows.binds - before < 24)
+
+                val beforeEnd = rows.binds
+                assertTrue(pointer(120f, 48f, pressed = true, previouslyPressed = true))
+                rows.prependRow()
+                assertTrue(pointer(120f, 120f, pressed = false, previouslyPressed = true))
+                assertFalse(list.isScrollIndicatorDragging)
+                assertTrue(list.hasPendingScrollIndicatorPlacement)
+                layout(list, 120, 96)
+                assertFalse(list.hasPendingScrollIndicatorPlacement)
+                assertFalse(list.canScrollVertically(1))
+                val last = checkNotNull(manager.findViewByPosition(rows.itemCount - 1))
+                assertEquals(list.height, manager.getDecoratedBottom(last))
+                assertTrue("Dragging to the end bound ${rows.binds - beforeEnd} rows", rows.binds - beforeEnd < 24)
+                assertThumb(list, Rect(116, 72, 118, 96))
+
+                assertTrue(pointer(84f, 84f, pressed = true, previouslyPressed = false))
+                assertTrue(pointer(-24f, 84f, pressed = true, previouslyPressed = true))
+                layout(list, 120, 96)
+                assertFalse(list.canScrollVertically(-1))
+                assertTrue(pointer(-24f, -24f, pressed = false, previouslyPressed = true))
+                assertThumb(list, Rect(116, 0, 118, 24))
+
+                assertTrue(pointer(12f, 12f, pressed = true, previouslyPressed = false))
+                assertTrue(pointer(120f, 12f, pressed = true, previouslyPressed = true))
+                assertTrue(list.hasPendingScrollIndicatorPlacement)
+                node.cancel()
+                assertFalse(list.isScrollIndicatorDragging)
+                assertFalse(list.hasPendingScrollIndicatorPlacement)
+                assertFalse(pointer(121f, 120f, pressed = true, previouslyPressed = true))
+                layout(list, 120, 96)
+                assertFalse(list.canScrollVertically(-1))
+            }
+        }
+    }
+
+    @SdkSuppress(minSdkVersion = 28, maxSdkVersion = 28)
+    @Test fun pieRetiresTheFadeWakeOnVisibilityAndPresentationLoss() {
+        val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
+            NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        var host: LinearLayout? = null
+        withRetiringTestActivity(activity, root = { host }) {
+            lateinit var list: NativeSourceRecyclerView
+            val laidOut = CountDownLatch(1)
+            val windowHidden = CountDownLatch(1)
+            val windowShown = CountDownLatch(1)
+            var observeWindow = false
+            var hadPendingWakeAtWindowHide = false
+            val fadeDelay = 1_000
+            main {
+                val root = object : LinearLayout(activity) {
+                    override fun onWindowVisibilityChanged(visibility: Int) {
+                        super.onWindowVisibilityChanged(visibility)
+                        if (!observeWindow) return
+                        if (visibility == View.VISIBLE) {
+                            windowShown.countDown()
+                        } else {
+                            // A ViewGroup receives the window transition before its children.
+                            hadPendingWakeAtWindowHide = legacyWakePending(list)
+                            windowHidden.countDown()
+                        }
+                    }
+                }.also { host = it }
+                list = recycler(activity, 160, View.LAYOUT_DIRECTION_LTR).apply {
+                    adapter = Rows(16)
+                    setBackgroundColor(Color.WHITE)
+                    scrollBarDefaultDelayBeforeFade = fadeDelay
+                    bindScrollIndicator(style, Color.RED)
+                    root.addView(this, LinearLayout.LayoutParams(120, 96))
+                    doOnLayout { laidOut.countDown() }
+                }
+                activity.setContentView(root)
+            }
+            assertTrue("Fixture did not lay out", laidOut.await(5, TimeUnit.SECONDS))
+
+            main {
+                revealAtTop(list)
+                assertThumb(list, Rect(116, 0, 118, 24))
+                assertTrue(list.canStartScrollIndicatorDrag(117f, 12f))
+                assertTrue(legacyWakePending(list))
+
+                list.scrollIndicatorPresentationActive = false
+                assertTrue(list.isAttachedToWindow && list.isShown)
+                assertFalse(legacyWakePending(list))
+                assertFalse(list.canStartScrollIndicatorDrag(117f, 12f))
+                revealAtTop(list)
+                assertThumb(list, null)
+                assertFalse(legacyWakePending(list))
+
+                list.scrollIndicatorPresentationActive = true
+                assertThumb(list, null)
+                revealAtTop(list)
+                assertThumb(list, Rect(116, 0, 118, 24))
+                assertTrue(legacyWakePending(list))
+
+                // Incidents can hide the attached list when history becomes empty. A parent
+                // can also hide the list without changing the window or presentation binding.
+                for (hidden in listOf(list, requireNotNull(host))) {
+                    hidden.visibility = View.GONE
+                    assertTrue(list.isAttachedToWindow && list.windowVisibility == View.VISIBLE)
+                    assertFalse(list.isShown)
+                    assertFalse(legacyWakePending(list))
+                    assertFalse(list.canStartScrollIndicatorDrag(117f, 12f))
+                    list.scrollBy(0, 1)
+                    assertEquals(1, list.computeVerticalScrollOffset())
+                    list.scrollBy(0, -1)
+                    assertThumb(list, null)
+                    assertFalse(legacyWakePending(list))
+
+                    hidden.visibility = View.VISIBLE
+                    assertTrue(list.isShown)
+                    assertFalse(list.canStartScrollIndicatorDrag(117f, 12f))
+                    assertThumb(list, null)
+                    assertFalse(legacyWakePending(list))
+                    revealAtTop(list)
+                    assertThumb(list, Rect(116, 0, 118, 24))
+                    assertTrue(legacyWakePending(list))
+                }
+
+                observeWindow = true
+                activity.setVisible(false)
+            }
+            assertTrue("Fixture window stayed visible", windowHidden.await(5, TimeUnit.SECONDS))
+            assertTrue("Window must hide before the scheduled fade wake", hadPendingWakeAtWindowHide)
+            main {
+                assertTrue(list.isAttachedToWindow && list.windowVisibility != View.VISIBLE)
+                assertFalse(legacyWakePending(list))
+                assertFalse(list.canStartScrollIndicatorDrag(117f, 12f))
+                revealAtTop(list)
+                assertThumb(list, null)
+                assertFalse(legacyWakePending(list))
+            }
+
+            val afterFade = fadeDelay + ViewConfiguration.getScrollBarFadeDuration() + 100L
+            SystemClock.sleep(afterFade)
+            main {
+                assertFalse(legacyWakePending(list))
+                activity.setVisible(true)
+            }
+            assertTrue("Fixture window stayed hidden", windowShown.await(5, TimeUnit.SECONDS))
+            main {
+                assertThumb(list, null)
+                assertFalse(list.canStartScrollIndicatorDrag(117f, 12f))
+                revealAtTop(list)
+                assertThumb(list, Rect(116, 0, 118, 24))
+                assertTrue(list.canStartScrollIndicatorDrag(117f, 12f))
+                assertTrue(legacyWakePending(list))
+            }
+            SystemClock.sleep(afterFade)
+            main {
+                assertThumb(list, null)
+                assertFalse(list.canStartScrollIndicatorDrag(117f, 12f))
+                assertFalse(legacyWakePending(list))
+            }
+        }
+    }
+
+    private fun legacyWakePending(list: NativeSourceRecyclerView): Boolean {
+        // Observe the shared Runnable's ownership without adding test-only runtime APIs.
+        fun field(owner: Any, name: String) = owner.javaClass.getDeclaredField(name).apply {
+            isAccessible = true
+        }
+        val indicator = checkNotNull(field(list, "scrollIndicator").get(list))
+        val fade = checkNotNull(field(indicator, "legacyFade").get(indicator))
+        return field(fade, "wakePending").getBoolean(fade)
+    }
+
+    private fun revealAtTop(list: RecyclerView) {
+        list.scrollBy(0, 1)
+        list.scrollBy(0, -1)
     }
 
     private fun main(action: () -> Unit) {
@@ -316,11 +574,24 @@ class NativeScrollIndicatorDrawTest {
 
     private class Row(view: View) : RecyclerView.ViewHolder(view)
 
-    private class Rows(private val count: Int) : RecyclerView.Adapter<Row>() {
+    private class Rows(private var count: Int, private val heightAt: (Int) -> Int = { 24 }) :
+        RecyclerView.Adapter<Row>() {
+        var binds = 0
+            private set
+
         override fun getItemCount() = count
+
+        fun prependRow() {
+            count++
+            notifyItemInserted(0)
+        }
+
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) = Row(View(parent.context).apply {
             layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 24)
         })
-        override fun onBindViewHolder(holder: Row, position: Int) = Unit
+        override fun onBindViewHolder(holder: Row, position: Int) {
+            binds++
+            holder.itemView.layoutParams.height = heightAt(position)
+        }
     }
 }

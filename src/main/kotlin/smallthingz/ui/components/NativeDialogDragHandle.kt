@@ -32,6 +32,7 @@ fun createNativeDialogDragHandle(
         init {
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             minimumWidth = (DEFAULT_MINIMUM_TOUCH_TARGET_DP * density.density).roundToInt()
+            minimumHeight = minimumWidth
             addView(
                 NativeSheetDragHandle(context, style, { this }, runtime, onDismiss, onDismiss),
                 LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.CENTER),

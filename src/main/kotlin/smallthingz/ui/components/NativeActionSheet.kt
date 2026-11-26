@@ -678,7 +678,8 @@ internal class SheetRoot(
             val available=max(0,height-imeBottom)
             updateContentInsets()
             scrim.measure(sheetWindowExact(width),sheetWindowExact(available))
-            surface.measure(sheetWindowExact(min(width,(maxWidthDp*density).roundToInt())),sheetWindowAtMost(available))
+            val safeWidth = max(0, width - safe.left - safe.right)
+            surface.measure(sheetWindowExact(min(safeWidth,(maxWidthDp*density).roundToInt())),sheetWindowAtMost(available))
             setMeasuredDimension(width,height)
             state.measured(available,surface.measuredHeight)
         } finally {measuring=false}
@@ -686,7 +687,7 @@ internal class SheetRoot(
     }
     override fun onLayout(changed:Boolean,l:Int,t:Int,r:Int,b:Int) {
         scrim.layout(0,0,scrim.measuredWidth,scrim.measuredHeight)
-        val x=((width-surface.measuredWidth)*.5f).roundToInt()
+        val x = safe.left + ((max(0, width - safe.left - safe.right) - surface.measuredWidth) * .5f).roundToInt()
         val y = sheetTop()
         surface.layout(x,y,x+surface.measuredWidth,y+surface.measuredHeight)
         motion()

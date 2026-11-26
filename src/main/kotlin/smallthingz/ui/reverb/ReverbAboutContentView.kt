@@ -158,7 +158,8 @@ internal class ReverbAboutContentView private constructor(
         addView(dragLayer)
         input.bind(this, surface, content, handle)
         ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
-            val nextNavigation = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+            val nextNavigation = insets.getInsets(WindowInsetsCompat.Type.navigationBars() or
+                WindowInsetsCompat.Type.displayCutout())
             val rawStatus = insets.getInsets(WindowInsetsCompat.Type.statusBars())
             val nextStatus = Insets.of(
                 max(0, rawStatus.left - nextNavigation.left),

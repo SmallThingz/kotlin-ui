@@ -105,6 +105,76 @@ class NativePermissionDialogIntegrationTest {
         }
     }
 
+    @Test fun minimumHandleStripCancelsOnceAndCustomEqualInkKeepsContrast() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
+            NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        var prompt: NativePermissionDialog? = null
+        var decor: View? = null
+        fun main(action: () -> Unit) {
+            var result: Result<Unit>? = null
+            instrumentation.runOnMainSync { result = runCatching(action) }
+            checkNotNull(result).getOrThrow()
+        }
+        var cancels = 0
+        withRetiringTestActivity(activity, root = { decor }, cleanup = { prompt?.dismiss() }) {
+            main {
+                val same = 0xffdddddd.toInt()
+                val colors = NativeColorScheme.fallback(false).copy(surfaceContainerHigh = same, onSurfaceVariant = same)
+                prompt = NativePermissionDialog(activity, colors, null, "Reader", "Allow access?", "Deny", "Allow",
+                    onDeny = { fail("Handle must not deny") }, onAllow = { fail("Handle must not allow") },
+                    onCancel = { cancels++ }, showDragHandle = true).also { it.show() }
+                decor = requireNotNull(platform(checkNotNull(prompt)).window).decorView
+            }
+            changeWindowFocus(checkNotNull(decor), true) {}
+            main {
+                val window = platform(checkNotNull(prompt))
+                val handle = nodes(checkNotNull(decor)).filterIsInstance<NativeSheetDragHandle>().single()
+                val target = handle.parent as View
+                val density = activity.resources.displayMetrics.density
+                assertTrue(target.isAttachedToWindow && target.isLaidOut && target.isShown)
+                assertTrue(target.width >= (48f * density).roundToInt())
+                assertTrue(target.height >= (48f * density).roundToInt())
+                assertEquals((32f * density).roundToInt(), handle.mark.width)
+                assertEquals((2f * density).roundToInt().coerceAtLeast(1), handle.mark.height)
+                val surface = generateSequence(handle.parent as? View) { it.parent as? View }
+                    .filterIsInstance<NativeSurface>().first()
+                val range = NativeModalTextSurface.sample(handle.mark, forHandle = true)
+                assertEquals(surface.paintedTextSurface, range)
+                assertNotEquals(0L, range)
+                val image = Bitmap.createBitmap(handle.mark.width, handle.mark.height, Bitmap.Config.ARGB_8888)
+                try {
+                    handle.mark.draw(Canvas(image))
+                    val ink = image.getPixel(image.width / 2, image.height / 2)
+                    for (fill in listOf((range ushr 32).toInt(), range.toInt())) {
+                        assertTrue("Equal custom role/fill must remain visible",
+                            androidx.core.graphics.ColorUtils.calculateContrast(ink, fill) >= 3.0)
+                    }
+                } finally { image.recycle() }
+                val localY = target.height / 2f - 20f * density
+                assertTrue("Down must start in the newly covered strip", localY >= 0f && localY < handle.top)
+                val position = IntArray(2)
+                target.getLocationInWindow(position)
+                val x = position[0] + target.width / 2f
+                val y = position[1] + localY
+                val time = android.os.SystemClock.uptimeMillis()
+                fun send(action: Int, atY: Float) {
+                    val pointer = MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_FINGER }
+                    val point = MotionEvent.PointerCoords().apply { this.x = x; this.y = atY }
+                    val event = MotionEvent.obtain(time, time + 20, action, 1, arrayOf(pointer), arrayOf(point),
+                        0, 0, 1f, 1f, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, 0)
+                    try { assertTrue(window.dispatchTouchEvent(event)) } finally { event.recycle() }
+                }
+                send(MotionEvent.ACTION_DOWN, y)
+                send(MotionEvent.ACTION_UP, y + 64f * density)
+                assertFalse(window.isShowing)
+                assertEquals(1, cancels)
+                window.cancel()
+                assertEquals(1, cancels)
+            }
+        }
+    }
+
     @Test fun handleAccessibilityDismissRoutesToCancel() = attached { activity ->
         var cancels = 0
         val prompt = prompt(activity, deny = { fail("Handle denied the request") },

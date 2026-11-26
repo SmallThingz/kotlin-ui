@@ -37,6 +37,8 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityManager
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import smallthingz.ui.text.style.TextOverflow
@@ -55,6 +57,8 @@ data class LibraryRecordingRow(
     val edges: NativeGroupEdges?,
     val expanded: Boolean = false,
     val activationLabel: String? = null,
+    /** Actual playback of this recording, independent of expansion or a pending play request. */
+    val isPlaying: Boolean = false,
 )
 
 /** Both short clicks share the released action; the leading target has its own long-click action. */
@@ -492,9 +496,10 @@ private abstract class RecordingRowInputTarget(context: Context) : ViewGroup(con
         { NativeMergedRowAccessibilityState(true, null, clickLabel, semanticChildren(),
             selected = selectedSemantic, contentDescription = contentDescription,
             clickable = isClickable, longClickable = isLongClickable, longClickLabel = longClickLabel,
-            rolePresent = isClickable) },
+            rolePresent = isClickable, stateDescription = playbackStateDescription) },
         { sourceClick() }, { sourceLongClick() })
-    private val semanticPresent get() = isClickable || selectedSemantic != null || !contentDescription.isNullOrEmpty()
+    private val semanticPresent get() = isClickable || selectedSemantic != null ||
+        !contentDescription.isNullOrEmpty() || playbackStateDescription != null
     override val hasAccessibilitySemanticNode get() = semanticPresent
     fun refreshSemanticFlags() {
         importantForAccessibility = if(semanticPresent) IMPORTANT_FOR_ACCESSIBILITY_YES else IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -519,6 +524,22 @@ private abstract class RecordingRowInputTarget(context: Context) : ViewGroup(con
     var clickLabel: String? = null
     var longClickLabel: String? = null
     var selectedSemantic: Boolean? = null
+    var playbackStateDescription: String? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            val manager = context.getSystemService(AccessibilityManager::class.java)
+            if (manager?.isEnabled != true || !isAttachedToWindow) return
+            @Suppress("DEPRECATION")
+            val event = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED).apply {
+                contentChangeTypes = AccessibilityEvent.CONTENT_CHANGE_TYPE_STATE_DESCRIPTION
+                isEnabled = true
+                className = "android.view.View"
+                packageName = context.packageName
+                setSource(this@RecordingRowInputTarget)
+            }
+            parent?.requestSendAccessibilityEvent(this, event)
+        }
     init {
         clipChildren = false
         clipToPadding = false
@@ -580,7 +601,12 @@ private class RecordingRowBody(context: Context, initial: ReverbEnvironment) : R
     }
     fun bind(row: LibraryRecordingRow, actions: LibraryRecordingRowActions) {
         title.setText(row.title)
-        subtitle.setText(row.subtitle)
+        val playingLabel = if (row.isPlaying) context.getString(R.string.recording_playing) else null
+        subtitle.setText(if (playingLabel == null) row.subtitle else if (row.subtitle.isEmpty()) playingLabel
+            else context.getString(R.string.recording_playing_details, row.subtitle))
+        leading.setPlaying(row.isPlaying)
+        playbackStateDescription = playingLabel
+        leading.playbackStateDescription = playingLabel
         timestamp.setText(row.timestamp ?: "")
         hasTimestamp = row.timestamp != null
         timestamp.visibility = if (!hasTimestamp || trailingContent != null) GONE else VISIBLE
@@ -596,6 +622,9 @@ private class RecordingRowBody(context: Context, initial: ReverbEnvironment) : R
     }
     fun clear() {
         for (index in paragraphLeaves.indices) paragraphLeaves[index].setText("")
+        leading.setPlaying(false)
+        playbackStateDescription = null
+        leading.playbackStateDescription = null
         selectedSemantic = null
         leading.selectedSemantic = null
         leading.contentDescription = null
@@ -675,6 +704,7 @@ private class RecordingRowLeading(context: Context, initial: ReverbEnvironment) 
     private val style get() = environment.appearance.listDecorations.leadingDisc
     private var icon = ReverbIconDrawable(ReverbIcon.AudioFile, initial.textDensity.density, initial.palette.ink)
     private var iconColor = initial.palette.ink
+    private var isPlaying = false
     private val disc = NativeLeadingDisc(context, initial.textDensity.density, style, icon, initial.palette.raised).apply {
         setSurfacePreset(initial.palette.surfacePreset)
     }
@@ -687,6 +717,14 @@ private class RecordingRowLeading(context: Context, initial: ReverbEnvironment) 
 
     fun setContent(view: View?) = disc.bindContent(view)
 
+    fun setPlaying(value: Boolean) {
+        if (isPlaying == value) return
+        isPlaying = value
+        icon = ReverbIconDrawable(if (value) ReverbIcon.Play else ReverbIcon.AudioFile,
+            environment.textDensity.density, iconColor)
+        disc.bindStyle(environment.textDensity.density, style, icon)
+    }
+
     fun setColors(background: Int, tint: Int) {
         iconColor = tint
         disc.bindColors(background, tint)
@@ -695,7 +733,8 @@ private class RecordingRowLeading(context: Context, initial: ReverbEnvironment) 
     fun setEnvironment(value: ReverbEnvironment) {
         val densityChanged = environment.textDensity.density != value.textDensity.density
         environment = value
-        if (densityChanged) icon = ReverbIconDrawable(ReverbIcon.AudioFile, value.textDensity.density, iconColor)
+        if (densityChanged) icon = ReverbIconDrawable(if (isPlaying) ReverbIcon.Play else ReverbIcon.AudioFile,
+            value.textDensity.density, iconColor)
         disc.setSurfacePreset(value.palette.surfacePreset)
         disc.bindStyle(value.textDensity.density, style, icon)
     }
