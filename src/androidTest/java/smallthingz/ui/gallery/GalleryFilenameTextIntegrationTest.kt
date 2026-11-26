@@ -88,9 +88,9 @@ class GalleryFilenameTextIntegrationTest {
             }
     }
 
-    /** Failure-only evidence for the documented ordinary-native no-span fallback. */
-    private fun matchedNativeDiagnostics(view: GalleryFilenameText,
-        currentStyle: NativeTextStyle, widthDp: Int): String {
+    /** Matched reference for the documented ordinary-native no-span fallback. */
+    private fun matchedNativeControl(view: GalleryFilenameText,
+        currentStyle: NativeTextStyle, widthDp: Int): NativeText {
         val control = NativeText(view.context,
             GalleryDesign.palette(view.context, true).pageControls, currentStyle).apply {
             layoutParams = ViewGroup.LayoutParams(-1, -2)
@@ -127,7 +127,7 @@ class GalleryFilenameTextIntegrationTest {
         }
         check((control.text as Spanned).getSpans(0, control.length(),
             ReplacementSpan::class.java).isEmpty()) { "Control unexpectedly has replacement spans" }
-        return "paintEquals=true selectable=${control.isTextSelectable} " + diagnostics(control)
+        return control
     }
 
     private fun assertFits(view: NativeText, expected: String) {
@@ -141,6 +141,64 @@ class GalleryFilenameTextIntegrationTest {
             assertEquals(detail, 0, layout.getEllipsisCount(line))
             assertTrue(detail, layout.getLineMax(line) <= width + .5f)
             assertTrue(detail, layout.getLineLeft(line) >= -.5f && layout.getLineRight(line) <= width + .5f)
+        }
+    }
+
+    /** Native fallback is exact reference parity, not an absolute-ink overflow waiver. */
+    private fun assertNativeFallback(view: GalleryFilenameText, expected: String, control: NativeText) {
+        val actual = checkNotNull(view.layout)
+        val reference = checkNotNull(control.layout)
+        val detail = diagnostics(view) + " native=" + diagnostics(control)
+        assertTrue(detail, view.paint.equalsForTextMeasurement(control.paint))
+        assertEquals(detail, control.isTextSelectable, view.isTextSelectable)
+        assertEquals(detail, control.breakStrategy, view.breakStrategy)
+        assertEquals(detail, control.hyphenationFrequency, view.hyphenationFrequency)
+        if (Build.VERSION.SDK_INT >= 35) {
+            assertEquals(detail, control.useBoundsForWidth, view.useBoundsForWidth)
+            assertEquals(detail, reference.useBoundsForWidth, actual.useBoundsForWidth)
+        }
+        val width = view.width - view.compoundPaddingLeft - view.compoundPaddingRight
+        assertEquals(detail, control.width - control.compoundPaddingLeft - control.compoundPaddingRight, width)
+        assertEquals(detail, reference.width, actual.width)
+        assertEquals(detail, reference.height, actual.height)
+        assertEquals(detail, control.measuredHeight, view.measuredHeight)
+        assertEquals(detail, reference.lineCount, actual.lineCount)
+        for (candidate in listOf(view, control)) {
+            val layout = checkNotNull(candidate.layout)
+            val text = candidate.text as Spanned
+            assertEquals(expected, text.toString())
+            assertEquals(detail, expected.length, layout.getLineEnd(layout.lineCount - 1))
+            assertTrue(detail, layout.height <= candidate.height -
+                candidate.compoundPaddingTop - candidate.compoundPaddingBottom)
+            assertEquals(detail, 0, text.getSpans(0, text.length, ReplacementSpan::class.java).size)
+        }
+        val actualInk = Rect()
+        val nativeInk = Rect()
+        for (line in 0 until actual.lineCount) {
+            val start = actual.getLineStart(line)
+            val end = actual.getLineEnd(line)
+            assertEquals(detail, reference.getLineStart(line), start)
+            assertEquals(detail, reference.getLineEnd(line), end)
+            assertEquals(detail, 0, actual.getEllipsisCount(line))
+            assertEquals(detail, 0, reference.getEllipsisCount(line))
+            assertEquals(detail, reference.getParagraphDirection(line), actual.getParagraphDirection(line))
+            assertEquals(detail, reference.getLineTop(line), actual.getLineTop(line))
+            assertEquals(detail, reference.getLineBottom(line), actual.getLineBottom(line))
+            assertEquals(detail, reference.getLineBaseline(line), actual.getLineBaseline(line))
+            assertEquals(detail, reference.getLineMax(line), actual.getLineMax(line), 0f)
+            assertEquals(detail, reference.getLineWidth(line), actual.getLineWidth(line), 0f)
+            assertEquals(detail, reference.getLineLeft(line), actual.getLineLeft(line), 0f)
+            assertEquals(detail, reference.getLineRight(line), actual.getLineRight(line), 0f)
+            view.paint.getTextBounds(expected, start, end, actualInk)
+            control.paint.getTextBounds(expected, start, end, nativeInk)
+            assertEquals(detail, nativeInk, actualInk)
+            assertEquals(detail, control.paint.measureText(expected, start, end),
+                view.paint.measureText(expected, start, end), 0f)
+            if (reference.getLineMax(line) <= width + .5f && reference.getLineLeft(line) >= -.5f &&
+                reference.getLineRight(line) <= width + .5f) {
+                assertTrue(detail, actual.getLineMax(line) <= width + .5f)
+                assertTrue(detail, actual.getLineLeft(line) >= -.5f && actual.getLineRight(line) <= width + .5f)
+            }
         }
     }
 
@@ -331,30 +389,22 @@ class GalleryFilenameTextIntegrationTest {
                         assertExtensionTogether(retained)
                         if (expectedStart == unitStart) assertBasenameOnExtensionLine(retained)
                     } else assertNoExtensionSpan(retained)
-                    try {
-                        assertFits(retained, name)
-                    } catch (failure: AssertionError) {
-                        if (expectedStart < 0) {
-                            try {
-                                failure.addSuppressed(AssertionError("matchedNativeControl: " +
-                                    matchedNativeDiagnostics(retained, nextStyle, width)))
-                            } catch (diagnosticFailure: Throwable) {
-                                failure.addSuppressed(diagnosticFailure)
-                            }
-                        }
-                        throw failure
-                    }
+                    val native = if (expectedStart < 0) matchedNativeControl(retained, nextStyle, width) else null
+                    if (native == null) assertFits(retained, name)
+                    else assertNativeFallback(retained, name, native)
                     assertSame(buffer, retained.text)
                     assertEquals(name.lastIndexOf('.'), retained.selectionStart)
                     assertEquals(name.length, retained.selectionEnd)
                     val fresh = label(context, name).apply { applyStyle(nextStyle) }
                     measure(fresh, width)
-                    assertFits(fresh, name)
+                    if (native == null) assertFits(fresh, name)
+                    else assertNativeFallback(fresh, name, native)
                     val measuredHeight = retained.measuredHeight
                     val ends = checkNotNull(retained.layout).let { layout ->
                         (0 until layout.lineCount).map { layout.getLineEnd(it) }
                     }
                     measure(retained, width)
+                    if (native != null) assertNativeFallback(retained, name, native)
                     assertEquals("Repeated ordinary measure is stable", measuredHeight, retained.measuredHeight)
                     assertEquals(ends, checkNotNull(retained.layout).let { layout ->
                         (0 until layout.lineCount).map { layout.getLineEnd(it) }
