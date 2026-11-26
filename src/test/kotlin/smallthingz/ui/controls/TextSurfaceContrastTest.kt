@@ -56,16 +56,39 @@ class TextSurfaceContrastTest {
         assertEquals(0, textSurfaceForeground(textSurfaceRange(-1), 0))
     }
 
-    @Test fun flatRippleQualificationMatchesTheExistingLightRenderer() {
+    @Test fun flatRippleQualificationProtectsTheRasterBoundsOfEveryAcceptedOpacity() {
         for (channel in 0..255) {
             val surface = -0x1000000 or (channel * 0x010101)
             for (ink in listOf(-1, -0x1000000, 0xff6750a4.toInt())) {
                 for (indication in listOf(0x28ffffff, 0x28000000, 0x286750a4)) {
-                    assertEquals(selectionForegroundWithIndication(0, surface, ink, indication),
-                        textSurfaceForegroundWithIndication(textSurfaceRange(surface), ink, indication))
+                    val nominal = selectionForegroundWithIndication(0, surface, ink, indication)
+                    val result = textSurfaceForegroundWithIndication(textSurfaceRange(surface), ink, indication)
+                    val accepted = (result ushr 32).toInt()
+                    // The nominal renderer rounds a summed blend. Raster bounds also cover
+                    // independently quantized source/destination terms, so exact equality is wrong.
+                    assertTrue(accepted in 0..(nominal ushr 32).toInt())
+                    for (alpha in 0..accepted) {
+                        val range = smallthingz.ui.graphics.noiseSurfaceRangeOver(textSurfaceRange(surface),
+                            (indication and 0x00ffffff) or (alpha shl 24), 0)
+                        val case = "surface=$surface ink=$ink indication=$indication alpha=$alpha"
+                        assertTrue(case, contrast(result.toInt(), (range ushr 32).toInt()) >= 4.5)
+                        assertTrue(case, contrast(result.toInt(), range.toInt()) >= 4.5)
+                    }
                 }
             }
         }
+    }
+
+    @Test fun independentlyRoundedRasterTermsCanRequireLessOpacityThanTheNominalBlend() {
+        val surface = 0xff5d5d5d.toInt()
+        val nominal = selectionForegroundWithIndication(0, surface, -1, 0x28ffffff)
+        val bounded = textSurfaceForegroundWithIndication(textSurfaceRange(surface), -1, 0x28ffffff)
+        assertEquals(40L, nominal ushr 32)
+        assertEquals(39L, bounded ushr 32)
+        assertEquals(-1, bounded.toInt())
+        // At alpha39 the upper raster endpoint is118; alpha40 can reach119.
+        assertTrue(contrast(-1, 0xff767676.toInt()) >= 4.5)
+        assertTrue(contrast(-1, 0xff777777.toInt()) < 4.5)
     }
 
     @Test fun texturedRippleQualificationProtectsEveryAcceptedOpacity() {
