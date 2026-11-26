@@ -160,7 +160,9 @@ internal class ReverbPermissionSheet(
                 bindActions()
                 bindProgress()
                 bindError()
-                sheet.setContent(body, actions, listOf(actions.hitLayout, host.hit(body, emptyList())), scrollable = true)
+                sheet.setContentWithPinnedActions(body, actions,
+                    bodyHitLayouts = listOf(host.hit(body, emptyList())),
+                    actionHitLayouts = listOf(actions.hitLayout))
                 // Host lifecycle disposal is terminal and silent, just like explicit dismiss().
                 sheet.setOnDismissListener { dismiss() }
             } catch (failure: Throwable) {

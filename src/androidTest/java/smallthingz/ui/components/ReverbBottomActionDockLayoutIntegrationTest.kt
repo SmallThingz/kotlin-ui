@@ -176,7 +176,11 @@ class ReverbBottomActionDockLayoutIntegrationTest {
         } finally { button.close() }
     }
 
-    private fun main(action: () -> Unit) = InstrumentationRegistry.getInstrumentation().runOnMainSync(action)
+    private fun main(action: () -> Unit) {
+        var result: Result<Unit>? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { result = runCatching(action) }
+        checkNotNull(result).getOrThrow()
+    }
     private fun exact(size: Int) = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY)
     private fun atMost(size: Int) = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.AT_MOST)
     private fun unspecified() = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)

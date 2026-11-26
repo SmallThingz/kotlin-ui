@@ -205,12 +205,10 @@ internal class ReverbBrowserPanelSwipe(
                     dismiss(direction, velocity)
                 } else {
                     dismissed = true
-                    try {
-                        onSwipe(direction)
-                    } finally {
-                        // Keep the surface offscreen if the host removes the tab asynchronously.
-                        restoreClipping()
-                    }
+                    // Retire this exit before the host can synchronously rebind or start new input.
+                    // The completed translation survives until removal or an authoritative rebind.
+                    restoreClipping()
+                    onSwipe(direction)
                 }
             }
         })
@@ -234,6 +232,11 @@ internal class ReverbBrowserPanelSwipe(
         dismissed = false
         if (dragOffset != 0f) drag(0f)
         restoreClipping()
+    }
+
+    /** The host's authoritative list still contains this tab after the close request. */
+    fun restoreRetainedTab() {
+        if (dismissed) cancelDismissal()
     }
 
     override fun onCancelPendingInputEvents() {

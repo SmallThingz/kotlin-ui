@@ -87,7 +87,7 @@ private class ReverbBrowserChromeMenuRow(context: Context, theme: ReverbTheme,
         interestedParent = { interestedScrollParent() }).apply {
         filterTouchesWhenObscured = true
         bindContent(item.title, item.detail, ReverbDesign.appearance.typography[NativeTypographyRole.BODY_SMALL],
-            item.icon, item.enabled, theme.palette.menuColors(), item.id?.let { id -> {
+            item.icon, item.enabled, theme.palette.menuColors(), twoLineTitle = true, action = item.id?.let { id -> {
                 if (!this@ReverbBrowserChromeMenuRow.closed && browserPanelAdmitsInput() &&
                     !this@ReverbBrowserChromeMenuRow.closed) callback?.invoke(id)
             } })

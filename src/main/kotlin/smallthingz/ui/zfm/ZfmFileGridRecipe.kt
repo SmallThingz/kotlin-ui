@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Paint
 import smallthingz.ui.components.NativeTextStyle
 import smallthingz.ui.text.font.FontFamily
+import smallthingz.ui.text.font.FontStyle
 import smallthingz.ui.text.font.FontWeight
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
@@ -28,8 +29,14 @@ data class ZfmFileGridRecipe(
         val fonts = createFontFamilyResolver(context)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         fun useTypography(style: NativeTextStyle) {
-            paint.typeface = fonts.resolve(FontFamily.system(style.fontFamily), FontWeight(style.weight)).value
+            // Keep configuration weight adjustment and match NativeText's italic/tracking.
+            paint.typeface = fonts.resolve(FontFamily.system(style.fontFamily), FontWeight(style.weight),
+                if (style.italic) FontStyle.Italic else FontStyle.Normal).value
             paint.textSize = with(density) { style.sizeSp.sp.toPx() }
+            paint.letterSpacing = style.letterSpacingSp?.let {
+                val emWidth = paint.textSize * paint.textScaleX
+                if (emWidth.isFinite() && emWidth != 0f) with(density) { it.sp.toPx() } / emWidth else 0f
+            } ?: style.letterSpacing
         }
         useTypography(titleStyle)
         // Fit a usual folder name and keep a size or status word intact on its own line.

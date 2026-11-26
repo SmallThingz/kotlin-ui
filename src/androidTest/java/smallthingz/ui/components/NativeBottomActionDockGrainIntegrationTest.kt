@@ -214,5 +214,9 @@ class NativeBottomActionDockGrainIntegrationTest {
         }
         error("Missing field $name")
     }
-    private fun onMain(block: () -> Unit) = InstrumentationRegistry.getInstrumentation().runOnMainSync(block)
+    private fun onMain(block: () -> Unit) {
+        var result: Result<Unit>? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { result = runCatching(block) }
+        checkNotNull(result).getOrThrow()
+    }
 }

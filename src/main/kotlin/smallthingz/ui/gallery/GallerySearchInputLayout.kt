@@ -38,28 +38,32 @@ open class GallerySearchInputLayout(context: Context) : ViewGroup(context) {
         val bounded = MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED
         val bound = (MeasureSpec.getSize(widthMeasureSpec) - padding).coerceAtLeast(0)
         val unspecified = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+        val configuration = resources.configuration
+        val compactLandscape = bounded && configuration.screenHeightDp in 1..480 &&
+            configuration.screenWidthDp > configuration.screenHeightDp
         // Use the canonical labelled-field width as an editing-space floor. Actual
         // placeholder/slot height below still determines whether the query fits.
         val queryFloor = (280f * density).roundToInt()
-        actions.measure(MeasureSpec.makeMeasureSpec(bound,
-            if (bounded) MeasureSpec.AT_MOST else MeasureSpec.UNSPECIFIED), unspecified)
+        if (!bounded || compactLandscape) {
+            actions.measure(MeasureSpec.makeMeasureSpec(bound,
+                if (bounded) MeasureSpec.AT_MOST else MeasureSpec.UNSPECIFIED), unspecified)
+        }
         val available = if (bounded) bound else max(queryFloor, actions.measuredWidth)
-        query.measure(MeasureSpec.makeMeasureSpec(available, MeasureSpec.EXACTLY), unspecified)
-        val fullQueryHeight = query.measuredHeight
-        val actionWidth = actions.measuredWidth
-        val remaining = available - actionWidth - gap
-        val configuration = resources.configuration
-        inlineLayout = bounded && configuration.screenHeightDp in 1..480 &&
-            configuration.screenWidthDp > configuration.screenHeightDp &&
-            remaining >= queryFloor && actions.measuredHeight <= fullQueryHeight
-        if (inlineLayout) {
-            query.measure(MeasureSpec.makeMeasureSpec(remaining, MeasureSpec.EXACTLY), unspecified)
-            // Slots or a localized placeholder may wrap at the candidate width.
-            // Never buy horizontal placement with a taller/clipped query band.
-            inlineLayout = query.measuredHeight <= fullQueryHeight
+        val fullQueryWidthSpec = MeasureSpec.makeMeasureSpec(available, MeasureSpec.EXACTLY)
+        query.measure(fullQueryWidthSpec, unspecified)
+        inlineLayout = false
+        if (compactLandscape) {
+            val fullQueryHeight = query.measuredHeight
+            val remaining = available - actions.measuredWidth - gap
+            inlineLayout = remaining >= queryFloor && actions.measuredHeight <= fullQueryHeight
+            if (inlineLayout && remaining < available) {
+                query.measure(MeasureSpec.makeMeasureSpec(remaining, MeasureSpec.EXACTLY), unspecified)
+                // A wrapping query may need its full-width measurement for the stacked layout.
+                inlineLayout = query.measuredHeight <= fullQueryHeight
+                if (!inlineLayout) query.measure(fullQueryWidthSpec, unspecified)
+            }
         }
         if (!inlineLayout) {
-            query.measure(MeasureSpec.makeMeasureSpec(available, MeasureSpec.EXACTLY), unspecified)
             actions.measure(MeasureSpec.makeMeasureSpec(available, MeasureSpec.EXACTLY), unspecified)
         }
         val contentHeight = if (inlineLayout) max(query.measuredHeight, actions.measuredHeight)

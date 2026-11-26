@@ -37,6 +37,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import smallthingz.ui.runtime.MonotonicFrameClock
 import smallthingz.ui.text.TextStyle
 import smallthingz.ui.text.font.FontFamily
+import smallthingz.ui.text.style.TextOverflow
 import smallthingz.ui.unit.Density
 import androidx.core.view.ViewCompat
 import kotlinx.coroutines.CoroutineScope
@@ -269,7 +270,11 @@ internal class NativeMenuRowView<I>(
 
     /** Plain snapshot actions may omit an icon and include muted supporting text. */
     fun bindContent(label: String, detail: String?, detailStyle: TextStyle, icon: I?, enabled: Boolean,
-                    palette: NativeMenuColors, action: (() -> Unit)?) {
+                    palette: NativeMenuColors, action: (() -> Unit)?) =
+        bindContent(label, detail, detailStyle, icon, enabled, palette, twoLineTitle = false, action = action)
+
+    fun bindContent(label: String, detail: String?, detailStyle: TextStyle, icon: I?, enabled: Boolean,
+                    palette: NativeMenuColors, twoLineTitle: Boolean, action: (() -> Unit)?) {
         customContent = true
         this.action = action
         val selectionChanged = selected || actionCheck != null
@@ -282,6 +287,8 @@ internal class NativeMenuRowView<I>(
         importantForAccessibility = if (action != null) IMPORTANT_FOR_ACCESSIBILITY_YES else IMPORTANT_FOR_ACCESSIBILITY_NO
         ViewCompat.setScreenReaderFocusable(this, action != null)
         text.importantForAccessibility = if (action != null) IMPORTANT_FOR_ACCESSIBILITY_NO else IMPORTANT_FOR_ACCESSIBILITY_AUTO
+        if (twoLineTitle) text.setTextLayout(maxLines = 2, overflow = TextOverflow.Ellipsis)
+        else text.setTextLayout()
         text.setText(label)
         text.animateTextColor(palette.ink)
         if (icon != null) icons.bind(check, icon, palette.ink)
@@ -291,7 +298,7 @@ internal class NativeMenuRowView<I>(
             val paragraph = supportingText ?: ParagraphView(context, detailStyle, density, resolver, palette.muted).also {
                 NativeModalTextSurface.bindTree(it)
                 ViewCompat.setScreenReaderFocusable(it, false)
-                it.setTextLayout(maxLines = 1, overflow = smallthingz.ui.text.style.TextOverflow.Ellipsis)
+                it.setTextLayout(maxLines = 1, overflow = TextOverflow.Ellipsis)
                 supportingText = it
                 addView(it)
             }
@@ -312,6 +319,7 @@ internal class NativeMenuRowView<I>(
     private fun resetCustomContent() {
         if (!customContent) return
         customContent = false
+        text.setTextLayout()
         supportingText?.visibility = GONE
         contentDescription = null
         isClickable = true

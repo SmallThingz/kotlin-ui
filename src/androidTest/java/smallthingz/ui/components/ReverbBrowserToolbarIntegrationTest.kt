@@ -248,7 +248,11 @@ class ReverbBrowserToolbarIntegrationTest {
     private fun fixedDensity(context: Context, scale: Float = 1f) = context.createConfigurationContext(
         Configuration(context.resources.configuration).apply { densityDpi = 160; fontScale = scale })
     private fun exact(value: Int) = View.MeasureSpec.makeMeasureSpec(value, View.MeasureSpec.EXACTLY)
-    private fun main(block: () -> Unit) = instrumentation.runOnMainSync(block)
+    private fun main(block: () -> Unit) {
+        var result: Result<Unit>? = null
+        instrumentation.runOnMainSync { result = runCatching(block) }
+        checkNotNull(result).getOrThrow()
+    }
 
     private fun withWindow(block: (ReverbBrowserChrome, View, ReverbTheme) -> Unit) {
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,

@@ -214,6 +214,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         heading.setText(title)
         entries.forEachIndexed { index, entry ->
             val card = cards.getOrPut(entry.key) { Card(entry) }
+            card.gesture.restoreRetainedTab()
             card.bind(entry)
             if (grid.indexOfChild(card.gesture) != index) {
                 val focus = card.gesture.findFocus()
@@ -223,10 +224,21 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             } else card.gesture.layoutParams = cardParams(index)
         }
         cards.values.forEach { it.bindReorderActions() }
-        scheduleRemovedFocusHandoff()
+        handoffRemovedFocus()
     }
-    private fun hasAccessibilityFocus(view: View): Boolean = view.isAccessibilityFocused ||
-        (view is ViewGroup && (0 until view.childCount).any { hasAccessibilityFocus(view.getChildAt(it)) })
+    @Suppress("DEPRECATION") // Nodes returned by providers may be pooled on older Android versions.
+    private fun hasAccessibilityFocus(view: View, includeProviders: Boolean = false): Boolean {
+        if (view.isAccessibilityFocused) return true
+        if (includeProviders) view.accessibilityNodeProvider?.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)?.let {
+            it.recycle()
+            return true
+        }
+        if (view is ViewGroup) for (index in 0 until view.childCount) {
+            val child = view.getChildAt(index) ?: continue
+            if (hasAccessibilityFocus(child, includeProviders)) return true
+        }
+        return false
+    }
 
     private fun cancelFocusHandoff() {
         focusHandoffToken = null
@@ -234,32 +246,47 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         pendingAccessibilityContinuation = null
     }
 
-    private fun scheduleRemovedFocusHandoff() {
+    private fun currentFocusableTab(candidates: List<Key>): View? = candidates.firstNotNullOfOrNull { key ->
+        cards[key]?.takeIf { it.content.enabled && it.row.browserPanelAdmitsInput() }?.row
+    }
+
+    private fun View.isPresentForFocus(): Boolean = isEnabled && isAttachedToWindow && isShown && hasWindowFocus()
+
+    private fun handoffRemovedFocus() {
         if (pendingKeyboardContinuation == null && pendingAccessibilityContinuation == null) return
         val token = Any().also { focusHandoffToken = it }
+        fun keyboardUnclaimed(): Boolean {
+            val focused = rootView.findFocus()
+            // Removing a focused child can make the focusable panel the framework's fallback.
+            return !panelClosed && focusHandoffToken === token &&
+                (focused == null || focused === this)
+        }
+        val keyboard = pendingKeyboardContinuation
+        pendingKeyboardContinuation = null
+        if (keyboard != null && keyboardUnclaimed()) {
+            val target = currentFocusableTab(keyboard)
+            if (keyboardUnclaimed() && target?.requestFocus() != true &&
+                browserPanelAdmitsInput() && keyboardUnclaimed()) focusBackAction()
+        }
+        if (focusHandoffToken !== token) return
+        if (pendingAccessibilityContinuation == null) {
+            focusHandoffToken = null
+            return
+        }
         grid.doOnLayout {
             if (panelClosed || focusHandoffToken !== token) return@doOnLayout
-            val keyboard = pendingKeyboardContinuation
             val accessibility = pendingAccessibilityContinuation
-            pendingKeyboardContinuation = null
             pendingAccessibilityContinuation = null
-            fun currentRow(candidates: List<Key>): View? = candidates.firstNotNullOfOrNull { key ->
-                cards[key]?.takeIf { it.content.enabled && it.row.browserPanelAdmitsInput() }?.row
-            }
-            // Undo and other host actions may acquire focus between bind and layout.
-            // Honor the current window owner independently for each focus channel.
-            if (keyboard != null && rootView.findFocus() == null) {
-                val target = currentRow(keyboard)
-                if (focusHandoffToken === token && rootView.findFocus() == null && target?.requestFocus() != true &&
-                    browserPanelAdmitsInput() && focusHandoffToken === token && rootView.findFocus() == null) focusBackAction()
-            }
-            if (accessibility != null && !panelClosed && focusHandoffToken === token && !hasAccessibilityFocus(rootView)) {
-                val target = currentRow(accessibility) ?: back.accessibilityAction
+            fun accessibilityUnclaimed(): Boolean = !panelClosed && focusHandoffToken === token &&
+                !hasAccessibilityFocus(rootView, includeProviders = true) &&
+                !panelClosed && focusHandoffToken === token
+            if (accessibility != null && accessibilityUnclaimed()) {
+                val target = currentFocusableTab(accessibility) ?: back.accessibilityAction
                 // The surviving neighbor may be outside the scroll viewport after a removal.
-                if (target.browserPanelAdmitsInput()) {
+                if (target.browserPanelAdmitsInput() && accessibilityUnclaimed() && target.isPresentForFocus()) {
                     target.requestRectangleOnScreen(Rect(0, 0, target.width, target.height), true)
-                    if (target.browserPanelAdmitsInput() && focusHandoffToken === token &&
-                        !hasAccessibilityFocus(rootView)) target.performAccessibilityAction(
+                    if (target.browserPanelAdmitsInput() && accessibilityUnclaimed() &&
+                        target.isPresentForFocus()) target.performAccessibilityAction(
                         AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null)
                 }
             }
@@ -267,11 +294,15 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         }
     }
     fun updateTab(entry: ReverbBrowserPanelTab<Key>) {
-        if (panelClosed || entry.key !in cards) return
-        cancelReorder()
-        reorder.setEnabled(entry.key, entry.enabled)
-        cards[entry.key]?.bind(entry)
-        cards.values.forEach { it.bindReorderActions() }
+        if (panelClosed) return
+        val card = cards[entry.key] ?: return
+        val eligibilityChanged = card.content.enabled != entry.enabled
+        if (eligibilityChanged) {
+            cancelReorder()
+            reorder.setEnabled(entry.key, entry.enabled)
+        }
+        card.bind(entry)
+        if (eligibilityChanged) cards.values.forEach { it.bindReorderActions() }
     }
     private fun cancelReorder() {
         stopEdgeScroll()
@@ -313,19 +344,21 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         if (panelClosed || !reorder.canMove(key, target)) return false
         val source = cards[key] ?: return false
         val destination = cards[target] ?: return false
-        if (!source.content.enabled || !destination.content.enabled ||
-            !source.row.browserPanelAdmitsInput() || !destination.row.browserPanelAdmitsInput()) return false
-        val restoreAccessibilityFocus = source.row.isAccessibilityFocused
-        // Keep keyboard focus on the moved key when the host synchronously rebinds the grid.
-        source.row.requestFocus()
+        fun current() = !panelClosed && onTabMove === callback && reorder.canMove(key, target) &&
+            cards[key] === source && cards[target] === destination &&
+            source.content.enabled && destination.content.enabled
+        fun admitted() = current() && source.row.browserPanelAdmitsInput() &&
+            destination.row.browserPanelAdmitsInput() && current()
+        if (!admitted()) return false
         cancelReorder()
-        if (panelClosed || onTabMove !== callback || !reorder.canMove(key, target) ||
-            cards[key] !== source || cards[target] !== destination ||
-            !source.row.browserPanelAdmitsInput() || !destination.row.browserPanelAdmitsInput()) return false
+        if (!admitted()) return false
+        val restoreAccessibilityFocus = source.row.isAccessibilityFocused
         callback(key, target)
         // A synchronous host rebind may detach/reinsert the moved row. Resolve it afresh by key.
-        if (restoreAccessibilityFocus && !panelClosed) cards[key]?.row?.let { row ->
-            if (row.browserPanelAdmitsInput()) row.performAccessibilityAction(
+        if (restoreAccessibilityFocus && !panelClosed && onTabMove === callback) cards[key]?.row?.let { row ->
+            if (row.browserPanelAdmitsInput() && !hasAccessibilityFocus(rootView, includeProviders = true) &&
+                !panelClosed && onTabMove === callback &&
+                cards[key]?.row === row && row.isPresentForFocus()) row.performAccessibilityAction(
                 AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null)
         }
         return true
@@ -379,8 +412,9 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         private val recipe = theme.appearance.groupSurfaces.settingsChoices
         private val surface = recipe.create(context, ReverbTextSurface::invalidate).also { recipe.bind(it, theme.palette) }
         val gesture = ReverbBrowserPanelSwipe(context, { it * .35f },
-            canSwipe = { !closed && !reorder.dragging && content.enabled && surface.browserPanelAdmitsInput() },
-            onDrag = { surface.translationX = it }, onSwipe = { dispatch(ReverbBrowserPanelTabAction.CLOSE) })
+            canSwipe = { !closed && onTabAction != null && !reorder.dragging && content.enabled &&
+                surface.browserPanelAdmitsInput() },
+            onDrag = { surface.translationX = it }, onSwipe = { swipeCloseRequested() })
         val row = ReverbBrowserPanelSettingRow(context, theme, ReverbBrowserPanelSetting(initial.title, actionId = "select")) {
             dispatch(ReverbBrowserPanelTabAction.SELECT)
         }.apply {
@@ -477,11 +511,14 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             row.setOnLongClickListener(null)
             row.isLongClickable = false
             val entry = snapshot ?: return
-            if (closed || panelClosed || !entry.enabled || onTabMove == null) return
-            if (reorder.canStart(entry.key)) row.setOnLongClickListener {
-                if (closed || panelClosed || onTabMove == null || snapshot !== entry ||
-                    cards[entry.key] !== this || !row.browserPanelAdmitsInput()) return@setOnLongClickListener false
-                val token = reorder.begin(entry.key) ?: return@setOnLongClickListener false
+            val owner = onTabMove ?: return
+            if (closed || panelClosed || !entry.enabled) return
+            val key = entry.key
+            fun ownsActions() = !closed && !panelClosed && onTabMove === owner &&
+                snapshot?.enabled == true && cards[key] === this
+            if (reorder.canStart(key)) row.setOnLongClickListener {
+                if (!ownsActions() || !row.browserPanelAdmitsInput() || !ownsActions()) return@setOnLongClickListener false
+                val token = reorder.begin(key) ?: return@setOnLongClickListener false
                 dragSource = row
                 gesture.cancelBrowserPanelInput()
                 val started = try { row.startDragAndDrop(null, View.DragShadowBuilder(surface), token, 0) }
@@ -491,20 +528,28 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             }
             for ((step, label) in listOf(-1 to R.string.reverb_browser_tab_move_earlier,
                 1 to R.string.reverb_browser_tab_move_later)) {
-                if (reorder.adjacent(entry.key, step) == null) continue
+                if (reorder.adjacent(key, step) == null) continue
                 moveActions += ViewCompat.addAccessibilityAction(row, context.getString(label)) { _, _ ->
-                    if (closed || snapshot !== entry) false else {
-                        val target = reorder.adjacent(entry.key, step)
-                        target != null && moveTab(entry.key, target)
+                    if (!ownsActions()) false else {
+                        val target = reorder.adjacent(key, step)
+                        target != null && moveTab(key, target)
                     }
                 }
             }
         }
-        private fun dispatch(action: ReverbBrowserPanelTabAction, source: View = surface) {
-            val before = snapshot ?: return
+        private fun swipeCloseRequested() {
+            if (!dispatch(ReverbBrowserPanelTabAction.CLOSE)) gesture.restoreRetainedTab()
+        }
+        private fun dispatch(action: ReverbBrowserPanelTabAction, source: View = surface): Boolean {
+            val before = snapshot ?: return false
+            val owner = onTabAction ?: return false
             if (!closed && !panelClosed && !reorder.dragging && before.enabled && cards[before.key] === this &&
-                source.browserPanelAdmitsInput() && !closed && !panelClosed && snapshot === before && cards[before.key] === this)
-                onTabAction?.invoke(before.key, action)
+                source.browserPanelAdmitsInput() && !closed && !panelClosed && snapshot === before &&
+                cards[before.key] === this && onTabAction === owner) {
+                owner(before.key, action)
+                return true
+            }
+            return false
         }
         fun bind(entry: ReverbBrowserPanelTab<Key>) {
             if (closed) return

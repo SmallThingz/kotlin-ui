@@ -6,9 +6,13 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import androidx.core.view.OneShotPreDrawListener
 
 /** Spends only spare, already-measured Heal panel space; never changes its measurement. */
 open class GalleryHealControlsLayout(context: Context) : LinearLayout(context) {
+    private var pendingDecisionPlacement: OneShotPreDrawListener? = null
+    private var attachmentGeneration = 0
+
     var reservedDecisionGroup: GalleryHealDecisionGroup? = null
     var anchorReadyDecision = false
         set(value) {
@@ -19,14 +23,31 @@ open class GalleryHealControlsLayout(context: Context) : LinearLayout(context) {
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
-        val group = reservedDecisionGroup ?: return
-        if (!anchorReadyDecision || group.parent !== this || group.visibility != View.VISIBLE) return
+        if (pendingDecisionPlacement != null || decisionWithSpareSpace() == null) return
+        // ScrollView clamps its offset after laying out its children.
+        val generation = attachmentGeneration
+        pendingDecisionPlacement = OneShotPreDrawListener.add(this) {
+            if (generation != attachmentGeneration) return@add
+            pendingDecisionPlacement = null
+            val group = decisionWithSpareSpace()
+            if (group != null && fullyFitsScrollViewport()) group.extendDecisionTo(height - paddingBottom)
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        attachmentGeneration++
+        pendingDecisionPlacement?.removeListener()
+        pendingDecisionPlacement = null
+        super.onDetachedFromWindow()
+    }
+
+    private fun decisionWithSpareSpace(): GalleryHealDecisionGroup? {
+        val group = reservedDecisionGroup ?: return null
+        if (!anchorReadyDecision || group.parent !== this || group.visibility != View.VISIBLE ||
+            height - paddingBottom <= group.bottom) return null
         // Details or any other later visible content must retain ordinary vertical flow.
         val lastVisible = (childCount - 1 downTo 0).firstOrNull { getChildAt(it).visibility != View.GONE }
-        if (lastVisible == null || getChildAt(lastVisible) !== group) return
-        val targetBottom = height - paddingBottom
-        if (targetBottom <= group.bottom || !fullyFitsScrollViewport()) return
-        group.extendDecisionTo(targetBottom)
+        return if (lastVisible != null && getChildAt(lastVisible) === group) group else null
     }
 
     private fun fullyFitsScrollViewport(): Boolean {

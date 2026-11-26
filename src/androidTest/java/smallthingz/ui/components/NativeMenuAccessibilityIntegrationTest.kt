@@ -15,6 +15,7 @@ import org.junit.runner.RunWith
 import smallthingz.ui.text.TextStyle
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
+import smallthingz.ui.util.closePreservingPrimaryFailure
 
 /** Attached Android nodes/event requests; does not claim accessibility-service delivery. */
 @RunWith(AndroidJUnit4::class)
@@ -45,12 +46,12 @@ class NativeMenuAccessibilityIntegrationTest {
         var failure: Throwable? = null
         var primaryFailed = false
         try {
-            instrumentation.runOnMainSync {
+            onMain {
                 ownedColumn = column(activity).also { it.addOnAttachStateChangeListener(attachment) }
                 activity.setContentView(requireNotNull(ownedColumn))
             }
             check(attached.await(5, TimeUnit.SECONDS)) { "Owned menu column did not attach" }
-            instrumentation.runOnMainSync {
+            onMain {
                 val attached = requireNotNull(ownedColumn)
                 check(attached.isAttachedToWindow)
                 action(attached)
@@ -60,16 +61,25 @@ class NativeMenuAccessibilityIntegrationTest {
             primaryFailed = true
             throw error
         } finally {
-            instrumentation.runOnMainSync {
-                try { ownedColumn?.removeOnAttachStateChangeListener(attachment) }
-                catch (error: Throwable) { if (failure == null) failure = error else failure!!.addSuppressed(error) }
-                try { ownedColumn?.close() }
-                catch (error: Throwable) { if (failure == null) failure = error else failure!!.addSuppressed(error) }
-                try { activity.finish() }
-                catch (error: Throwable) { if (failure == null) failure = error else failure!!.addSuppressed(error) }
+            try {
+                onMain {
+                    failure = closePreservingPrimaryFailure(failure) {
+                        ownedColumn?.removeOnAttachStateChangeListener(attachment)
+                    }
+                    failure = closePreservingPrimaryFailure(failure) { ownedColumn?.close() }
+                    failure = closePreservingPrimaryFailure(failure) { activity.finish() }
+                }
+            } catch (error: Throwable) {
+                failure = closePreservingPrimaryFailure(failure) { throw error }
             }
             if (!primaryFailed) failure?.let { throw it }
         }
+    }
+
+    private fun onMain(block: () -> Unit) {
+        var result: Result<Unit>? = null
+        instrumentation.runOnMainSync { result = runCatching(block) }
+        checkNotNull(result).getOrThrow()
     }
 
     private fun assertNode(row: NativeMenuRowView<Int>, selected: Boolean, enabled: Boolean, label: String) {

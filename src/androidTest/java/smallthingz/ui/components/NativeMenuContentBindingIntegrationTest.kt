@@ -14,6 +14,9 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import smallthingz.ui.reverb.ReverbBrowserChromeMenuBody
+import smallthingz.ui.reverb.ReverbBrowserChromeMenuContent
+import smallthingz.ui.reverb.ReverbBrowserChromeRow
 import smallthingz.ui.reverb.ReverbDesign
 import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.text.font.createFontFamilyResolver
@@ -22,6 +25,7 @@ import smallthingz.ui.unit.Density
 import smallthingz.ui.util.closePreservingPrimaryFailure
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.math.roundToInt
 
 /** Actual attached rows, framework accessibility nodes and input; no accessibility-service claim. */
 @RunWith(AndroidJUnit4::class)
@@ -144,6 +148,40 @@ class NativeMenuContentBindingIntegrationTest {
         }
     }
 
+    @Test fun browserPopupTitleEllipsizesAfterTwoLinesAndKeepsTheFullAccessibilityLabel() = withFixture { f ->
+        val title = "A browsing history title long enough to occupy several lines in a narrow popup without truncation"
+        val detail = "Visited yesterday"
+        val theme = ReverbDesign.theme(f.root.context, dark = false)
+        val popup = ReverbBrowserChromeMenuBody(f.root.context, theme,
+            ReverbBrowserChromeMenuContent("History", rows = listOf(ReverbBrowserChromeRow("open", title, detail)))) {
+            error("Binding must not activate the row")
+        }
+        try {
+            f.root.addView(popup, LinearLayout.LayoutParams(-1, -2))
+            val width = (140 * theme.density.density).roundToInt()
+            layout(popup, width)
+            val row = popup.getChildAt(0) as NativeMenuRowView<*>
+            assertTrue(row.isAttachedToWindow)
+            val titleView = labels(row).first()
+            val popupTitle = checkNotNull(titleView.currentParagraph)
+            assertEquals(2, popupTitle.lineCount)
+            assertTrue("The second line must end in an ellipsis", popupTitle.isLineEllipsized(1))
+            node(row) { assertEquals("$title, $detail", it.contentDescription.toString()) }
+
+            row.bind(title, false, colors) {}
+            layout(row, width)
+            assertSame(titleView, labels(row).single())
+            val ordinaryTitle = checkNotNull(titleView.currentParagraph)
+            assertTrue("An ordinary binding must restore wrapping beyond two lines", ordinaryTitle.lineCount > 2)
+            assertFalse(ordinaryTitle.isLineEllipsized(ordinaryTitle.lineCount - 1))
+            assertEquals(title, nodeText(titleView))
+            node(row) { assertNull(it.contentDescription) }
+        } finally {
+            popup.close()
+            f.root.removeView(popup)
+        }
+    }
+
     @Test fun choiceBindingAfterCustomContentRestoresFreshRowAccessibilitySelectionAndGeometry() = withFixture { f ->
         var staleCalls = 0
         var choiceCalls = 0
@@ -244,7 +282,7 @@ class NativeMenuContentBindingIntegrationTest {
         var fixture: Fixture? = null
         var failure: Throwable? = null
         try {
-            instrumentation.runOnMainSync {
+            onMain {
                 fixture = Fixture(activity).also { f ->
                     f.root.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
                         override fun onViewAttachedToWindow(view: View) {
@@ -257,7 +295,7 @@ class NativeMenuContentBindingIntegrationTest {
                 }
             }
             assertTrue("Menu test host did not attach", attached.await(5, TimeUnit.SECONDS))
-            instrumentation.runOnMainSync { assertions(checkNotNull(fixture)) }
+            onMain { assertions(checkNotNull(fixture)) }
         } catch (error: Throwable) {
             failure = error
             throw error
@@ -271,13 +309,19 @@ class NativeMenuContentBindingIntegrationTest {
         }
     }
 
-    private fun layout(row: NativeMenuRowView<Int>, width: Int = 260) {
-        row.forceLayout()
-        row.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
-        row.layout(0, 0, row.measuredWidth, row.measuredHeight)
+    private fun onMain(action: () -> Unit) {
+        var result: Result<Unit>? = null
+        instrumentation.runOnMainSync { result = runCatching(action) }
+        checkNotNull(result).getOrThrow()
     }
-    private fun labels(row: NativeMenuRowView<Int>): List<ParagraphView> =
+
+    private fun layout(view: View, width: Int = 260) {
+        view.forceLayout()
+        view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+        view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+    }
+    private fun labels(row: NativeMenuRowView<*>): List<ParagraphView> =
         (0 until row.childCount).map(row::getChildAt).filterIsInstance<ParagraphView>().filter { it.visibility == View.VISIBLE }
     private fun glyph(row: NativeMenuRowView<Int>) = (0 until row.childCount).map(row::getChildAt).filterIsInstance<Glyph>().single()
     private fun bounds(view: View) = Rect(view.left, view.top, view.right, view.bottom)

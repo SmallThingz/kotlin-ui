@@ -18,13 +18,13 @@ import org.junit.runner.RunWith
 import java.util.Locale
 import kotlin.math.roundToInt
 
-/** Real Android layout-time scroll transforms; no scroll-only re-anchoring contract.
- * Forced layouts below evaluate the current viewport. Between layouts, content scrolls naturally.
+/** Real Android layout and scroll transforms with post-layout placement.
+ * Forced layouts below evaluate the final viewport. Between layouts, content scrolls naturally.
  * No Activity, settings or media mutation. */
 @RunWith(AndroidJUnit4::class)
 class GalleryHealReservedDecisionLayoutIntegrationTest {
     @Test fun reservedReadyDecisionUsesOnlyVisibleSlackAndRetainsChildren() =
-        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+        onMain {
             val target = InstrumentationRegistry.getInstrumentation().targetContext
             for (font in listOf(1f, 2f)) for (rtl in listOf(false, true)) {
                 val context = ContextThemeWrapper(target, android.R.style.Theme_Material_NoActionBar).apply {
@@ -118,6 +118,55 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
             }
         }
 
+    @Test fun readyDecisionAnchorsAfterViewportResizeClampsScrollOffset() =
+        onMain {
+            val target = InstrumentationRegistry.getInstrumentation().targetContext
+            val f = Fixture(target, rtl = false, trailingHeightDp = 48)
+            try {
+                f.viewportHeight = f.dp(240)
+                f.selecting()
+                val reserved = f.panel.measuredHeight
+                f.panel.reservation = reserved
+                f.ready(false)
+                val natural = f.bounds(f.decisions)
+                val comparison = f.bounds(f.before)
+                val retained = listOf(f.before, f.discard, f.apply)
+                assertTrue(natural.bottom < reserved - f.panel.paddingBottom)
+
+                f.panel.clearFocus()
+                f.scroll.scrollTo(0, f.body.height)
+                f.ready(true)
+                val panelRect = Rect(0, 0, f.panel.width, f.panel.height)
+                f.scroll.offsetDescendantRectToMyCoords(f.panel, panelRect)
+                val oldOffset = f.scroll.scrollY
+                assertTrue(oldOffset + f.scroll.paddingTop > panelRect.top)
+                assertEquals(natural, f.bounds(f.decisions))
+
+                // Keep the same content but shrink the scroll range to a nonzero offset.
+                val finalOffset = f.dp(24)
+                assertTrue(oldOffset > finalOffset)
+                f.viewportHeight = f.body.height + f.scroll.paddingTop + f.scroll.paddingBottom - finalOffset
+                f.ready(true)
+                assertEquals(finalOffset, f.scroll.scrollY)
+                panelRect.set(0, 0, f.panel.width, f.panel.height)
+                f.scroll.offsetDescendantRectToMyCoords(f.panel, panelRect)
+                assertTrue(panelRect.top >= finalOffset + f.scroll.paddingTop)
+                assertTrue(panelRect.bottom <= finalOffset + f.scroll.height - f.scroll.paddingBottom)
+                assertEquals(reserved, f.panel.measuredHeight)
+                assertEquals(comparison, f.bounds(f.before))
+                assertEquals(reserved - f.panel.paddingBottom, f.bounds(f.decisions).bottom)
+                assertSame(retained[0], f.group.getChildAt(0))
+                assertSame(retained[1], f.decisions.getChildAt(0))
+                assertSame(retained[2], f.decisions.getChildAt(1))
+            } finally { f.panel.clearFocus(); f.scroll.removeAllViews() }
+        }
+
+    private fun onMain(block: () -> Unit) {
+        var result: Result<Unit>? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { result = runCatching(block) }
+        checkNotNull(result).getOrThrow()
+    }
+
     /** Mirrors only the existing app's reserved-height contract, not its Heal state machine. */
     private class ReservedPanel(context: Context) : GalleryHealControlsLayout(context) {
         var reservation = 0
@@ -128,7 +177,7 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
         }
     }
 
-    private class Fixture(val context: Context, rtl: Boolean) {
+    private class Fixture(val context: Context, rtl: Boolean, trailingHeightDp: Int = 600) {
         fun dp(value: Int) = (value * context.resources.displayMetrics.density).roundToInt()
         var clicks = 0
         var width = dp(640)
@@ -164,7 +213,7 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
             setPadding(dp(5), dp(7), dp(9), dp(11))
             addView(View(context), LinearLayout.LayoutParams(-1, dp(96)))
             addView(panel, LinearLayout.LayoutParams(-1, -2))
-            addView(View(context), LinearLayout.LayoutParams(-1, dp(600)))
+            addView(View(context), LinearLayout.LayoutParams(-1, dp(trailingHeightDp)))
         }
         val scroll = ScrollView(context).apply {
             layoutDirection = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
@@ -173,11 +222,12 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
             addView(body, FrameLayout.LayoutParams(-1, -2))
         }
         fun layout() {
-            // Force descendant layout: fit/fallback is evaluated here, not on scroll events.
+            // Force descendant layout; the detached fixture delivers pre-draw after ScrollView clamps.
             panel.forceLayout(); group.forceLayout(); body.forceLayout(); scroll.forceLayout()
             scroll.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(viewportHeight, View.MeasureSpec.EXACTLY))
             scroll.layout(0, 0, width, viewportHeight)
+            panel.viewTreeObserver.dispatchOnPreDraw()
         }
         fun selecting() {
             panel.anchorReadyDecision = false; group.visibility = View.GONE; selection.visibility = View.VISIBLE
