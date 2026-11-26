@@ -88,7 +88,9 @@ internal class ReverbAppChoiceRow(
         choice = value
         label.setText(value.label)
         theme.bindParagraph(label, NativeTypographyRole.BODY_MEDIUM)
-        if (!value.enabled) label.animateTextColor(theme.palette.muted)
+        // Picker choices follow the shared menu's selection emphasis; triggers and checkboxes do not.
+        val menuChoice = !trigger && !checkbox
+        if (!value.enabled || (menuChoice && !selected)) label.animateTextColor(theme.palette.muted)
         val packageName = value.packageName?.takeIf { it.isNotBlank() }
         val detail = if (supportingText == null) packageName else supportingText.takeIf { it.isNotBlank() }
         packageLabel.setText(if (supportingText != null) detail.orEmpty() else packageName?.let {
@@ -110,7 +112,8 @@ internal class ReverbAppChoiceRow(
             checkbox -> if (selected) ReverbIcon.Checked else ReverbIcon.Unchecked
             else -> ReverbIcon.Check
         }
-        trailing.bind(glyph, if (checkbox && selected) theme.palette.primary else theme.palette.muted)
+        val emphasizedCheck = selected && (checkbox || (menuChoice && value.enabled))
+        trailing.bind(glyph, if (emphasizedCheck) theme.palette.primary else theme.palette.muted)
         trailing.visibility = if (trigger || checkbox || selected) VISIBLE else GONE
         isSelected = selected
         contentDescription = listOfNotNull(value.label, detail, explanation).joinToString(", ")
