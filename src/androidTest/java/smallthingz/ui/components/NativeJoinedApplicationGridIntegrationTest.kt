@@ -100,7 +100,7 @@ class NativeJoinedApplicationGridIntegrationTest {
             try {
                 grid.measure(exact(width), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
                 grid.layout(0, 0, width, grid.measuredHeight)
-                assertEquals(if (font == 1f) 76 else 152, chip.height)
+                assertEquals(if (font == 1f) 84 else 168, chip.height)
                 assertTrue(chip.width >= 48 && chip.height >= 48)
                 assertEquals(2, chip.layout.lineCount)
                 assertTrue("Both name lines fit below the reserved icon area",

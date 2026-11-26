@@ -7,7 +7,10 @@ import kotlin.math.roundToInt
 /** Pure sizing shared by both app pickers; one extra column without jumping to six on phones. */
 internal object NativeApplicationGridSizing {
     const val cellMinWidthDp = 64f
-    const val cellMinHeightDp = 76f
+    // Measured at mdpi/default font scale: Arabic/mixed labels need 44dp for two
+    // fallback-font lines. Budget 3dp top + 32dp icon + 2dp gap + 44dp text +
+    // 3dp bottom = 84dp; retain fallback line spacing and the full icon.
+    const val cellMinHeightDp = 84f
     const val maxColumns = 7
     private const val preferredCellWidthDp = 80f
 

@@ -8,7 +8,7 @@ class NativeApplicationGridRecipeTest {
         for (width in listOf(328f, 388f)) {
             assertEquals(5, NativeApplicationGridSizing.columns(width, 1f))
         }
-        assertEquals(76f, NativeApplicationGridSizing.heightDp(1f), 0f)
+        assertEquals(84f, NativeApplicationGridSizing.heightDp(1f), 0f)
     }
 
     @Test fun compactWidthsRespectMinimumCellWidthAndTouchTargets() {
@@ -27,7 +27,7 @@ class NativeApplicationGridRecipeTest {
         assertEquals(2, NativeApplicationGridSizing.columns(328f, 2f))
         assertEquals(3, NativeApplicationGridSizing.columns(388f, 2f))
         assertEquals(1, NativeApplicationGridSizing.columns(128f, 2f))
-        assertEquals(152f, NativeApplicationGridSizing.heightDp(2f), 0f)
+        assertEquals(168f, NativeApplicationGridSizing.heightDp(2f), 0f)
         for (width in listOf(328f, 388f)) {
             assertTrue(width / NativeApplicationGridSizing.columns(width, 2f) >= 128f)
         }
@@ -38,6 +38,6 @@ class NativeApplicationGridRecipeTest {
             assertEquals(NativeApplicationGridSizing.columns(width, 1f),
                 NativeApplicationGridSizing.columns(width, .85f))
         }
-        assertEquals(76f, NativeApplicationGridSizing.heightDp(.85f), 0f)
+        assertEquals(84f, NativeApplicationGridSizing.heightDp(.85f), 0f)
     }
 }
