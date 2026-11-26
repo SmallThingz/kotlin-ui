@@ -187,15 +187,25 @@ class NativeDialogActionsIntegrationTest {
             val sheet = NativeActionSheet(View(context), style, "Add catalog", {}, entryEdge = edge)
             try {
                 val surface = sheet.contentView as NativeSheetSurface
-                val body = FrameLayout(context).apply { minimumHeight = dp(surface, 200) }
+                var boundedBodyMeasures = 0
+                var naturalBodyMeasures = 0
+                val body = object : FrameLayout(context) {
+                    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                        when (View.MeasureSpec.getMode(heightMeasureSpec)) {
+                            View.MeasureSpec.AT_MOST -> boundedBodyMeasures++
+                            View.MeasureSpec.UNSPECIFIED -> naturalBodyMeasures++
+                        }
+                        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+                    }
+                }.apply { minimumHeight = dp(surface, 200) }
                 withPair(context, "Cancel", "Replace installed plugin") { row, first, second ->
                     sheet.setContentWithPinnedActions(body, row, emptyList(), emptyList())
                     val viewport = surface.column.content as smallthingz.ui.scroll.NativeVerticalViewport
                     val bottomInset = dp(surface, 19)
                     val topInset = dp(surface, 11)
-                    fun layout(available: Int) {
+                    fun layout(available: Int, widthDp: Int = 136) {
                         surface.insets.update(topInset, bottomInset)
-                        surface.measure(View.MeasureSpec.makeMeasureSpec(dp(surface, 136), View.MeasureSpec.EXACTLY),
+                        surface.measure(View.MeasureSpec.makeMeasureSpec(dp(surface, widthDp), View.MeasureSpec.EXACTLY),
                             View.MeasureSpec.makeMeasureSpec(available + topInset + bottomInset, View.MeasureSpec.AT_MOST))
                         surface.layout(0, 0, surface.measuredWidth, surface.measuredHeight)
                         assertTrue(surface.height <= available + topInset + bottomInset)
@@ -223,7 +233,13 @@ class NativeDialogActionsIntegrationTest {
                         }
                     }
 
-                    layout(dp(surface, 640))
+                    // Distinct widths make the body remeasure instead of reusing cached specs.
+                    for (widthDp in listOf(137, 138, 136)) {
+                        val previousNaturalMeasures = naturalBodyMeasures
+                        layout(dp(surface, 640), widthDp)
+                        assertTrue(naturalBodyMeasures > previousNaturalMeasures)
+                        assertEquals("Ample space needs no bounded form probe", 0, boundedBodyMeasures)
+                    }
                     assertEquals(LinearLayout.VERTICAL, row.orientation)
                     val footer = row.parent as View
                     val naturalHeight = footer.height
@@ -247,6 +263,7 @@ class NativeDialogActionsIntegrationTest {
                         assertEquals(firstHeight, first.height)
                         assertEquals(secondHeight, second.height)
                     }
+                    assertTrue("Constrained sheets still probe the form", boundedBodyMeasures > 0)
                     layout(naturalHeight + usableContent)
                     assertSame(surface.column, footer.parent)
                     assertEquals(View.GONE, surface.column.handle.visibility)

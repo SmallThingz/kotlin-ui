@@ -274,18 +274,22 @@ internal class NativeSheetSurface(
             val footer = pinnedActions
             footer?.measure(sheetSurfaceExact(width), sheetSurfaceUnspecified())
             val naturalFooterHeight = footer?.measuredHeight ?: 0
-            // Keep at least one shared minimum touch target of scrollable form visible. Probe only
-            // that bounded height; a shorter form keeps its natural height. The previously moved
-            // footer must not influence this budget or prevent repinning after the window grows.
             val minimumContent = if (footer == null) 0 else {
                 val target = appContent.minimumTouchTargetPx.roundToInt()
-                appContent.measure(sheetSurfaceExact(width), sheetSurfaceAtMost(target))
-                val height = min(target, appContent.measuredNonFooterHeight)
-                // Restore natural measurement even when the viewport's own specs are unchanged.
-                // Forcing only its child does not invalidate Android's wrapper measure cache.
-                appContent.forceLayout()
-                content.forceLayout()
-                height
+                if (remaining - naturalFooterHeight - naturalHandleSpace >= target) {
+                    // Even the full target fits beside both, so a shorter form cannot change placement.
+                    target
+                } else {
+                    // Where space is tight, a shorter form keeps its natural height. Exclude a
+                    // footer already in the viewport so increasing the window height can repin it.
+                    appContent.measure(sheetSurfaceExact(width), sheetSurfaceAtMost(target))
+                    val height = min(target, appContent.measuredNonFooterHeight)
+                    // Restore natural measurement even when the viewport's own specs are unchanged.
+                    // Forcing only its child does not invalidate Android's wrapper measure cache.
+                    appContent.forceLayout()
+                    content.forceLayout()
+                    height
+                }
             }
             val overflow = footer != null && remaining - naturalFooterHeight < minimumContent
             if (footer != null) placeActions(footer, overflow)
