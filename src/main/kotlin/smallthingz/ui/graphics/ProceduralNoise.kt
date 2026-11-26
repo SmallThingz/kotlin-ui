@@ -33,9 +33,10 @@ private fun fillNoisePixels(pixels: IntArray, initialState: Int): Int {
     return state
 }
 
-/** One process-owned generation. Scheduling/factory failure is terminal, never a per-frame retry. */
+/** One generation. Failure is terminal; retirement rejects late work and drops the published value. */
 internal class NoiseTileCache<T>(private val generate: () -> T) {
     private var started = false
+    @Volatile private var retired = false
     @Volatile private var terminal: Result<T>? = null
 
     fun valueOrNull(): T? = terminal?.getOrNull()
@@ -43,25 +44,30 @@ internal class NoiseTileCache<T>(private val generate: () -> T) {
 
     fun start(execute: (() -> Unit) -> Unit, onComplete: () -> Unit) {
         synchronized(this) {
-            if (started) return
+            if (started || retired) return
             started = true
         }
         try {
             execute work@{
-                if (terminal != null) return@work
+                if (retired || terminal != null) return@work
                 val result = runCatching(generate)
                 if (settle(result)) onComplete()
                 // A failure must not leave waiters hanging, but fatal VM/thread errors still propagate.
                 result.exceptionOrNull()?.let { if (it is VirtualMachineError || it is ThreadDeath) throw it }
             }
         } catch (error: Throwable) {
-            if (settle(Result.failure(error))) onComplete() else throw error
+            if (settle(Result.failure(error))) onComplete() else if (!retired) throw error
             if (error is VirtualMachineError || error is ThreadDeath) throw error
         }
     }
 
+    fun retire() = synchronized(this) {
+        retired = true
+        terminal = null
+    }
+
     private fun settle(result: Result<T>): Boolean = synchronized(this) {
-        if (terminal != null) false else {
+        if (retired || terminal != null) false else {
             terminal = result
             true
         }
