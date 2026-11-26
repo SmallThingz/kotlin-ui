@@ -164,19 +164,19 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         }.apply {
             titleView.setLines(1)
             titleView.ellipsize = TextUtils.TruncateAt.END
+            // A tab title needs less inset than a settings row. The adjacent close slot
+            // already supplies its own visual inset inside a full 48dp touch target.
+            setPaddingRelative(dp(8), dp(4), 0, dp(4))
+            minimumHeight = dp(48)
         }
         private val close = ReverbStandardIconButtonView(context, environment, { this@ReverbBrowserPanelTabs })
         private val header = FrameLayout(context).apply {
             // Keep SELECT and CLOSE separate. Reserve the close target before measuring the
             // single-line title, rather than overlaying it or stacking it below long text.
             addView(row, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_VERTICAL).apply {
-                marginEnd = dp(64)
+                marginEnd = dp(48)
             })
-            addView(close, FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER_VERTICAL or Gravity.END).apply {
-                topMargin = dp(8)
-                bottomMargin = dp(8)
-                marginEnd = dp(8)
-            })
+            addView(close, FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER_VERTICAL or Gravity.END))
         }
         private val image = object : ImageView(context) {
             private val topFit = Matrix()
