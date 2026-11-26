@@ -1,10 +1,19 @@
 package smallthingz.ui.reverb
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.Context
+import android.graphics.Rect
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.ViewConfiguration
+import android.view.View
+import android.view.ViewGroup
+import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
+import android.widget.ScrollView
+import java.util.WeakHashMap
 import kotlin.math.abs
 
 /** Recognizes an intentional horizontal finger swipe without disturbing normal taps or vertical scroll. */
@@ -12,7 +21,7 @@ internal class ReverbBrowserPanelSwipe(
     context: Context,
     private val swipeDistance: (width: Int) -> Float,
     private val canSwipe: () -> Boolean,
-    private val onDrag: (Float) -> Unit = {},
+    private val onDrag: ((Float) -> Unit)? = null,
     private val onSwipe: (direction: Int) -> Unit,
 ) : FrameLayout(context) {
     private val config = ViewConfiguration.get(context)
@@ -25,6 +34,12 @@ internal class ReverbBrowserPanelSwipe(
     private var downY = 0f
     private var phase = ReverbBrowserPanelSwipePhase.IDLE
 
+    private var dismissal: ValueAnimator? = null
+    private var dismissed = false
+    private var dragOffset = 0f
+    private var viewport: View? = null
+    private val unclipped = mutableListOf<ViewGroup>()
+
     init {
         filterTouchesWhenObscured = true
     }
@@ -33,6 +48,12 @@ internal class ReverbBrowserPanelSwipe(
         val action = event.actionMasked
         val trusted = onFilterTouchEventForSecurity(event) &&
             event.flags and (MotionEvent.FLAG_WINDOW_IS_OBSCURED or MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED) == 0
+        if (dismissal != null || dismissed) {
+            if (!trusted || action == MotionEvent.ACTION_CANCEL || event.pointerCount != 1 || !canSwipe()) {
+                cancelDismissal()
+            }
+            return true
+        }
         if (action == MotionEvent.ACTION_DOWN) {
             finishGesture()
             if (trusted && event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER && canSwipe()) {
@@ -58,14 +79,22 @@ internal class ReverbBrowserPanelSwipe(
             ReverbBrowserPanelSwipePhase.DRAGGING -> if (previous == ReverbBrowserPanelSwipePhase.PENDING) takeGesture(event)
             ReverbBrowserPanelSwipePhase.PENDING -> Unit
         }
-        if (previous == ReverbBrowserPanelSwipePhase.DRAGGING && phase == ReverbBrowserPanelSwipePhase.CANCELED) onDrag(0f)
+        if (previous == ReverbBrowserPanelSwipePhase.DRAGGING && phase == ReverbBrowserPanelSwipePhase.CANCELED) drag(0f)
         velocityTracker?.addMovement(event)
-        if (action == MotionEvent.ACTION_MOVE && phase == ReverbBrowserPanelSwipePhase.DRAGGING) onDrag(dx)
+        if (action == MotionEvent.ACTION_MOVE && phase == ReverbBrowserPanelSwipePhase.DRAGGING) drag(dx)
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             val wasSwipe = phase.ownsTouch
             val direction = if (action == MotionEvent.ACTION_UP) swipeDirection(dx) else 0
-            finishGesture()
-            if (direction != 0) onSwipe(direction)
+            val releaseVelocity = velocityTracker?.xVelocity ?: 0f
+            if (direction != 0 && onDrag != null) {
+                // Keep the release position visible; resetting here caused the mid-screen disappearance.
+                drag(dx)
+                finishGesture(resetDrag = false)
+                dismiss(direction, releaseVelocity)
+            } else {
+                finishGesture()
+                if (direction != 0) onSwipe(direction)
+            }
             if (wasSwipe) return true
         }
         return phase.ownsTouch || super.dispatchTouchEvent(event) ||
@@ -82,6 +111,18 @@ internal class ReverbBrowserPanelSwipe(
             cancel.recycle()
         }
         parent?.requestDisallowInterceptTouchEvent(true)
+        if (onDrag != null) {
+            var ancestor = parent
+            while (ancestor is View && ancestor !is ScrollView) ancestor = ancestor.parent
+            viewport = (ancestor as? View) ?: rootView
+            // The card and grid otherwise clip the translated surface at its original column.
+            var group: ViewGroup? = this
+            while (group != null && group !== viewport) {
+                acquireSwipeClip(group)
+                unclipped.add(group)
+                group = group.parent as? ViewGroup
+            }
+        }
     }
 
     private fun swipeDirection(dx: Float): Int {
@@ -98,19 +139,103 @@ internal class ReverbBrowserPanelSwipe(
         velocityTracker = null
     }
 
-    private fun finishGesture() {
+    private fun finishGesture(resetDrag: Boolean = true) {
         stopTracking()
-        if (phase == ReverbBrowserPanelSwipePhase.DRAGGING) onDrag(0f)
+        if (resetDrag) {
+            if (phase == ReverbBrowserPanelSwipePhase.DRAGGING) drag(0f)
+            restoreClipping()
+        }
         if (phase.ownsTouch) parent?.requestDisallowInterceptTouchEvent(false)
         phase = ReverbBrowserPanelSwipePhase.IDLE
     }
 
+    private fun drag(offset: Float) {
+        dragOffset = offset
+        onDrag?.invoke(offset)
+    }
+
+    private fun exitOffset(direction: Int): Float? {
+        val bounds = Rect()
+        val visible = viewport ?: return null
+        if (!isAttachedToWindow || !visible.getGlobalVisibleRect(bounds)) return null
+        val location = IntArray(2)
+        getLocationOnScreen(location)
+        val rootLocation = IntArray(2)
+        visible.rootView.getLocationOnScreen(rootLocation)
+        // getGlobalVisibleRect is root-relative; getLocationOnScreen includes the window origin.
+        val cardLeft = (location[0] - rootLocation[0]).toFloat()
+        return browserTabSwipeExitOffset(direction, cardLeft, width.toFloat(),
+            bounds.left.toFloat(), bounds.right.toFloat(), dragOffset)
+    }
+
+    private fun dismiss(direction: Int, velocity: Float) {
+        val target = exitOffset(direction)
+        if (target == null || !canSwipe()) {
+            cancelDismissal()
+            return
+        }
+        val animation = ValueAnimator.ofFloat(dragOffset, target)
+        dismissal = animation
+        animation.duration = browserTabSwipeExitDuration(target - dragOffset, direction * velocity, minimumFlingSpeed)
+        animation.interpolator = LinearInterpolator()
+        animation.addUpdateListener {
+            if (dismissal !== animation) return@addUpdateListener
+            if (!isAttachedToWindow || !canSwipe()) cancelDismissal()
+            else drag(it.animatedValue as Float)
+        }
+        animation.addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animator: Animator) {
+                if (dismissal !== animation) return
+                dismissal = null
+                if (!isAttachedToWindow || !canSwipe()) {
+                    cancelDismissal()
+                    return
+                }
+                // Recheck after layout/viewport changes; never close a still-visible card.
+                val updatedTarget = exitOffset(direction)
+                if (updatedTarget == null) {
+                    cancelDismissal()
+                } else if (direction * (updatedTarget - dragOffset) > 0f) {
+                    dismiss(direction, velocity)
+                } else {
+                    dismissed = true
+                    try {
+                        onSwipe(direction)
+                    } finally {
+                        // Keep the surface offscreen if the host removes the tab asynchronously.
+                        restoreClipping()
+                    }
+                }
+            }
+        })
+        animation.start()
+    }
+
+    private fun restoreClipping() {
+        unclipped.forEach(::releaseSwipeClip)
+        unclipped.clear()
+        viewport = null
+    }
+
+    private fun cancelDismissal() {
+        val animation = dismissal
+        dismissal = null
+        animation?.removeAllUpdateListeners()
+        animation?.removeAllListeners()
+        animation?.cancel()
+        dismissed = false
+        if (dragOffset != 0f) drag(0f)
+        restoreClipping()
+    }
+
     override fun onCancelPendingInputEvents() {
+        cancelDismissal()
         finishGesture()
         super.onCancelPendingInputEvents()
     }
 
     override fun onDetachedFromWindow() {
+        cancelDismissal()
         finishGesture()
         super.onDetachedFromWindow()
     }
@@ -143,4 +268,37 @@ internal enum class ReverbBrowserPanelSwipePhase {
     }
 
     private fun horizontal(x: Float, y: Float) = abs(x) > 1.25f * abs(y)
+}
+
+/** Screen-space geometry: the trailing edge must clear the viewport, even across multiple columns. */
+internal fun browserTabSwipeExitOffset(
+    direction: Int, cardLeft: Float, cardWidth: Float, viewportLeft: Float, viewportRight: Float,
+    currentOffset: Float,
+): Float = if (direction < 0) {
+    minOf(currentOffset, viewportLeft - cardLeft - cardWidth - 1f)
+} else {
+    maxOf(currentOffset, viewportRight - cardLeft + 1f)
+}
+
+internal fun browserTabSwipeExitDuration(remaining: Float, outwardVelocity: Float, minimumSpeed: Float): Long =
+    (1000f * abs(remaining) / maxOf(outwardVelocity, minimumSpeed)).toLong().coerceIn(80L, 280L)
+
+// Several cards can be exiting concurrently. Restore a shared ancestor only after its last owner.
+private data class SwipeClipLease(val children: Boolean, val padding: Boolean, var owners: Int = 1)
+private val swipeClipLeases = WeakHashMap<ViewGroup, SwipeClipLease>()
+private fun acquireSwipeClip(group: ViewGroup) {
+    val lease = swipeClipLeases[group]
+    if (lease != null) lease.owners++ else {
+        swipeClipLeases[group] = SwipeClipLease(group.clipChildren, group.clipToPadding)
+        group.clipChildren = false
+        group.clipToPadding = false
+    }
+}
+private fun releaseSwipeClip(group: ViewGroup) {
+    val lease = swipeClipLeases[group] ?: return
+    if (--lease.owners == 0) {
+        swipeClipLeases.remove(group)
+        group.clipChildren = lease.children
+        group.clipToPadding = lease.padding
+    }
 }
