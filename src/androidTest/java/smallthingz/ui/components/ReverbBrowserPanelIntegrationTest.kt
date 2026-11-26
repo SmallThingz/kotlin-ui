@@ -55,6 +55,8 @@ class ReverbBrowserPanelIntegrationTest {
                 gate = Gate(activity)
                 panel = ReverbBrowserPanelSettings(activity, ReverbDesign.theme(activity, false), "Settings", "Back", "Undo", "Apply")
                 installed = panel
+                assertEquals("Only toolbar and scrolling content; no hidden status slot", 2, panel.childCount)
+                assertTrue(panel.getChildAt(1) is android.widget.ScrollView)
                 row = panel.createSetting(ReverbBrowserPanelSetting("Clear", actionId = "clear")) { events.add(it) }
                 toggle = panel.createToggle("cookies", ToggleState("Cookies", false, true)) { id, value -> events.add("$id:$value") }
                 choice = panel.createChoice("search", "Search", listOf(ReverbBrowserPanelOption("a", "A", "Search, A"), ReverbBrowserPanelOption("b", "B", "Search, B")), "a",
