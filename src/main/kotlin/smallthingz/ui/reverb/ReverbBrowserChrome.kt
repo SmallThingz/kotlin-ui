@@ -6,10 +6,13 @@ import android.graphics.Paint
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.text.InputFilter
+import android.text.InputType
 import android.text.Spanned
 import android.view.Gravity
 import android.view.View
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView.BufferType
@@ -50,6 +53,8 @@ class ReverbBrowserChromeActionView internal constructor(context: Context, priva
     private var admission: (() -> Boolean)? = inputAllowed
     private var closed = false
     private var bound = false
+    // Retain semantic count across appearance/content bindings, not just a one-off drawable.
+    private var tabCount: Int? = null
     init {
         // Browser controls share their parent's material, while each keeps a full input target.
         bindStyle(theme.appearance.toolbars.action.copy(sizeDp = 48f, glyphDp = 22f))
@@ -61,6 +66,13 @@ class ReverbBrowserChromeActionView internal constructor(context: Context, priva
         bound = false
         bindContent(action)
     }
+    internal fun bindTabCount(count: Int) {
+        if (closed || tabCount == count) return
+        require(count >= 0)
+        tabCount = count
+        bound = false
+        bindContent(action)
+    }
     fun bindContent(next: ReverbBrowserChromeAction) {
         if (closed) return
         if (bound && action == next) return
@@ -68,7 +80,9 @@ class ReverbBrowserChromeActionView internal constructor(context: Context, priva
         bindingRevision++
         if (action.id != next.id || !next.enabled) cancelInput()
         action = next
-        setGlyph(requireNotNull(next.icon.drawable(context, theme, sampledIconTint)), sampledIconTint)
+        val drawable = tabCount?.let { ReverbBrowserTabCountDrawable(it, theme.density.density, sampledIconTint) }
+            ?: requireNotNull(next.icon.drawable(context, theme, sampledIconTint))
+        setGlyph(drawable, sampledIconTint)
         setDescription(next.label)
         accessibilityAction.tooltipText = next.label
         accessibilityAction.filterTouchesWhenObscured = true
@@ -113,10 +127,11 @@ open class ReverbBrowserChrome(context: Context, private var chromeTheme: Reverb
     val tabsAction = ReverbBrowserChromeActionView(context, chromeTheme, tabs, ::action, ::admitsChromeAction)
     val menuAction = ReverbBrowserChromeActionView(context, chromeTheme, menu, ::action, ::admitsChromeAction)
     private val field = chromeTheme.appearance.compactField.style
-    // The address is an editor in the continuous browser toolbar, not another rounded button.
+    // One elongated address surface identifies the native editor. Utility actions retain the
+    // continuous toolbar material; the field has neither a button outline nor elevation.
     val addressEditor: NativeTextField = ReverbBrowserChromeAddressEditor(context, chromeTheme.palette.pageControls,
-        field.copy(outlined = false, filled = false, minHeightDp = 48f,
-            startPaddingDp = 4f, endPaddingDp = 8f, verticalPaddingDp = 8f)).apply {
+        field.copy(outlined = false, filled = true, radiusDp = 24f, minHeightDp = 48f,
+            startPaddingDp = 8f, endPaddingDp = 8f, verticalPaddingDp = 8f)).apply {
         hint = addressHint
     }
     val pageHost = FrameLayout(context)
@@ -174,7 +189,16 @@ open class ReverbBrowserChrome(context: Context, private var chromeTheme: Reverb
         siteAction.bindContent(content)
         ViewCompat.setStateDescription(siteAction.accessibilityAction, state)
     }
-    fun bindTabCount(description: String) = ViewCompat.setStateDescription(tabsAction.accessibilityAction, description)
+    /** Compatibility binding: update speech without discarding an already bound numeric glyph. */
+    fun bindTabCount(description: String) {
+        if (!panelClosed) ViewCompat.setStateDescription(tabsAction.accessibilityAction, description)
+    }
+    /** The host owns the actual count and its localized accessible description. */
+    fun bindTabCount(count: Int, description: String) {
+        if (panelClosed) return
+        tabsAction.bindTabCount(count)
+        bindTabCount(description)
+    }
     fun bindLoading(value: Float, operation: Long, loading: Boolean, chromeVisible: Boolean) {
         if (panelClosed) return
         progress.bindSurfacePreset(chromeTheme.palette.surfacePreset)
@@ -213,7 +237,11 @@ private class ReverbBrowserChromeAddressEditor(context: Context, palette: Contro
     NativeTextField(context, palette, style) {
     private var settingText = 0
     private var accessibilityInput = 0
-    private val focusPaint = Paint().apply { color = palette.accent }
+    private val focusRadiusDp = style.radiusDp
+    private val focusPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = palette.accent
+        this.style = Paint.Style.STROKE
+    }
     init {
         // TextView otherwise adds its own 5,000-character filter, including on setText(). A
         // LengthFilter subclass also prevents later setSingleLine/inputType calls replacing it.
@@ -231,15 +259,26 @@ private class ReverbBrowserChromeAddressEditor(context: Context, palette: Contro
         focusPaint.color = theme.palette.pageControls.accent
         invalidate()
     }
+    override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
+        val connection = super.onCreateInputConnection(outAttrs) ?: return null
+        // Chromium's UrlBar separates native word selection from the keyboard's URI hints.
+        // The host configures a plain-text editor; only IME metadata gets URI variation.
+        outAttrs.inputType = (outAttrs.inputType and InputType.TYPE_MASK_VARIATION.inv()) or
+            InputType.TYPE_TEXT_VARIATION_URI
+        return connection
+    }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (!isFocused || !isEnabled) return
-        // Keep a visible editing cue without taking the host's focus listener or painting a box.
-        // TextView scrolls its canvas for long URLs; this rule stays fixed to the editor viewport.
+        // The focus cue follows the address silhouette without taking the host's listener.
+        // TextView scrolls its canvas for long URLs; keep the outline in viewport coordinates.
         val density = resources.displayMetrics.density
-        val bottom = scrollY + height - 2f * density
-        canvas.drawRect(scrollX + paddingLeft.toFloat(), bottom - 2f * density,
-            scrollX + width - paddingRight.toFloat(), bottom, focusPaint)
+        val halfStroke = density.coerceAtMost(minOf(width, height) / 2f)
+        if (halfStroke <= 0f) return
+        focusPaint.strokeWidth = 2f * halfStroke
+        val radius = (minOf(focusRadiusDp * density, width / 2f, height / 2f) - halfStroke).coerceAtLeast(0f)
+        canvas.drawRoundRect(scrollX + halfStroke, scrollY + halfStroke,
+            scrollX + width - halfStroke, scrollY + height - halfStroke, radius, radius, focusPaint)
     }
     override fun setText(text: CharSequence?, type: BufferType?) {
         // TextView's constructor can call this override before this subclass is initialized.

@@ -16,6 +16,7 @@ import smallthingz.ui.components.NativeInputGate
 import smallthingz.ui.components.NativeMaterialButtonView
 import smallthingz.ui.components.NativeMenuAccessibilityTestActivity
 import smallthingz.ui.components.NativePermissionRow
+import smallthingz.ui.components.NativeSettingsRow
 import smallthingz.ui.components.NativeToggleRow
 
 /** Requires an owned foreground test window. These tests never launch a destination or request a grant. */
@@ -134,13 +135,42 @@ class ReverbInformationIntegrationTest {
                 row.performClick()
                 assertEquals(listOf("import"), selected)
                 gate.admitted = true
-                transfers.bind(listOf(action.copy(enabled = false)), "Saving")
+                transfers.bind(listOf(action.copy(enabled = false)), ReverbTransferProgress("import", "Saving"))
                 row.performClick()
                 transfers.close()
                 row.performClick()
                 assertEquals(listOf("import"), selected)
             }
         } finally { main { transfers.close() } }
+    }
+
+    @Test fun transferProgressBelongsToItsRowAndDoesNotReserveATerminalFooter() = fixture { activity, gate ->
+        val actions = listOf(
+            ReverbTransferAction("import", "Import", "Choose a backup", ReverbTransferDirection.IMPORT, false),
+            ReverbTransferAction("export", "Export", "Save app data", ReverbTransferDirection.EXPORT, false),
+        )
+        main {
+            val group = ReverbDesign.appearance.groupSurfaces.settingsGroup.create(activity)
+            val transfers = ReverbTransferSettings(group, ReverbDesign.theme(activity, false), actions) {}
+            gate.addView(group)
+            try {
+                assertEquals(2, group.pointerContent.childCount)
+                val importing = transfers.anchor("import") as NativeSettingsRow
+                val exporting = transfers.anchor("export") as NativeSettingsRow
+                transfers.bind(actions, ReverbTransferProgress("export", "Saving export…"))
+                assertEquals("Choose a backup", importing.detailView.text.toString())
+                assertEquals("Saving export…", exporting.detailView.text.toString())
+                assertEquals(View.ACCESSIBILITY_LIVE_REGION_POLITE, exporting.detailView.accessibilityLiveRegion)
+                assertEquals(2, group.pointerContent.childCount)
+                transfers.bind(actions, ReverbTransferProgress("import", "Restart to finish import"))
+                assertEquals("Restart to finish import", importing.detailView.text.toString())
+                assertEquals("Save app data", exporting.detailView.text.toString())
+                transfers.bind(actions)
+                assertEquals("Choose a backup", importing.detailView.text.toString())
+                assertEquals(View.ACCESSIBILITY_LIVE_REGION_NONE, importing.detailView.accessibilityLiveRegion)
+                assertEquals(2, group.pointerContent.childCount)
+            } finally { transfers.close() }
+        }
     }
 
     private class Gate(activity: Activity) : FrameLayout(activity), NativeInputGate {

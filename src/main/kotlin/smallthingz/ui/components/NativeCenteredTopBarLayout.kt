@@ -18,6 +18,13 @@ open class NativeCenteredTopBarLayout(
     private var toolbarStyle: NativeToolbarStyle = NativeToolbarStyle.Default,
     private val useCompactActions: Boolean = false,
 ) : ViewGroup(context) {
+    /** Opt in for compact toolbars whose action slot contains multiple full-size controls. */
+    var measureCompactActionsNaturally: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            requestLayout()
+        }
     private var logicalHeight = 0
     private var titleWrapperWidth = 0
     private var navigationWrapperWidth = 0
@@ -53,7 +60,13 @@ open class NativeCenteredTopBarLayout(
         val edgeInset = if (useCompactActions) toolbarStyle.compactEdgeInsetDp else toolbarStyle.centeredPaddingDp
         navigationPadding = dp(edgeInset)
         actionPadding = dp(edgeInset)
-        if (useCompactActions) {
+        if (useCompactActions && measureCompactActionsNaturally) {
+            val targetHeight = MeasureSpec.makeMeasureSpec(
+                dp(max(toolbarStyle.action.sizeDp, toolbarStyle.action.minimumTargetDp)), MeasureSpec.EXACTLY)
+            navigation.measure(atMost((w - navigationPadding - actionPadding).coerceAtLeast(0)), targetHeight)
+            done.measure(atMost((w - navigationPadding - navigation.measuredWidth - actionPadding).coerceAtLeast(0)),
+                targetHeight)
+        } else if (useCompactActions) {
             val actionSize = MeasureSpec.makeMeasureSpec(dp(toolbarStyle.action.sizeDp), MeasureSpec.EXACTLY)
             navigation.measure(actionSize, actionSize)
             done.measure(actionSize, actionSize)
