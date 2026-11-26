@@ -22,6 +22,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeText
+import smallthingz.ui.components.NativeTextStyle
 import smallthingz.ui.text.NativeTypographyRole
 import java.util.Locale
 import kotlin.math.ceil
@@ -85,6 +86,48 @@ class GalleryFilenameTextIntegrationTest {
                     "left=${layout.getLineLeft(line)} right=${layout.getLineRight(line)} " +
                     "text=${value.substring(start, end)}"
             }
+    }
+
+    /** Failure-only evidence for the documented ordinary-native no-span fallback. */
+    private fun matchedNativeDiagnostics(view: GalleryFilenameText,
+        currentStyle: NativeTextStyle, widthDp: Int): String {
+        val control = NativeText(view.context,
+            GalleryDesign.palette(view.context, true).pageControls, currentStyle).apply {
+            layoutParams = ViewGroup.LayoutParams(-1, -2)
+            setSingleLine(false)
+            ellipsize = null
+            setTextIsSelectable(view.isTextSelectable)
+            breakStrategy = view.breakStrategy
+            hyphenationFrequency = view.hyphenationFrequency
+            textDirection = view.textDirection
+            layoutDirection = view.layoutDirection
+            gravity = view.gravity
+            includeFontPadding = view.includeFontPadding
+            setFallbackLineSpacing(view.isFallbackLineSpacing)
+            justificationMode = view.justificationMode
+            setLineSpacing(view.lineSpacingExtra, view.lineSpacingMultiplier)
+            setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)
+            textScaleX = view.textScaleX
+            if (Build.VERSION.SDK_INT >= 33) {
+                lineBreakStyle = view.lineBreakStyle
+                lineBreakWordStyle = view.lineBreakWordStyle
+            }
+            if (Build.VERSION.SDK_INT >= 35) {
+                useBoundsForWidth = view.useBoundsForWidth
+                shiftDrawingOffsetForStartOverhang = view.shiftDrawingOffsetForStartOverhang
+            }
+            text = view.text.toString()
+            paint.set(view.paint)
+        }
+        measure(control, widthDp)
+        check(control.paint.equalsForTextMeasurement(view.paint)) { "Control paint mismatch" }
+        check(control.width == view.width &&
+            checkNotNull(control.layout).width == checkNotNull(view.layout).width) {
+            "Control content width mismatch"
+        }
+        check((control.text as Spanned).getSpans(0, control.length(),
+            ReplacementSpan::class.java).isEmpty()) { "Control unexpectedly has replacement spans" }
+        return "paintEquals=true selectable=${control.isTextSelectable} " + diagnostics(control)
     }
 
     private fun assertFits(view: NativeText, expected: String) {
@@ -288,7 +331,19 @@ class GalleryFilenameTextIntegrationTest {
                         assertExtensionTogether(retained)
                         if (expectedStart == unitStart) assertBasenameOnExtensionLine(retained)
                     } else assertNoExtensionSpan(retained)
-                    assertFits(retained, name)
+                    try {
+                        assertFits(retained, name)
+                    } catch (failure: AssertionError) {
+                        if (expectedStart < 0) {
+                            try {
+                                failure.addSuppressed(AssertionError("matchedNativeControl: " +
+                                    matchedNativeDiagnostics(retained, nextStyle, width)))
+                            } catch (diagnosticFailure: Throwable) {
+                                failure.addSuppressed(diagnosticFailure)
+                            }
+                        }
+                        throw failure
+                    }
                     assertSame(buffer, retained.text)
                     assertEquals(name.lastIndexOf('.'), retained.selectionStart)
                     assertEquals(name.length, retained.selectionEnd)
