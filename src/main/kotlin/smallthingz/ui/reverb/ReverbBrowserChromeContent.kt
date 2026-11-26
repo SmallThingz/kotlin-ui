@@ -7,6 +7,10 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import smallthingz.ui.components.NativeGroupLayout
+import smallthingz.ui.components.NativeSettingsRow
+import smallthingz.ui.components.NativeSettingsRowStyle
+import smallthingz.ui.components.NativeTextRole
+import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.text.NativeTypographyRole
 import kotlin.math.roundToInt
 
@@ -24,6 +28,8 @@ internal class ReverbBrowserChromeMenuBody(context: Context, theme: ReverbTheme,
 ) : ReverbBrowserPanelLayout(context) {
     private val owned = mutableListOf<AutoCloseable>()
     init {
+        val surface = ReverbDesign.appearance.modals.anchoredPanel.surfaceColor(theme.palette)
+        val menuColors = theme.palette.settingsControls.copy(surface = surface, raised = surface)
         fun paragraph(text: String, heading: Boolean) = theme.paragraph(context, text,
             if (heading) NativeTypographyRole.TITLE_LARGE else NativeTypographyRole.BODY_SMALL).apply {
             isAccessibilityHeading = heading
@@ -41,22 +47,47 @@ internal class ReverbBrowserChromeMenuBody(context: Context, theme: ReverbTheme,
         }, LayoutParams(-1, -2))
         content.site?.let {
             val row = reverbBrowserPanelSiteIdentity(context, theme, it.origin, it.connection, it.icon.drawable(context, theme))
+            row.applyPalette(menuColors)
             owned.add(row); addView(row, LayoutParams(-1, -2))
         }
-        val recipe = ReverbDesign.appearance.groupSurfaces.settingsGroup
-        addView(recipe.create(context, ReverbTextSurface::invalidate).apply {
-            recipe.bind(this, theme.palette)
-            content.rows.forEachIndexed { index, item ->
-                val row = browserChromeRow(context, theme, item, onAction)
-                owned.add(row)
-                addRow(row, NativeGroupLayout.LayoutParams(-1, -2).apply { dividerTop = index > 0 })
-            }
-        }, LayoutParams(-1, -2))
+        // Every popup kind shares the anchored panel's foreground fill, grain and outer clip.
+        // Reverb's ordinary RECORDINGS click menu uses content ink for both labels and icons.
+        content.rows.forEach { item ->
+            val row = ReverbBrowserChromeMenuRow(context, theme, menuColors, item, onAction)
+            owned.add(row)
+            addView(row, LayoutParams(-1, -2))
+        }
     }
     override fun close() {
         if (panelClosed) return
         super.close()
         owned.forEach { it.close() }; owned.clear()
+    }
+}
+
+/** Snapshot menu row: ordinary icon ink is independent of the muted supporting text role. */
+private class ReverbBrowserChromeMenuRow(context: Context, theme: ReverbTheme, colors: ControlPalette,
+    private val item: ReverbBrowserChromeRow, onAction: (String) -> Unit,
+) : NativeSettingsRow(context, colors, NativeSettingsRowStyle(iconRole = NativeTextRole.CONTENT)), AutoCloseable {
+    private val icon = item.icon?.drawable(context, theme)
+    private var callback: ((String) -> Unit)? = onAction
+    private var closed = false
+    init {
+        filterTouchesWhenObscured = true
+        isEnabled = item.enabled
+        titleView.maxLines = 2; titleView.ellipsize = TextUtils.TruncateAt.END
+        detailView.maxLines = 1; detailView.ellipsize = TextUtils.TruncateAt.END
+        bind(item.title, item.detail, icon, onClick = item.id?.let { id -> {
+            if (!closed && browserPanelAdmitsInput() && !closed) callback?.invoke(id)
+        } })
+    }
+    override fun close() {
+        if (closed) return
+        closed = true
+        callback = null
+        cancelBrowserPanelInput()
+        isEnabled = false
+        bind(item.title, item.detail, icon)
     }
 }
 

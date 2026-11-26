@@ -8,13 +8,11 @@ import android.view.View
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.widget.FrameLayout
-import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.ScrollView
 import androidx.core.view.ViewCompat
 import androidx.core.view.doOnLayout
 import smallthingz.ui.components.NativeAnchoredMenuPanel
-import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.NativeInputGate
 import smallthingz.ui.components.acceptsNativeInput
 import smallthingz.ui.util.closePreservingPrimaryFailure
@@ -72,9 +70,7 @@ class ReverbBrowserChromePopup(
     private val actions = (content.navigation.map { it.id to it.enabled } + content.rows.mapNotNull { row ->
         row.id?.let { it to row.enabled }
     }).also { require(it.map { action -> action.first }.distinct().size == it.size) { "Menu action IDs must be unique" } }.toMap()
-    private val body = ReverbBrowserChromeMenuBody(anchor.context, theme, content, ::choose).apply {
-        if (kind == ReverbBrowserChromeMenuKind.NAVIGATION) useClickMenuSurface(theme)
-    }
+    private val body = ReverbBrowserChromeMenuBody(anchor.context, theme, content, ::choose)
     private val scroll: ScrollView = object : ScrollView(anchor.context), NativeInputGate {
         private var blockedGesture = true
         private var dismissKey: Int? = null
@@ -265,26 +261,6 @@ class ReverbBrowserChromePopup(
 }
 
 internal fun browserChromePopupPivotY(aboveAnchor: Boolean) = if (aboveAnchor) 1f else 0f
-
-/** The three-dot menu shares Reverb's single foreground surface, with adjoining action rows. */
-private fun ReverbBrowserChromeMenuBody.useClickMenuSurface(theme: ReverbTheme) {
-    val surface = ReverbDesign.appearance.modals.anchoredPanel.surfaceColor(theme.palette)
-    val colors = theme.palette.settingsControls.copy(surface = surface, raised = surface)
-    // Keep the original row handles, callbacks and close ownership. Removing the Settings
-    // wrapper lets the existing anchored panel own the fill, foreground grain and outer clip.
-    // removeRow also retires the group's divider foreground without replacing row feedback.
-    for (index in childCount - 1 downTo 0) {
-        val group = getChildAt(index) as? NativeGroupLayout ?: continue
-        removeView(group)
-        var insertion = index
-        while (group.pointerContent.childCount > 0) {
-            val row = group.pointerContent.getChildAt(0)
-            group.removeRow(row)
-            (row as? ReverbBrowserPanelSettingRow)?.applyPalette(colors)
-            addView(row, insertion++, LinearLayout.LayoutParams(-1, -2))
-        }
-    }
-}
 
 /** Retirement always completes; a later callback failure must never replace the action's failure. */
 internal fun completeReverbBrowserChromeAction(retire: () -> Unit, deliver: () -> Unit, notifyRetired: () -> Unit) {
