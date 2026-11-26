@@ -6,6 +6,8 @@ import android.animation.ValueAnimator
 import android.transition.Slide
 import android.transition.Transition
 import android.transition.TransitionManager
+import android.transition.TransitionSet
+import android.transition.Visibility
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -14,6 +16,9 @@ import android.widget.FrameLayout
 
 /** Retained Android scenes use Reverb Main's 220ms panel timing and vertical reveal direction. */
 object NativePageTransition {
+    private const val DURATION_MILLIS = 220L
+    private fun panelInterpolator() = PathInterpolator(.4f, 0f, .2f, 1f)
+
     /** A child panel enters over its stationary predecessor; Back lowers that same foreground. */
     enum class Direction { FORWARD, BACK }
 
@@ -105,8 +110,8 @@ object NativePageTransition {
             }
             val motion = ValueAnimator.ofFloat(start, end)
             animator = motion
-            motion.duration = 220L
-            motion.interpolator = PathInterpolator(.4f, 0f, .2f, 1f)
+            motion.duration = DURATION_MILLIS
+            motion.interpolator = panelInterpolator()
             motion.addUpdateListener {
                 if (animator !== motion) return@addUpdateListener
                 if (!ValueAnimator.areAnimatorsEnabled() || !container.isShown ||
@@ -142,13 +147,30 @@ object NativePageTransition {
     }
 
     // Compatibility: existing consumers retain their original same-edge Android scene policy.
-    fun begin(container: ViewGroup, edge: Int = Gravity.BOTTOM) {
+    fun begin(container: ViewGroup, edge: Int = Gravity.BOTTOM) =
+        beginScene(container, Slide(edge).apply { configureScene(this) })
+
+    /** Advancing pages enter at END while their predecessors leave at START; Back reverses both. */
+    fun beginHorizontal(container: ViewGroup, direction: Direction) =
+        beginScene(container, horizontalSceneTransition(direction))
+
+    internal fun horizontalSceneTransition(direction: Direction) = TransitionSet().apply {
+        val forward = direction == Direction.FORWARD
+        ordering = TransitionSet.ORDERING_TOGETHER
+        addTransition(Slide(if (forward) Gravity.END else Gravity.START).apply { mode = Visibility.MODE_IN })
+        addTransition(Slide(if (forward) Gravity.START else Gravity.END).apply { mode = Visibility.MODE_OUT })
+        configureScene(this)
+    }
+
+    private fun configureScene(transition: Transition) {
+        transition.duration = DURATION_MILLIS
+        transition.interpolator = panelInterpolator()
+        transition.setMatchOrder(Transition.MATCH_INSTANCE)
+    }
+
+    private fun beginScene(container: ViewGroup, transition: Transition) {
         if (!container.isLaidOut || !container.isAttachedToWindow || !ValueAnimator.areAnimatorsEnabled()) return
         TransitionManager.endTransitions(container)
-        TransitionManager.beginDelayedTransition(container, Slide(edge).apply {
-            duration = 220L
-            interpolator = PathInterpolator(.4f, 0f, .2f, 1f)
-            setMatchOrder(Transition.MATCH_INSTANCE)
-        })
+        TransitionManager.beginDelayedTransition(container, transition)
     }
 }
