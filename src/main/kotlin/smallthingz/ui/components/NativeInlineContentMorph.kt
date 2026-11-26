@@ -19,6 +19,7 @@ class NativeInlineContentMorph<Editor : View>(
     private var opening = false
     private var sourceAvailable = true
     private var closed = false
+    private var measuredContentHeight = -1
     private val progress = SpringValue.float(0f)
     private val durationScale = NativeViewAnimatorScale(context)
     private var driver: ViewSpringDriver<Float, smallthingz.ui.animation.core.AnimationVector1D>? = null
@@ -59,7 +60,15 @@ class NativeInlineContentMorph<Editor : View>(
             INVISIBLE else VISIBLE
         expanded?.alpha = fraction
         if (!opening && !progress.isRunning) releaseEditor()
-        requestLayout()
+        // Alpha changes invalidate their own Views. Remeasure only when the rounded natural
+        // height differs from the last measurement; child/parent layout requests remain intact.
+        if (contentHeight() != measuredContentHeight) requestLayout()
+    }
+    private fun contentHeight(): Int {
+        val collapsedHeight = if (sourceAvailable) action.measuredHeight else 0
+        return collapsedHeight +
+            (((expanded?.measuredHeight ?: collapsedHeight) - collapsedHeight) *
+                progress.value.coerceIn(0f, 1f)).roundToInt()
     }
     private fun releaseEditor() {
         val old = expanded ?: return
@@ -70,11 +79,8 @@ class NativeInlineContentMorph<Editor : View>(
         val width = MeasureSpec.getSize(w)
         action.measure(exact(width), unspecified())
         expanded?.measure(exact(width), unspecified())
-        val collapsedHeight = if (sourceAvailable) action.measuredHeight else 0
-        val height = collapsedHeight +
-            (((expanded?.measuredHeight ?: collapsedHeight) - collapsedHeight) *
-                progress.value.coerceIn(0f, 1f)).roundToInt()
-        setMeasuredDimension(width, resolveSize(height, h))
+        measuredContentHeight = contentHeight()
+        setMeasuredDimension(width, resolveSize(measuredContentHeight, h))
     }
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         action.layout(0, 0, width, action.measuredHeight)

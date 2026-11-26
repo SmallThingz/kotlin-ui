@@ -73,7 +73,7 @@ open class ParagraphIntrinsics(
     val style = resolveDefaults(style, style.layoutDirection ?:
         if (TextUtils.getLayoutDirectionFromLocale(Locale.getDefault()) == android.view.View.LAYOUT_DIRECTION_RTL)
             LayoutDirection.Rtl else LayoutDirection.Ltr)
-    private val emojiProcessed = NativeEmojiFonts.ready
+    internal val emojiProcessed = NativeEmojiFonts.ready
     val hasStaleResolvedFonts: Boolean get() = !emojiProcessed && NativeEmojiFonts.ready
     fun observeFontChanges(onChanged: () -> Unit): AutoCloseable = NativeEmojiFonts.observe(onChanged)
 
