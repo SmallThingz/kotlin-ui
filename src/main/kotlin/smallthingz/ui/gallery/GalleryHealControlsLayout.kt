@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import androidx.core.view.OneShotPreDrawListener
+import kotlin.math.roundToInt
 
 /** Spends only spare, already-measured Heal panel space; never changes its measurement. */
 open class GalleryHealControlsLayout(context: Context) : LinearLayout(context) {
@@ -71,5 +72,30 @@ open class GalleryHealControlsLayout(context: Context) : LinearLayout(context) {
             ancestor = ancestor.parent
         }
         return foundViewport
+    }
+}
+
+/** Scroll-content end clearance for an already EXACT-height Heal sidebar.
+ * Owns only the supplied body's bottom padding until close; creates no view/scroll owner.
+ * The caller disables this binding before intrinsic/non-sidebar measurement.
+ */
+class GalleryHealScrollEndInset(private val body: View) : AutoCloseable {
+    private val originalBottom = body.paddingBottom
+    private var appliedInset = 0
+    private var closed = false
+
+    fun refresh(enabled: Boolean) {
+        if (closed) return
+        val inset = if (enabled) (GalleryDesign.appearance.modals.sheet.actionsGapDp *
+            body.resources.displayMetrics.density).roundToInt().coerceAtLeast(0) else 0
+        if (inset == appliedInset) return
+        appliedInset = inset
+        body.setPadding(body.paddingLeft, body.paddingTop, body.paddingRight, originalBottom + inset)
+    }
+
+    override fun close() {
+        if (closed) return
+        refresh(false)
+        closed = true
     }
 }
