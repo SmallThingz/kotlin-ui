@@ -25,6 +25,7 @@ class ZfmTheme private constructor(private val theme: ControlTheme) {
     val density get() = theme.density
     val fontResolver get() = theme.fontResolver
     val typography get() = appearance.typography
+    val fileGrid get() = ZfmFileGridRecipe.Default
     val buttons get() = appearance.buttons
     val groupSurfaces get() = appearance.groupSurfaces
     val buttonPalette get() = colors.buttonPalette
