@@ -11,10 +11,12 @@ internal object ZfmChooserAnchors {
 
     fun capture(
         rows: List<ZfmChooserRootBounds>, scrollY: Int, viewportHeight: Int, bottomFirst: Boolean,
+        clipTop: Int = 0, clipBottom: Int = 0,
     ): ZfmChooserAnchor {
-        val edge = scrollY.toLong() + viewportHeight.coerceAtLeast(0)
-        val visible = if (viewportHeight <= 0) emptyList() else rows.filter {
-            it.bottom > it.top && it.bottom.toLong() > scrollY && it.top.toLong() < edge
+        val start = scrollY.toLong() + clipTop.coerceAtLeast(0)
+        val end = scrollY.toLong() + viewportHeight - clipBottom.coerceAtLeast(0)
+        val visible = if (end <= start) emptyList() else rows.filter {
+            it.bottom > it.top && it.bottom.toLong() > start && it.top.toLong() < end
         }.sortedBy { it.top }
         // Prefer the reading edge, but retain every visible candidate in case that key disappears.
         return ZfmChooserAnchor(physicalOrder(visible, bottomFirst).map {
@@ -40,6 +42,7 @@ internal class ZfmChooserPlacementGate(private val opening: Long) {
     private var attached = false
     private var closed = false
     private var initial = true
+    val awaitsInitialPlacement get() = initial
 
     fun attach() { if (!closed) { attachment++; attached = true } }
     fun detach() { attachment++; attached = false; initial = false }

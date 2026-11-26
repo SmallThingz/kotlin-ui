@@ -104,25 +104,32 @@ class ZfmChooserViewport(
      * Duplicate keys/views, replacing a surviving key's view, or adopting a foreign view are errors.
      * Call on every render, including unchanged roots with status/management geometry changes,
      * while prior committed bounds remain available and before the next layout. Geometry changes
-     * alone do not capture an anchor. Input/focus cancellation still wins over pending placement.
+     * must request layout before publication. Input/focus cancellation still wins over placement.
      * Multiple publications before layout keep the last committed visible-key snapshot.
      * Direction changes preserve a surviving visible key; they never request a second initial edge.
      */
     fun publish(items: List<ZfmChooserRoot>, bottomFirst: Boolean = this.bottomFirst): Boolean {
         check(!closed) { "Chooser is closed" }
         if (!isOpeningCurrent(openingGeneration)) return false
-        val next = items.toList()
-        roots.validate(next)
+        val itemsChanged = !roots.matches(items)
+        val directionChanged = bottomFirst != this.bottomFirst
+        if (!itemsChanged && !directionChanged &&
+            (publicationNeedsLayout || (!isLayoutRequested && boundary?.isLayoutRequested != true))) return true
+
+        val next = if (itemsChanged) items.toList().also(roots::validate) else roots.items
         val ticket = gate.ticket()
         if (pending == null && committed && !publicationNeedsLayout && ticket != null &&
-            ownsWindow() && idle()) {
-            pending = Pending(ticket, ZfmChooserAnchors.capture(bounds(), scrollY, height, this.bottomFirst),
-                scrollPositions())
+            ownsWindow() && hasWindowFocus() && idle()) {
+            val anchor = ZfmChooserAnchors.capture(
+                bounds(), scrollY, height, this.bottomFirst,
+                clipTop = if (clipToPadding) paddingTop else 0,
+                clipBottom = if (clipToPadding) paddingBottom else 0,
+            )
+            pending = Pending(ticket, anchor, scrollPositions())
         }
         this.bottomFirst = bottomFirst
         publicationNeedsLayout = true
-        roots.publish(next, bottomFirst)
-        requestLayout()
+        if (itemsChanged || directionChanged) roots.publish(next, bottomFirst) else requestLayout()
         return true
     }
 
@@ -130,12 +137,12 @@ class ZfmChooserViewport(
     fun rootView(key: String): View? = roots.items.firstOrNull { it.key == key }?.view
 
     private fun idle() = dispatchDepth == 0 && !touchActive && heldKeys.isEmpty()
-    private fun ownsWindow(initial: Boolean = false): Boolean {
+    private fun ownsWindow(): Boolean {
         val host = boundary ?: return false
         return !closed && isAttachedToWindow && host.isAttachedToWindow &&
             host.token != null && windowToken == host.token && host.windowToken == host.token &&
             windowVisibility == VISIBLE && isShown && host.isShown && isInside(this, host) &&
-            (host.hasWindowFocus() || (initial && !host.everFocused)) && isOpeningCurrent(openingGeneration)
+            isOpeningCurrent(openingGeneration)
     }
 
     private fun scrollPositions(): List<ScrollPosition> {
@@ -159,18 +166,25 @@ class ZfmChooserViewport(
         )
     }
 
-    private fun retirePosition() { gate.input(); pending = null }
+    private fun retirePosition() {
+        gate.input()
+        pending = null
+        boundary?.clearInitialScrollPositions()
+    }
 
     private fun committedLayout(ticket: ZfmChooserPlacementGate.Ticket?) {
         if (width <= 0 || height <= 0 || !isAttachedToWindow) return
-        val initial = gate.commitInitial(ticket)
         val restore = pending
         pending = null
-        committed = true
         publicationNeedsLayout = false
+        if (!ownsWindow()) return
+        val initial = gate.commitInitial(ticket)
+        boundary?.clearInitialScrollPositions()
+        committed = true
         // The first visible attached layout may precede the window's first focus notification.
         // Only that initial placement admits pre-focus; all subsequent restores require focus.
-        if (!ownsWindow(initial) || !idle() || !gate.accepts(ticket)) return
+        if (!(hasWindowFocus() || (initial && boundary?.everFocused == false)) ||
+            !idle() || !gate.accepts(ticket)) return
         val maximum = (column.bottom - height + paddingBottom).coerceAtLeast(0)
         val target = when {
             initial -> if (bottomFirst) maximum else 0
@@ -206,6 +220,11 @@ class ZfmChooserViewport(
         return super.requestChildRectangleOnScreen(child, rectangle, immediate)
     }
 
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        if (isVisible && !committed && !closed) boundary?.requestLayout()
+    }
+
     override fun onDetachedFromWindow() {
         retirePosition()
         super.onDetachedFromWindow()
@@ -223,7 +242,10 @@ class ZfmChooserViewport(
         pending = null
         touchActive = false
         heldKeys.clear()
-        boundary?.removeObserver()
+        boundary?.let {
+            it.clearInitialScrollPositions()
+            it.removeObserver()
+        }
         // Views and their click/permission lifetimes belong to the caller, not this layout.
     }
 
@@ -260,7 +282,7 @@ class ZfmChooserViewport(
             super.onAttachedToWindow()
             token = windowToken
             gate.attach()
-            initialScrollPositions = scrollPositions()
+            if (gate.awaitsInitialPlacement) initialScrollPositions = scrollPositions()
             if (!closed) observer = viewTreeObserver.also {
                 it.addOnGlobalFocusChangeListener(focusObserver)
                 it.addOnScrollChangedListener(scrollObserver)
@@ -275,13 +297,17 @@ class ZfmChooserViewport(
             observer = null
         }
 
+        fun clearInitialScrollPositions() {
+            initialScrollPositions = emptyList()
+        }
+
         override fun onDetachedFromWindow() {
             gate.detach()
             pending = null
             touchActive = false
             heldKeys.clear()
             token = null
-            initialScrollPositions = emptyList()
+            clearInitialScrollPositions()
             removeObserver()
             super.onDetachedFromWindow()
         }
@@ -290,7 +316,11 @@ class ZfmChooserViewport(
             gate.windowChanged(hasWindowFocus)
             pending = null
             if (hasWindowFocus) everFocused = true
-            if (!hasWindowFocus) { touchActive = false; heldKeys.clear() }
+            if (!hasWindowFocus) {
+                clearInitialScrollPositions()
+                touchActive = false
+                heldKeys.clear()
+            }
             super.onWindowFocusChanged(hasWindowFocus)
         }
 
@@ -298,6 +328,7 @@ class ZfmChooserViewport(
             if (visibility != VISIBLE) {
                 gate.windowChanged(false)
                 pending = null
+                clearInitialScrollPositions()
                 touchActive = false
                 heldKeys.clear()
             }
@@ -384,6 +415,15 @@ class ZfmChooserViewport(
         private var order: List<ZfmChooserRoot> = emptyList()
 
         init { setWillNotDraw(true); importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
+
+        fun matches(next: List<ZfmChooserRoot>): Boolean {
+            if (items.size != next.size) return false
+            val candidates = next.iterator()
+            return items.all { prior ->
+                val candidate = candidates.next()
+                prior.key == candidate.key && prior.view === candidate.view && prior.view.parent === this
+            }
+        }
 
         fun validate(next: List<ZfmChooserRoot>) {
             require(next.map { it.key }.toSet().size == next.size) { "Duplicate chooser root key" }

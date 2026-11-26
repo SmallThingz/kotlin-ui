@@ -103,6 +103,23 @@ class ZfmChooserAnchorTest {
         assertEquals(listOf("bottom", "top"), ZfmChooserAnchors.capture(rows, 100, 100, true).visible.map { it.key })
     }
 
+    @Test fun clippedPaddingSkipsHiddenRootsAndPreservesTheActualScrollOffset() {
+        val rows = listOf(
+            ZfmChooserRootBounds("clippedTop", 100, 120),
+            ZfmChooserRootBounds("visible", 120, 180),
+            ZfmChooserRootBounds("clippedBottom", 180, 200),
+        )
+        for (bottomFirst in listOf(false, true)) {
+            val anchor = ZfmChooserAnchors.capture(rows, 100, 100, bottomFirst, clipTop = 20, clipBottom = 20)
+            assertEquals(listOf(ZfmChooserVisibleRoot("visible", 20)), anchor.visible)
+            val updated = rows.dropLast(1) + ZfmChooserRootBounds("clippedBottom", 195, 215)
+            assertEquals(100, ZfmChooserAnchors.restore(anchor, updated, 200))
+            assertEquals(100, ZfmChooserAnchors.restore(anchor, emptyList(), 200))
+        }
+        val excluded = ZfmChooserAnchors.capture(rows, 100, 100, true, clipTop = 50, clipBottom = 50)
+        assertTrue(excluded.visible.isEmpty())
+    }
+
     @Test fun shorterManagementAndNegativeRangeClampToZero() {
         val anchor = ZfmChooserAnchor(listOf(ZfmChooserVisibleRoot("root", 50L)), 10)
         val rows = listOf(ZfmChooserRootBounds("root", 20, 100))
