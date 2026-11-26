@@ -153,6 +153,13 @@ data class NativeSettingsSelectorStyle(
 ) {
     internal constructor(typography: NativeTypography) : this(sectionTitle = sectionTitleStyle(typography))
 
+    /** Shared grouped surface for composed selectors; retains the recipe's palette and grain ownership. */
+    fun createSegmentedPresentation(
+        context: Context,
+        onPaintedSurfaceChanged: (View) -> Unit = {},
+    ): NativeSegmentedPresentation =
+        GroupedSegmentedPresentation(context, segmented.surfaceRadiusDp, onPaintedSurfaceChanged)
+
     fun createSegmentedControl(
         context: Context,
         palette: ControlPalette,
@@ -160,7 +167,7 @@ data class NativeSettingsSelectorStyle(
         inputAllowed: () -> Boolean = { true },
         onPaintedSurfaceChanged: (View) -> Unit = {},
     ): NativeSegmentedControl = NativeSegmentedControl(context, palette, segmented, density, inputAllowed,
-        GroupedSegmentedPresentation(context, segmented.surfaceRadiusDp, onPaintedSurfaceChanged))
+        createSegmentedPresentation(context, onPaintedSurfaceChanged))
 
     /** [titlePaintedSurface] samples the actual title underlay, encoded as [smallthingz.ui.controls.textSurfaceRange]. */
     fun createThemeSelector(

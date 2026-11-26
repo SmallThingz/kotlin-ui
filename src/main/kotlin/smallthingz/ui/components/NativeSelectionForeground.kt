@@ -36,7 +36,12 @@ internal class NativeSelectionForeground(
         if (host.isAttachedToWindow) onViewAttachedToWindow(host)
     }
 
-    override fun onPreDraw(): Boolean { prepare(); return true }
+    override fun onPreDraw(): Boolean {
+        // Attached hidden capsules share the window observer, but have no foreground to prepare.
+        // Explicit/offscreen drawing still prepares through NativeSegmentedChoice.dispatchDraw.
+        if (host.isShown && host.windowVisibility == View.VISIBLE) prepare()
+        return true
+    }
 
     fun prepare() {
         if (closed) return
