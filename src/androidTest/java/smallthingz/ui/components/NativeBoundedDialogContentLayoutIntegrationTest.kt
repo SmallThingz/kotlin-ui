@@ -39,7 +39,8 @@ class NativeBoundedDialogContentLayoutIntegrationTest {
             assertEquals(Rect(24, 72, 176, 120), bounds(footerViewport))
             assertEquals(80, body.height)
             assertEquals(48, footer.height)
-            bodyViewport.scrollTo(0, Int.MAX_VALUE)
+            // Overshoot the end by one viewport without overflowing ScrollView's clamp.
+            bodyViewport.scrollTo(0, body.height)
             assertEquals(body.height, bodyViewport.scrollY + bodyViewport.height)
             assertEquals(Rect(24, 72, 176, 120), bounds(footerViewport))
 
@@ -67,7 +68,7 @@ class NativeBoundedDialogContentLayoutIntegrationTest {
         assertEquals(24, bodyViewport.height)
         assertEquals(81, footerViewport.height)
         assertEquals(200, footer.height)
-        footerViewport.scrollTo(0, Int.MAX_VALUE)
+        footerViewport.scrollTo(0, footer.height)
         assertEquals(footer.height, footerViewport.scrollY + footerViewport.height)
 
         layout(panel, 200, 400)
@@ -142,7 +143,7 @@ class NativeBoundedDialogContentLayoutIntegrationTest {
                 assertTrue(target.left >= 0 && target.right <= footer.width)
                 assertTrue(target.bottom <= footerViewport.height)
                 val footerBounds = bounds(footerViewport)
-                bodyViewport.scrollTo(0, Int.MAX_VALUE)
+                bodyViewport.scrollTo(0, body.height)
                 assertEquals(body.height, bodyViewport.scrollY + bodyViewport.height)
                 assertEquals(footerBounds, bounds(footerViewport))
                 assertSame(target, footer.getChildAt(0))

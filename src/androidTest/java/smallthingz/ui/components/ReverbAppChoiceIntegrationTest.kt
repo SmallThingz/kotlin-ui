@@ -85,10 +85,12 @@ class ReverbAppChoiceIntegrationTest {
             main {
                 val row = control.row
                 control.bind("Example app", "Component", true, true, f.theme)
+                assertTrue(row.isFocusableInTouchMode)
                 assertTrue(row.requestFocus())
                 control.isEnabled = false
                 assertFalse(row.isEnabled)
                 assertFalse(row.isFocusable)
+                assertFalse(row.isFocusableInTouchMode)
                 val info = row.createAccessibilityNodeInfo()
                 assertFalse(info.isEnabled)
                 assertTrue(info.isChecked)
@@ -99,6 +101,7 @@ class ReverbAppChoiceIntegrationTest {
                 assertTrue(requests.isEmpty())
                 control.isEnabled = true
                 assertTrue(row.isEnabled)
+                assertTrue("Re-enable must restore the original touch-mode focus policy", row.isFocusableInTouchMode)
                 assertTrue(row.requestFocus())
                 press(row, KeyEvent.KEYCODE_ENTER)
                 assertEquals(listOf(false), requests)
@@ -106,10 +109,17 @@ class ReverbAppChoiceIntegrationTest {
                 control.bind("Example app", "Component", true, false, f.theme)
                 control.isEnabled = true
                 assertFalse(row.isEnabled)
+                assertFalse(row.isFocusableInTouchMode)
                 assertFalse(row.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                control.bind("Example app", "Component", true, true, f.theme)
+                assertTrue(row.isFocusableInTouchMode)
+                assertTrue(row.requestFocus())
+                assertTrue(row.createAccessibilityNodeInfo().isChecked)
+                assertEquals(listOf(false), requests)
                 control.close()
                 control.isEnabled = true
                 assertFalse(row.isEnabled)
+                assertFalse(row.isFocusableInTouchMode)
                 assertFalse(row.performClick())
                 assertEquals(listOf(false), requests)
             }

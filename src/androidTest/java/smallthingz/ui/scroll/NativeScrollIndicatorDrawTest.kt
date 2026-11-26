@@ -1,5 +1,6 @@
 package smallthingz.ui.scroll
 
+import android.app.Dialog
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -17,6 +18,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.Window
+import android.view.WindowManager
 import android.widget.LinearLayout
 import androidx.core.view.doOnLayout
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -98,12 +100,25 @@ class NativeScrollIndicatorDrawTest {
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         var host: LinearLayout? = null
-        withRetiringTestActivity(activity, root = { host }) {
+        var dialog: Dialog? = null
+        withRetiringTestActivity(activity, root = { host }, cleanup = { dialog?.dismiss() }) {
             lateinit var bound: NativeSourceRecyclerView
             lateinit var control: NativeSourceRecyclerView
+            lateinit var fixtureWindow: Window
             val laidOut = CountDownLatch(1)
             main {
-                val root = LinearLayout(activity).apply {
+                // Expanded Dark Theme can invert light windows despite View opt-outs. Select
+                // a genuinely dark theme before this test-local hardware window first attaches.
+                val fixture = Dialog(activity, android.R.style.Theme_Material_NoActionBar).also { dialog = it }
+                if (Build.VERSION.SDK_INT >= 29) {
+                    val lightTheme = TypedValue()
+                    assertTrue(fixture.context.theme.resolveAttribute(android.R.attr.isLightTheme, lightTheme, true))
+                    assertEquals(TypedValue.TYPE_INT_BOOLEAN, lightTheme.type)
+                    assertEquals("PixelCopy fixture requires a dark window theme", 0, lightTheme.data)
+                }
+                fixtureWindow = requireNotNull(fixture.window)
+                fixtureWindow.addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
+                val root = LinearLayout(fixture.context).apply {
                     orientation = LinearLayout.VERTICAL
                     descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                     // Match the Library/Incidents host policy for explicit palette colors.
@@ -111,7 +126,7 @@ class NativeScrollIndicatorDrawTest {
                     setBackgroundColor(Color.WHITE)
                 }
                 host = root
-                fun addList() = recycler(activity, 160, View.LAYOUT_DIRECTION_LTR).apply {
+                fun addList() = recycler(fixture.context, 160, View.LAYOUT_DIRECTION_LTR).apply {
                     adapter = Rows(16)
                     isFocusable = false
                     defaultFocusHighlightEnabled = false
@@ -120,9 +135,12 @@ class NativeScrollIndicatorDrawTest {
                 bound = addList()
                 control = addList()
                 control.doOnLayout { laidOut.countDown() }
-                activity.setContentView(root)
+                fixture.setContentView(root)
+                fixture.show()
             }
             assertTrue("Hardware fixture did not lay out", laidOut.await(5, TimeUnit.SECONDS))
+            // Establish the fixed-color control before testing scrollbar painting or fading.
+            assertWindowThumb(fixtureWindow, bound, control, Color.WHITE)
 
             main {
                 if (Build.VERSION.SDK_INT >= 29) {
@@ -142,7 +160,7 @@ class NativeScrollIndicatorDrawTest {
                 assertFalse(bound.willNotDraw())
                 revealAtTop(bound)
             }
-            assertWindowThumb(activity.window, bound, control, Color.RED)
+            assertWindowThumb(fixtureWindow, bound, control, Color.RED)
 
             main {
                 // A different tint makes PixelCopy reject a stale pre-removal frame.
@@ -158,19 +176,19 @@ class NativeScrollIndicatorDrawTest {
                 assertFalse("Bound thumb must keep hardware drawing enabled", bound.willNotDraw())
                 revealAtTop(bound)
             }
-            assertWindowThumb(activity.window, bound, control, Color.BLUE)
-            assertWindowThumb(activity.window, bound, control, Color.WHITE)
+            assertWindowThumb(fixtureWindow, bound, control, Color.BLUE)
+            assertWindowThumb(fixtureWindow, bound, control, Color.WHITE)
             main {
                 assertFalse(bound.canStartScrollIndicatorDrag(117f, 12f))
                 revealAtTop(bound)
             }
-            assertWindowThumb(activity.window, bound, control, Color.BLUE)
+            assertWindowThumb(fixtureWindow, bound, control, Color.BLUE)
 
             main {
                 bound.bindScrollIndicator(null, Color.BLUE)
                 assertTrue("Unbind restores the latest suppressed draw request", bound.willNotDraw())
             }
-            assertWindowThumb(activity.window, bound, control, Color.WHITE)
+            assertWindowThumb(fixtureWindow, bound, control, Color.WHITE)
 
             main {
                 bound.bindScrollIndicator(style, Color.BLUE)

@@ -25,6 +25,7 @@ open class NativeCenteredTopBarLayout(
     private var navigationPadding = 0
     private var actionPadding = 0
     private var titlePadding = 0
+    private var laidOutDirection = LAYOUT_DIRECTION_LTR
 
 
     private val navigation get() = navigationView
@@ -71,8 +72,14 @@ open class NativeCenteredTopBarLayout(
         logicalHeight = max(minimumHeight, title.measuredHeight)
         setMeasuredDimension(w, resolveSize(logicalHeight, heightMeasureSpec))
     }
+    override fun onRtlPropertiesChanged(layoutDirection: Int) {
+        super.onRtlPropertiesChanged(layoutDirection)
+        // Inherited direction can change while this viewport keeps the same bounds.
+        if (layoutDirection != laidOutDirection) requestLayout()
+    }
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        val rtl = layoutDirection == LAYOUT_DIRECTION_RTL
+        laidOutDirection = layoutDirection
+        val rtl = laidOutDirection == LAYOUT_DIRECTION_RTL
         val p = centeredTopBarPlacement(width, logicalHeight, navigationWrapperWidth,
             navigation.measuredHeight, titleWrapperWidth, title.measuredHeight,
             actionWrapperWidth, done.measuredHeight, density, rtl, toolbarStyle.centeredTitleStartDp)

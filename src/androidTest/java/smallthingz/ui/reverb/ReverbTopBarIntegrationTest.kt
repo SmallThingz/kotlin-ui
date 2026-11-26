@@ -2,10 +2,10 @@ package smallthingz.ui.reverb
 
 import android.annotation.SuppressLint
 import android.content.ContextWrapper
+import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
-import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -13,17 +13,18 @@ import android.widget.LinearLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import smallthingz.ui.R
-import smallthingz.ui.components.NativeTopBarInsets
-import smallthingz.ui.components.NativeTopBarLayout
 import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.NativeThemedToolbarAction
+import smallthingz.ui.components.NativeTopBarInsets
+import smallthingz.ui.components.NativeTopBarLayout
 import smallthingz.ui.components.NativeToolbarActionTone
+import smallthingz.ui.test.R
 import smallthingz.ui.text.style.TextOverflow
 import kotlin.math.roundToInt
 
@@ -31,7 +32,7 @@ import kotlin.math.roundToInt
 class ReverbTopBarIntegrationTest {
     @SuppressLint("ResourceType") // A color resource is drawable artwork with directly observable qualifier selection.
     @Test fun launcherUsesApplicationConfigurationAndRetainsArtworkUntilItChanges() = onMainThread {
-        val base = InstrumentationRegistry.getInstrumentation().targetContext
+        val base = InstrumentationRegistry.getInstrumentation().context
         fun configured(night: Int) = base.createConfigurationContext(Configuration(base.resources.configuration).apply {
             uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or night
         })
@@ -44,12 +45,11 @@ class ReverbTopBarIntegrationTest {
             }
             val mark = ReverbIdentityMarkView(activity)
             val image = mark.getChildAt(1) as ImageView
-            val identity = ReverbProductIdentity.Launcher(R.color.reverb_brand_background)
+            // The production icon is fixed dark. Use test qualifiers to expose which context supplied the artwork.
+            val identity = ReverbProductIdentity.Launcher(R.color.reverb_launcher_configuration_test_color)
             val palette = ReverbDesign.theme(activity, dark = otherMode == Configuration.UI_MODE_NIGHT_YES).palette
             fun expectedColor() = application.resources.getColor(identity.drawable, null)
-            if (Build.VERSION.SDK_INT >= 31) {
-                assertTrue(expectedColor() != activity.resources.getColor(identity.drawable, null))
-            }
+            assertNotEquals(expectedColor(), activity.resources.getColor(identity.drawable, null))
             mark.bind(identity, palette)
             assertEquals(expectedColor(), (image.drawable as ColorDrawable).color)
             val initial = image.drawable
@@ -80,7 +80,9 @@ class ReverbTopBarIntegrationTest {
     @Test fun multiActionToolbarMatchesTitledBackInBothDirectionsWithoutShrinkingEndCells() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         onMainThread {
-            val context = instrumentation.targetContext
+            val context = instrumentation.context
+            assertTrue("Toolbar fixture requires supportsRtl in the test APK",
+                context.applicationInfo.flags and ApplicationInfo.FLAG_SUPPORTS_RTL != 0)
             val theme = ReverbDesign.theme(context, dark = false)
             val style = ReverbDesign.appearance.toolbars
             val density = theme.density.density
@@ -124,6 +126,8 @@ class ReverbTopBarIntegrationTest {
                             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
                         view.layout(0, 0, width, view.measuredHeight)
                     }
+                    assertEquals(direction, bar.layoutDirection)
+                    assertEquals(direction, reference.contentClipView.layoutDirection)
                     assertEquals(dp(58f), bar.measuredHeight)
                     assertEquals(bounds(reference, referenceBack.visual), bounds(bar, back.visual))
                     assertEquals(glyphOrigin(reference, referenceEnd), glyphOrigin(bar, endActions.last()))

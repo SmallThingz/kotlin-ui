@@ -431,6 +431,8 @@ class NativeModalContrastIntegrationTest {
     @androidx.test.filters.SdkSuppress(minSdkVersion = 30)
     @Test fun sheetCentersActionsInsideAsymmetricSafeSpanInBothDirections() = mainChecked {
         val context = instrumentation.targetContext
+        assertTrue("RTL fixture requires supportsRtl in the target APK",
+            context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_SUPPORTS_RTL != 0)
         val runtime = NativeModalWindowRuntime(context)
         val style = reverbActionSheetStyle(ReverbDesign.windowTheme(Density(1f),
             createFontFamilyResolver(context), palette(false)))
@@ -440,13 +442,21 @@ class NativeModalContrastIntegrationTest {
         val content = NativeSheetContent(context, style, "Confirm", { null }, null, {})
         val action = NativeMaterialButtonView(context, NativeUiAppearance.Default.buttons.filled,
             Density(1f), createFontFamilyResolver(context), onClick = {})
-        content.setContent(View(context).apply { minimumHeight = 80 }, action)
+        action.bind("Confirm", true, palette(false).buttonPalette)
+        // Plain View consumes the entire AT_MOST height despite minimumHeight = 80.
+        val body = object : View(context) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), resolveSize(80, heightMeasureSpec))
+            }
+        }
+        content.setContent(body, action)
         val surface = NativeSheetSurface(context, style, handle, content, null)
         val scrim = SheetScrim(context, style.palette.scrim, style.recipe.scrimAlpha, {})
         val root = SheetRoot(context, pointer, state, surface, scrim, 1f, 640f, {}, {})
         try {
             for (rtl in listOf(false, true)) for ((left, right) in listOf(120 to 0, 0 to 120, 80 to 24)) {
-                root.layoutDirection = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+                val direction = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+                root.layoutDirection = direction
                 root.insets(androidx.core.view.WindowInsetsCompat.Builder()
                     .setInsets(androidx.core.view.WindowInsetsCompat.Type.displayCutout(), androidx.core.graphics.Insets.of(left, 0, right, 0))
                     .setInsets(androidx.core.view.WindowInsetsCompat.Type.navigationBars(), androidx.core.graphics.Insets.of(0, 0, 0, 40)).build())
@@ -456,6 +466,9 @@ class NativeModalContrastIntegrationTest {
                         View.MeasureSpec.makeMeasureSpec(800, View.MeasureSpec.EXACTLY))
                     state.dispatchRawDelta(-800f)
                     root.layout(0, 0, 600, 800)
+                    assertEquals("Detached root must resolve the requested direction", direction, root.layoutDirection)
+                    assertEquals("Action must inherit the requested direction", direction, action.layoutDirection)
+                    assertEquals("Fixture body must leave room for the action", 80, body.height)
                     assertEquals(40, surface.insets.contentBottom)
                     val safeWidth = 600 - left - right
                     assertEquals(minOf(safeWidth, maximum.toInt()), surface.width)
@@ -464,7 +477,9 @@ class NativeModalContrastIntegrationTest {
                     val bounds = Rect(0, 0, action.width, action.height)
                     root.offsetDescendantRectToMyCoords(action, bounds)
                     assertTrue(bounds.left >= left && bounds.right <= 600 - right)
-                    assertTrue(action.width > 0 && action.height > 0)
+                    assertTrue("rtl=$rtl safe=$left..${600 - right} maximum=$maximum " +
+                        "body=${body.width}x${body.height} action=${action.width}x${action.height} bounds=$bounds",
+                        action.width > 0 && action.height > 0)
                     assertTrue(bounds.bottom <= 800 - 40)
                 }
             }

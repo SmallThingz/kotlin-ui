@@ -38,6 +38,8 @@ class ReverbCheckedSettingsRow(
         if (!rowReady) return
         row.isEnabled = acceptsNativeInput
         row.isFocusable = acceptsNativeInput
+        // Disabling focus clears View's touch-mode flag; restore the row's original policy too.
+        row.isFocusableInTouchMode = acceptsNativeInput
         row.isClickable = acceptsNativeInput
     }
 

@@ -10,17 +10,24 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+import androidx.core.view.doOnLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.R
+import smallthingz.ui.geometry.Rect
 import smallthingz.ui.reverb.ReverbEnvironment
 import smallthingz.ui.reverb.library.LibraryRecordingRow
 import smallthingz.ui.reverb.library.LibraryRecordingRowActions
 import smallthingz.ui.reverb.library.ReverbLibraryRecordingRow
 import smallthingz.ui.text.view.NativeMergedRowAccessibilityHost
+import smallthingz.ui.text.view.NativePlainTextViewGeometry
+import smallthingz.ui.text.view.NativeTextSemanticsClip
+import smallthingz.ui.text.view.NativeTextSemanticsClipPolicy
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
 @RunWith(AndroidJUnit4::class)
@@ -108,8 +115,11 @@ class ReverbLibraryPlayingIndicatorIntegrationTest {
         var root: FrameLayout? = null
         var row: ReverbLibraryRecordingRow? = null
         var runtime: NativeModalWindowRuntime? = null
+        val laidOut = CountDownLatch(1)
+        val geometryLeases = mutableListOf<AutoCloseable>()
         withRetiringTestActivity(activity, root = { root }, cleanup = {
-            try { row?.unbind() } finally { runtime?.close() }
+            try { geometryLeases.forEach { it.close() } }
+            finally { try { row?.unbind() } finally { runtime?.close() } }
         }) {
             val model = LibraryRecordingRow("one", "Recording", "12 seconds", null,
                 true, true, true, null, expanded = true, isPlaying = true)
@@ -122,29 +132,42 @@ class ReverbLibraryPlayingIndicatorIntegrationTest {
                     checkNotNull(root).addView(it, FrameLayout.LayoutParams(
                         (320f * activity.resources.displayMetrics.density).roundToInt(), -2))
                     it.bind(model, actions)
+                    it.doOnLayout { laidOut.countDown() }
                 }
                 activity.setContentView(checkNotNull(root))
             }
+            assertTrue("The recording row must be laid out before sampling accessibility",
+                laidOut.await(5, TimeUnit.SECONDS))
             instrumentation.waitForIdleSync()
+            val hosts = mutableListOf<View>()
             val hostNodes = mutableListOf<AccessibilityNodeInfo>()
+            fun assertState(info: AccessibilityNodeInfo, expected: String?) {
+                assertTrue("Both action nodes must be visible", info.isVisibleToUser)
+                assertTrue("Both action nodes must be clickable", info.isClickable)
+                assertTrue("Selection semantics must survive playback state", info.isSelected)
+                assertEquals(expected, AccessibilityNodeInfoCompat.wrap(info).stateDescription?.toString())
+            }
             try {
                 onMain {
                     val view = checkNotNull(row)
                     assertTrue(view.isAttachedToWindow && view.isShown)
-                    val hosts = descendants(view).filterIsInstance<NativeMergedRowAccessibilityHost>()
-                        .map { it as View }.toList()
+                    hosts += descendants(view).filterIsInstance<NativeMergedRowAccessibilityHost>().map { it as View }
                     assertEquals(2, hosts.size)
-                    hosts.forEach { hostNodes += checkNotNull(it.createAccessibilityNodeInfo()) }
-                    fun assertState(expected: String?) {
-                        for (host in hosts) {
-                            val info = checkNotNull(host.createAccessibilityNodeInfo())
-                            try {
-                                assertEquals(expected, AccessibilityNodeInfoCompat.wrap(info).stateDescription?.toString())
-                                assertTrue("Selection semantics must survive playback state", info.isSelected)
-                            } finally { info.recycle() }
-                        }
+                    // The app window supplies these leases. This fixture binds the same delegate
+                    // to its real measured bounds without supplying synthetic node presence.
+                    val fixtureRoot = checkNotNull(root)
+                    val geometry = NativePlainTextViewGeometry(fixtureRoot,
+                        NativeTextSemanticsClipPolicy { NativeTextSemanticsClip.Unclipped },
+                        rootContentClip = { Rect(0f, 0f, fixtureRoot.width.toFloat(), fixtureRoot.height.toFloat()) })
+                    hosts.forEach { host ->
+                        geometryLeases += (host as NativeMergedRowAccessibilityHost).mergedRowAccessibility
+                            .bindGeometry(geometry) { host.isAttachedToWindow && host.isShown }
                     }
-                    assertState(activity.getString(R.string.recording_playing))
+                    hosts.forEachIndexed { index, host ->
+                        val info = checkNotNull(host.createAccessibilityNodeInfo()) { "Missing action node ${index + 1}" }
+                        hostNodes += info
+                        assertState(info, activity.getString(R.string.recording_playing))
+                    }
                 }
                 fun assertTransition(playing: Boolean) {
                     val notified = mutableSetOf<Int>()
@@ -164,12 +187,10 @@ class ReverbLibraryPlayingIndicatorIntegrationTest {
                     event.recycle()
                     assertEquals("Both retained action hosts must announce playback changes", 2, notified.size)
                     onMain {
-                        descendants(checkNotNull(row)).filterIsInstance<NativeMergedRowAccessibilityHost>().forEach {
-                            val info = checkNotNull((it as View).createAccessibilityNodeInfo())
+                        hosts.forEachIndexed { index, host ->
+                            val info = checkNotNull(host.createAccessibilityNodeInfo()) { "Missing action node ${index + 1}" }
                             try {
-                                assertEquals(if (playing) activity.getString(R.string.recording_playing) else null,
-                                    AccessibilityNodeInfoCompat.wrap(info).stateDescription?.toString())
-                                assertTrue(info.isSelected)
+                                assertState(info, if (playing) activity.getString(R.string.recording_playing) else null)
                             } finally { info.recycle() }
                         }
                     }
