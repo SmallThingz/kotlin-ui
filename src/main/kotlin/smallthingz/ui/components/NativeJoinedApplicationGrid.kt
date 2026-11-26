@@ -21,12 +21,12 @@ private class JoinedApplicationGridSurface(context: Context, palette: NativeColo
     private val stroke = density * (palette.surfacePreset?.borderWidthDp ?: 1f)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = palette.border; style = Paint.Style.STROKE; strokeWidth = stroke
-        strokeJoin = Paint.Join.ROUND
+        strokeJoin = Paint.Join.MITER
     }
     private val shape = Path()
     private val mask = Path()
     private val region = Region()
-    private var key = emptyList<Any>()
+    private var initialized = false
     private var top = 0f
     private var height = 0f
     private var width = 0
@@ -36,9 +36,9 @@ private class JoinedApplicationGridSurface(context: Context, palette: NativeColo
     private var rtl = false
 
     fun update(width: Int, top: Float, count: Int, columns: Int, cellHeight: Int, rtl: Boolean) {
-        val next = listOf(width, top, count, columns, cellHeight, rtl)
-        if (next == key) return
-        key = next; this.top = top; this.width = width; this.count = count
+        if (initialized && this.width == width && this.top == top && this.count == count &&
+            this.columns == columns && this.cellHeight == cellHeight && this.rtl == rtl) return
+        initialized = true; this.top = top; this.width = width; this.count = count
         this.columns = columns; this.cellHeight = cellHeight; this.rtl = rtl
         shape.rewind(); mask.rewind(); region.setEmpty()
         if (count == 0 || width <= 0) return
@@ -47,7 +47,9 @@ private class JoinedApplicationGridSurface(context: Context, palette: NativeColo
         shape.moveTo(corners.first().start.x, top + corners.first().start.y)
         for (corner in corners) {
             shape.lineTo(corner.start.x, top + corner.start.y)
-            shape.quadTo(corner.vertex.x, top + corner.vertex.y, corner.end.x, top + corner.end.y)
+            if (!corner.concave) {
+                shape.quadTo(corner.vertex.x, top + corner.vertex.y, corner.end.x, top + corner.end.y)
+            }
         }
         shape.close()
         mask.set(shape)

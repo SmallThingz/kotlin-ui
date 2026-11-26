@@ -5,28 +5,48 @@ import org.junit.Test
 
 class NativeJoinedGridGeometryTest {
     @Test fun fourThenTwoHasOneInwardCornerAtTheShortRowBoundary() {
-        val corners = joinedGridCorners(6, 4, 320f, 88f, 16f)
+        val corners = joinedGridCorners(6, 4, 320f, 76f, 16f)
         assertEquals(6, corners.size)
         val corner = corners.single { it.concave }
-        assertEquals(JoinedGridPoint(160f, 88f), corner.vertex)
-        assertEquals(JoinedGridPoint(176f, 88f), corner.start)
-        assertEquals(JoinedGridPoint(160f, 104f), corner.end)
+        assertEquals(JoinedGridPoint(160f, 76f), corner.vertex)
+        assertEquals(corner.vertex, corner.start)
+        assertEquals(corner.vertex, corner.end)
+    }
+    @Test fun densePhoneAndCompactLargeFontOutlinesKeepOnlyOutsideCurves() {
+        for (width in listOf(128f, 328f, 388f)) for (font in listOf(1f, 2f)) {
+            val columns = NativeApplicationGridSizing.columns(width, font)
+            for (rtl in listOf(false, true)) {
+                val corners = joinedGridCorners(columns + 1, columns, width,
+                    NativeApplicationGridSizing.heightDp(font), 16f, rtl)
+                for (corner in corners) {
+                    if (corner.concave) {
+                        assertEquals(corner.vertex, corner.start)
+                        assertEquals(corner.vertex, corner.end)
+                    } else {
+                        assertEquals(16f, kotlin.math.hypot(corner.start.x - corner.vertex.x,
+                            corner.start.y - corner.vertex.y), .0001f)
+                        assertEquals(16f, kotlin.math.hypot(corner.end.x - corner.vertex.x,
+                            corner.end.y - corner.vertex.y), .0001f)
+                    }
+                }
+            }
+        }
     }
     @Test fun completeRowsHaveOnlyTheFourOuterCorners() {
         for (count in listOf(4, 8, 12)) {
-            val corners = joinedGridCorners(count, 4, 320f, 88f, 16f)
+            val corners = joinedGridCorners(count, 4, 320f, 76f, 16f)
             assertEquals(4, corners.size)
             assertTrue(corners.none { it.concave })
         }
     }
     @Test fun shortFirstRowDoesNotStretchToFillMissingCells() {
-        val corners = joinedGridCorners(2, 4, 320f, 88f, 16f)
+        val corners = joinedGridCorners(2, 4, 320f, 76f, 16f)
         assertEquals(160f, corners.maxOf { it.vertex.x }, 0f)
         assertEquals(4, corners.size)
     }
     @Test fun rtlMirrorsTheWholeShapeIncludingTheInwardTurn() {
-        val ltr = joinedGridCorners(6, 4, 320f, 88f, 16f)
-        val rtl = joinedGridCorners(6, 4, 320f, 88f, 16f, true)
+        val ltr = joinedGridCorners(6, 4, 320f, 76f, 16f)
+        val rtl = joinedGridCorners(6, 4, 320f, 76f, 16f, true)
         ltr.zip(rtl).forEach { (a, b) ->
             assertEquals(a.concave, b.concave)
             assertEquals(320f - a.vertex.x, b.vertex.x, 0f)
@@ -35,21 +55,25 @@ class NativeJoinedGridGeometryTest {
         }
     }
     @Test fun everyPartialRowHasOneConcaveCornerAndFiniteBoundedCurves() {
-        for (columns in 1..6) for (count in 1..80) for (width in listOf(1f, 221f, 480f)) {
-            val corners = joinedGridCorners(count, columns, width, 88f, 16f)
+        for (columns in 1..7) for (count in 1..80) for (width in listOf(1f, 221f, 480f)) {
+            val corners = joinedGridCorners(count, columns, width, 76f, 16f)
             val rows = (count - 1) / columns + 1
             assertEquals(if (rows > 1 && count % columns != 0) 1 else 0, corners.count { it.concave })
+            corners.filter { it.concave }.forEach { corner ->
+                assertEquals(corner.vertex, corner.start)
+                assertEquals(corner.vertex, corner.end)
+            }
             for (corner in corners) for (p in listOf(corner.start, corner.vertex, corner.end)) {
                 assertTrue(p.x.isFinite() && p.x in 0f..width)
-                assertTrue(p.y.isFinite() && p.y in 0f..rows * 88f)
+                assertTrue(p.y.isFinite() && p.y in 0f..rows * 76f)
             }
         }
     }
     @Test fun emptyAndZeroWidthGridsHaveNoOutline() {
-        assertTrue(joinedGridCorners(0, 4, 320f, 88f, 16f).isEmpty())
-        assertTrue(joinedGridCorners(6, 4, 0f, 88f, 16f).isEmpty())
+        assertTrue(joinedGridCorners(0, 4, 320f, 76f, 16f).isEmpty())
+        assertTrue(joinedGridCorners(6, 4, 0f, 76f, 16f).isEmpty())
     }
     @Test(expected = IllegalArgumentException::class) fun rejectsZeroColumns() {
-        joinedGridCorners(6, 0, 320f, 88f, 16f)
+        joinedGridCorners(6, 0, 320f, 76f, 16f)
     }
 }

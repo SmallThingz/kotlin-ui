@@ -29,6 +29,13 @@ internal fun joinedGridCorners(count: Int, columns: Int, width: Float, cellHeigh
         val previous = vertices[(index + vertices.size - 1) % vertices.size]
         val vertex = vertices[index]
         val next = vertices[(index + 1) % vertices.size]
+        val cross = (vertex.x - previous.x) * (next.y - vertex.y) -
+            (vertex.y - previous.y) * (next.x - vertex.x)
+        // Rectangular child selection fills meet exactly here; never extend a curve into the gap.
+        if (cross < 0) {
+            val point = mirror(vertex)
+            return@map JoinedGridCorner(point, point, point, true)
+        }
         val incoming = hypot(previous.x - vertex.x, previous.y - vertex.y)
         val outgoing = hypot(next.x - vertex.x, next.y - vertex.y)
         val r = minOf(radius, incoming / 2, outgoing / 2)
@@ -36,8 +43,6 @@ internal fun joinedGridCorners(count: Int, columns: Int, width: Float, cellHeigh
             vertex.y + (previous.y - vertex.y) * r / incoming)
         val end = JoinedGridPoint(vertex.x + (next.x - vertex.x) * r / outgoing,
             vertex.y + (next.y - vertex.y) * r / outgoing)
-        val cross = (vertex.x - previous.x) * (next.y - vertex.y) -
-            (vertex.y - previous.y) * (next.x - vertex.x)
-        JoinedGridCorner(mirror(start), mirror(vertex), mirror(end), cross < 0)
+        JoinedGridCorner(mirror(start), mirror(vertex), mirror(end), false)
     }
 }
