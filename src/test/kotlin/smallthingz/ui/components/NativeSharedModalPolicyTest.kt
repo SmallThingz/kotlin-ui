@@ -1,11 +1,11 @@
 package smallthingz.ui.components
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Test
 import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.reverb.ReverbDesign
+import smallthingz.ui.reverb.ReverbTheme
 import smallthingz.ui.reverb.reverbActionSheetStyle
 import smallthingz.ui.text.font.FontFamily
 import smallthingz.ui.text.font.FontStyle
@@ -36,8 +36,7 @@ class NativeSharedModalPolicyTest {
                 assertEquals(2f, common.recipe.handleHeightDp, 0f)
                 assertEquals(16f, common.recipe.handleVerticalPaddingDp, 0f)
                 assertEquals(NoiseDrawable.SEED_BACKGROUND, common.recipe.grainSeed)
-                // A raw palette now keeps the recipe's grain rather than opting out implicitly.
-                assertEquals(if (raw) 1f else .5f, common.recipe.grainIntensity, 0f)
+                assertEquals(palette.surfacePreset?.backgroundGrain ?: 1f, common.recipe.grainIntensity, 0f)
                 assertEquals(palette.onSurface, common.palette.title)
                 assertEquals(palette.onSurfaceVariant, common.palette.onSurfaceVariant)
                 assertEquals(palette.scrim, common.palette.scrim)
@@ -60,22 +59,35 @@ class NativeSharedModalPolicyTest {
         }
     }
 
-    @Test fun rawPalettesKeepExplicitSheetRecipesAndGrainOptOut() {
+    @Test fun themeBackdropSeedFlowsThroughSheetAndFloatingWindowRecipes() {
+        val palette = NativeColorScheme.fallback(false)
+        for (seed in listOf(null, 61, NoiseDrawable.SEED_BACKGROUND)) {
+            val appearance = NativeUiAppearance.Default.copy(backdrops = NativeBackdropStyle(windowGrainSeed = seed))
+            val theme = ReverbTheme(density, resolver, palette, appearance)
+            val style = appearance.actionSheetStyle(density, resolver, palette)
+            assertEquals(seed, style.recipe.grainSeed)
+            assertEquals(style, reverbActionSheetStyle(theme))
+            assertEquals(seed, appearance.floatingWindowRecipe.grainSeed)
+        }
+    }
+
+    @Test fun themeOwnsSheetGrainAndGeometryCopiesKeepResolvedPaint() {
         val recipe = NativeActionSheetRecipe(handleHeightDp = 5f, handleVerticalPaddingDp = 9f,
             grainSeed = 42, grainIntensity = .27f)
         val modals = NativeUiAppearance.Default.modals.copy(sheet = recipe)
         val raw = NativeColorScheme.fallback(false)
-        assertEquals(recipe, modals.actionSheetStyle(density, resolver, raw).recipe)
-        val flat = modals.copy(sheet = recipe.copy(grainSeed = null))
-            .actionSheetStyle(density, resolver, raw)
-        assertNull(flat.recipe.grainSeed)
-        assertEquals(.27f, flat.recipe.grainIntensity, 0f)
-        val themed = NativeDefaultColorScheme.resolve(false, 30) { 0xfff3edf4.toInt() }
-        assertEquals(recipe.copy(grainIntensity = .5f),
-            modals.actionSheetStyle(density, resolver, themed).recipe)
+        val themed = raw.copy(surfacePreset = NativeGrainPreset(backgroundGrain = .75f, foregroundGrain = .25f))
+        val style = modals.actionSheetStyle(density, resolver, themed)
+        assertEquals(recipe.copy(grainSeed = NoiseDrawable.SEED_BACKGROUND, grainIntensity = .75f), style.recipe)
+        val geometry = style.copy(recipe = recipe.copy(handleHeightDp = 7f, grainSeed = null))
+        assertEquals(7f, geometry.recipe.handleHeightDp, 0f)
+        assertEquals(style.recipe.grainSeed, geometry.recipe.grainSeed)
+        assertEquals(style.recipe.grainIntensity, geometry.recipe.grainIntensity, 0f)
+        val flat = themed.copy(surfacePreset = NativeGrainPreset(backgroundGrain = 0f, foregroundGrain = .25f))
+        assertEquals(0f, modals.actionSheetStyle(density, resolver, flat).recipe.grainIntensity, 0f)
     }
 
-    @Test fun floatingPanelsUseWindowBackgroundWhileLinksKeepTheirRaisedRole() {
+    @Test fun floatingPanelsUseWindowBackgroundWhileLinksUseSharedForeground() {
         val floating = NativeUiAppearance.Default.modals.floating
         assertEquals(floating, ReverbDesign.appearance.modals.floating)
         for (dark in listOf(false, true)) {
@@ -83,26 +95,25 @@ class NativeSharedModalPolicyTest {
             val panelFill = floating.surfaceColor(palette)
             val linkFill = floating.link.fill(palette)
             assertEquals(palette.background, panelFill)
-            assertEquals(if (dark) 0xff1a1a1a.toInt() else palette.surfaceContainerHighest, linkFill)
+            assertEquals(palette.surfaceContainerHigh, linkFill)
             assertEquals(linkFill, ReverbDesign.modalLinkSurface(palette))
             assertEquals(palette.onSurface, floating.link.content(palette))
         }
     }
 
-    @Test fun floatingBackgroundPreservesAlphaWhileAmoledLinksKeepTheirLift() {
+    @Test fun floatingBackgroundAndCanonicalLinkPreserveAlpha() {
         val floating = NativeUiAppearance.Default.modals.floating
         val palette = NativeDefaultColorScheme.resolve(true, 30) { 0xfff3edf4.toInt() }.copy(
             background = 0x30102030,
             surfaceContainerHigh = 0x40102030,
             surfaceContainerHighest = 0x80203040.toInt(),
         )
-        // The panel preserves background alpha48. Links retain their own 4% white lift:
-        // round(128 + 10 * (1 - 128/255)) = 133.
+        assertEquals(palette.background, floating.surfaceColor(palette))
+        assertEquals(palette.surfaceContainerHigh, floating.link.fill(palette))
         assertEquals(48, floating.surfaceColor(palette) ushr 24)
-        assertEquals(133, floating.link.fill(palette) ushr 24)
+        assertEquals(64, floating.link.fill(palette) ushr 24)
         val raw = palette.copy(surfacePreset = null)
         assertEquals(raw.background, floating.surfaceColor(raw))
-        assertEquals(raw.surfaceContainerHighest, floating.link.fill(raw))
+        assertEquals(raw.surfaceContainerHigh, floating.link.fill(raw))
     }
-
 }

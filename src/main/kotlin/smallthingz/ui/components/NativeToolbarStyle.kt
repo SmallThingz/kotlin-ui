@@ -29,7 +29,7 @@ data class NativeToolbarStyle(
 ) {
     fun compactHeightPx(density: Float): Int = (compactHeightDp * density).roundToInt()
 
-    fun backgroundColor(palette: NativeColorScheme): Int = palette.surface
+    fun backgroundColor(palette: NativeColorScheme): Int = palette.background
     fun actionFill(palette: NativeColorScheme): Int = palette.field
     fun contentColor(palette: NativeColorScheme): Int = palette.ink
 

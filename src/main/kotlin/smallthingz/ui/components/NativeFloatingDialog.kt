@@ -115,6 +115,7 @@ class NativeFloatingDialog(
     private val root = FloatingWindowRoot(
         context, requireNotNull(window), content, statusBarProtection, entryEdge,
         host = anchor.rootView.takeIf { entryEdge != null },
+        exteriorBottomPaintSpace = contentOwner.exteriorBottomPaintSpace,
     ) {
         visibilityMotion.setHeight(content.measuredHeight)
         applyMotion()
@@ -354,8 +355,11 @@ private class FloatingWindowRoot(
     private val statusBarProtection: NativeStatusBarProtection?,
     private val entryEdge: NativeDialogEdge?,
     private val host: View?,
+    private val exteriorBottomPaintSpace: (() -> Int)?,
     private val onContentMeasured: () -> Unit,
 ) : ViewGroup(context) {
+    private var bottomPaintSpace = 0
+
     init {
         clipChildren = false
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -388,7 +392,9 @@ private class FloatingWindowRoot(
         val targetHeight = if (heightMode == MeasureSpec.AT_MOST &&
             dialogWindow.attributes.height == LayoutParams.WRAP_CONTENT) height + 1 else height
         val horizontalPadding = paddingLeft + paddingRight
-        val verticalPadding = paddingTop + paddingBottom
+        bottomPaintSpace = (exteriorBottomPaintSpace?.invoke() ?: 0).coerceAtMost(
+            if (heightMode == MeasureSpec.UNSPECIFIED) Int.MAX_VALUE else height)
+        val verticalPadding = paddingTop + paddingBottom + bottomPaintSpace
         val hostWidth = host?.width ?: 0
         val hostHeight = host?.height ?: 0
         val childWidth = if (widthMode == MeasureSpec.UNSPECIFIED && hostWidth <= 0) widthMeasureSpec
@@ -428,8 +434,8 @@ private class FloatingWindowRoot(
         val l = paddingLeft + (width - content.measuredWidth - paddingLeft - paddingRight) / 2
         val t = when (entryEdge) {
             NativeDialogEdge.TOP -> paddingTop
-            NativeDialogEdge.BOTTOM -> height - paddingBottom - content.measuredHeight
-            null -> paddingTop + (height - content.measuredHeight - paddingTop - paddingBottom) / 2
+            NativeDialogEdge.BOTTOM -> height - paddingBottom - bottomPaintSpace - content.measuredHeight
+            null -> paddingTop + (height - content.measuredHeight - paddingTop - paddingBottom - bottomPaintSpace) / 2
         }
         content.layout(l, t, l + content.measuredWidth, t + content.measuredHeight)
     }
@@ -443,6 +449,9 @@ private class FloatingWindowRoot(
     fun isInsideContent(event: MotionEvent): Boolean {
         if (!event.x.isFinite() || !event.y.isFinite() || content.visibility == GONE) return false
         val l = left + content.left; val t = top + content.top
-        return event.x.roundToInt() in l..(l + content.width) && event.y.roundToInt() in t..(t + content.height)
+        val bottom = t + content.height
+        val insideY = if (bottomPaintSpace > 0) event.y >= t && event.y < bottom
+            else event.y.roundToInt() in t..bottom
+        return event.x.roundToInt() in l..(l + content.width) && insideY
     }
 }

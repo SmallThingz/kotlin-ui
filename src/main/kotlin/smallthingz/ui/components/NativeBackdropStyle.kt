@@ -12,18 +12,18 @@ data class NativeBackdropStyle(
     val windowGrainSeed: Int? = NoiseDrawable.SEED_BACKGROUND,
     val panelScrimAlpha: Float = .32f,
 ) {
-    fun pageBackground(palette: NativeColorScheme) = NoiseDrawable(palette.surface, pageGrainSeed).apply {
-        setNoiseIntensity(palette.surfacePreset?.backgroundGrain ?: 1f)
+    fun pageBackground(palette: NativeColorScheme) = NoiseDrawable(palette.background, pageGrainSeed).apply {
+        setNoiseIntensity(palette.backgroundGrain)
     }
 
     fun panelScrimColor(palette: NativeColorScheme): Int = srgbColorWithAlpha(palette.scrim, panelScrimAlpha)
 
     fun attachPage(view: View, palette: NativeColorScheme, onPaintChanged: () -> Unit = {}): NativeBackdropBinding =
-        NativeBackdropBinding(view, pageGrainSeed, palette.surface,
-            palette.surfacePreset?.backgroundGrain ?: 1f, onPaintChanged)
+        NativeBackdropBinding(view, pageGrainSeed, palette.background,
+            palette.backgroundGrain, onPaintChanged)
 
     fun bindPage(binding: NativeBackdropBinding, palette: NativeColorScheme) =
-        binding.bind(pageGrainSeed, palette.surface, palette.surfacePreset?.backgroundGrain ?: 1f)
+        binding.bind(pageGrainSeed, palette.background, palette.backgroundGrain)
 
     /** Window handoff using the app's already-resolved palette, including its grain policy. */
     fun windowBackground(palette: NativeColorScheme): NoiseDrawable =
@@ -33,7 +33,7 @@ data class NativeBackdropStyle(
     fun bindWindowBackground(drawable: NoiseDrawable, palette: NativeColorScheme) {
         drawable.setBackgroundColor(palette.background)
         drawable.setGrainSeed(windowGrainSeed)
-        drawable.setNoiseIntensity(palette.surfacePreset?.backgroundGrain ?: 1f)
+        drawable.setNoiseIntensity(palette.backgroundGrain)
     }
 
     /** Framework-theme fallback for callers without an app-resolved palette. */

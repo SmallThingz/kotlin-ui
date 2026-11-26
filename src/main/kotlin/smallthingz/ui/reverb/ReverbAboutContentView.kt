@@ -57,8 +57,10 @@ import androidx.core.view.WindowInsetsCompat
 import android.widget.FrameLayout
 import smallthingz.ui.common.NativeModalDragNode
 import smallthingz.ui.components.NativeSheetDragHandle
+import smallthingz.ui.components.modalEdgeWidthDp
 import smallthingz.ui.unit.Velocity
 import smallthingz.ui.input.phase.NativeDragSink
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -76,7 +78,7 @@ data class ReverbAboutDetails(
 
 private class AboutContentAppearance(val theme: ReverbTheme) {
     private val typography = ReverbDesign.appearance.typography
-    val panel = theme.appearance.modals.floating
+    val panel = theme.appearance.floatingWindowRecipe
     val palette get() = theme.palette
     val headlineSmall get() = typography[panel.headlineRole]
     val titleSmall get() = typography[panel.titleRole]
@@ -117,7 +119,9 @@ internal class ReverbAboutContentView private constructor(
     private var status = Insets.NONE
     private var linkOpenFailed = false
     private var inputRoot: View? = null
-    private val dragLayer = FrameLayout(context)
+    private val dragLayer = FrameLayout(context).apply {
+        clipChildren = false
+    }
     private val surface = AboutSurface(context, initialAppearance, runtime, initialScrollPosition)
     private val handle = NativeSheetDragHandle(context, reverbActionSheetStyle(initialAppearance.theme),
         { inputRoot }, runtime, requestDismiss, requestDismiss)
@@ -129,6 +133,10 @@ internal class ReverbAboutContentView private constructor(
     private var accessibilityOwner: AboutContentAccessibilityOwner? = null
 
     fun scrollPosition(): Int = surface.viewport.saveScrollPosition()
+
+    fun exteriorBottomPaintSpace(): Int =
+        if (appearance.palette.border ushr 24 == 0) 0
+        else ceil(appearance.palette.modalEdgeWidthDp() * appearance.density.density).toInt()
 
     fun bindWindowAccessibility(windowRoot: View) {
         check(accessibilityOwner == null) { "About content already has its native Window cursor" }
@@ -150,6 +158,7 @@ internal class ReverbAboutContentView private constructor(
 
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+        clipChildren = false
         descendantFocusability = FOCUS_AFTER_DESCENDANTS
         if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
         surface.setContent(content)

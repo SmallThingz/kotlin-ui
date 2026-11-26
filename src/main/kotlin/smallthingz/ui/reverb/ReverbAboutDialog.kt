@@ -19,7 +19,9 @@ class ReverbAboutDialog(
         statusBarProtection = ReverbDesign.statusBarProtection(anchor.context), shadowDp = panel.shadowDp) { context, runtime, dismiss ->
         val body = ReverbAboutContentView(context, theme, details, dismiss, openRepository, runtime, restoredScrollPosition)
         content = body
-        NativeFloatingDialogContent(body, body.predictiveMotionTarget, body::bindWindowAccessibility, body::dispose)
+        NativeFloatingDialogContent(body, body.predictiveMotionTarget, body::bindWindowAccessibility, body::dispose).apply {
+            exteriorBottomPaintSpace = body::exteriorBottomPaintSpace
+        }
     }
 
     val window get() = dialog.window

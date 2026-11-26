@@ -33,7 +33,7 @@ class NativeImmediateGroupBindingIntegrationTest {
             val child = View(context)
             group.addRow(child, NativeGroupLayout.LayoutParams(-1, 48))
             val parent = child.parent
-            val palette = NativeColorScheme.fallback(false).copy(surfaceContainerLow = Color.BLACK)
+            val palette = NativeColorScheme.fallback(false).copy(surfaceContainerHigh = Color.BLACK)
             recipe.bindImmediately(group, palette)
             notifications = 0
 
@@ -62,7 +62,7 @@ class NativeImmediateGroupBindingIntegrationTest {
             assertEquals(2.625f, context.resources.displayMetrics.density, 0f)
             val recipe = NativeGroupSurfaceRecipes.Default.settingsGroup
             val palette = NativeColorScheme.fallback(false).copy(
-                surfaceContainerLow = Color.BLACK,
+                surfaceContainerHigh = Color.BLACK,
                 onSurface = Color.WHITE,
             )
             val preset = NativeDarkSurfacePreset.Amoled.copy(
@@ -137,15 +137,15 @@ class NativeImmediateGroupBindingIntegrationTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         lateinit var group: NativeGroupLayout
         val recipe = NativeGroupSurfaceRecipes.Default.settingsGroup
-        val palette = NativeColorScheme.fallback(false).copy(surfaceContainerLow = Color.BLACK)
+        val palette = NativeColorScheme.fallback(false).copy(surfaceContainerHigh = Color.BLACK)
         withLaidOutPaintActivity(mount = { activity ->
             group = recipe.create(activity)
             recipe.bind(group, palette)
             listOf(group, group.pointerContent)
         }) {
             instrumentation.runOnMainSync {
-                recipe.bind(group, palette.copy(surfaceContainerLow = Color.WHITE))
-                recipe.bindImmediately(group, palette.copy(surfaceContainerLow = Color.RED))
+                recipe.bind(group, palette.copy(surfaceContainerHigh = Color.WHITE))
+                recipe.bindImmediately(group, palette.copy(surfaceContainerHigh = Color.RED))
                 assertEquals(Color.RED, group.paintedFillColor)
                 assertEquals(textSurfaceRange(Color.RED), group.paintedTextSurface)
             }

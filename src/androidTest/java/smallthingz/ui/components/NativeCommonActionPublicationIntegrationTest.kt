@@ -21,7 +21,7 @@ class NativeCommonActionPublicationIntegrationTest {
         var callbacks = 0
         var publications = 0
         val palette = NativeColorScheme.fallback(false).copy(
-            surfaceContainerLow = Color.WHITE, onSurface = Color.BLACK, onSurfaceVariant = Color.BLACK,
+            surfaceContainerHigh = Color.WHITE, onSurface = Color.BLACK, onSurfaceVariant = Color.BLACK,
         )
         withLaidOutPaintActivity(mount = { activity ->
             val scope = object : FrameLayout(activity), NativeTextSurfaceScope {}

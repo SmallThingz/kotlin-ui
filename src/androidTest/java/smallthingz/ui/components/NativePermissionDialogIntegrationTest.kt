@@ -315,6 +315,55 @@ class NativePermissionDialogIntegrationTest {
         } finally { prompt.dismiss() }
     }
 
+    @Test fun edgePlacementPaintsOnlyTheExposedLipAndCenterKeepsTheFullBorder() {
+        for (dark in listOf(false, true)) for (entry in listOf(null, NativeDialogEdge.TOP, NativeDialogEdge.BOTTOM)) {
+            attached { activity ->
+                val colors = NativeColorScheme.fallback(dark).copy(
+                    surfacePreset = NativeDarkSurfacePreset.Amoled.copy(
+                        backgroundGrain = 0f, foregroundGrain = .5f,
+                        borderLightness = if (dark) .75f else .25f,
+                    ),
+                )
+                val theme = ControlTheme.resolve(activity, dark).withColorScheme(colors)
+                val prompt = NativePermissionDialog(activity, theme, null, "Reader", "Allow access?", "Deny", "Allow",
+                    onDeny = {}, onAllow = {}, onCancel = {})
+                val dialog = platform(prompt)
+                prepareFixtureWindow(dialog)
+                when (entry) {
+                    null -> prompt.show()
+                    NativeDialogEdge.TOP -> prompt.showAtEdge(entry)
+                    NativeDialogEdge.BOTTOM -> prompt.showAtBottom()
+                }
+                prompt to {
+                    assertFixtureWindow(dialog)
+                    val decor = requireNotNull(dialog.window).decorView as ViewGroup
+                    val surface = nodes(decor).filterIsInstance<NativeSurface>().first()
+                    assertTrue(decor.isAttachedToWindow && decor.isLaidOut && surface.isLaidOut)
+                    assertEquals(colors.background, surface.paintedFillColor)
+                    assertEquals(smallthingz.ui.controls.textSurfaceRange(colors.background), surface.paintedTextSurface)
+                    val panel = Rect(0, 0, surface.width, surface.height)
+                    decor.offsetDescendantRectToMyCoords(surface, panel)
+                    val bitmap = Bitmap.createBitmap(decor.width, decor.height, Bitmap.Config.ARGB_8888)
+                    try {
+                        decor.draw(Canvas(bitmap))
+                        val x = panel.centerX()
+                        if (entry == null) {
+                            assertEquals(colors.border, bitmap.getPixel(x, panel.top))
+                            assertEquals(colors.border, bitmap.getPixel(x, panel.bottom - 1))
+                        } else {
+                            val lip = if (entry == NativeDialogEdge.TOP) panel.bottom else panel.top - 1
+                            val seam = if (entry == NativeDialogEdge.TOP) panel.top else panel.bottom - 1
+                            assertTrue("The exterior lip must be within the actual dialog window", lip in 0 until decor.height)
+                            assertEquals(colors.border, bitmap.getPixel(x, lip))
+                            assertEquals(colors.background, bitmap.getPixel(x, seam))
+                            assertEquals(colors.background, bitmap.getPixel(panel.left, panel.centerY()))
+                        }
+                    } finally { bitmap.recycle() }
+                }
+            }
+        }
+    }
+
     @Test fun invalidWindowTokenSilentlyRetiresTheFailedPresentation() = withActivity { activity ->
         var allows = 0
         var denies = 0
@@ -871,15 +920,15 @@ class NativePermissionDialogIntegrationTest {
         var prompt: NativePermissionDialog? = null
         try {
             lateinit var assertions: () -> Unit
-            instrumentation.runOnMainSync {
+            main {
                 val result = mount(activity)
                 prompt = result.first
                 assertions = result.second
             }
             lateinit var decor: View
-            instrumentation.runOnMainSync { decor = requireNotNull(platform(requireNotNull(prompt)).window).decorView }
+            main { decor = requireNotNull(platform(requireNotNull(prompt)).window).decorView }
             changeWindowFocus(decor, true) {}
-            instrumentation.runOnMainSync(assertions)
+            main(assertions)
         } finally {
             instrumentation.runOnMainSync { prompt?.dismiss(); activity.finish() }
         }

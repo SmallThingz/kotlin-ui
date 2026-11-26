@@ -238,7 +238,7 @@ class NativeStandaloneSharedControlsIntegrationTest {
             val editor = field.editor
             val editable = editor.text
             val surface = group.view
-            val flat = dark.copy(surfaceContainerLow = Color.BLACK, onSurface = Color.WHITE, surfacePreset = null)
+            val flat = dark.copy(surfaceContainerHigh = Color.BLACK, onSurface = Color.WHITE, surfacePreset = null)
             group.bindPalette(flat)
             val density = context.resources.displayMetrics.density
             surface.measure(View.MeasureSpec.makeMeasureSpec((240 * density).roundToInt(), View.MeasureSpec.EXACTLY),
@@ -274,7 +274,7 @@ class NativeStandaloneSharedControlsIntegrationTest {
     @Test fun initiallyBlackGroupSeedsInkWithoutANewFillAndKeepsDisabledOpacity() =
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             val context = InstrumentationRegistry.getInstrumentation().targetContext
-            val palette = NativeColorScheme.fallback(darkTheme = true).copy(surfaceContainerLow = Color.BLACK,
+            val palette = NativeColorScheme.fallback(darkTheme = true).copy(surfaceContainerHigh = Color.BLACK,
                 onSurface = Color.BLACK, error = Color.BLACK)
             val recipe = NativeUiAppearance.Default.joinedFields
             val field = recipe.createField(context, palette, "Key")
@@ -302,9 +302,9 @@ class NativeStandaloneSharedControlsIntegrationTest {
         // Keep every interior fill in the contrast-sensitive range. A fixed white-to-black
         // grayscale band can fit entirely between two frames at the device's motion scale.
         val rawInk = Color.rgb(128, 128, 128)
-        val light = NativeColorScheme.fallback(darkTheme = false).copy(surfaceContainerLow = Color.rgb(160, 160, 160),
+        val light = NativeColorScheme.fallback(darkTheme = false).copy(surfaceContainerHigh = Color.rgb(160, 160, 160),
             onSurface = rawInk, onSurfaceVariant = rawInk, error = rawInk)
-        val dark = NativeColorScheme.fallback(darkTheme = true).copy(surfaceContainerLow = Color.rgb(80, 80, 80),
+        val dark = NativeColorScheme.fallback(darkTheme = true).copy(surfaceContainerHigh = Color.rgb(80, 80, 80),
             onSurface = rawInk, onSurfaceVariant = rawInk, error = rawInk)
         val finished = CountDownLatch(1)
         var bitmap: Bitmap? = null

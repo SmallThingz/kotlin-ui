@@ -29,7 +29,8 @@ class ReverbAboutForegroundGrainIntegrationTest {
         val deadline = System.nanoTime() + 5_000_000_000L
         while (NoiseTexture.shader(NoiseDrawable.SEED_BACKGROUND) == null && System.nanoTime() < deadline) Thread.sleep(5)
         assertNotNull(NoiseTexture.shader(NoiseDrawable.SEED_BACKGROUND))
-        instrumentation.runOnMainSync {
+        var result: Result<Unit>? = null
+        instrumentation.runOnMainSync { result = runCatching {
             val context = instrumentation.targetContext
             val resolver = createFontFamilyResolver(context)
             val light = NativeColorScheme.fallback(false)
@@ -51,7 +52,7 @@ class ReverbAboutForegroundGrainIntegrationTest {
                     val floating = NativeFloatingPanelRecipe()
                     val fill = floating.surfaceColor(palette)
                     val expectedPaint = NoiseDrawable(fill, floating.grainSeed).apply {
-                        setNoiseIntensity(palette.surfacePreset?.foregroundGrain ?: 1f)
+                        setNoiseIntensity(palette.surfacePreset?.backgroundGrain ?: 1f)
                     }
                     assertEquals("Actual panel underlay at step $index", expectedPaint.paintedTextSurface,
                         panel.paintedTextSurface)
@@ -80,7 +81,8 @@ class ReverbAboutForegroundGrainIntegrationTest {
             } finally {
                 try { about.dispose() } finally { runtime.close() }
             }
-        }
+        } }
+        checkNotNull(result).getOrThrow()
     }
 
     private fun descendants(view: View): List<View> = buildList {

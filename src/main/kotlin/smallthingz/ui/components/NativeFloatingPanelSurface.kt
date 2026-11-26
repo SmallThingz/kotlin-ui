@@ -35,7 +35,7 @@ open class NativeFloatingPanelSurface(
     private var edgeWidthDp = palette.modalEdgeWidthDp()
     private var dialogEdge = NativeDialogEdge.TOP
     private val clipped = NativeFloatingPanelClip(context)
-    private var grainIntensity = palette.surfacePreset?.foregroundGrain ?: 1f
+    private var grainIntensity = palette.backgroundGrain
     private val grain = NoiseDrawable(fill.color, recipe.grainSeed).apply {
         setNoiseIntensity(grainIntensity)
     }
@@ -62,7 +62,7 @@ open class NativeFloatingPanelSurface(
 
     fun bindSurface(density: Float, recipe: NativeFloatingPanelRecipe, palette: NativeColorScheme) {
         val shapeChanged = this.density != density || this.recipe.cornerRadiusDp != recipe.cornerRadiusDp
-        val nextGrainIntensity = palette.surfacePreset?.foregroundGrain ?: 1f
+        val nextGrainIntensity = palette.backgroundGrain
         val grainChanged = this.recipe.grainSeed != recipe.grainSeed || grainIntensity != nextGrainIntensity
         val nextEdgeColor = palette.border
         val nextEdgeWidthDp = palette.modalEdgeWidthDp()

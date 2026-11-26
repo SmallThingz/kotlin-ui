@@ -19,31 +19,30 @@ import smallthingz.ui.R
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeDarkSurfacePreset
 import smallthingz.ui.components.NativeDefaultColorScheme
-import smallthingz.ui.components.NativeGroupSurfaceRecipes
 import smallthingz.ui.components.NativeLayeredMarkPalette
 import smallthingz.ui.geometry.roundedGroupGeometry
 
 @RunWith(AndroidJUnit4::class)
 class ReverbBrandSurfaceIntegrationTest {
     @Test fun defaultMarkAndLauncherPlateStayDarkInDayAndNight() = onMain { context ->
-        for (night in listOf(false, true)) {
-            val themed = context.withNightMode(night)
+        for (density in listOf(160, 320)) for (night in listOf(false, true)) {
+            val themed = context.withNightMode(night, density)
             val palette = colors(themed, dark = true)
-            val fill = NativeGroupSurfaceRecipes.Default.recordingInfoRow.fillColor(palette)
+            val fill = palette.pageControls.raised
+            assertEquals(fill, themed.getColor(R.color.native_amoled_foreground_fill))
             assertEquals(NativeLayeredMarkPalette(fill, palette.primary, palette.ink), readReverbBrandPalette(themed))
             assertTrue(ColorUtils.calculateContrast(palette.ink, fill) >= 4.5)
             assertTrue(ColorUtils.calculateContrast(palette.primary, fill) >= 4.5)
-            val mark = renderMark(ReverbBrandMarkView(themed))
+            val mark = renderMark(ReverbBrandMarkView(themed).apply { setReverbBrandOutline(true) })
             assertEquals(palette.ink, mark[MAIN_STROKE_PIXEL])
-            val launcher = render {
-                checkNotNull(themed.getDrawable(R.drawable.reverb_brand_plate)).apply {
-                    setBounds(0, 0, SIZE, SIZE)
-                }.draw(it)
-            }
-            // A region inside the circular clip and above all three strokes.
-            val sample = platePixels(launcher)
-            assertTrue(sample.any { it != fill })
-            assertArrayEquals(sample, platePixels(mark))
+            val launcher = renderDrawable(themed, R.drawable.reverb_brand_plate)
+            val foreground = renderDrawable(themed, R.drawable.native_amoled_foreground_background)
+
+            // Interior above the glyphs and inside the first compact grain tile.
+            val canonical = platePixels(foreground, width = 16)
+            assertTrue(canonical.any { it != fill })
+            assertArrayEquals(canonical, platePixels(launcher, width = 16))
+            assertArrayEquals(platePixels(launcher), platePixels(mark))
         }
     }
 
@@ -90,8 +89,12 @@ class ReverbBrandSurfaceIntegrationTest {
             context.resources.getColor(it, context.theme)
         }
 
-    private fun Context.withNightMode(dark: Boolean): Context = createConfigurationContext(
+    private fun Context.withNightMode(
+        dark: Boolean,
+        density: Int = resources.configuration.densityDpi,
+    ): Context = createConfigurationContext(
         Configuration(resources.configuration).apply {
+            densityDpi = density
             val night = if (dark) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
             uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or night
         },
@@ -104,6 +107,10 @@ class ReverbBrandSurfaceIntegrationTest {
         return render(mark::draw)
     }
 
+    private fun renderDrawable(context: Context, resource: Int): IntArray = render { canvas ->
+        checkNotNull(context.getDrawable(resource)).apply { setBounds(0, 0, SIZE, SIZE) }.draw(canvas)
+    }
+
     private fun render(draw: (Canvas) -> Unit): IntArray {
         val bitmap = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
         return try {
@@ -114,8 +121,8 @@ class ReverbBrandSurfaceIntegrationTest {
         }
     }
 
-    private fun platePixels(pixels: IntArray): IntArray = IntArray(32 * 16) { index ->
-        pixels[(16 + index / 32) * SIZE + 48 + index % 32]
+    private fun platePixels(pixels: IntArray, width: Int = 32): IntArray = IntArray(width * 16) { index ->
+        pixels[(16 + index / width) * SIZE + 48 + index % width]
     }
 
     private fun onMain(block: (Context) -> Unit) {

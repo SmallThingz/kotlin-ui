@@ -29,7 +29,7 @@ internal data class NativeMenuColors(val raised: Int, val surfaceContainerHigh: 
 internal fun NativeAnchoredMenuRecipe.colors(palette: NativeColorScheme): NativeMenuColors {
     val fill = surfaceColor(palette)
     return NativeMenuColors(fill, fill, palette.ink, palette.muted, palette.primary,
-        palette.surfacePreset?.foregroundGrain ?: 0f)
+        palette.popupGrain)
 }
 
 /** One retained icon view per row; bind must accept every icon produced by this renderer. */

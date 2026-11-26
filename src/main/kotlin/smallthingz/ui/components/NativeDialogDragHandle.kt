@@ -23,7 +23,7 @@ fun createNativeDialogDragHandle(
     onDismiss: () -> Unit,
 ): View {
     val density = Density(context)
-    val style = appearance.modals.actionSheetStyle(density, createFontFamilyResolver(context), colors)
+    val style = appearance.actionSheetStyle(density, createFontFamilyResolver(context), colors)
     val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     val dismissDistance = maxOf(touchSlop * 2f, 24f * density.density)
     return object : FrameLayout(context) {

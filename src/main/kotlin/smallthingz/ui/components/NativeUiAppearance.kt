@@ -64,8 +64,18 @@ class NativeUiAppearance(
     val outlinedField: NativeOutlinedFieldRecipe = outlinedField ?: NativeOutlinedFieldRecipe(typography = typography)
     val compactField: NativeCompactFieldRecipe = compactField ?: NativeCompactFieldRecipe(typography)
     val modals: NativeModalRecipes = modals ?: NativeModalRecipes(typography)
+    internal val floatingWindowRecipe: NativeFloatingPanelRecipe = this.modals.floating.let { recipe ->
+        if (recipe.grainSeed == backdrops.windowGrainSeed) recipe
+        else recipe.copy(grainSeed = backdrops.windowGrainSeed)
+    }
     val readoutTypography: NativeReadoutTypography = readoutTypography ?: NativeReadoutTypography(typography)
     val statusContent: NativeCenteredStatusStyle = statusContent ?: NativeCenteredStatusStyle(typography)
+
+    /** Resolve a sheet using this appearance's window backdrop and the current palette. */
+    fun actionSheetStyle(
+        density: Density, fontResolver: FontFamily.Resolver, palette: NativeColorScheme,
+    ): NativeActionSheetStyle =
+        modals.actionSheetStyle(density, fontResolver, palette, backdrops.windowGrainSeed)
 
     /** Inherited recipes follow [typography]. Pass null for a recipe to restore inheritance. */
     fun copy(

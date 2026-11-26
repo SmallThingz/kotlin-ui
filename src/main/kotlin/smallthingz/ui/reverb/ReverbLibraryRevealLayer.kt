@@ -32,7 +32,7 @@ class ReverbLibraryRevealLayer(
     private var scrollIndicatorViewport: NativeSourceRecyclerView? = null
     private val scrimPaint = ColorDrawable(initialEnvironment.appearance.backdrops.panelScrimColor(initialEnvironment.palette))
     private val paletteMotion:ViewColorTransition by lazy {ViewColorTransition(this,
-        intArrayOf(initialEnvironment.palette.surface,scrimPaint.color),{
+        intArrayOf(initialEnvironment.palette.background,scrimPaint.color),{
             val fill = paletteMotion.color(0)
             noise.setBackgroundColor(fill)
             scrimPaint.color = paletteMotion.color(1)
@@ -60,7 +60,7 @@ class ReverbLibraryRevealLayer(
 
     private fun publishScrollIndicatorUnderlay(fill: Int) {
         scrollIndicatorViewport?.bindScrollIndicatorTransitionUnderlay(
-            if (fill == environment.palette.surface) 0L else noise.paintedTextSurface)
+            if (fill == environment.palette.background) 0L else noise.paintedTextSurface)
     }
 
     fun bind(environment: ReverbEnvironment, statusTop: Int, progress: Float, visible: Boolean) {
@@ -69,9 +69,9 @@ class ReverbLibraryRevealLayer(
             val palette = environment.palette
             val backdrop = environment.appearance.backdrops
             noise.setGrainSeed(backdrop.pageGrainSeed)
-            noise.setNoiseIntensity(palette.surfacePreset?.backgroundGrain ?: 1f)
+            noise.setNoiseIntensity(palette.backgroundGrain)
             val motion = paletteMotion
-            motion.retarget(palette.surface, backdrop.panelScrimColor(palette))
+            motion.retarget(palette.background, backdrop.panelScrimColor(palette))
             // An unchanged, settled color target can skip the motion's paint callback.
             publishScrollIndicatorUnderlay(motion.color(0))
         }

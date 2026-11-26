@@ -2,10 +2,12 @@ package smallthingz.ui.components
 
 import kotlin.math.roundToInt
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EdgeEffect
@@ -23,6 +25,7 @@ import smallthingz.ui.controls.textSurfaceRange
 import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.reverb.ReverbAboutContentView
 import smallthingz.ui.reverb.ReverbAboutDetails
+import smallthingz.ui.reverb.ReverbAboutDialog
 import smallthingz.ui.reverb.ReverbDesign
 import smallthingz.ui.reverb.ReverbGlyphView
 import smallthingz.ui.reverb.ReverbIcon
@@ -45,7 +48,7 @@ import smallthingz.ui.unit.sp
 class NativeModalContrastIntegrationTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
 
-    @Test fun longPressMenuFirstPaintAndLightDarkLightRebind() = instrumentation.runOnMainSync {
+    @Test fun longPressMenuFirstPaintAndLightDarkLightRebind() = mainChecked {
         val context = instrumentation.targetContext
         val runtime = NativeModalWindowRuntime(context)
         val icons = object : NativeMenuIcons<Int> {
@@ -86,14 +89,16 @@ class NativeModalContrastIntegrationTest {
                 val intensity = palette.surfacePreset?.foregroundGrain ?: 0f
                 val colors = palette.menuColors()
                 if (dark) assertTrue(colors.raised > palette.raised)
-                else assertEquals(palette.raised, colors.raised)
+                else assertNotEquals(palette.raised, colors.raised)
+                assertNotEquals(palette.background, colors.raised)
+                assertEquals(NativeAnchoredMenuRecipe.Default.surfaceColor(palette), colors.raised)
                 // A stale/equal ink target must still be corrected against the current paint.
-                menu.bindActions(listOf(ResolvedMenuAction("Copy", 0, palette.raised, palette.ink) {}), colors)
+                menu.bindActions(listOf(ResolvedMenuAction("Copy", 0, colors.raised, palette.ink) {}), colors)
                 assertRetainedGlow(colors.muted)
                 val label = descendants(menu).filterIsInstance<ParagraphView>().single()
                 assertEquals(grainRange(colors.raised, intensity), menu.paintedTextSurface)
                 assertEquals(menu.paintedTextSurface, label.paintedTextSurface!!.asLong)
-                assertInk(label, textSurfaceForeground(menu.paintedTextSurface, palette.raised))
+                assertInk(label, textSurfaceForeground(menu.paintedTextSurface, colors.raised))
                 menu.bindGrain(intensity)
                 assertFalse("An unchanged grain bind must not dirty settled text", label.isDirty)
             }
@@ -198,6 +203,61 @@ class NativeModalContrastIntegrationTest {
         } finally { menu.close(); runtime.close() }
     }
 
+    @Test fun mountedAboutWindowLeavesRoomForTheExteriorBottomLip() {
+        val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
+            NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        var prompt: ReverbAboutDialog? = null
+        var decor: View? = null
+        withRetiringTestActivity(activity, root = { decor }, cleanup = { prompt?.dismiss() }) {
+            val colors = NativeDarkSurfacePreset.Amoled.colorScheme().resolve(true, 30) { error("No resources") }
+                .copy(surfacePreset = NativeDarkSurfacePreset.Amoled.copy(backgroundGrain = 0f, foregroundGrain = 0f))
+            mainChecked {
+                val theme = ReverbDesign.windowTheme(Density(activity), createFontFamilyResolver(activity), colors)
+                val details = ReverbAboutDetails("Reverb", "1.0", "GitHub", "Repository", "Unavailable")
+                prompt = ReverbAboutDialog(activity.window.decorView, theme, details,
+                    openRepository = { true }, onDismiss = {}).also { it.show() }
+                decor = requireNotNull(requireNotNull(prompt).window).decorView
+            }
+            instrumentation.waitForIdleSync()
+            mainChecked {
+                val host = requireNotNull(decor) as ViewGroup
+                val about = descendants(host).filterIsInstance<ReverbAboutContentView>().single()
+                assertTrue(host.isAttachedToWindow && host.isLaidOut)
+                assertTrue(about.isAttachedToWindow && about.isLaidOut)
+                val windowRoot = about.parent as ViewGroup
+                val contains = windowRoot.javaClass.getDeclaredMethod("isInsideContent", MotionEvent::class.java)
+                    .apply { isAccessible = true }
+                val bottom = (windowRoot.top + about.bottom).toFloat()
+                val x = (windowRoot.left + about.left + about.width / 2).toFloat()
+                fun hits(y: Float): Boolean {
+                    val event = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, x, y, 0)
+                    return try { contains.invoke(windowRoot, event) as Boolean } finally { event.recycle() }
+                }
+                assertTrue(hits(bottom - .25f))
+                assertFalse(hits(bottom))
+                assertFalse(hits(bottom + .25f))
+                val panel = about.predictiveMotionTarget
+                // Sample the settled transform without waiting for entry animation.
+                val alpha = about.alpha
+                val translationY = about.translationY
+                about.alpha = 1f
+                about.translationY = 0f
+                val bitmap = Bitmap.createBitmap(host.width, host.height, Bitmap.Config.ARGB_8888)
+                try {
+                    val bounds = Rect(0, 0, panel.width, panel.height)
+                    host.offsetDescendantRectToMyCoords(panel, bounds)
+                    assertTrue(bounds.bottom < host.height)
+                    host.draw(Canvas(bitmap))
+                    assertEquals(colors.border, bitmap.getPixel(bounds.centerX(), bounds.bottom))
+                } finally {
+                    bitmap.recycle()
+                    about.alpha = alpha
+                    about.translationY = translationY
+                }
+            }
+        }
+    }
+
     @Test fun githubCardFirstPaintAndLightDarkLightRebind() = instrumentation.runOnMainSync {
         val context = instrumentation.targetContext
         val resolver = createFontFamilyResolver(context)
@@ -213,9 +273,10 @@ class NativeModalContrastIntegrationTest {
                 val floating = NativeFloatingPanelRecipe()
                 val panelFill = floating.surfaceColor(next.palette)
                 assertEquals(grainRange(panelFill,
-                    next.palette.surfacePreset?.foregroundGrain ?: 1f), panel.paintedTextSurface)
+                    next.palette.surfacePreset?.backgroundGrain ?: 1f), panel.paintedTextSurface)
                 val repository = descendants(about).filterIsInstance<NativeGroupLayout>().first()
-                assertEquals(floating.link.fill(next.palette), ReverbDesign.modalLinkSurface(next.palette))
+                assertEquals(next.palette.surfaceContainerHigh, repository.paintedFillColor)
+                assertEquals(next.palette.surfaceContainerHigh, ReverbDesign.modalLinkSurface(next.palette))
                 assertEquals(grainRange(floating.link.fill(next.palette),
                     next.palette.surfacePreset?.foregroundGrain ?: 0f), repository.paintedTextSurface)
                 val title = descendants(repository).filterIsInstance<ParagraphView>().first()
@@ -228,32 +289,30 @@ class NativeModalContrastIntegrationTest {
         } finally { about.dispose(); runtime.close() }
     }
 
-    @Test fun githubCardHonorsActiveLinkRecipeOnFirstPaintAndRebind() = instrumentation.runOnMainSync {
+    @Test fun githubCardUsesThemeForegroundAcrossLinkGeometryChangesAndRebind() = instrumentation.runOnMainSync {
         val context = instrumentation.targetContext
         val resolver = createFontFamilyResolver(context)
         val runtime = NativeModalWindowRuntime(context)
         val details = ReverbAboutDetails("Reverb", "1.0", "GitHub", "Repository", "Unavailable")
         val base = palette(false)
-        val colors = base.copy(surfaceContainerHighest = base.surface)
         val appearance = ReverbDesign.appearance
         val floating = appearance.modals.floating
-        fun theme(elevationDp: Float): ReverbTheme {
+        fun theme(colors: NativeColorScheme, elevationDp: Float): ReverbTheme {
             val panel = floating.copy(link = floating.link.copy(elevationDp = elevationDp))
             return ReverbTheme(Density(1f), resolver, colors,
                 appearance.copy(modals = appearance.modals.copy(floating = panel)))
         }
-        val about = ReverbAboutContentView(context, theme(0f), details, {}, { false }, runtime, 0)
+        val about = ReverbAboutContentView(context, theme(base, 0f), details, {}, { false }, runtime, 0)
         try {
             val repository = descendants(about).filterIsInstance<NativeGroupLayout>().first()
-            val defaultFill = ReverbDesign.modalLinkSurface(colors)
-            assertNotEquals(defaultFill, colors.surface)
-            assertEquals(colors.surface, repository.paintedFillColor)
+            assertEquals(base.surfaceContainerHigh, repository.paintedFillColor)
+            about.bind(theme(base, 16f), details)
+            assertEquals(base.surfaceContainerHigh, repository.paintedFillColor)
 
-            val rebound = theme(16f)
-            val expected = rebound.appearance.modals.floating.link.fill(colors)
-            assertNotEquals(defaultFill, expected)
-            about.bind(rebound, details)
-            assertEquals(expected, repository.paintedFillColor)
+            val next = base.copy(surfaceContainerHigh = 0xff516878.toInt())
+            about.bind(theme(next, 16f), details)
+            assertEquals(next.surfaceContainerHigh, repository.paintedFillColor)
+            assertSame(repository, descendants(about).filterIsInstance<NativeGroupLayout>().first())
         } finally { about.dispose(); runtime.close() }
     }
 
@@ -283,7 +342,7 @@ class NativeModalContrastIntegrationTest {
             current = style(dark)
             surface.updateStyle(current)
             content.updateStyle(current)
-            assertEquals(if (dark) .5f else 1f, current.recipe.grainIntensity, 0f)
+            assertEquals(1f, current.recipe.grainIntensity, 0f)
             assertEquals(NoiseDrawable.SEED_BACKGROUND, current.recipe.grainSeed)
             assertEquals(2f, current.recipe.handleHeightDp, 0f)
             assertEquals(16f, current.recipe.handleVerticalPaddingDp, 0f)

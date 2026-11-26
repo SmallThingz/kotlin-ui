@@ -40,12 +40,12 @@ data class NativeAnchoredMenuRecipe(
         require(windowShadowInsetDp.isFinite() && windowShadowInsetDp >= 0f)
     }
 
-    fun surfaceColor(palette: NativeColorScheme): Int = raisedModalColor(palette.raised, palette)
+    fun surfaceColor(palette: NativeColorScheme): Int = palette.popupFill
 
     /** Creates a surface around an unattached child. The caller owns window size and placement. */
     fun createPanel(content: View, density: Density, palette: NativeColorScheme): NativeAnchoredMenuPanel =
         NativeAnchoredMenuPanel(NativeMenuSurface(content.context, density, this, surfaceColor(palette)).apply {
-            bindGrain(palette.surfacePreset?.foregroundGrain ?: 0f)
+            bindGrain(palette.popupGrain)
             setBody(content)
         }, density, this, drivesMotion = true)
 
@@ -106,7 +106,7 @@ class NativeAnchoredMenuPanel internal constructor(
 
     fun bindPalette(palette: NativeColorScheme) {
         surface.bindFill(recipe.surfaceColor(palette))
-        surface.bindGrain(palette.surfacePreset?.foregroundGrain ?: 0f)
+        surface.bindGrain(palette.popupGrain)
     }
 
     /** Physical fractions of the panel, derived by the caller from its actual placement. */

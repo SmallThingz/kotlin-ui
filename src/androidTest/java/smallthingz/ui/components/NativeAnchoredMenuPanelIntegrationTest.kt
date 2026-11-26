@@ -273,7 +273,8 @@ class NativeAnchoredMenuPanelIntegrationTest {
         val bitmap = Bitmap.createBitmap(surface.width, surface.height, Bitmap.Config.ARGB_8888)
         try {
             surface.draw(Canvas(bitmap))
-            assertEquals(palette.raised, bitmap.getPixel(surface.width / 2, 1))
+            val fill = NativeAnchoredMenuRecipe.Default.surfaceColor(palette)
+            assertEquals(fill, bitmap.getPixel(surface.width / 2, 1))
             assertEquals(0, bitmap.getPixel(0, 0))
         } finally {
             bitmap.recycle()

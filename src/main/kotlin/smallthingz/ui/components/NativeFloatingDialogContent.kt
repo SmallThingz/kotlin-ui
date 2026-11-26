@@ -8,4 +8,7 @@ class NativeFloatingDialogContent(
     val predictiveMotionTarget: View = view,
     val bindWindowAccessibility: (View) -> Unit,
     val dispose: () -> Unit,
-)
+) {
+    /** Optional paint below the caller's content and its input bounds. */
+    internal var exteriorBottomPaintSpace: (() -> Int)? = null
+}

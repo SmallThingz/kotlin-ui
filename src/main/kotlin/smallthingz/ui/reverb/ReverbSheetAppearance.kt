@@ -26,7 +26,7 @@ fun NativeActionSheet.bindReverbTheme(environment: ReverbTheme) {
 }
 
 fun reverbActionSheetStyle(theme: ReverbTheme): NativeActionSheetStyle =
-    theme.appearance.modals.actionSheetStyle(theme.density, theme.fontResolver, theme.palette)
+    theme.appearance.actionSheetStyle(theme.density, theme.fontResolver, theme.palette)
 
 internal fun createReverbSupportingParagraph(
     context: Context, text: String, role: NativeTypographyRole, theme: ReverbTheme,

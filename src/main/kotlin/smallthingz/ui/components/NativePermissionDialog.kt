@@ -2,6 +2,7 @@ package smallthingz.ui.components
 
 import android.app.Activity
 import android.app.Dialog
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
@@ -18,6 +19,7 @@ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.Window
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import androidx.core.view.doOnLayout
@@ -26,6 +28,7 @@ import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 /** A contained permission recipe; app identity, request text and authorization remain caller-owned. */
@@ -42,6 +45,7 @@ data class NativePermissionDialogRecipe(
     val actionRadiusDp: Float = 12f,
     val actionSeamRadiusDp: Float = 4f,
     val actionMinimumHeightDp: Int = 56,
+    /** Retained for constructor compatibility. Window grain follows the background material. */
     val noiseSeed: Int? = NoiseDrawable.SEED_BACKGROUND,
     val windowTheme: Int = android.R.style.Theme_Material_Dialog_NoActionBar,
     val dimAmount: Float? = null,
@@ -142,6 +146,20 @@ private class NativePermissionWindow(
     private val hostWindow = activity.window
     private val host = hostWindow.decorView
     private val density = Density(activity)
+    private var placementEdge: NativeDialogEdge? = null
+    private var edgeHost: PermissionEdgeHost? = null
+    private val edgeWidthDp = colors.modalEdgeWidthDp()
+    private val edgeBandPx = if (Color.alpha(colors.border) == 0) 0
+        else ceil(edgeWidthDp * density.density).toInt()
+    private val surfaceStyle = NativeSurfaceStyle(
+        fillColor = appearance.modals.sheet.surfaceColor(colors),
+        cornerRadiusDp = recipe.cornerRadiusDp,
+        outlineColor = colors.border,
+        outlineWidthDp = edgeWidthDp,
+        noise = appearance.backdrops.windowGrainSeed != null && colors.backgroundGrain > 0f,
+        noiseSeed = appearance.backdrops.windowGrainSeed ?: NoiseDrawable.SEED_BACKGROUND,
+    )
+    private val surface: NativeSurface
     private val fonts = createFontFamilyResolver(activity)
     private val handleRuntime = if (showDragHandle) NativeModalWindowRuntime(activity) else null
     private var busy = false
@@ -305,14 +323,8 @@ private class NativePermissionWindow(
         }
         val panel = NativeBoundedDialogContentLayout(activity, body, actions, recipe.contentInsetDp,
             availableHeight = { Rect().also(host::getWindowVisibleDisplayFrame).height() }, header = handle)
-        val surface = NativeSurface(activity, NativeSurfaceStyle(
-            fillColor = appearance.modals.sheet.surfaceColor(colors),
-            cornerRadiusDp = recipe.cornerRadiusDp,
-            outlineColor = colors.border,
-            outlineWidthDp = colors.modalEdgeWidthDp(),
-            noise = recipe.noiseSeed != null,
-            noiseSeed = recipe.noiseSeed ?: NoiseDrawable.SEED_BACKGROUND)).apply {
-            setNoiseIntensity(colors.surfacePreset?.foregroundGrain ?: 1f)
+        surface = NativeSurface(activity, surfaceStyle).apply {
+            setNoiseIntensity(colors.backgroundGrain)
             addView(panel, ViewGroup.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         }
         surface.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
@@ -369,17 +381,25 @@ private class NativePermissionWindow(
     private fun sizeWindow() {
         val frame = Rect().also(host::getWindowVisibleDisplayFrame)
         val available = minOf(host.width.takeIf { it > 0 } ?: frame.width(), frame.width().takeIf { it > 0 } ?: Int.MAX_VALUE)
-        window.setLayout((available - dp(recipe.windowInsetDp * 2)).coerceIn(1, dp(recipe.maxWidthDp)), WRAP_CONTENT)
+        val panelWidth = (available - dp(recipe.windowInsetDp * 2)).coerceIn(1, dp(recipe.maxWidthDp))
+        val horizontalPaintSpace = if (edgeHost == null) 0
+            else minOf(edgeBandPx, (available - panelWidth).coerceAtLeast(0) / 2)
+        edgeHost?.setHorizontalPaintSpace(horizontalPaintSpace)
+        window.setLayout(panelWidth + 2 * horizontalPaintSpace, WRAP_CONTENT)
     }
 
     override fun showAtBottom() {
-        if (!shown) recipe.placeAtBottom(window)
+        if (!shown) {
+            placementEdge = NativeDialogEdge.BOTTOM
+            recipe.placeAtBottom(window)
+        }
         show()
     }
 
     /** Edge placement is opt-in so callers keep their existing consent flow by default. */
     override fun showAtEdge(edge: NativeDialogEdge) {
         if (!shown) {
+            placementEdge = edge
             recipe.placeAtEdge(window, edge)
             if (recipe.windowAnimations == null) {
                 window.setWindowAnimations(if (edge == NativeDialogEdge.TOP)
@@ -394,6 +414,15 @@ private class NativePermissionWindow(
         if (shown) return
         shown = true
         try {
+            val edge = placementEdge
+            if (edge != null && edgeBandPx > 0) {
+                (surface.parent as ViewGroup).removeView(surface)
+                surface.applyStyle(surfaceStyle.copy(outlineColor = null))
+                val host = PermissionEdgeHost(surface, edge, density.density, recipe.cornerRadiusDp,
+                    colors.border, edgeWidthDp, edgeBandPx)
+                edgeHost = host
+                dialog.setContentView(host)
+            }
             val secure = WindowManager.LayoutParams.FLAG_SECURE
             window.setFlags(hostWindow.attributes.flags and secure, secure)
             dialog.show()
@@ -439,6 +468,47 @@ private class NativePermissionWindow(
         error.visibility = if (message.isNullOrEmpty()) View.GONE else View.VISIBLE
         if (error.visibility == View.VISIBLE) error.doOnLayout {
             if (error.visibility == View.VISIBLE) error.requestRectangleOnScreen(Rect(0, 0, error.width, error.height))
+        }
+    }
+}
+
+/** Gives the exterior lip its own window pixels while the rounded panel retains clipping and input. */
+private class PermissionEdgeHost(
+    private val surface: NativeSurface,
+    private val entry: NativeDialogEdge,
+    private val density: Float,
+    private val radiusDp: Float,
+    private val edgeColor: Int,
+    private val edgeWidthDp: Float,
+    band: Int,
+) : FrameLayout(surface.context) {
+    private val highlight = NativeModalEdgeHighlight()
+
+    init {
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+        val exposedTop = entry == NativeDialogEdge.BOTTOM
+        setPadding(0, if (exposedTop) band else 0, 0, if (exposedTop) 0 else band)
+        addView(surface, LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+    }
+
+    fun setHorizontalPaintSpace(pixels: Int) {
+        if (paddingLeft != pixels) setPadding(pixels, paddingTop, pixels, paddingBottom)
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        super.onLayout(changed, left, top, right, bottom)
+        val radius = minOf(radiusDp * density, minOf(surface.width, surface.height) / 2f)
+        highlight.update(surface.width, surface.height, radius, density, entry, edgeColor, edgeWidthDp)
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        super.dispatchDraw(canvas)
+        val checkpoint = canvas.save()
+        canvas.translate(surface.left.toFloat(), surface.top.toFloat())
+        try {
+            highlight.draw(canvas)
+        } finally {
+            canvas.restoreToCount(checkpoint)
         }
     }
 }

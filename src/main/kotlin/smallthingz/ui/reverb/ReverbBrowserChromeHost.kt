@@ -15,7 +15,7 @@ class ReverbBrowserChromeControlsScroll(context: Context, private var theme: Rev
     private var disclosure = false
     private var disclosureBackground: android.graphics.drawable.Drawable? = null
     private fun disclosureBackground() = disclosureBackground ?: NativeForeground.foregroundBackground(
-        theme.palette.pageControls, theme.palette.surface).also { disclosureBackground = it }
+        theme.palette.pageControls).also { disclosureBackground = it }
 
     /** Keep disclosure, layout parameters, children and scroll position; replace only cached paint. */
     fun bindTheme(theme: ReverbTheme) {

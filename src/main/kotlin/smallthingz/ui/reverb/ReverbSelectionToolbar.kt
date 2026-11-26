@@ -35,7 +35,7 @@ open class ReverbSelectionToolbar private constructor(
         val style = ReverbDesign.appearance.toolbars
         val palette = theme.palette
         bindStyle(theme.density.density, 0, style)
-        chrome.bind(style, style.backgroundColor(palette), palette.surfacePreset?.backgroundGrain ?: 1f)
+        chrome.bind(style, style.backgroundColor(palette), palette.backgroundGrain)
         title.setText(label)
         theme.bindParagraph(title, style.selectionTitleRole)
         group.setSurfacePreset(palette.surfacePreset)

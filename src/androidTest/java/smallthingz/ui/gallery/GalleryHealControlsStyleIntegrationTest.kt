@@ -87,7 +87,7 @@ class GalleryHealControlsStyleIntegrationTest {
 
         button.isEnabled = false
         assertSame(background, button.background)
-        assertEquals(colors.surfaceContainerLow, centerPixel(background))
+        assertEquals(colors.surfaceContainerHigh, centerPixel(background))
         assertEquals(recipe.contentColor(colors.buttonPalette, enabled = false), button.currentTextColor)
 
         button.isEnabled = true

@@ -387,7 +387,7 @@ class ReverbIncidentsContentView(
     }
 
     private fun bindScrollIndicatorUnderlay() {
-        list.bindScrollIndicatorTransitionUnderlay(backdrop.transitionUnderlay(theme.palette.surface))
+        list.bindScrollIndicatorTransitionUnderlay(backdrop.transitionUnderlay(theme.palette.background))
     }
 
     private fun dp(value: Float) = (value * appearance.card.density.density).roundToInt()
@@ -516,7 +516,7 @@ private class IncidentsHeader(
             }
         }
         bar.bindStyle(density, 0, style)
-        chrome.bind(style, style.backgroundColor(palette), palette.surfacePreset?.backgroundGrain ?: 1f)
+        chrome.bind(style, style.backgroundColor(palette), palette.backgroundGrain)
         title.setText(if (selecting) texts.selectionCount(selected) else texts.title)
         theme.bindParagraph(title, if (selecting) style.selectionTitleRole else style.leadingTitleRole)
         title.animateTextColor(style.contentColor(palette))

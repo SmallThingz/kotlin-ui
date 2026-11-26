@@ -164,7 +164,7 @@ class NativeCaptureBorderCacheIntegrationTest {
     }
 
     private fun palette(ink: Int) = NativeColorScheme.fallback(false).copy(
-        onSurface = ink, surfaceContainerLow = Color.TRANSPARENT,
+        onSurface = ink, surfaceContainerHigh = Color.TRANSPARENT,
     )
 
     private fun onMain(test: (Surface) -> Unit) {

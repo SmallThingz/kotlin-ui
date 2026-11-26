@@ -32,9 +32,6 @@ import smallthingz.ui.reverb.ReverbStandardIconButtonView
 import smallthingz.ui.reverb.ReverbTextSurface
 import smallthingz.ui.reverb.ReverbTextSurfaceScope
 import smallthingz.ui.graphics.NoiseDrawable
-import smallthingz.ui.graphics.Color as SurfaceColor
-import smallthingz.ui.graphics.compositeOver
-import smallthingz.ui.graphics.toArgb
 import smallthingz.ui.reverb.createReverbSupportingParagraph
 import smallthingz.ui.reverb.settings.ReverbLabeledSegmentedSelector
 import smallthingz.ui.reverb.settings.ReverbSelectorHelp
@@ -79,25 +76,17 @@ class ReverbLabeledSegmentedSelectorIntegrationTest {
                 val expected = if (dark) Color.BLACK else readColor(R.color.native_default_light_background)
                 assertEquals("$role uses the shared default backdrop, dark=$dark sdk=$sdk", expected, actual)
             }
-            // Raw palettes preserve link fills; AMOLED composites white over floating fills.
-            // Sheet darkening preserves caller-owned alpha in either case.
+            // The background and foreground roles retain the window's supplied alpha.
             for (source in listOf(base, palette)) for (alpha in listOf(0, 1, 64, 127, 128, 254, 255)) {
-                val surface = ColorUtils.setAlphaComponent(source.surfaceContainerLow, alpha)
-                val link = ColorUtils.setAlphaComponent(source.surfaceContainerHighest, alpha)
-                val variant = source.copy(surfaceContainerLow = surface, surfaceContainerHighest = link)
+                val surface = ColorUtils.setAlphaComponent(source.background, alpha)
+                val link = ColorUtils.setAlphaComponent(source.surfaceContainerHigh, alpha)
+                val variant = source.copy(background = surface, surfaceContainerHigh = link)
                 val sheetFill = ReverbDesign.modalSurface(variant)
-                assertEquals("Sheet darkening must retain source alpha", alpha, sheetFill ushr 24)
-                assertEquals("Sheet darkening must retain the RGB recipe",
-                    ColorUtils.blendARGB(surface, Color.BLACK, .08f) and 0x00ffffff, sheetFill and 0x00ffffff)
+                assertEquals("Sheet uses the exact background role", surface, sheetFill)
                 assertEquals(NativeActionSheetRecipe().surfaceColor(variant), sheetFill)
 
-                // These container roles differ from the page surface, so tonal elevation is inactive.
-                assertTrue(link != variant.surface)
-                val lifted = (variant.surfacePreset as? NativeDarkSurfacePreset)?.style == NativeDarkSurfaces.AMOLED
-                val expectedLink = if (lifted) SurfaceColor.White.copy(alpha = .04f)
-                    .compositeOver(SurfaceColor(link)).toArgb() else link
                 val linkFill = ReverbDesign.modalLinkSurface(variant)
-                assertEquals("Floating link uses shared fill and composited opacity", expectedLink, linkFill)
+                assertEquals("Floating link uses the exact foreground role", link, linkFill)
                 assertEquals(NativeFloatingPanelRecipe().link.fill(variant), linkFill)
                 for ((role, actual) in listOf(
                     "sheet" to sheetFill,

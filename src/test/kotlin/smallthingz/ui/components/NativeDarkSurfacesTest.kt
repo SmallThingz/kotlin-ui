@@ -52,7 +52,10 @@ class NativeDarkSurfacesTest {
             assertEquals(black, foregroundOnly.background)
             assertEquals(black, foregroundOnly.surface)
             assertEquals(black, foregroundOnly.surfaceDim)
-            assertTrue(foregroundOnly.field > black && foregroundOnly.raised > foregroundOnly.field)
+            assertTrue(foregroundOnly.surfaceContainerLow > black)
+            assertTrue(foregroundOnly.surfaceContainerHigh > foregroundOnly.surfaceContainerLow)
+            assertEquals(foregroundOnly.surfaceContainerHigh, foregroundOnly.field)
+            assertEquals(foregroundOnly.field, foregroundOnly.raised)
             assertEquals(base.primary, foregroundOnly.primary)
             assertEquals(base.onSurface, foregroundOnly.onSurface)
         }

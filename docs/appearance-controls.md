@@ -90,30 +90,31 @@ ZFM itself does not construct a toolbar.
 
 ## Shared modal surfaces
 
-Use the window's resolved theme for dialog and popup fills, text and icons.
-Configure the color scheme on `NativeUiAppearance` to change these roles across
-an app. Action sheets and floating panels use `palette.background`, so they
-follow the app background in Light mode and the default AMOLED background in
-Dark mode. Anchored menus use the theme's raised surface for contrast.
+Configure the color scheme on `NativeUiAppearance` to change the three
+surface materials across an app. Pages and ordinary dialogs pair
+`palette.background` with background grain. Groups and links use the shared
+foreground fill and grain. Context menus and Reverb's off-page recording tab
+use the same popup fill and grain. Text, icons, accents, and error colors
+continue to use their semantic roles.
 
 Reverb's About panel and discard confirmations inherit the shared modal fill.
 A bottom sheet highlights its exposed top edge and rounded corners. A panel
 attached at the top highlights its bottom edge. Both use the palette's border
-color and the shared thin outline. About's link uses its own theme roles,
-`surfaceContainerHighest` for the raised fill and `onSurface` for the label.
+color and the shared thin outline. About's link uses the shared foreground
+fill and `onSurface` for the label.
 
 Resolve a sheet's style with
-`appearance.modals.actionSheetStyle(density, fontResolver, palette)`. The
-factory uses `onSurface` and `onSurfaceVariant` for foregrounds and takes
-grain intensity from the surface preset when present. The default handle is
-2 dp high with 16 dp vertical padding.
+`appearance.actionSheetStyle(density, fontResolver, palette)`. The
+factory uses `onSurface` and `onSurfaceVariant` for content and resolves
+the grain from the window backdrop seed and background grain intensity.
+The default handle is 2 dp high with 16 dp vertical padding.
 
 ## Grouped surfaces
 
 Use `appearance.groupSurfaces.settingsGroup` for the container around a related
 set of Settings rows. Create it once with `recipe.create(context)`, add the
 retained rows through `addRow`, and call `recipe.bind(group, colors)` when the
-scheme changes. The recipe supplies the field fill and the subtle group border.
+scheme changes. The recipe supplies the shared foreground fill and the subtle group border.
 `colors.pageControls.outline` is the outline role for general page controls.
 Set `NativeGroupLayout.LayoutParams.dividerTop` on rows that need a divider.
 

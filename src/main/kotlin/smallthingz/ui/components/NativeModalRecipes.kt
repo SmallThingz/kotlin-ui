@@ -7,14 +7,12 @@ package smallthingz.ui.components
 
 import smallthingz.ui.graphics.Color
 import smallthingz.ui.graphics.NoiseDrawable
-import smallthingz.ui.graphics.compositeOver
 import smallthingz.ui.graphics.toArgb
 import smallthingz.ui.text.NativeTypography
 import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.text.TextStyle
 import smallthingz.ui.text.font.FontFamily
 import smallthingz.ui.unit.Density
-import kotlin.math.ln
 import kotlin.math.min
 
 /** Appearance of layered native windows. Content and callbacks are bound by the caller. */
@@ -27,12 +25,16 @@ data class NativeModalRecipes(
     val permissionDialog: NativePermissionDialogRecipe = NativePermissionDialogRecipe(),
 ) {
     fun actionSheetStyle(density: Density, resolver: FontFamily.Resolver, palette: NativeColorScheme): NativeActionSheetStyle =
-        NativeActionSheetStyle(density, resolver,
+        actionSheetStyle(density, resolver, palette, NoiseDrawable.SEED_BACKGROUND)
+
+    internal fun actionSheetStyle(
+        density: Density, resolver: FontFamily.Resolver, palette: NativeColorScheme, backgroundGrainSeed: Int?,
+    ): NativeActionSheetStyle = NativeActionSheetStyle(density, resolver,
             NativeActionSheetColors(sheet.surfaceColor(palette), palette.onSurface, palette.onSurfaceVariant,
                 palette.scrim, palette.inverseSurface, palette.inverseOnSurface, palette.onSurface,
                 palette.border, palette.modalEdgeWidthDp()),
             typography[sheet.titleRole], typography[sheet.tooltipRole],
-            sheet.copy(grainIntensity = palette.surfacePreset?.foregroundGrain ?: sheet.grainIntensity))
+            sheet.copy(grainSeed = backgroundGrainSeed, grainIntensity = palette.backgroundGrain))
 }
 
 data class NativeStatusBarStyle(
@@ -45,7 +47,7 @@ data class NativeStatusBarStyle(
     internal fun resolve(
         palette: NativeColorScheme,
         preset: NativeSurfacePreset? = palette.surfacePreset,
-    ) = NativeStatusBarAppearance(palette.surface, grainSeed, preset?.backgroundGrain ?: 1f, darkIcons)
+    ) = NativeStatusBarAppearance(palette.background, grainSeed, preset?.backgroundGrain ?: 1f, darkIcons)
 }
 
 internal data class NativeStatusBarAppearance(
@@ -69,6 +71,7 @@ data class NativeActionSheetRecipe(
     val maxWidthDp: Float = 640f,
     val shadowDp: Float = 8f,
     val scrimAlpha: Float = .32f,
+    /** Retained for constructor compatibility. Window grain follows the background material. */
     val grainSeed: Int? = NoiseDrawable.SEED_BACKGROUND,
     val titleRole: NativeTypographyRole = NativeTypographyRole.TITLE_LARGE,
     val tooltipRole: NativeTypographyRole = NativeTypographyRole.BODY_SMALL,
@@ -76,6 +79,7 @@ data class NativeActionSheetRecipe(
     val handleVerticalPaddingDp: Float = 16f,
     /** Content clearance after the handle; also the outer top inset for an inline editor. */
     val topPaddingDp: Float = NativeMergedActionLayout.ACTION_FOOTER_BOTTOM_PADDING_DP,
+    /** Retained for constructor compatibility. Window grain follows the theme. */
     val grainIntensity: Float = 1f,
 ) {
     /** Use the same fill as the normal app background. */
@@ -88,6 +92,7 @@ data class NativeFloatingPanelRecipe(
     /** Retained for constructor compatibility. Fill follows the window theme background. */
     val surfaceElevationDp: Float = 6f,
     val shadowDp: Float = 8f,
+    /** Theme-owned windows resolve this from their backdrop. */
     val grainSeed: Int? = NoiseDrawable.SEED_BACKGROUND,
     val horizontalPaddingDp: Float = 24f,
     val topPaddingDp: Float = 12f,
@@ -117,6 +122,7 @@ data class NativeFloatingPanelRecipe(
 
 data class NativeFloatingLinkStyle(
     val radiusDp: Float = 20f,
+    /** Retained for constructor compatibility. Links use the shared foreground material. */
     val elevationDp: Float = 6f,
     val horizontalPaddingDp: Float = 18f,
     val verticalPaddingDp: Float = 15f,
@@ -124,8 +130,7 @@ data class NativeFloatingLinkStyle(
     val textGapDp: Float = 14f,
     val minimumHeightDp: Float = 48f,
 ) {
-    fun fill(palette: NativeColorScheme): Int =
-        raisedModalColor(modalTonalColor(palette.surfaceContainerHighest, palette, elevationDp), palette)
+    fun fill(palette: NativeColorScheme): Int = palette.foregroundFill
 
     // This is a surface role, even when its numeric value aliases an accent/container role.
     fun content(palette: NativeColorScheme): Int = palette.onSurface
@@ -136,23 +141,11 @@ data class NativeFloatingLinkStyle(
 
 data class NativeFloatingErrorStyle(
     val radiusDp: Float = 18f,
+    /** Retained for constructor compatibility. Error fill follows the semantic color role. */
     val elevationDp: Float = 8f,
     val startPaddingDp: Float = 16f,
     val endPaddingDp: Float = 8f,
     val verticalPaddingDp: Float = 8f,
 ) {
-    fun fill(palette: NativeColorScheme): Int =
-        modalTonalColor(palette.errorContainer, palette, elevationDp)
+    fun fill(palette: NativeColorScheme): Int = palette.errorContainer
 }
-
-private fun modalTonalColor(color: Int, palette: NativeColorScheme, elevationDp: Float): Int {
-    if (color != palette.surface || elevationDp == 0f) return color
-    val alpha = ((4.5f * ln(elevationDp + 1f)) + 2f) / 100f
-    return Color(palette.surfaceTint).copy(alpha = alpha).compositeOver(Color(palette.surface)).toArgb()
-}
-
-/** A small neutral lift for floating foregrounds; page blacks and Material accents stay owned by the palette. */
-internal fun raisedModalColor(color: Int, palette: NativeColorScheme): Int =
-    if ((palette.surfacePreset as? NativeDarkSurfacePreset)?.style == NativeDarkSurfaces.AMOLED)
-        Color.White.copy(alpha = .04f).compositeOver(Color(color)).toArgb()
-    else color

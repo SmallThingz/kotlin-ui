@@ -4,10 +4,6 @@ import android.content.Context
 import android.graphics.Outline
 import android.view.View
 import android.view.ViewOutlineProvider
-import smallthingz.ui.graphics.Color
-import smallthingz.ui.graphics.compositeOver
-import smallthingz.ui.graphics.toArgb
-import kotlin.math.ln
 
 /** Shared surface recipes. Children, dividers and any selection animation belong to the caller. */
 data class NativeGroupSurfaceRecipes(
@@ -34,9 +30,7 @@ enum class NativeGroupFill {
     FIELD, RAISED, HIGHEST, PRIMARY_CONTAINER;
 
     internal fun color(colors: NativeColorScheme): Int = when (this) {
-        FIELD -> colors.field
-        RAISED -> colors.raised
-        HIGHEST -> colors.surfaceContainerHighest
+        FIELD, RAISED, HIGHEST -> colors.foregroundFill
         PRIMARY_CONTAINER -> colors.primaryContainer
     }
 }
@@ -109,7 +103,7 @@ data class NativeRangeTimeBubbleStyle(
 
     fun bind(surface: NativeGroupLayout, colors: NativeColorScheme, active: Boolean, density: Float): Int {
         surface.setSurfacePreset(colors.surfacePreset)
-        surface.setPalette(if (active) colors.primaryContainer else colors.surfaceContainerHighest, 0)
+        surface.setPalette(if (active) colors.primaryContainer else colors.foregroundFill, 0)
         surface.elevation = if (active) activeElevationDp * density else 0f
         return if (active) colors.onPrimaryContainer else colors.onSurfaceVariant
     }
@@ -119,25 +113,20 @@ enum class NativeFeedbackTone { INFO, SUCCESS, ERROR }
 
 data class NativeFeedbackSurfaceStyle(
     val cornerRadiusDp: Float = 18f,
+    /** Retained for constructor compatibility. Fill follows the selected color role. */
     val tonalElevationDp: Float = 2f,
     val contentStartDp: Float = 16f,
     val contentEndDp: Float = 8f,
     val contentVerticalInsetDp: Float = 8f,
     val actionGapDp: Float = 8f,
 ) {
-    private val tonalAlpha = ((4.5f * ln(tonalElevationDp + 1f)) + 2f) / 100f
-
     fun create(context: Context, onPaintedSurfaceChanged: (View) -> Unit = {}): NativeGroupLayout =
         NativeGroupLayout(context, cornerRadiusDp, onPaintedSurfaceChanged = onPaintedSurfaceChanged)
 
-    fun fillColor(colors: NativeColorScheme, tone: NativeFeedbackTone): Int {
-        val fill = when (tone) {
-            NativeFeedbackTone.INFO -> colors.raised
-            NativeFeedbackTone.SUCCESS -> colors.primaryContainer
-            NativeFeedbackTone.ERROR -> colors.errorContainer
-        }
-        return if (fill == colors.surface && tonalElevationDp > 0f)
-            Color(colors.surfaceTint).copy(alpha = tonalAlpha).compositeOver(Color(fill)).toArgb() else fill
+    fun fillColor(colors: NativeColorScheme, tone: NativeFeedbackTone): Int = when (tone) {
+        NativeFeedbackTone.INFO -> colors.foregroundFill
+        NativeFeedbackTone.SUCCESS -> colors.primaryContainer
+        NativeFeedbackTone.ERROR -> colors.errorContainer
     }
 
     fun inkColor(colors: NativeColorScheme, tone: NativeFeedbackTone): Int = when (tone) {

@@ -26,7 +26,7 @@ class EmailComposerFieldsIntegrationTest {
         lateinit var theme: ControlTheme
         lateinit var recipient: View
         var actions = 0
-        val flat = NativeColorScheme.fallback(false).copy(surfaceContainerLow = Color.BLACK)
+        val flat = NativeColorScheme.fallback(false).copy(surfaceContainerHigh = Color.BLACK)
         withLaidOutPaintActivity(mount = { activity ->
             theme = ControlTheme.resolve(activity, false).withColorScheme(flat)
             composer = EmailComposerFields(activity, theme, "Subject")
@@ -56,12 +56,12 @@ class EmailComposerFieldsIntegrationTest {
                     val half = flat.copy(surfacePreset = NativeGrainPreset(0f, .5f))
                     val states = listOf(
                         half to textSurfaceRange(Color.BLACK, 0xff090909.toInt()),
-                        half.copy(surfaceContainerLow = Color.WHITE) to textSurfaceRange(0xfff6f6f6.toInt(), Color.WHITE),
+                        half.copy(surfaceContainerHigh = Color.WHITE) to textSurfaceRange(0xfff6f6f6.toInt(), Color.WHITE),
                         flat to textSurfaceRange(Color.BLACK),
                     )
                     for ((colors, expectedRange) in states) {
                         composer.bindTheme(theme.withColorScheme(colors))
-                        assertEquals(colors.surfaceContainerLow, group.paintedFillColor)
+                        assertEquals(colors.surfaceContainerHigh, group.paintedFillColor)
                         assertEquals(expectedRange, group.paintedTextSurface)
                         assertSame(group, composer.view)
                         assertSame(editor, composer.subjectEditor)

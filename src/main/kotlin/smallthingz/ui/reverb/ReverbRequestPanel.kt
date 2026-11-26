@@ -29,7 +29,7 @@ class ReverbRequestPanel(
     private val onDismiss: () -> Unit,
     private val onConfirm: () -> Unit,
 ) : AutoCloseable {
-    private val recipe=ReverbDesign.appearance.modals.floating
+    private val recipe=theme.appearance.floatingWindowRecipe
     private var closed=false
     private var answered=false
     private var blockedGesture=true

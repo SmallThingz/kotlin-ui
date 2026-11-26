@@ -10,14 +10,23 @@ class BrandPlateTest(unittest.TestCase):
     def sources(self):
         return [(plate.ROOT / name).read_text(encoding="utf-8") for name in plate.SOURCE_FILES]
 
-    def test_amoled_level_rounds_the_kotlin_float_literal_before_multiplication(self):
-        scheme, dark_surfaces, recipe, preset, defaults, groups, _ = self.sources()
-        recipe, changed = re.subn(r"amoledForegroundLightness = \d*\.?\d+f",
-                                  "amoledForegroundLightness = .0075f", recipe)
+    def test_all_brand_fills_alias_the_canonical_foreground_resource(self):
+        *palette, _ = self.sources()
+        colors, _ = plate.exported_colors(*palette)
+        self.assertEqual({fill for fill, _, _ in colors.values()},
+                         {"@color/native_amoled_foreground_fill"})
+
+    def test_grain_opacity_follows_the_canonical_foreground_recipe(self):
+        scheme, recipe, preset, defaults, _ = self.sources()
+        recipe, changed = re.subn(r"amoledForegroundGrain = \d*\.?\d+f",
+                                  "amoledForegroundGrain = .23f", recipe)
         self.assertEqual(changed, 1)
-        colors, _ = plate.exported_colors(scheme, dark_surfaces, recipe, preset, defaults, groups)
-        # Binary32 arithmetic yields 0.4999999403953552; a Double literal rounds up instead.
-        self.assertTrue(all(fill == "#000000" for fill, _, _ in colors.values()))
+        _, opacity = plate.exported_colors(scheme, recipe, preset, defaults)
+        self.assertEqual(opacity, "0.23")
+        preset = preset.replace("foregroundGrain = NativeDarkSurfaceRecipe.amoledForegroundGrain",
+                                "foregroundGrain = .5f")
+        with self.assertRaisesRegex(ValueError, "Shared paint contract changed"):
+            plate.exported_colors(scheme, recipe, preset, defaults)
 
     def test_resource_modes_share_all_three_dark_paint_roles_on_each_sdk_range(self):
         *palette, _ = self.sources()

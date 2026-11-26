@@ -222,9 +222,11 @@ class EmailRecipientAppearanceIntegrationTest {
                     val interior = (center - 20..center + 20).flatMap { y ->
                         (center - 20..center + 20).map { x -> rendered[y * side + x] }
                     }.toSet()
-                    if (strength == 0f) assertEquals(setOf(Color.BLACK), interior)
+                    val fill = recipe.surfaceColor(theme.colors)
+                    assertEquals(0xff0a0a0a.toInt(), fill)
+                    if (strength == 0f) assertEquals(setOf(fill), interior)
                     else assertTrue("Enabled grain must change interior pixels", interior.size > 1)
-                    val original = controls.shape(Color.BLACK, recipe.cornerRadiusDp.roundToInt(), theme.colors.border)
+                    val original = controls.shape(fill, recipe.cornerRadiusDp.roundToInt(), theme.colors.border)
                     original.setBounds(8, 8, end, end)
                     val reference = pixels(side, side) { original.draw(it) }
                     assertEquals("Grain must not overpaint the border", reference[8 * side + center], rendered[8 * side + center])
@@ -240,24 +242,26 @@ class EmailRecipientAppearanceIntegrationTest {
     @Test fun matchedInkQualifiesBothNoisySurfacesAndTranslucentSelection() {
         instrumentation.runOnMainSync {
             val base = ControlTheme.resolve(instrumentation.targetContext, false)
-            val nearThreshold = 0xff767676.toInt()
+            val nearThreshold = 0xff707070.toInt()
             val flat = colors(0f).copy(surfaceContainerHigh = Color.WHITE, surfaceContainerHighest = Color.WHITE,
                 primary = nearThreshold, onSurface = Color.BLACK)
-            assertTrue(ColorUtils.calculateContrast(nearThreshold, Color.WHITE) >= 4.5)
-            assertTrue(ColorUtils.calculateContrast(nearThreshold, 0xffeeeeee.toInt()) < 4.5)
+            val recipe = base.appearance.modals.anchoredPanel
+            val flatPopup = recipe.surfaceColor(flat)
+            assertTrue(ColorUtils.calculateContrast(nearThreshold, flatPopup) >= 4.5)
+            assertTrue(minContrast(nearThreshold, noiseSurfaceRange(flatPopup, 255)) < 4.5)
             assertEquals(nearThreshold, emailRecipientMatchColor(base.withColorScheme(flat)))
             assertEquals(Color.BLACK, emailRecipientMatchColor(base.withColorScheme(flat.copy(surfacePreset = NativeGrainPreset(0f, 1f)))))
-            // With full grain, #696969 qualifies on noisy white but fails on noisy #eeeeee.
-            for ((popup, selected) in listOf(Color.WHITE to 0xffeeeeee.toInt(),
+            // The matched ink must qualify across both the actual popup and the selected row.
+            for ((foreground, selected) in listOf(Color.WHITE to 0xffeeeeee.toInt(),
                 0xffeeeeee.toInt() to Color.WHITE, Color.WHITE to 0x80000000.toInt())) {
-                val palette = flat.copy(surfacePreset = NativeGrainPreset(0f, 1f), primary = 0xff696969.toInt(),
-                    surfaceContainerHigh = popup, surfaceContainerHighest = selected)
-                val popupRange = noiseSurfaceRange(popup, 255)
+                val palette = flat.copy(surfacePreset = NativeGrainPreset(0f, 1f), primary = 0xff656565.toInt(),
+                    surfaceContainerHigh = foreground, surfaceContainerHighest = selected)
+                val popupRange = noiseSurfaceRange(recipe.surfaceColor(palette), 255)
                 val selectedRange = noiseSurfaceRangeOver(popupRange, selected, selected ushr 24)
                 val result = emailRecipientMatchColor(base.withColorScheme(palette))
                 assertEquals(Color.BLACK, result)
                 if (selected ushr 24 == 255) {
-                    val safeRange = if (popup == Color.WHITE) popupRange else selectedRange
+                    val safeRange = if (foreground == Color.WHITE) popupRange else selectedRange
                     assertTrue("Only one surface should reject this primary", minContrast(palette.primary, safeRange) >= 4.5)
                     assertTrue(minContrast(result, popupRange, selectedRange) >= 4.5)
                 }
@@ -266,11 +270,13 @@ class EmailRecipientAppearanceIntegrationTest {
             }
             val midpoint = flat.copy(surfacePreset = NativeGrainPreset(0f, 1f), primary = 0xff757575.toInt(),
                 onSurface = 0xff757575.toInt(), surfaceContainerHigh = 0xff757575.toInt(), surfaceContainerHighest = 0xff757575.toInt())
-            val range = noiseSurfaceRange(0xff757575.toInt(), 255)
+            val popupRange = noiseSurfaceRange(recipe.surfaceColor(midpoint), 255)
+            val selectedRange = noiseSurfaceRangeOver(popupRange, midpoint.surfaceContainerHighest, 255)
             val chosen = emailRecipientMatchColor(base.withColorScheme(midpoint))
             assertEquals(Color.BLACK, chosen)
-            assertTrue(minContrast(chosen, range) < 4.5) // Best achievable, not an impossible AA guarantee.
-            assertTrue(minContrast(chosen, range) > minContrast(Color.WHITE, range))
+            assertTrue(minContrast(chosen, popupRange, selectedRange) < 4.5)
+            assertTrue(minContrast(chosen, popupRange, selectedRange) >
+                minContrast(Color.WHITE, popupRange, selectedRange))
         }
     }
 

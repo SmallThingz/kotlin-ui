@@ -33,7 +33,7 @@ class ReverbApplicationWidgets(private val context: Context, theme: ReverbTheme)
 
     fun background(topBar: Boolean = false) = if (topBar)
         NoiseDrawable(appearance.toolbars.backgroundColor(colors), appearance.toolbars.grainSeed).apply {
-            setNoiseIntensity(colors.surfacePreset?.backgroundGrain ?: 1f)
+            setNoiseIntensity(colors.backgroundGrain)
         }
     else appearance.backdrops.pageBackground(colors)
 
@@ -41,7 +41,7 @@ class ReverbApplicationWidgets(private val context: Context, theme: ReverbTheme)
         createReverbActionSheet(anchor, reverbTheme, title, onDismiss)
 
     fun floatingPanel(body: View): NativeFloatingPanelSurface {
-        val panel = appearance.modals.floating
+        val panel = appearance.floatingWindowRecipe
         return object : NativeFloatingPanelSurface(context, textDensity.density, panel, colors) {
             init { setPanelViewport(ScrollView(context).apply { addView(body) }) }
         }.apply {

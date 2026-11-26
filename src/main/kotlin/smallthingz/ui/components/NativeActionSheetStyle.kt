@@ -59,7 +59,8 @@ data class NativeActionSheetStyle internal constructor(
 ) {
     /** Change sheet geometry and behavior while retaining the resolved window paint. */
     fun copy(recipe: NativeActionSheetRecipe): NativeActionSheetStyle =
-        NativeActionSheetStyle(textDensity, sharedFontResolver, palette, titleStyle, tooltipStyle, recipe)
+        NativeActionSheetStyle(textDensity, sharedFontResolver, palette, titleStyle, tooltipStyle,
+            recipe.copy(grainSeed = this.recipe.grainSeed, grainIntensity = this.recipe.grainIntensity))
 
     internal fun title(context: Context, text: String) = paragraph(context,text,titleStyle,palette.title)
     internal fun tooltip(context: Context, text: String) = paragraph(context,text,tooltipStyle,palette.inverseOnSurface)

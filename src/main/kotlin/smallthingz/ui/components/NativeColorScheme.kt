@@ -23,6 +23,8 @@ import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.components.waveform.WaveformStyle
 import smallthingz.ui.graphics.hct.Cam16Color
 import smallthingz.ui.graphics.Color
+import smallthingz.ui.graphics.compositeOver
+import smallthingz.ui.graphics.luminance
 import smallthingz.ui.graphics.toArgb
 
 /** Stateless strategy for the current window. Use [resolve]'s resource reader synchronously. */
@@ -91,9 +93,9 @@ data class NativeColorScheme(
     val acknowledgedStatusTintOverride: Int? = null,
 ) {
     val buttonPalette = NativeButtonPalette(accent = primary, onAccent = onPrimary, content = onSurface,
-        muted = onSurfaceVariant, quietSurface = surfaceContainerLow, tonalSurface = secondaryContainer,
+        muted = onSurfaceVariant, quietSurface = foregroundFill, tonalSurface = secondaryContainer,
         onTonal = onSecondaryContainer, errorSurface = errorContainer, onError = onErrorContainer,
-        raisedSurface = surfaceContainerHigh, surfacePreset = surfacePreset)
+        raisedSurface = foregroundFill, surfacePreset = surfacePreset)
     val waveformStyle = WaveformStyle(
         bodyColor = primary,
         trackColor = onSurfaceVariant,
@@ -101,8 +103,22 @@ data class NativeColorScheme(
         markerColor = onSurface,
     )
 
-    val field: Int get() = surfaceContainerLow
-    val raised: Int get() = surfaceContainerHigh
+    internal val backgroundGrain: Float get() = surfacePreset?.backgroundGrain ?: 1f
+
+    internal val foregroundFill: Int get() = surfaceContainerHigh
+    internal val foregroundGrain: Float get() = surfacePreset?.foregroundGrain ?: 0f
+
+    // Context menus and an off-page recording tab share the same popup material.
+    internal val popupFill: Int = run {
+        val foreground = Color(foregroundFill)
+        val amoled = (surfacePreset as? NativeDarkSurfacePreset)?.style == NativeDarkSurfaces.AMOLED
+        val neutral = if (amoled || foreground.luminance() < .5f) Color.White else Color.Black
+        neutral.copy(alpha = .04f).compositeOver(foreground).toArgb()
+    }
+    internal val popupGrain: Float get() = foregroundGrain
+
+    val field: Int get() = foregroundFill
+    val raised: Int get() = foregroundFill
     val ink: Int get() = onSurface
     val muted: Int get() = onSurfaceVariant
     /** Shared dark presets use white; other palettes follow current ink. Explicit theme overrides win. */
@@ -114,7 +130,7 @@ data class NativeColorScheme(
     val settingsOnSelection: Int get() = onPrimary
 
     val settingsControls = ControlPalette(field, field, ink, muted, primary, settingsOnSelection, settingsSelection, border, surfacePreset)
-    val pageControls = ControlPalette(surface, surfaceContainerHigh, onSurface, onSurfaceVariant,
+    val pageControls = ControlPalette(background, foregroundFill, onSurface, onSurfaceVariant,
         primary, onPrimary, primaryContainer, outlineVariant, surfacePreset)
     val switchPalette = NativeMaterialSwitchPalette(surface, onSurface, primary, onPrimary, outline, surfaceContainerHighest)
 

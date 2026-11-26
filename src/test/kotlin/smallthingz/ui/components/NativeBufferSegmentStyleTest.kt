@@ -4,14 +4,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NativeBufferSegmentStyleTest {
-    @Test fun inactiveCaptureHasSubtleAccentWithoutSelectedInkOrFilledState() {
+    @Test fun offPageRecordingUsesPopupWithoutTakingSelectionOrSelectedInk() {
         val style = NativeBufferSegmentStyle()
         for (dark in listOf(false, true, false)) {
-            val palette = NativeDarkSurfacePreset.Amoled.colorScheme().resolve(dark, 30) { error("No resources") }
+            val palette = NativeDefaultColorScheme.resolve(dark, 30) { 0xfff3edf4.toInt() }
             for (filled in listOf(false, true)) {
                 val fill = style.fill(palette, selected = false, recording = true, filled = filled)
-                assertEquals(31, fill ushr 24)
-                assertEquals(palette.primary and 0xffffff, fill and 0xffffff)
+                val popup = NativeAnchoredMenuRecipe.Default.colors(palette)
+                assertEquals(255, fill ushr 24)
+                assertEquals(popup.raised, fill)
+                assertEquals(popup.grainIntensity, palette.foregroundGrain, 0f)
+                assertNotEquals(palette.primary, fill)
                 assertEquals(palette.muted, style.ink(palette, false, true, true, filled))
                 assertEquals(style.ink(palette, false, false, false, filled),
                     style.ink(palette, false, true, false, filled))

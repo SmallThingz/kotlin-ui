@@ -71,7 +71,7 @@ open class ReverbTopBarLayout(
 
     fun bindToolbar(density: Float, palette: NativeColorScheme, statusInsetPx: Int = 0) {
         bindStyle(density, statusInsetPx, visualStyle)
-        chrome.bind(visualStyle, visualStyle.backgroundColor(palette), palette.surfacePreset?.backgroundGrain ?: 1f)
+        chrome.bind(visualStyle, visualStyle.backgroundColor(palette), palette.backgroundGrain)
     }
 }
 

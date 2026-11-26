@@ -16,6 +16,7 @@ data class NativeBufferSegmentStyle(
     val selectedDisabledInkAlpha: Float = .62f,
     val idleDisabledInkAlpha: Float = .30f,
     val preferredWidthDp: Int = 112,
+    /** Retained for constructor compatibility. Off-page recording uses the popup fill. */
     val inactiveRecordingFillAlpha: Float = .12f,
 ) {
     init {
@@ -32,7 +33,7 @@ data class NativeBufferSegmentStyle(
         selected && recording -> palette.primary
         filled && selected -> palette.tertiary
         selected -> srgbColorWithAlpha(palette.primaryContainer, selectedFillAlpha)
-        recording -> srgbColorWithAlpha(palette.primary, inactiveRecordingFillAlpha)
+        recording -> palette.popupFill
         else -> Color.TRANSPARENT
     }
 

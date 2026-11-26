@@ -33,9 +33,8 @@ class ReverbBufferRecordingAppearanceIntegrationTest {
             val runtime = NativeModalWindowRuntime(context)
             try {
                 for (dark in listOf(false, true)) for (viewed in 0..1) for (known in listOf(true, false)) {
-                    // Isolate this existing state/opacity assertion from the independently tested texture.
-                    val palette = NativeDarkSurfacePreset.Amoled.colorScheme()
-                        .resolve(dark, 30) { error("No resources") }.copy(surfacePreset = null)
+                    // Disable only texture. Keep the dark preset so the popup retains its dark fill.
+                    val palette = flatPalette(NativeDefaultColorScheme.resolve(dark, 30) { 0xfff3edf4.toInt() })
                     val environment = ReverbEnvironment(Density(1f), createFontFamilyResolver(context), palette)
                     val root = View(context)
                     val controls = ReverbHomeControls(context, environment, { root }, runtime.scope, 0, 1)
@@ -52,7 +51,7 @@ class ReverbBufferRecordingAppearanceIntegrationTest {
                     try {
                         idle.draw(Canvas(bitmap))
                         val pixel = bitmap.getPixel(56, 2)
-                        val expectedFill = if (known) (palette.primary and 0x00ffffff) or (31 shl 24)
+                        val expectedFill = if (known) NativeAnchoredMenuRecipe.Default.surfaceColor(palette)
                             else Color.TRANSPARENT
                         val reference = flatReferencePixel(expectedFill)
                         val retainedFill = (field(idle, "fill") as Paint).color
@@ -60,7 +59,7 @@ class ReverbBufferRecordingAppearanceIntegrationTest {
                             "pixel=${pixel.toUInt().toString(16)} primary=${palette.primary.toUInt().toString(16)} " +
                             "fill=${retainedFill.toUInt().toString(16)} expectedFill=${expectedFill.toUInt().toString(16)} " +
                             "reference=${reference.toUInt().toString(16)}"
-                        assertEquals(detail, if (known) 31 else 0, Color.alpha(pixel))
+                        assertEquals(detail, if (known) 255 else 0, Color.alpha(pixel))
                         assertEquals("Retained semantic fill $detail", expectedFill, retainedFill)
                         assertEquals("Independent flat raster $detail", reference, pixel)
                     } finally { bitmap.recycle() }
@@ -100,7 +99,7 @@ class ReverbBufferRecordingAppearanceIntegrationTest {
                         assertTrue(renderers.all { it != null })
                         val original = assertComposedTabs(controls, tabs, state, base, palette.field)
                         // Same-palette preset changes exercise the retained owners without a color tween.
-                        val flat = base.withPalette(palette.copy(surfacePreset = null))
+                        val flat = base.withPalette(flatPalette(palette))
                         controls.setEnvironment(flat)
                         val plain = assertComposedTabs(controls, tabs, state, flat, palette.field)
                         assertTrue("Grain changes the composed strips for dark=$dark state=$state",
@@ -148,6 +147,10 @@ class ReverbBufferRecordingAppearanceIntegrationTest {
         }
     }
 
+    private fun flatPalette(palette: NativeColorScheme) = palette.copy(surfacePreset =
+        (palette.surfacePreset as? NativeDarkSurfacePreset)?.copy(foregroundGrain = 0f)
+            ?: NativeGrainPreset(backgroundGrain = 1f, foregroundGrain = 0f))
+
     /** Independent flat-fill raster oracle includes the backend's premultiplied alpha round trip. */
     private fun flatReferencePixel(fill: Int): Int {
         val bitmap = Bitmap.createBitmap(112, 54, Bitmap.Config.ARGB_8888)
@@ -186,7 +189,12 @@ class ReverbBufferRecordingAppearanceIntegrationTest {
                 val full = index == 0 && state.oneShotFull
                 val fill = sampledFills?.get(index)
                     ?: environment.appearance.bufferSegment.fill(palette, selected, recording, full)
-                if (sampledFills == null && selected && (recording || full)) assertEquals(255, Color.alpha(fill))
+                if (sampledFills == null && (recording || selected && full)) assertEquals(255, Color.alpha(fill))
+                if (sampledFills == null && recording && !selected) {
+                    val popup = NativeAnchoredMenuRecipe.Default.colors(palette)
+                    assertEquals(popup.raised, fill)
+                    assertEquals(popup.grainIntensity, intensity, 0f)
+                }
                 val offset = Rect(0, 0, tab.width, tab.height)
                 controls.offsetDescendantRectToMyCoords(tab, offset)
                 expected.eraseColor(Color.TRANSPARENT)
