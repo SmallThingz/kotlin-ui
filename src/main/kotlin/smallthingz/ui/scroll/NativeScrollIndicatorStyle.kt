@@ -10,6 +10,22 @@ data class NativeScrollIndicatorStyle(
     val rightInsetDp: Float = 2f,
     val minThumbHeightDp: Float = 24f,
 ) {
+    /** Physical-right clear content gutter, including one pixel outside the thumb's inward AA edge.
+     * Call again when density/style changes; apply as right (not end) padding with child clipping.
+     * Invalid geometry has no indicator and requires no gutter, matching the drawing contract.
+     */
+    fun contentGutterPx(density: Float): Int {
+        if (!density.isFinite() || density <= 0f || !widthDp.isFinite() || widthDp <= 0f ||
+            !rightInsetDp.isFinite() || rightInsetDp < 0f ||
+            !minThumbHeightDp.isFinite() || minThumbHeightDp < 0f) return 0
+        val widthPx = widthDp * density
+        val insetPx = rightInsetDp * density
+        val minimumPx = minThumbHeightDp * density
+        if (!widthPx.isFinite() || !insetPx.isFinite() || !minimumPx.isFinite()) return 0
+        val span = widthPx.toDouble() + insetPx.toDouble()
+        return (kotlin.math.ceil(span) + 1.0).coerceAtMost(Int.MAX_VALUE.toDouble()).toInt()
+    }
+
     companion object {
         val Default = NativeScrollIndicatorStyle()
     }
