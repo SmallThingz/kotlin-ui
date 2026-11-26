@@ -52,10 +52,14 @@ class ReverbProductTopBar(context: Context, initialTheme: ReverbTheme, inputRoot
         settings: ReverbHeaderAction,
         insets: NativeTopBarInsets = NativeTopBarInsets(0, 0, 0),
         counts: List<ReverbHeaderCount> = emptyList(),
+        /** Home-only presentation; the original identity is retained for About. */
+        circularLauncherOutline: Boolean = false,
     ) {
         this.identity = identity
+        val headerIdentity = if (circularLauncherOutline && identity is ReverbProductIdentity.Launcher)
+            identity.copy(circularOutline = true) else identity
         bar.bind(theme, browser?.withIcon(ReverbIcon.Browser),
-            ReverbTopBarCenterContent.Product(identity, aboutLabel, onAbout),
+            ReverbTopBarCenterContent.Product(headerIdentity, aboutLabel, onAbout),
             settings.withIcon(ReverbIcon.Settings), insets)
         countsStrip.bind(theme, insets, counts)
     }
