@@ -1,6 +1,7 @@
 package smallthingz.ui.reverb
 
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Matrix
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -50,6 +51,7 @@ internal class ReverbIdentityMarkView(context: Context) : FrameLayout(context) {
         visibility = GONE
     }
     private var identity: ReverbProductIdentity = ReverbProductIdentity.Reverb
+    private var launcherConfiguration: Configuration? = null
 
     init {
         descendantFocusability = FOCUS_BLOCK_DESCENDANTS
@@ -61,17 +63,36 @@ internal class ReverbIdentityMarkView(context: Context) : FrameLayout(context) {
 
     override fun getAccessibilityClassName(): CharSequence = "android.widget.ImageView"
 
+    private fun refreshLauncherArtwork(value: ReverbProductIdentity.Launcher, force: Boolean = false) {
+        // Launcher resources follow the application/system configuration, even in a forced-theme Activity.
+        val resources = context.applicationContext.resources
+        if (!force && launcherConfiguration == resources.configuration) return
+        monochrome.setImageDrawable(resources.getDrawable(value.drawable, null))
+        launcherConfiguration = Configuration(resources.configuration)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        (identity as? ReverbProductIdentity.Launcher)?.let {
+            refreshLauncherArtwork(it)
+            monochrome.alignArtwork()
+        }
+    }
+
     fun bind(value: ReverbProductIdentity, palette: NativeColorScheme) {
-        if (value != identity) {
+        val changed = value != identity
+        if (changed) {
             identity = value
             reverb.visibility = if (value == ReverbProductIdentity.Reverb) VISIBLE else GONE
             monochrome.visibility = if (value != ReverbProductIdentity.Reverb) VISIBLE else GONE
-            monochrome.setImageResource(when (value) {
-                is ReverbProductIdentity.Monochrome -> value.drawable
-                is ReverbProductIdentity.Launcher -> value.drawable
-                ReverbProductIdentity.Reverb -> 0
-            })
+            when (value) {
+                is ReverbProductIdentity.Monochrome -> monochrome.setImageResource(value.drawable)
+                is ReverbProductIdentity.Launcher -> Unit
+                ReverbProductIdentity.Reverb -> monochrome.setImageResource(0)
+            }
+            if (value !is ReverbProductIdentity.Launcher) launcherConfiguration = null
         }
+        if (value is ReverbProductIdentity.Launcher) refreshLauncherArtwork(value, force = changed)
         reverb.refreshResourcePalette()
         monochrome.imageTintList = null
         if (value is ReverbProductIdentity.Monochrome) {

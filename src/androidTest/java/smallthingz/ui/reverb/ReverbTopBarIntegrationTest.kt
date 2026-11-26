@@ -1,16 +1,24 @@
 package smallthingz.ui.reverb
 
+import android.annotation.SuppressLint
+import android.content.ContextWrapper
+import android.content.res.Configuration
 import android.graphics.Rect
+import android.graphics.drawable.ColorDrawable
+import android.os.Build
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.LinearLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import smallthingz.ui.R
 import smallthingz.ui.components.NativeTopBarInsets
 import smallthingz.ui.components.NativeTopBarLayout
 import smallthingz.ui.components.NativeGroupLayout
@@ -21,6 +29,54 @@ import kotlin.math.roundToInt
 
 @RunWith(AndroidJUnit4::class)
 class ReverbTopBarIntegrationTest {
+    @SuppressLint("ResourceType") // A color resource is drawable artwork with directly observable qualifier selection.
+    @Test fun launcherUsesApplicationConfigurationAndRetainsArtworkUntilItChanges() = onMainThread {
+        val base = InstrumentationRegistry.getInstrumentation().targetContext
+        fun configured(night: Int) = base.createConfigurationContext(Configuration(base.resources.configuration).apply {
+            uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or night
+        })
+        for (appMode in listOf(Configuration.UI_MODE_NIGHT_NO, Configuration.UI_MODE_NIGHT_YES)) {
+            val otherMode = if (appMode == Configuration.UI_MODE_NIGHT_NO)
+                Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
+            var application = configured(appMode)
+            val activity = object : ContextWrapper(configured(otherMode)) {
+                override fun getApplicationContext() = application
+            }
+            val mark = ReverbIdentityMarkView(activity)
+            val image = mark.getChildAt(1) as ImageView
+            val identity = ReverbProductIdentity.Launcher(R.color.reverb_brand_background)
+            val palette = ReverbDesign.theme(activity, dark = otherMode == Configuration.UI_MODE_NIGHT_YES).palette
+            fun expectedColor() = application.resources.getColor(identity.drawable, null)
+            if (Build.VERSION.SDK_INT >= 31) {
+                assertTrue(expectedColor() != activity.resources.getColor(identity.drawable, null))
+            }
+            mark.bind(identity, palette)
+            assertEquals(expectedColor(), (image.drawable as ColorDrawable).color)
+            val initial = image.drawable
+            mark.bind(identity, palette)
+            assertSame(initial, image.drawable)
+            // An Activity-only configuration callback does not re-inflate canonical launcher artwork.
+            mark.dispatchConfigurationChanged(activity.resources.configuration)
+            assertSame(initial, image.drawable)
+
+            application = configured(otherMode)
+            mark.dispatchConfigurationChanged(activity.resources.configuration)
+            assertNotSame(initial, image.drawable)
+            assertEquals(expectedColor(), (image.drawable as ColorDrawable).color)
+            val refreshed = image.drawable
+            mark.bind(identity, palette)
+            assertSame(refreshed, image.drawable)
+
+            // A retained owner that rebinds without a View callback also observes system changes.
+            application = configured(appMode)
+            mark.bind(identity, palette)
+            assertNotSame(refreshed, image.drawable)
+            assertEquals(expectedColor(), (image.drawable as ColorDrawable).color)
+            mark.bind(ReverbProductIdentity.Monochrome(identity.drawable), palette)
+            assertEquals(activity.resources.getColor(identity.drawable, null), (image.drawable as ColorDrawable).color)
+        }
+    }
+
     @Test fun multiActionToolbarMatchesTitledBackInBothDirectionsWithoutShrinkingEndCells() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         onMainThread {
