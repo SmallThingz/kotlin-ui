@@ -63,7 +63,18 @@ class ReverbPermissionNoticesAccessibilityIntegrationTest {
                 val lease = action.mergedRowAccessibility.bindGeometry(NativePlainTextViewGeometry(f.root,
                     NativeTextSemanticsClipPolicy { NativeTextSemanticsClip.Unclipped })) { true }
                 try {
-                    assertAction(action, f.activity.getString(R.string.reverb_settings_background_review))
+                    val parent = checkNotNull(action.createAccessibilityNodeInfo())
+                    assertTrue(parent.isEnabled && parent.isVisibleToUser)
+                    assertEquals("android.view.View", parent.className.toString())
+                    assertEquals(f.activity.getString(R.string.reverb_settings_background_review),
+                        parent.contentDescription.toString())
+                    assertEquals(1, parent.actionList.count { it.id == AccessibilityNodeInfo.ACTION_CLICK })
+                    val children = arrayListOf<View>()
+                    action.addChildrenForAccessibility(children)
+                    assertEquals(listOf(action.label, action.mergedRowAccessibility.roleView), children)
+                    val role = checkNotNull(action.mergedRowAccessibility.roleView.createAccessibilityNodeInfo())
+                    assertEquals("android.widget.Button", role.className.toString())
+                    assertFalse(role.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK })
                     assertTrue(click(action))
                     assertEquals(1, requests)
                 } finally { lease.close() }
