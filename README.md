@@ -17,6 +17,12 @@ accepted state and `close()` when its owner retires. The app owns values,
 localized labels, and actions. See [control binding](docs/reference-guide.md#control-bindings)
 and [appearance configuration](docs/appearance-controls.md#defaults-and-explicit-configuration).
 
+## Mail
+
+`smallthingz.ui.mail` provides `MailComposerFields`, `MailRecipientRow`, and
+`mailDropdownGroup` for native mail composition and choice lists. These
+delegate to the existing `smallthingz.ui.email` controls.
+
 ## Build
 
 Use JDK 21 and Android SDK platform 37. Set `ANDROID_HOME`, or set `sdk.dir`
