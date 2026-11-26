@@ -15,6 +15,7 @@ import kotlin.math.roundToInt
 /** A persistent overflow cue on the caller's platform ScrollView, not another scroll owner.
  * The caller retains sufficient physical-right content inset; this binding changes no padding,
  * measurement, input listener or accessibility node. Platform range/length rules remain in charge.
+ * Inset scrollbar modes retain their stock configuration and artwork to preserve layout geometry.
  * API28 keeps the stock themed artwork; API29+ uses a solid Gallery thumb (no grain parity claim).
  * Close with the owning panel. Temporary detach only suspends underlay observation.
  */
@@ -28,7 +29,9 @@ class GalleryPlatformScrollIndicator(
     private val originalFading = scroll.isScrollbarFadingEnabled
     private val originalPosition = scroll.verticalScrollbarPosition
     private val originalStyle = scroll.scrollBarStyle
-    private val thumb = if (Build.VERSION.SDK_INT >= 29) Thumb(scroll) else null
+    private val ownsScrollbar = originalStyle == View.SCROLLBARS_INSIDE_OVERLAY ||
+        originalStyle == View.SCROLLBARS_OUTSIDE_OVERLAY
+    private val thumb = if (ownsScrollbar && Build.VERSION.SDK_INT >= 29) Thumb(scroll) else null
     private var observer: ViewTreeObserver? = null
     private var closed = false
     private val beforeDraw = ViewTreeObserver.OnPreDrawListener { refresh(); true }
@@ -38,23 +41,32 @@ class GalleryPlatformScrollIndicator(
     }
 
     init {
-        scroll.scrollBarStyle = View.SCROLLBARS_OUTSIDE_OVERLAY
-        scroll.verticalScrollbarPosition = View.SCROLLBAR_POSITION_RIGHT
-        scroll.isScrollbarFadingEnabled = false
-        scroll.addOnAttachStateChangeListener(attachment)
-        refresh()
-        if (scroll.isAttachedToWindow) observe()
+        if (ownsScrollbar) {
+            scroll.scrollBarStyle = View.SCROLLBARS_OUTSIDE_OVERLAY
+            scroll.verticalScrollbarPosition = View.SCROLLBAR_POSITION_RIGHT
+            scroll.isScrollbarFadingEnabled = false
+            scroll.addOnAttachStateChangeListener(attachment)
+            refresh()
+            if (scroll.isAttachedToWindow) observe()
+        }
     }
 
     /** Also covers detached rendering and an owner's explicit appearance refresh. */
     fun refresh() {
-        if (closed) return
+        if (closed || !ownsScrollbar) return
         val recipe = style()
+        if (closed) return
         val density = scroll.resources.displayMetrics.density
         val valid = recipe.contentGutterPx(density) > 0
+        val ink = if (valid && Build.VERSION.SDK_INT >= 29) {
+            val surface = paintedSurface()
+            if (closed) return
+            textSurfaceForeground(surface, palette().muted)
+        } else 0
+        if (closed) return
         if (scroll.isVerticalScrollBarEnabled != valid) scroll.isVerticalScrollBarEnabled = valid
         if (valid && Build.VERSION.SDK_INT >= 29) {
-            thumb?.bind(textSurfaceForeground(paintedSurface(), palette().muted),
+            thumb?.bind(ink,
                 (recipe.widthDp * density).roundToInt().coerceAtLeast(1),
                 (recipe.rightInsetDp * density).roundToInt().coerceAtLeast(0))
         }
@@ -74,6 +86,7 @@ class GalleryPlatformScrollIndicator(
     override fun close() {
         if (closed) return
         closed = true
+        if (!ownsScrollbar) return
         stopObserving()
         scroll.removeOnAttachStateChangeListener(attachment)
         if (Build.VERSION.SDK_INT >= 29) thumb?.restore()
