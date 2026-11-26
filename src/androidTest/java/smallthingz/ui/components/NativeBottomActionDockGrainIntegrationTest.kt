@@ -21,6 +21,7 @@ import smallthingz.ui.graphics.ViewGrain
 import smallthingz.ui.reverb.ReverbBottomActionDock
 import smallthingz.ui.reverb.ReverbDesign
 import smallthingz.ui.reverb.ReverbTheme
+import kotlin.math.roundToInt
 
 /** Software pixels exercise the real shared grain and retained button, without opening a window. */
 @RunWith(AndroidJUnit4::class)
@@ -40,10 +41,16 @@ class NativeBottomActionDockGrainIntegrationTest {
                     val input = button.nativeClickEndpoint
                     val accessibility = button.mergedRowAccessibility
                     val dock = dock(context, theme, button, legacy)
+                    val gutter = ((if (legacy) theme.appearance.settingsSelectors.retentionSection.sideInsetDp
+                        else NativeScreenSpacing.HORIZONTAL_DP) * theme.density.density).roundToInt()
                     dock.applySafeInsets(Insets.of(16, 0, 24, 32))
                     layout(dock)
                     assertEquals(28f, dock.topCornerRadiusPx, 0f)
                     assertEquals(64, dock.minimumActionHeightPx)
+                    assertEquals(16 + gutter, button.left)
+                    assertEquals(24 + gutter, dock.width - button.right)
+                    assertEquals(dock.width - 40 - 2 * gutter, button.width)
+                    assertEquals(32, dock.height - button.bottom)
                     val bounds = Rect(button.left, button.top, button.right, button.bottom)
                     val motion = field(button, "colorMotion") as ViewColorTransition
                     var retainedGrain: Any? = null
@@ -78,9 +85,12 @@ class NativeBottomActionDockGrainIntegrationTest {
                                 canvas.drawColor(fill)
                                 NoiseDrawable().apply { setNoiseIntensity(intensity) }.drawGrain(canvas,
                                     0f, 0f, dock.width.toFloat(), dock.height.toFloat(), coverage = alpha)
-                                // All three extensions, including side/bottom junctions: exactly one fill and grain pass.
-                                for (y in 32 until dock.height) for (x in 0 until dock.width) {
-                                    if (y >= button.bottom || x < button.left || x >= button.right) {
+                                // Side gutters stay transparent for every row, even alongside
+                                // the navigation fill. Inside the surface, retain the full
+                                // alpha/grain pixel oracle and the disjoint action comparison.
+                                assertTransparentGutters(actual, button)
+                                for (y in 32 until dock.height) for (x in button.left until button.right) {
+                                    if (y >= button.bottom) {
                                         assertEquals("inset ($x,$y), grain=$intensity alpha=$alpha",
                                             reference.getPixel(x, y), actual.getPixel(x, y))
                                     } else {
@@ -90,6 +100,10 @@ class NativeBottomActionDockGrainIntegrationTest {
                                 }
                                 assertEquals(Color.TRANSPARENT, actual.getPixel(0, 0))
                                 assertEquals(Color.TRANSPARENT, actual.getPixel(dock.width - 1, 0))
+                                assertEquals("Inset top-left corner is clipped", Color.TRANSPARENT,
+                                    actual.getPixel(button.left, 0))
+                                assertEquals("Inset top-right corner is clipped", Color.TRANSPARENT,
+                                    actual.getPixel(button.right - 1, 0))
                             } finally { actual.recycle(); actionOnly.recycle(); reference.recycle() }
                         }
                         assertSame(button, dock.action)
@@ -102,7 +116,10 @@ class NativeBottomActionDockGrainIntegrationTest {
                         assertFalse(dock.isClickable)
                         assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO, dock.importantForAccessibility)
                     }
-                    for ((x, y) in listOf(0f to 0f, 4f to 48f, 80f to 90f)) {
+                    for ((x, y) in listOf(0f to 0f, 4f to 48f,
+                        (button.left - 1f) to 48f, button.right.toFloat() to 48f,
+                        button.left.toFloat() to 0f, (button.right - 1f) to 0f,
+                        ((button.left + button.right) / 2f) to 90f)) {
                         val down = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, x, y, 0)
                         try { assertFalse("Insets/cut corners are not action targets", dock.dispatchTouchEvent(down)) }
                         finally { down.recycle() }
@@ -111,12 +128,14 @@ class NativeBottomActionDockGrainIntegrationTest {
                     motion.snap(0x80182838.toInt(), Color.WHITE)
                     dock.applySafeInsets(Insets.NONE)
                     layout(dock)
-                    assertEquals(Rect(0, 0, dock.width, dock.height), Rect(button.left, button.top, button.right, button.bottom))
+                    assertEquals(Rect(gutter, 0, dock.width - gutter, dock.height),
+                        Rect(button.left, button.top, button.right, button.bottom))
                     val actual = raster(dock)
                     val actionOnly = raster(button)
                     try {
-                        for (y in 32 until dock.height) for (x in 0 until dock.width)
-                            assertEquals(actionOnly.getPixel(x, y), actual.getPixel(x, y))
+                        assertTransparentGutters(actual, button)
+                        for (y in 32 until dock.height) for (x in button.left until button.right)
+                            assertEquals(actionOnly.getPixel(x - button.left, y), actual.getPixel(x, y))
                     } finally { actual.recycle(); actionOnly.recycle() }
                 } finally { button.close() }
             }
@@ -124,6 +143,8 @@ class NativeBottomActionDockGrainIntegrationTest {
     }
 
     @Test fun presetBeforeFirstColorBindAndAlreadyBoundConstructionReachTheDock() = onMain {
+        assertNotNull("Keep the shared JVM constructor", NativeBottomActionDock::class.java.getConstructor(
+            Context::class.java, smallthingz.ui.unit.Density::class.java, NativeMaterialButtonView::class.java))
         assertNotNull("Keep the original JVM constructor", ReverbBottomActionDock::class.java.getConstructor(
             Context::class.java, ReverbTheme::class.java, NativeMaterialButtonView::class.java))
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -172,6 +193,17 @@ class NativeBottomActionDockGrainIntegrationTest {
     }
     private fun raster(view: View): Bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888).also {
         view.draw(Canvas(it))
+    }
+    private fun assertTransparentGutters(bitmap: Bitmap, button: View) {
+        assertTrue("Fixture must expose a left gutter", button.left > 0)
+        assertTrue("Fixture must expose a right gutter", button.right < bitmap.width)
+        assertTrue("Fixture must retain a nonempty action surface", button.width > 0)
+        for (y in 0 until bitmap.height) {
+            for (x in 0 until button.left)
+                assertEquals("Left gutter ($x,$y) must not receive fill or grain", Color.TRANSPARENT, bitmap.getPixel(x, y))
+            for (x in button.right until bitmap.width)
+                assertEquals("Right gutter ($x,$y) must not receive fill or grain", Color.TRANSPARENT, bitmap.getPixel(x, y))
+        }
     }
     private fun field(owner: Any, name: String): Any? {
         var type: Class<*>? = owner.javaClass
