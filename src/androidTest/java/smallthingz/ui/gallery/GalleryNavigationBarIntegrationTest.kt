@@ -2,13 +2,18 @@ package smallthingz.ui.gallery
 
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Outline
 import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.RippleDrawable
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
+import androidx.core.graphics.ColorUtils
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
@@ -126,6 +131,89 @@ class GalleryNavigationBarIntegrationTest {
         }
     }
 
+    @Test fun selectedSurfaceRetainsBoundsNodesAndSettledContrastAcrossThemes() = main {
+        for (fontScale in listOf(1f, 2f))
+            for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
+                withBar(fontScale, listOf("Photos", "Search", "Albums"), direction) { f ->
+                    f.layout(600)
+                    val nodes = f.chips
+                    val parents = nodes.mapValues { it.value.parent }
+                    val ids = nodes.mapValues { it.value.id }
+                    val backgrounds = nodes.mapValues { it.value.background }
+                    val bounds = nodes.mapValues { boundsIn(f.bar, it.value) }
+                    val barSize = f.bar.width to f.bar.height
+                    // Detached ViewColorTransition.retarget snaps to its target. No sleep,
+                    // animator-scale override or mid-transition color assumption is needed.
+                    assertFalse(f.bar.isAttachedToWindow)
+                    for (dark in listOf(false, true, false)) for (selected in f.ids) {
+                        val palette = GalleryDesign.palette(f.context, dark).pageControls
+                        f.bar.bind(selected, palette)
+                        f.layout(600)
+                        assertEquals(barSize, f.bar.width to f.bar.height)
+                        assertTrue("Theme/selection binding must not navigate", f.requests.isEmpty())
+                        for ((id, chip) in f.chips) {
+                            assertSame(nodes.getValue(id), chip)
+                            assertSame(parents.getValue(id), chip.parent)
+                            assertEquals(ids.getValue(id), chip.id)
+                            assertSame(backgrounds.getValue(id), chip.background)
+                            assertEquals(bounds.getValue(id), boundsIn(f.bar, chip))
+                            assertEquals("Navigate $id", chip.contentDescription.toString())
+                            assertEquals(id == selected, chip.isChecked)
+                            assertTrue(chip.isEnabled)
+                            assertTrue(chip.width >= f.dp(48) && chip.height >= f.dp(64))
+                            val text = checkNotNull(chip.layout)
+                            assertEquals(chip.text.length, text.getLineEnd(text.lineCount - 1))
+                            for (line in 0 until text.lineCount) assertEquals(0, text.getEllipsisCount(line))
+                            assertTrue(text.height <= chip.height - chip.compoundPaddingTop - chip.compoundPaddingBottom)
+                            val surface = renderNavigationChip(chip, palette.surface, backgroundOnly = true)
+                            try {
+                                val middle = surface.getPixel(chip.width / 2, chip.height / 2)
+                                if (id == selected) {
+                                    assertNotEquals("Selection needs a container behind its content", palette.surface, middle)
+                                    assertEquals("Rounded corner keeps the footer underlay", palette.surface, surface.getPixel(0, 0))
+                                    val outline = Outline()
+                                    (chip.background as RippleDrawable).getDrawable(0).getOutline(outline)
+                                    assertEquals("Existing16dp recipe radius", f.dp(16).toFloat(), outline.radius, .01f)
+                                } else assertEquals("Unselected cell has no filled container", palette.surface, middle)
+                                val iconInk = checkNotNull(chip.compoundDrawableTintList)
+                                    .getColorForState(chip.drawableState, Color.TRANSPARENT)
+                                // Sample the actual painted surface, with its configured theme grain.
+                                // Background-only drawing avoids accidentally sampling a text glyph.
+                                for (y in listOf(f.dp(8), chip.height / 2, chip.height - f.dp(8))) {
+                                    val background = surface.getPixel(chip.width / 2, y)
+                                    val textInk = ColorUtils.compositeColors(chip.currentTextColor, background)
+                                    val displayedIcon = ColorUtils.compositeColors(iconInk, background)
+                                    assertTrue("Settled label contrast dark=$dark selected=${id == selected}",
+                                        ColorUtils.calculateContrast(textInk, background) >= 4.5)
+                                    assertTrue("Settled icon contrast dark=$dark selected=${id == selected}",
+                                        ColorUtils.calculateContrast(displayedIcon, background) >= 3.0)
+                                }
+                                val complete = renderNavigationChip(chip, palette.surface, backgroundOnly = false)
+                                try {
+                                    assertEquals("No separate underline at the cell bottom",
+                                        surface.getPixel(chip.width / 2, chip.height - 2),
+                                        complete.getPixel(chip.width / 2, chip.height - 2))
+                                } finally { complete.recycle() }
+                            } finally { surface.recycle() }
+                        }
+                    }
+                }
+            }
+    }
+
+    private fun renderNavigationChip(chip: NativeChip, underlay: Int, backgroundOnly: Boolean): Bitmap {
+        val bitmap = Bitmap.createBitmap(chip.width, chip.height, Bitmap.Config.ARGB_8888)
+        return try {
+            val canvas = Canvas(bitmap)
+            canvas.drawColor(underlay)
+            if (backgroundOnly) {
+                chip.background.setBounds(0, 0, chip.width, chip.height)
+                chip.background.draw(canvas)
+            } else chip.draw(canvas)
+            bitmap
+        } catch (failure: Throwable) { bitmap.recycle(); throw failure }
+    }
+
     private class Fixture(val context: Context, labels: List<String>, direction: Int) {
         val ids = labels.indices.map { "destination-$it" }
         val requests = mutableListOf<String>()
@@ -194,7 +282,11 @@ class GalleryNavigationBarIntegrationTest {
             Rect(0, 0, viewport.width, viewport.height).contains(visible))
     }
 
-    private fun main(action: () -> Unit) = InstrumentationRegistry.getInstrumentation().runOnMainSync(action)
+    private fun main(action: () -> Unit) {
+        var result: Result<Unit>? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { result = runCatching(action) }
+        checkNotNull(result).getOrThrow()
+    }
 
     private companion object {
         fun exact(size: Int) = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY)

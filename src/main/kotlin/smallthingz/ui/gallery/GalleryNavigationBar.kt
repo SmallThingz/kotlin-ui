@@ -6,6 +6,7 @@ import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import smallthingz.ui.components.ChoiceArrangement
 import smallthingz.ui.components.NativeChoice
+import smallthingz.ui.components.NativeChoiceColor
 import smallthingz.ui.components.NativeChoiceStyle
 import smallthingz.ui.components.NativeTabBar
 import smallthingz.ui.components.NativeTextRole
@@ -27,17 +28,17 @@ class GalleryNavigationBar(
         horizontalPaddingDp = 4f,
         verticalPaddingDp = 6f,
         outlined = false,
-        selectedFill = false,
+        selectedFill = true,
         iconAbove = true,
         iconSizeDp = 24f,
         iconGapDp = 4f,
         textStyle = GalleryDesign.textStyle(NativeTypographyRole.LABEL_MEDIUM),
         normalTextRole = NativeTextRole.MUTED,
-        selectedTextRole = NativeTextRole.CONTENT,
+        selectedTextRole = null, // Shared contrast-aware ink for the selected surface.
         normalIconRole = NativeTextRole.MUTED,
-        selectedIconRole = NativeTextRole.ACCENT,
-        indicatorHeightDp = 3f,
-        indicatorWidthDp = 24f,
+        selectedIconRole = null,
+        focusedSelectedOutline = NativeChoiceColor(NativeTextRole.ON_ACCENT),
+        indicatorHeightDp = 0f,
     ), gapDp = 0f, arrangement = ChoiceArrangement.EqualWidth,
         fixedColumns = destinations.size, maxColumns = destinations.size,
         fillRowHeight = true, activateOnFocusNavigation = false)
