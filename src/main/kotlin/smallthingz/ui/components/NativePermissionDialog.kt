@@ -66,10 +66,43 @@ data class NativePermissionDialogRecipe(
 }
 
 /**
- * Single-presentation permission window. Programmatic dismissal is silent; accepted cancellation is
- * delivered synchronously once, so a queued callback cannot consume a later request. Main thread only.
+ * Single-presentation permission window. Programmatic dismissal is silent and retires pending
+ * cancellation; user cancellation belongs only to the current presentation. Main thread only.
  */
-class NativePermissionDialog(
+class NativePermissionDialog internal constructor(private val presentation: NativePermissionPresentation) {
+    constructor(
+        activity: Activity,
+        colors: NativeColorScheme,
+        icon: Drawable?,
+        appName: CharSequence,
+        summary: CharSequence,
+        denyLabel: CharSequence,
+        allowLabel: CharSequence,
+        scopeBody: View? = null,
+        onDeny: () -> Unit,
+        onAllow: () -> Unit,
+        onCancel: () -> Unit,
+        appearance: NativeUiAppearance = NativeUiAppearance.Default,
+        recipe: NativePermissionDialogRecipe = appearance.modals.permissionDialog,
+        showDragHandle: Boolean = false,
+    ) : this(NativePermissionWindow(activity, colors, icon, appName, summary, denyLabel, allowLabel,
+        scopeBody, onDeny, onAllow, onCancel, appearance, recipe, showDragHandle))
+
+    // Retain the legacy window field used by the existing in-module native-window contract tests.
+    @Suppress("unused")
+    private val dialog: Dialog? = (presentation as? NativePermissionWindow)?.dialog
+
+    fun show() = presentation.show()
+    fun showAtBottom() = presentation.showAtBottom()
+    fun showAtEdge(edge: NativeDialogEdge) = presentation.showAtEdge(edge)
+    fun dismiss() = presentation.dismiss()
+    fun setBusy(value: Boolean) = presentation.setBusy(value)
+    fun setAllowEnabled(enabled: Boolean) = presentation.setAllowEnabled(enabled)
+    fun setProgress(message: CharSequence?) = presentation.setProgress(message)
+    fun setError(message: CharSequence?) = presentation.setError(message)
+}
+
+private class NativePermissionWindow(
     activity: Activity,
     private val colors: NativeColorScheme,
     icon: Drawable?,
@@ -84,7 +117,7 @@ class NativePermissionDialog(
     private val appearance: NativeUiAppearance = NativeUiAppearance.Default,
     private val recipe: NativePermissionDialogRecipe = appearance.modals.permissionDialog,
     showDragHandle: Boolean = false,
-) {
+) : NativePermissionPresentation {
     private val hostWindow = activity.window
     private val host = hostWindow.decorView
     private val density = Density(activity)
@@ -111,7 +144,7 @@ class NativePermissionDialog(
         setLeadingIcon(smallthingz.ui.icons.MaterialRoundedIconDrawable(
             smallthingz.ui.icons.MaterialRoundedIcon.Close, density.density, colors.ink))
     }
-    private val dialog: Dialog = object : Dialog(activity, recipe.windowTheme) {
+    val dialog: Dialog = object : Dialog(activity, recipe.windowTheme) {
         override fun cancel() {
             if (busy || !ownsInputFocus()) return
             dismiss()
@@ -314,13 +347,13 @@ class NativePermissionDialog(
         window.setLayout((available - dp(recipe.windowInsetDp * 2)).coerceIn(1, dp(recipe.maxWidthDp)), WRAP_CONTENT)
     }
 
-    fun showAtBottom() {
+    override fun showAtBottom() {
         if (!shown) recipe.placeAtBottom(window)
         show()
     }
 
     /** Edge placement is opt-in so callers keep their existing consent flow by default. */
-    fun showAtEdge(edge: NativeDialogEdge) {
+    override fun showAtEdge(edge: NativeDialogEdge) {
         if (!shown) {
             recipe.placeAtEdge(window, edge)
             if (recipe.windowAnimations == null) {
@@ -331,7 +364,7 @@ class NativePermissionDialog(
         show()
     }
 
-    fun show() {
+    override fun show() {
         check(!ended) { "Create a new permission dialog for each presentation" }
         if (shown) return
         shown = true
@@ -346,10 +379,10 @@ class NativePermissionDialog(
         }
     }
 
-    fun dismiss() = dialog.dismiss()
+    override fun dismiss() = dialog.dismiss()
 
     /** Busy disables both actions and Back; the supplied scope view stays caller-owned. */
-    fun setBusy(value: Boolean) {
+    override fun setBusy(value: Boolean) {
         busy = value
         escapeDown = false
         dialog.setCancelable(!value)
@@ -365,18 +398,18 @@ class NativePermissionDialog(
     }
 
     /** Retains Allow availability across busy transitions. */
-    fun setAllowEnabled(enabled: Boolean) {
+    override fun setAllowEnabled(enabled: Boolean) {
         allowEnabled = enabled
         bindActions()
     }
 
     /** Optional localized progress supplied by the consumer, without replacing either action label. */
-    fun setProgress(message: CharSequence?) {
+    override fun setProgress(message: CharSequence?) {
         progress.setText(message?.toString().orEmpty())
         progress.visibility = if (message.isNullOrEmpty()) View.GONE else View.VISIBLE
     }
 
-    fun setError(message: CharSequence?) {
+    override fun setError(message: CharSequence?) {
         error.setText(message?.toString().orEmpty())
         error.visibility = if (message.isNullOrEmpty()) View.GONE else View.VISIBLE
         if (error.visibility == View.VISIBLE) error.doOnLayout {

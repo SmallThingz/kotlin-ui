@@ -160,7 +160,10 @@ class NativeActionSheet(
     private val handle=NativeSheetDragHandle(context,style,{pointer.inputRoot},runtime,::handleClick,::requestAnimatedDismiss)
     private val appContent=NativeSheetContent(context,style,title,{pointer.inputRoot},closeIcon,::closeFromTitle)
     private val surface=NativeSheetSurface(context,style,handle,appContent,contentBackground,entryEdge)
-    private val scrim=SheetScrim(context,style.palette.scrim,style.recipe.scrimAlpha,::requestAnimatedDismiss)
+    private var dismissOnScrimTap=true
+    private val scrim=SheetScrim(context,style.palette.scrim,style.recipe.scrimAlpha) {
+        if(dismissOnScrimTap)requestAnimatedDismiss()
+    }
     private val root:SheetRoot=SheetRoot(context,pointer,state,surface,scrim,style.textDensity.density,
         style.recipe.maxWidthDp,::measured,::applyMotion,entryEdge) { acceptsContentActions }
     private val dragChannel=NativeActionSheetDragChannel(state,runtime.scope,::settleToDismiss,::returnAfterCancelledDrag,entryEdge)
@@ -352,6 +355,15 @@ class NativeActionSheet(
             applyMotion()
         }
     }
+    /** Consent windows can retain their outside-tap policy without replacing the sheet material. */
+    internal fun setDismissOnScrimTap(enabled: Boolean) {
+        dismissOnScrimTap = enabled
+        scrim.isEnabled = enabled
+        scrim.isClickable = enabled
+        scrim.importantForAccessibility = if (enabled) View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            else View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+
     val contentView:View get()=surface
     val hasCurrentWindowFocus get()=root.isAttachedToWindow&&root.hasWindowFocus()
     val canAcceptSensitiveAction get()=!disposed&&hasCurrentWindowFocus&&
