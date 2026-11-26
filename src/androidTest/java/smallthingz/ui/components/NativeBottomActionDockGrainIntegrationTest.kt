@@ -46,7 +46,7 @@ class NativeBottomActionDockGrainIntegrationTest {
                     dock.applySafeInsets(Insets.of(16, 0, 24, 32))
                     layout(dock)
                     assertEquals(28f, dock.topCornerRadiusPx, 0f)
-                    assertEquals(64, dock.minimumActionHeightPx)
+                    assertEquals(if (legacy) 48 else 64, dock.minimumActionHeightPx)
                     assertEquals(16 + gutter, button.left)
                     assertEquals(24 + gutter, dock.width - button.right)
                     assertEquals(dock.width - 40 - 2 * gutter, button.width)

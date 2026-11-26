@@ -203,8 +203,7 @@ open class ReverbBrowserPanelSettings(context: Context, private var theme: Rever
     private val heading = theme.paragraph(context, title, theme.appearance.toolbars.centeredTitleRole).apply {
         ViewCompat.setAccessibilityHeading(this, true)
     }
-    private val toolbar = ReverbTitledTopBarLayout(context, theme.density.density, theme.palette, back, heading,
-        draftActions, style = theme.appearance.toolbars)
+    private val toolbar = browserPanelToolbar(context, theme, back, heading, draftActions)
 
     /** Repaint in place without replaying draft bindings, selections or focus handoff. */
     fun bindTheme(theme: ReverbTheme) {

@@ -1,0 +1,20 @@
+{
+  "original_path": "/workspace/.tmp/control-council-browser-memory-20261127/shared-current/src/androidTest/java/smallthingz/ui/common/CredentialFieldGroupIntegrationTest.kt",
+  "original_sha256": "663ee09cee97b9447ef487556c84c8dfb17525664520fe9888653dcad021e908",
+  "original_method": "rootDispatchRoutesRevealMarginsWithoutEditingAcrossResizeRtlAndHiddenActions",
+  "original_method_sha256": "0182caf24919e7957e087f002007fd8913ef24aefa8e825aa1a7d9d6137f8f1b",
+  "adaptations": [
+    "InstrumentationRegistry lifecycle replaced by real attached Robolectric Activity; runOnMainSync executes on test main thread",
+    "Intent activity class is plain Activity; no app launched",
+    "awaitDraw draw latch replaced synchronous real measure/layout",
+    "Original method input dispatch, assertions and all seven helper bodies retained"
+  ],
+  "test_source_sha256": "ddc4ca6b5bf6656a7b35d7ad8e86b5d2f4e9365bcd8fa8132fce8bdb29617c54",
+  "final_test_source_sha256": "c616cafaae33eee2f8bb3f47cbe5d0cccb713a589de4024cc6c381c5f6af5811",
+  "additional_assertions": [
+    "Left/right margins for all3actions; top/bottom COPY/REROLL",
+    "40dpvisual24dpglyph for eachaction",
+    "Prior editor focus/Editable/selection2..7/no new pointer after each edge",
+    "Root ACTION_CANCEL for eachaction eachlayout; no callback/editor event"
+  ]
+}

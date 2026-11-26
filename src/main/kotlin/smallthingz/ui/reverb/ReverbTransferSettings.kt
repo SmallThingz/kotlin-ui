@@ -2,14 +2,11 @@ package smallthingz.ui.reverb
 
 import android.graphics.Path
 import android.view.View
-import android.widget.FrameLayout
 import smallthingz.ui.components.CachedPathIconDrawable
 import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.NativePathIconMask
 import smallthingz.ui.components.NativeSettingsRow
 import smallthingz.ui.components.NativeSettingsRowStyle
-import smallthingz.ui.text.NativeTypographyRole
-import kotlin.math.roundToInt
 
 enum class ReverbTransferDirection { IMPORT, EXPORT }
 data class ReverbTransferAction<K : Any>(
@@ -19,6 +16,9 @@ data class ReverbTransferAction<K : Any>(
     val direction: ReverbTransferDirection,
     val enabled: Boolean,
 )
+
+/** Ongoing work or recovery belongs to its operation row, never a terminal-result footer. */
+data class ReverbTransferProgress<K : Any>(val id: K, val message: String)
 
 /** Semantic rows installed into the host's existing shared Settings section.
  * The host owns disclosures, document pickers, transfers and all authorization decisions.
@@ -36,19 +36,9 @@ class ReverbTransferSettings<K : Any>(
     private val icons = initial.associate { action ->
         action.id to CachedPathIconDrawable({ transferGlyph(action.direction) }, theme.density.density, theme.palette.muted)
     }
-    private val status = createReverbSupportingParagraph(group.context, "", NativeTypographyRole.BODY_SMALL, theme).apply {
-        accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
-    }
-    private val statusHost = FrameLayout(group.context).apply {
-        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        val side = (recipe.horizontalPaddingDp * theme.density.density).roundToInt()
-        val vertical = (recipe.verticalPaddingDp * theme.density.density).roundToInt()
-        setPaddingRelative(side, vertical, side, vertical)
-        addView(status, FrameLayout.LayoutParams(-1, -2))
-    }
     private var closed = false
     private var bound: List<ReverbTransferAction<K>>? = null
-    private var boundMessage: String? = null
+    private var boundProgress: ReverbTransferProgress<K>? = null
     private val focusLease = cancelInformationInputOnFocusLoss(group) { rows.values.forEach(View::cancelPendingInputEvents) }
 
     init {
@@ -60,30 +50,31 @@ class ReverbTransferSettings<K : Any>(
             rows[action.id] = row
             group.addRow(row, NativeGroupLayout.LayoutParams(-1, -2).apply { dividerTop = index > 0 })
         }
-        group.addRow(statusHost, NativeGroupLayout.LayoutParams(-1, -2))
-        bind(initial, "")
+        bind(initial)
     }
 
     /** Anchor access is for the host's secure confirmation window, never for presentation changes. */
     fun anchor(id: K): View = checkNotNull(rows[id])
 
-    fun bind(values: List<ReverbTransferAction<K>>, message: String) {
-        if (closed || (bound == values && boundMessage == message)) return
+    fun bind(values: List<ReverbTransferAction<K>>, progress: ReverbTransferProgress<K>? = null) {
+        if (closed || (bound == values && boundProgress == progress)) return
         require(values.map { it.id } == rows.keys.toList() && values.all { directions[it.id] == it.direction }) {
             "Transfer action identities and directions must remain stable."
         }
+        require(progress == null || (progress.id in rows && progress.message.isNotBlank()))
         bound = values.toList()
-        boundMessage = message
+        boundProgress = progress
         val version = actions.bind(values.filter { it.enabled }.map { it.id })
         values.forEach { action ->
             val row = checkNotNull(rows[action.id])
-            row.bind(action.title, action.detail, icons.getValue(action.id), onClick = if (action.enabled) ({
+            val operation = progress?.takeIf { it.id == action.id }
+            row.detailView.accessibilityLiveRegion = if (operation == null) View.ACCESSIBILITY_LIVE_REGION_NONE
+                else View.ACCESSIBILITY_LIVE_REGION_POLITE
+            row.bind(action.title, operation?.message ?: action.detail, icons.getValue(action.id), onClick = if (action.enabled) ({
                 if (actions.admits(version, action.id) && reverbInformationInputAllowed(row) &&
                     actions.admits(version, action.id)) onAction(action.id)
             }) else null)
         }
-        status.setText(message)
-        statusHost.visibility = if (message.isEmpty()) View.GONE else View.VISIBLE
     }
 
     override fun close() {
@@ -91,10 +82,10 @@ class ReverbTransferSettings<K : Any>(
         closed = true
         focusLease.close()
         bound = null
+        boundProgress = null
         actions.close()
         rows.values.forEach { it.cancelPendingInputEvents(); group.removeRow(it) }
         rows.clear()
-        group.removeRow(statusHost)
     }
 }
 

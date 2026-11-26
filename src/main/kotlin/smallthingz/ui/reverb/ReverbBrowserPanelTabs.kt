@@ -25,6 +25,8 @@ import smallthingz.ui.R
 import smallthingz.ui.components.NativeForeground
 import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.NativeMaterialButtonView
+import smallthingz.ui.components.NativeTextStyle
+import smallthingz.ui.components.componentTypography
 import smallthingz.ui.util.closePreservingPrimaryFailure
 import kotlin.math.roundToInt
 
@@ -160,8 +162,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private var theme
         addView(grid, FrameLayout.LayoutParams(-1, -2))
     }
     private val footer = ReverbBottomActionDock(context, theme, newTab)
-    private val toolbar = ReverbTitledTopBarLayout(context, theme.density.density, theme.palette, back, heading,
-        Space(context), style = theme.appearance.toolbars)
+    private val toolbar = browserPanelToolbar(context, theme, back, heading, Space(context))
 
     /** Retain keyed cards, previews, order, scroll and independent accessibility/keyboard focus. */
     fun bindTheme(theme: ReverbTheme) {
@@ -433,33 +434,66 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private var theme
         private var closed = false
         private val recipe = theme.appearance.groupSurfaces.settingsChoices
         private val surface = recipe.create(context, ReverbTextSurface::invalidate).also { recipe.bind(it, theme.palette) }
+        // Paint remains clipped by the rounded surface; the standalone close owner must not
+        // inherit that surface's pointer clip, which rejects its outer finger corner.
+        private val cardContent = object : FrameLayout(context) {
+            private val headerBounds = Rect()
+            override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+                super.onLayout(changed, l, t, r, b)
+                headerBounds.set(0, 0, header.width, header.height)
+                offsetDescendantRectToMyCoords(header, headerBounds)
+                val left = if (layoutDirection == View.LAYOUT_DIRECTION_RTL) headerBounds.left
+                    else headerBounds.right - close.measuredWidth
+                val top = headerBounds.top + (headerBounds.height() - close.measuredHeight) / 2
+                close.layout(left, top, left + close.measuredWidth, top + close.measuredHeight)
+            }
+        }
         val gesture = ReverbBrowserPanelSwipe(context, { it * .35f },
             canSwipe = { !closed && onTabAction != null && !reorder.dragging && content.enabled &&
                 surface.browserPanelAdmitsInput() },
-            onDrag = { surface.translationX = it }, onSwipe = { swipeCloseRequested() })
+            onDrag = { cardContent.translationX = it }, onSwipe = { swipeCloseRequested() })
         val row = ReverbBrowserPanelSettingRow(context, theme, ReverbBrowserPanelSetting(initial.title, actionId = "select")) {
             dispatch(ReverbBrowserPanelTabAction.SELECT)
         }.apply {
             titleView.setLines(1)
             titleView.ellipsize = TextUtils.TruncateAt.END
-            // A tab title needs less inset than a settings row. The adjacent close slot
-            // already supplies its own visual inset inside a full 48dp touch target.
-            setPaddingRelative(dp(8), dp(4), 0, dp(4))
-            minimumHeight = dp(48)
         }
         // The input/semantic owner must fill the slot; a 48dp wrapper around a 40dp
-        // ActionVisual does not receive DOWN in its outer band. The glyph stays 24dp.
+        // ActionVisual does not receive DOWN in its outer band. Only the glyph is compacted.
         private val close = ReverbStandardIconButtonView(context, environment,
-            { this@ReverbBrowserPanelTabs }, actionSizeDp = 48f)
+            { this@ReverbBrowserPanelTabs }, actionSizeDp = 48f).apply {
+            visual.glyph.scaleX = 20f / 24f
+            visual.glyph.scaleY = 20f / 24f
+        }
+        private val titleStyle = NativeTextStyle(14f, weight = 500)
+        private var titleDensity = Float.NaN
+        private var titleFontScale = Float.NaN
+        private fun bindTitleGeometry(force: Boolean = false) {
+            val density = resources.displayMetrics.density
+            val fontScale = resources.configuration.fontScale
+            if (!force && titleDensity == density && titleFontScale == fontScale) return
+            titleDensity = density
+            titleFontScale = fontScale
+            // Retain settings-row input/ink ownership, with compact tab typography. Reapply
+            // after configuration/appearance binding, which can restore the settings recipe.
+            row.titleView.applyStyle(titleStyle)
+            row.titleView.componentTypography(titleStyle)
+            row.setPaddingRelative(dp(8), dp(2), 0, dp(2))
+            row.minimumHeight = dp(48)
+        }
         private val moveActions = mutableListOf<Int>()
         fun ownsAccessibilityFocus(): Boolean = hasAccessibilityFocus(row) || hasAccessibilityFocus(close)
-        private val header = FrameLayout(context).apply {
+        private val header = object : FrameLayout(context) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                bindTitleGeometry()
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            }
+        }.apply {
             // Keep SELECT and CLOSE separate. Reserve the close target before measuring the
             // single-line title, rather than overlaying it or stacking it below long text.
             addView(row, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_VERTICAL).apply {
                 marginEnd = dp(48)
             })
-            addView(close, FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER_VERTICAL or Gravity.END))
         }
         private val image = object : ImageView(context) {
             private val topFit = Matrix()
@@ -508,8 +542,10 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private var theme
             close.visual.filterTouchesWhenObscured = true
             close.visual.background = NativeForeground.foregroundBackground(theme.palette.pageControls)
             surface.addRow(body, NativeGroupLayout.LayoutParams(-1, -2))
-            gesture.addView(surface, FrameLayout.LayoutParams(-1, -2))
-            surface.setOnDragListener { _, event ->
+            cardContent.addView(surface, FrameLayout.LayoutParams(-1, -2))
+            cardContent.addView(close, FrameLayout.LayoutParams(dp(48), dp(48), Gravity.TOP or Gravity.END))
+            gesture.addView(cardContent, FrameLayout.LayoutParams(-1, -2))
+            cardContent.setOnDragListener { _, event ->
                 val key = reorder.source(event.localState)
                 when (event.action) {
                     DragEvent.ACTION_DRAG_STARTED -> key != null && !closed && content.enabled && onTabMove != null
@@ -545,7 +581,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private var theme
                 val token = reorder.begin(key) ?: return@setOnLongClickListener false
                 dragSource = row
                 gesture.cancelBrowserPanelInput()
-                val started = try { row.startDragAndDrop(null, View.DragShadowBuilder(surface), token, 0) }
+                val started = try { row.startDragAndDrop(null, View.DragShadowBuilder(cardContent), token, 0) }
                 catch (failure: RuntimeException) { cancelReorder(); throw failure }
                 if (!started) cancelReorder()
                 started
@@ -581,6 +617,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private var theme
             val entry = snapshot ?: return
             gesture.retireForAppearanceChange()
             row.bindTheme(theme)
+            bindTitleGeometry(force = true)
             surface.setSurfacePreset(theme.palette.surfacePreset)
             surface.setPaletteImmediately(recipe.fillColor(theme.palette),
                 if (entry.current) theme.palette.primary else recipe.borderColor(theme.palette))
@@ -636,7 +673,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private var theme
             moveActions.clear()
             row.setOnLongClickListener(null)
             row.isLongClickable = false
-            surface.setOnDragListener(null)
+            cardContent.setOnDragListener(null)
             // Preview ownership stays with the host; release references even if input retirement throws.
             preview.setOnClickListener(null)
             var failure = closePreservingPrimaryFailure(null) { gesture.cancelBrowserPanelInput() }
