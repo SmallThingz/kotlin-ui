@@ -87,9 +87,9 @@ class NativeThemeSelectorIntegrationTest {
         NativeThemeMode.entries.forEach { selected ->
             selector.bind(selected, reboundPalette, density, resolver)
             assertSame(title, selector.getChildAt(0))
-            val titleNode = checkNotNull(title.createAccessibilityNodeInfo())
-            try { assertTrue("Rebound Theme title remains an accessibility heading", titleNode.isHeading) }
-            finally { titleNode.recycle() }
+            // This fixture is detached: platform node initialization requires an attached View.
+            // Check the retained heading property here; exported node semantics need a window.
+            assertTrue("Rebound Theme title remains an accessibility heading", title.isAccessibilityHeading)
             assertSame(surface, capsule.getChildAt(0))
             NativeThemeMode.entries.forEachIndexed { index, mode ->
                 assertSame(children[index], row.choiceView(mode.name))
