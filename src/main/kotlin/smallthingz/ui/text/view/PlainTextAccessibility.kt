@@ -160,14 +160,12 @@ class PlainTextAccessibilityWindowScope(private val root: View) {
                 NativePlainTextSegments.ParagraphTextSegmentIterator.getInstance().apply { initialize(text) }
             AccessibilityNodeInfo.MOVEMENT_GRANULARITY_LINE -> {
                 val paragraph = snapshot.originalSemanticsLayout() ?: return null
-                NativePlainTextSegments.LineTextSegmentIterator.getInstance().apply { initialize(text, paragraph) }
+                NativePlainTextSegments.LineTextSegmentIterator(text, paragraph)
             }
             AccessibilityNodeInfo.MOVEMENT_GRANULARITY_PAGE -> {
                 val paragraph = snapshot.originalSemanticsLayout() ?: return null
                 val geometry = snapshot.geometry() ?: return null
-                NativePlainTextSegments.PageTextSegmentIterator.getInstance().apply {
-                    initialize(text, paragraph, geometry)
-                }
+                NativePlainTextSegments.PageTextSegmentIterator(text, paragraph, geometry)
             }
             else -> null
         }

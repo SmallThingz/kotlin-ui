@@ -333,26 +333,17 @@ internal class NativePlainTextSegments {
         }
     }
 
-    class LineTextSegmentIterator private constructor() : AbstractTextSegmentIterator() {
-        companion object {
-            private var lineInstance: LineTextSegmentIterator? = null
+    // Shaped layouts belong to one traversal request, so line and page iterators are request-local.
+    class LineTextSegmentIterator(
+        text: String,
+        private val layoutResult: MultiParagraph,
+    ) : AbstractTextSegmentIterator() {
+        private companion object {
             private val DirectionStart = ResolvedTextDirection.Rtl
             private val DirectionEnd = ResolvedTextDirection.Ltr
-
-            fun getInstance(): LineTextSegmentIterator {
-                if (lineInstance == null) {
-                    lineInstance = LineTextSegmentIterator()
-                }
-                return lineInstance as LineTextSegmentIterator
-            }
         }
 
-        private lateinit var layoutResult: MultiParagraph
-
-        fun initialize(text: String, layoutResult: MultiParagraph) {
-            this.text = text
-            this.layoutResult = layoutResult
-        }
+        init { initialize(text) }
 
         override fun following(current: Int): IntArray? {
             val textLength = text.length
@@ -420,29 +411,17 @@ internal class NativePlainTextSegments {
     }
 
     // TODO(b/27505408): A11y movement by granularity page not working in edittext.
-    class PageTextSegmentIterator private constructor() : AbstractTextSegmentIterator() {
-        companion object {
-            private var pageInstance: PageTextSegmentIterator? = null
+    class PageTextSegmentIterator(
+        text: String,
+        private val layoutResult: MultiParagraph,
+        private val node: PlainTextAccessibilityGeometry,
+    ) : AbstractTextSegmentIterator() {
+        private companion object {
             private val DirectionStart = ResolvedTextDirection.Rtl
             private val DirectionEnd = ResolvedTextDirection.Ltr
-
-            fun getInstance(): PageTextSegmentIterator {
-                if (pageInstance == null) {
-                    pageInstance = PageTextSegmentIterator()
-                }
-                return pageInstance as PageTextSegmentIterator
-            }
         }
 
-        private lateinit var layoutResult: MultiParagraph
-        private lateinit var node: PlainTextAccessibilityGeometry
-
-
-        fun initialize(text: String, layoutResult: MultiParagraph, node: PlainTextAccessibilityGeometry) {
-            this.text = text
-            this.layoutResult = layoutResult
-            this.node = node
-        }
+        init { initialize(text) }
 
         override fun following(current: Int): IntArray? {
             val textLength = text.length
