@@ -27,7 +27,11 @@ import kotlin.math.roundToInt
 @RunWith(AndroidJUnit4::class)
 class NativeAnchoredDropdownInertiaIntegrationTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
-    private fun main(action: () -> Unit) = instrumentation.runOnMainSync(action)
+    private fun main(action: () -> Unit) {
+        var result: Result<Unit>? = null
+        instrumentation.runOnMainSync { result = runCatching(action) }
+        checkNotNull(result).getOrThrow()
+    }
 
     private class Fixture(val activity: Activity, val root: FrameLayout, val anchor: View,
         val owner: NativeAnchoredDropdown, val optionCount: Int) {
@@ -148,9 +152,10 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
                                     assertEquals(wheel.width - expectedStroke / 2f, it.right, .001f)
                                 }
                             }
-                            fun rows() = (0 until wheel.childCount).map { index -> wheel.getChildAt(index).let {
+                            fun rows() = (0 until wheel.childCount).map(wheel::getChildAt)
+                                .filterIsInstance<NativeDropdown<*>>().map {
                                 listOf(it.left.toFloat(), it.top.toFloat(), it.right.toFloat(), it.bottom.toFloat(), it.translationY)
-                            } }
+                            }
                             val defaultWidth = popup.outlineWidthDp
                             if (dark) assertEquals(1f, checkNotNull(defaultWidth), 0f) else assertNull(defaultWidth)
                             val defaultPath = drawBounds(scale)
@@ -179,7 +184,7 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
         }
     }
 
-    @Test fun accessibilityDismissClosesWithoutSelecting() {
+    @Test fun accessibilityDismissWithoutBrowsingDoesNotRedeliverInitialSelection() {
         for (policy in DropdownSelectionPolicy.values()) scenario(policy) { f ->
             main {
                 val node = f.wheel.createAccessibilityNodeInfo()
@@ -231,10 +236,10 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
         val inset = 5f * f.root.resources.displayMetrics.density
         fun cueY() = if (lower) f.wheel.height - inset else inset
         fun rows() = (0 until f.wheel.childCount).map(f.wheel::getChildAt).filterIsInstance<NativeDropdown<*>>()
-        fun tap(y: Float) {
+        fun tap(y: Float, x: Float = f.wheel.width / 2f) {
             val now = SystemClock.uptimeMillis()
-            touch(f, MotionEvent.ACTION_DOWN, now, now, y)
-            touch(f, MotionEvent.ACTION_UP, now, now + 10, y)
+            touch(f, MotionEvent.ACTION_DOWN, now, now, y, x = x)
+            touch(f, MotionEvent.ACTION_UP, now, now + 10, y, x = x)
         }
         var expected = -1
         await("Clipped option missing under the overflow cue") {
@@ -247,7 +252,8 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
                 expected != f.optionCount / 2
             } else false
         }
-        main { tap(cueY()) }
+        // Keep this a clipped-option test: the center edge is now an independent cue button.
+        main { tap(cueY(), x = f.wheel.width * .25f) }
         assertTrue("A clipped edge tap must only browse", f.selections.isEmpty())
         await("Edge option did not reach the anchor fully visible") {
             f.wheel.isAttachedToWindow && rows().any { row ->
@@ -365,6 +371,7 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
         main {
             // Begin the actual non-tap-indication collapse through Back dispatch.
             val pane = f.wheel.parent as View
+            pane.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BACK))
             pane.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_BACK))
             assertTrue(field(session(f), "closing") as Boolean)
             assertTrue((field(session(f), "reveal") as Float) > 0f)
@@ -378,19 +385,26 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
     @Test fun focusLossDuringExplicitCollapseCannotStrandAnUntouchableModal() =
         scenario(DropdownSelectionPolicy.EXPLICIT, collapseMillis = 150) { f ->
             main {
+                (f.wheel.parent as View).dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN,
+                    android.view.KeyEvent.KEYCODE_BACK))
                 (f.wheel.parent as View).dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP,
                     android.view.KeyEvent.KEYCODE_BACK))
                 assertTrue(field(session(f), "closing") as Boolean)
                 f.wheel.onWindowFocusChanged(false)
-                assertTrue(field(session(f), "disposed") as Boolean)
-                assertFalse(f.wheel.isAttachedToWindow)
                 assertFalse(flinging(f))
+                assertTrue(f.selections.isEmpty())
+            }
+            await("Focus-loss retirement did not finish") { field(session(f), "disposed") as Boolean }
+            main {
+                assertFalse(f.wheel.isAttachedToWindow)
                 assertTrue(f.selections.isEmpty())
             }
         }
 
     @Test fun releaseBeyondSlopWithoutMoveReopensAPartiallyClosingSession() = scenario(collapseMillis = 150) { f ->
         main {
+            (f.wheel.parent as View).dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN,
+                android.view.KeyEvent.KEYCODE_BACK))
             (f.wheel.parent as View).dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP,
                 android.view.KeyEvent.KEYCODE_BACK))
             val oldMotion = checkNotNull(field(session(f), "animator")) as android.animation.ValueAnimator
@@ -422,9 +436,10 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
         touch(f, MotionEvent.ACTION_UP, down, now, start - f.anchor.height)
     }
 
-    private fun touch(f: Fixture, action: Int, down: Long, time: Long, y: Float, pointerId: Int = 0) {
+    private fun touch(f: Fixture, action: Int, down: Long, time: Long, y: Float, pointerId: Int = 0,
+        x: Float = f.wheel.width / 2f) {
         val properties = MotionEvent.PointerProperties().apply { id = pointerId; toolType = MotionEvent.TOOL_TYPE_FINGER }
-        val coordinates = MotionEvent.PointerCoords().apply { x = f.wheel.width / 2f; this.y = y; pressure = 1f; size = 1f }
+        val coordinates = MotionEvent.PointerCoords().apply { this.x = x; this.y = y; pressure = 1f; size = 1f }
         val event = MotionEvent.obtain(down, time, action, 1, arrayOf(properties), arrayOf(coordinates),
             0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
         try { assertTrue(f.wheel.dispatchTouchEvent(event)) } finally { event.recycle() }
@@ -445,11 +460,13 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
         assertEquals(f.optionCount - 1, field(owner, "lastPosition"))
         val above = ceil((anchor - top).toDouble() / height).toInt()
         val below = ceil((bottom - anchor - height).toDouble() / height).toInt()
+        val mountedRows = (0 until f.wheel.childCount).map(f.wheel::getChildAt)
+            .filterIsInstance<NativeDropdown<*>>()
         assertTrue("Mounted rows remain bounded during motion",
-            f.wheel.childCount in 1..minOf(f.optionCount, above + below + 4))
+            mountedRows.size in 1..minOf(f.optionCount, above + below + 4))
         val position = position(f)
-        val indices = (0 until f.wheel.childCount).map { slot ->
-            val logical = position + (f.wheel.getChildAt(slot).translationY - anchor) / height
+        val indices = mountedRows.map { row ->
+            val logical = position + (row.translationY - anchor) / height
             val index = logical.roundToInt()
             assertEquals(index.toFloat(), logical, .01f)
             assertTrue(index in 0 until f.optionCount)
@@ -461,7 +478,7 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
             val y = anchor + (index - position) * height
             if (y < bottom && y + height > top) {
                 assertTrue("Visible logical row $index survives motion", index in indices)
-                val row = f.wheel.getChildAt(indices.indexOf(index))
+                val row = mountedRows[indices.indexOf(index)]
                 assertEquals(height, row.height)
                 assertEquals(f.wheel.width, row.width)
             }

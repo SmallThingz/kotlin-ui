@@ -49,7 +49,7 @@ class EmailDemoPrivateCaptureTest {
             val (common, commonSlot) = open("Sample format")
             val commonInitial = onMain { option(rows(common).single { it.isSelected }) }
             val commonNext = browse(common, commonSlot, commonInitial)
-            cancel(common)
+            dismiss(common)
             check(onMain { hasValue(field("Sample format"), commonNext) })
             val (sort, sortSlot) = open("Message sort")
             val original = "Newest first"
@@ -58,7 +58,7 @@ class EmailDemoPrivateCaptureTest {
             dragAcrossAndReturn(sort)
             check(onMain { sort.isAttachedToWindow && option(rows(sort).single { it.isSelected }) == original })
             val next = browse(sort, sortSlot, original)
-            cancel(sort)
+            dismiss(sort, KeyEvent.KEYCODE_ESCAPE)
             check(onMain { hasValue(field("Message sort"), original) })
             val (again, slot) = open("Message sort")
             check(browse(again, slot, original) == next)
@@ -68,7 +68,7 @@ class EmailDemoPrivateCaptureTest {
             val (archive, _) = open("Archive folder", missing = true)
             check(onMain { rows(archive).map(::option) == listOf("Archive") && rows(archive).none { it.isSelected } })
             capture("email-demo-archive-recovery")
-            cancel(archive)
+            dismiss(archive)
             check(onMain { hasValue(field("Archive folder"), "Old archive") })
             tapRow(open("Archive folder", missing = true).first, "Archive")
             await("read-only recovered folder") { views(decor).any { it.isShown && text(it) == "Archive folder: Archive" }.takeIf { it } }
@@ -92,7 +92,7 @@ class EmailDemoPrivateCaptureTest {
                     check(label.getLocalVisibleRect(visible) && visible.contains(0, 0, label.width, label.height))
                 }
             }
-            cancel(from)
+            dismiss(from)
             val heading = onMain { views(decor).single { it.isShown && text(it) == "Email" } }
             onMain { heading.requestRectangleOnScreen(Rect(0, 0, heading.width, heading.height), true) }
             check(onMain { listOf("team@example.test", "Team update").all { value -> views(decor).any { text(it) == value } } })
@@ -148,11 +148,11 @@ class EmailDemoPrivateCaptureTest {
         }
         return await("next centred wheel value") { rows(wheel).singleOrNull { rect(it) == slot }?.let(::option)?.takeUnless { it == current } }
     }
-    private fun cancel(wheel: ViewGroup) {
+    private fun dismiss(wheel: ViewGroup, keyCode: Int = KeyEvent.KEYCODE_BACK) {
         onMain {
             DemoPrivateDisplay.beforeLocalInput(activity, decor)
-            decor.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK))
-            check(decor.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK)))
+            decor.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+            check(decor.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode)))
         }
         await("wheel dismissed") { true.takeIf { !wheel.isAttachedToWindow && decor.hasWindowFocus() } }
     }

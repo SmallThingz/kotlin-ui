@@ -15,14 +15,26 @@ import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.text.view.ParagraphView
 import smallthingz.ui.util.closePreservingPrimaryFailure
 
-/** A window-scoped group of typed dropdown fields with one expanded field at a time. */
+/**
+ * A window-scoped group of typed dropdown fields with one expanded field at a time.
+ * Outside taps, Back, and accessibility dismissal use [DropdownDismissPolicy.COMMIT] by default.
+ */
 class DropdownGroup internal constructor(
     initialTheme: ControlTheme,
     private val overlayHost: () -> FrameLayout?,
     private val inputAllowed: () -> Boolean,
     internal val selectionPolicy: DropdownSelectionPolicy,
     private val choiceRows: Boolean,
+    private val dismissPolicy: DropdownDismissPolicy,
 ) : AutoCloseable {
+    internal constructor(initialTheme: ControlTheme, overlayHost: () -> FrameLayout?, inputAllowed: () -> Boolean,
+        selectionPolicy: DropdownSelectionPolicy, choiceRows: Boolean) :
+        this(initialTheme, overlayHost, inputAllowed, selectionPolicy, choiceRows, DropdownDismissPolicy.COMMIT)
+
+    constructor(initialTheme: ControlTheme, overlayHost: () -> FrameLayout?, inputAllowed: () -> Boolean,
+        selectionPolicy: DropdownSelectionPolicy, dismissPolicy: DropdownDismissPolicy) :
+        this(initialTheme, overlayHost, inputAllowed, selectionPolicy, false, dismissPolicy)
+
     constructor(initialTheme: ControlTheme, overlayHost: () -> FrameLayout?, inputAllowed: () -> Boolean,
         selectionPolicy: DropdownSelectionPolicy) : this(initialTheme, overlayHost, inputAllowed, selectionPolicy, false)
 
@@ -90,7 +102,7 @@ class DropdownGroup internal constructor(
         current = session
         try {
             val mounted = dropdown.open(anchor, content.copy(options = options,
-                optionLabel = labels::getValue), selectionPolicy, choiceRows, { terminal(session) }) select@{ value ->
+                optionLabel = labels::getValue), selectionPolicy, choiceRows, dismissPolicy, { terminal(session) }) select@{ value ->
                 if (current !== session) return@select
                 if (!inputAllowed() || !anchor.isEnabled || !anchor.isShown) {
                     dismiss()
@@ -126,6 +138,7 @@ class DropdownGroup internal constructor(
         if (current?.field === field) dismiss()
     }
 
+    /** Retire the open field while retaining the last value delivered to the owner. */
     fun dismiss() {
         val session = current ?: return
         var failure = closePreservingPrimaryFailure(null, session.dropdown::close)

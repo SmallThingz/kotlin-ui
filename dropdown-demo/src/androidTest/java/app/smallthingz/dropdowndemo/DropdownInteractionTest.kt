@@ -227,7 +227,7 @@ class DropdownInteractionTest {
         fun assertPresentation(expected: String) {
             instrumentation.runOnMainSync {
                 val wheel = checkNotNull(popupPane(label)).getChildAt(1) as ViewGroup
-                val rows = (0 until wheel.childCount).map { wheel.getChildAt(it) as NativeDropdown<*> }
+                val rows = (0 until wheel.childCount).map(wheel::getChildAt).filterIsInstance<NativeDropdown<*>>()
                 assertEquals(choices.toSet(), rows.map { it.createAccessibilityNodeInfo().contentDescription.toString() }.toSet())
                 for (row in rows) {
                     val name = row.createAccessibilityNodeInfo().contentDescription.toString()
@@ -297,18 +297,30 @@ class DropdownInteractionTest {
         awaitClosed("32-bit float")
     }
 
-    @Test fun topWrapHasThreeUniqueOptionsAndStopsAtItsFiniteEnd() = withActivity {
-        open(it, "Top edge")
-        await("Three choices did not expand") { nodes().count { it.isClickable && it.className?.toString() == "android.widget.Button" } == 3 }
-        val labels = nodes().filter { it.isClickable && it.className?.toString() == "android.widget.Button" }.mapNotNull { it.contentDescription?.toString() }
-        assertEquals(listOf("Three", "One", "Two"), labels)
-        assertTrue(selected("Three"))
-        step(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, "Top edge", "One")
-        assertTrue(selected("One"))
-        step(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, "Top edge", "Two")
-        assertTrue(selected("Two"))
-        assertFalse(checkNotNull(wheel()).performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD))
-        assertTrue(nodes().single { it.contentDescription?.toString() == "Two" && it.isClickable }.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+    @Test fun topEdgeKeepsThreeOptionsInOriginalOrderAndStopsAtBothEnds() = withActivity {
+        val label = "Top edge"
+        val options = listOf("One", "Two", "Three")
+        val backward = AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+        val forward = AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+        val slot = open(it, label)
+        fun optionRows() = nodes().filter { row ->
+            row.isClickable && row.isVisibleToUser && row.className?.toString() == "android.widget.Button" &&
+                row.contentDescription.toString() in options
+        }
+        val initialLabels = optionRows().map { it.contentDescription.toString() }
+        assertTrue(initialLabels.isNotEmpty())
+        assertEquals(options.takeLast(initialLabels.size), initialLabels)
+        assertEquals(slot, selectedBounds("Three"))
+        assertFalse(checkNotNull(wheel()).performAction(forward))
+        step(backward, label, "Two")
+        assertEquals(slot, selectedBounds("Two"))
+        step(backward, label, "One")
+        assertEquals(slot, selectedBounds("One"))
+        assertFalse(checkNotNull(wheel()).performAction(backward))
+        await("Three original choices did not expand") { optionRows().size == options.size }
+        val rows = optionRows()
+        assertEquals(options, rows.map { it.contentDescription.toString() })
+        assertTrue(rows.single { it.contentDescription.toString() == "Two" }.performAction(AccessibilityNodeInfo.ACTION_CLICK))
         awaitClosed("Two")
     }
 
@@ -318,27 +330,22 @@ class DropdownInteractionTest {
         val slot = open(it, label, measureFirstDraw = true)
         val backward = AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
         val forward = AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
-        var index = rates.indexOf(44100)
-        var reverseSteps = 0
-        assertEquals(slot, selectedBounds("${rates[index]} Hz"))
-        // A viewport near an edge can rotate the finite order. Discover its first item through the wheel.
-        while (checkNotNull(wheel()).actionList.any { action -> action.id == backward }) {
-            assertTrue("Wheel never reached its first sample rate", ++reverseSteps < rates.size)
-            index = Math.floorMod(index - 1, rates.size)
+        val initial = rates.indexOf(44100)
+        assertEquals(slot, selectedBounds("${rates[initial]} Hz"))
+        for (index in (initial - 1) downTo 0) {
             val value = "${rates[index]} Hz"
             step(backward, label, value)
             assertEquals(value, slot, selectedBounds(value))
         }
         assertFalse(checkNotNull(wheel()).performAction(backward))
-        repeat(rates.lastIndex) {
-            index = (index + 1) % rates.size
+        for (index in 1..rates.lastIndex) {
             val value = "${rates[index]} Hz"
             step(forward, label, value)
             assertEquals(value, slot, selectedBounds(value))
         }
         assertFalse(checkNotNull(wheel()).performAction(forward))
         tap(slot)
-        awaitClosed("${rates[index]} Hz")
+        awaitClosed("${rates.last()} Hz")
     }
 
     private fun tap(bounds: Rect) {

@@ -18,16 +18,38 @@ Reverb compositions and presets, including `ReverbEnvironment`,
 controls. `smallthingz.ui.zfm.ZfmTheme` delegates to the shared palette,
 modal, and backdrop recipes. See [appearance configuration](appearance-controls.md#defaults-and-explicit-configuration).
 
+### Dropdown selection and dismissal
+
+`DropdownSelectionPolicy` controls delivery before dismissal. `DropdownGroup`
+defaults to `PROGRESSIVE`, which delivers each newly centered choice while
+browsing. `EXPLICIT` lets users browse before activating an option to deliver it.
+
+`DropdownDismissPolicy` applies to both selection modes. Its default, `COMMIT`,
+delivers a changed choice on an outside tap, Back, or the accessibility dismiss
+action. An unavailable stored value is kept if the user dismisses without
+choosing or browsing to an available option.
+
+For a field that requires separate confirmation, construct the group with
+`dismissPolicy = DropdownDismissPolicy.CANCEL` alongside its selection policy.
+This discards the pending choice on those dismissal actions and preserves any
+changes already delivered in progressive mode. Escape discards pending choices
+under either policy. Use `dismiss()` or `close()` for lifecycle cleanup, which
+also discards pending choices.
+
+The callback delivers a field value to its owner for rebinding. In Reverb
+Settings this updates the draft. The screen's Done action still owns saving the
+settings.
+
 ### Email
 
 `EmailDropdownGroup` retains one anchored choice at a time in the window's
 unscrolled `FrameLayout`. Pass `ControlTheme.resolve(context, dark)`, the overlay
 host and an input-admission callback. Bind each field with `DropdownContent`,
 using stable values and localized labels. Dragging, arrow keys and accessibility
-scroll actions browse choices. Activating a row or pressing Enter on the
-centered choice delivers the value. Back, Escape and outside dismissal leave the
-owner's value intact. An unavailable stored value can be displayed and replaced
-with an available choice, including a single remaining option.
+scroll actions browse choices using `EXPLICIT`. The group uses the default
+dismiss policy above. Activating a row or pressing Enter on the centered choice
+also delivers the choice. An unavailable stored value can be displayed and
+replaced with an available choice, including a single remaining option.
 
 Email values wrap to four lines. The field reserves room for its tallest option
 at the actual field width, keeping the open wheel aligned to its trigger.
@@ -36,8 +58,7 @@ Longer values end in an ellipsis and retain the complete accessibility label.
 Rebind the authoritative value after accepting a change. Dismiss the group
 when the screen stops. Close the field when its row retires and close the group
 with the owning window. Supply a new `ControlTheme` on a configuration or theme
-change. Common's default `DropdownGroup` continues to report each centered value
-for progressive controls such as Reverb audio choices.
+change.
 
 `EmailComposerFields` joins caller-supplied recipient rows with an editable
 Subject. Its `subjectEditor` retains Android text input, selection and IME

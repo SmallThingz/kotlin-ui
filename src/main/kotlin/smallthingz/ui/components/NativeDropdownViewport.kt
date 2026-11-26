@@ -16,7 +16,7 @@ internal class NativeDropdownViewport(
     val rowsAbove: Float = (anchorTop - top).toFloat() / rowHeight
     val rowsBelow: Float = (bottom - anchorTop - rowHeight).toFloat() / rowHeight
 
-    // Short lists use whole slots, avoiding unnecessary rotation into a partial edge row.
+    // A short list that fits in whole slots uses a compact whole-slot budget.
     fun slotsAbove(count: Int): Int = slots(rowsAbove, count)
     fun slotsBelow(count: Int): Int = slots(rowsBelow, count)
     private fun slots(space: Float, count: Int): Int =

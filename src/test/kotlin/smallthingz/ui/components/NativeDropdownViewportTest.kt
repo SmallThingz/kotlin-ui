@@ -22,17 +22,21 @@ class NativeDropdownViewportTest {
 
     @Test fun longListReachesExactPixelEdgesIncludingFractionalRows() {
         val geometry = NativeDropdownViewport(24, 1032, 451, 80)
-        for (selected in listOf(0, 20, 39)) {
+        fun assertViewport(selected: Int, top: Float, bottom: Float, above: Boolean, below: Boolean) {
             val plan = NativeAnchoredDropdownPlan(40, selected, geometry.slotsAbove(40), geometry.slotsBelow(40))
             val position = plan.selectedPosition.toFloat()
             assertEquals(selected, plan.optionAt(plan.selectedPosition))
-            assertEquals(24f, geometry.revealTop(position, 1f), 0f)
-            assertEquals(1032f, geometry.revealBottom(position, 39, 1f), 0f)
-            assertTrue(geometry.overflowsAbove(position))
-            assertTrue(geometry.overflowsBelow(position, 39))
+            assertEquals(top, geometry.revealTop(position, 1f), 0f)
+            assertEquals(bottom, geometry.revealBottom(position, 39, 1f), 0f)
+            assertEquals(above, geometry.overflowsAbove(position))
+            assertEquals(below, geometry.overflowsBelow(position, 39))
             assertEquals(451f, geometry.revealTop(position, 0f), 0f)
             assertEquals(531f, geometry.revealBottom(position, 39, 0f), 0f)
         }
+
+        assertViewport(0, top = 451f, bottom = 1032f, above = false, below = true)
+        assertViewport(20, top = 24f, bottom = 1032f, above = true, below = true)
+        assertViewport(39, top = 24f, bottom = 531f, above = true, below = false)
     }
 
     @Test fun shortListsStayCompactAndNeverInventOverflow() {

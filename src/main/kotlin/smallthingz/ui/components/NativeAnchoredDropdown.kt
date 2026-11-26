@@ -29,7 +29,9 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import android.widget.OverScroller
+import smallthingz.ui.common.DropdownDismissPolicy
 import smallthingz.ui.common.DropdownSelectionPolicy
+import smallthingz.ui.interaction.view.RowIndication
 import smallthingz.ui.common.canOpen
 import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.text.font.FontFamily
@@ -58,8 +60,8 @@ data class NativeAnchoredDropdownStyle(
 }
 
 /**
- * A window owner for [NativeDropdown] fields. Each option occurs once in the rotated list.
- * A drag can coast after release, then snaps to a slot. In explicit mode a tap on a partial
+ * A window owner for [NativeDropdown] fields. Options retain their original finite order.
+ * Release chooses one row destination and follows one native trajectory to it. In explicit mode a tap on a partial
  * option brings it into view. Tapping a fully visible option selects it and closes the wheel.
  * The caller owns values and must [close] this host with its screen lifetime.
  */
@@ -111,10 +113,19 @@ class NativeAnchoredDropdown(
 
     fun <T> open(anchor: View, content: NativeDropdownContent<T>, selectionPolicy: DropdownSelectionPolicy,
         onTerminal: () -> Unit, onSelected: (T) -> Unit): Boolean =
-        open(anchor, content, selectionPolicy, false, onTerminal, onSelected)
+        open(anchor, content, selectionPolicy, false, DropdownDismissPolicy.COMMIT, onTerminal, onSelected)
+
+    fun <T> open(anchor: View, content: NativeDropdownContent<T>, selectionPolicy: DropdownSelectionPolicy,
+        dismissPolicy: DropdownDismissPolicy, onTerminal: () -> Unit, onSelected: (T) -> Unit): Boolean =
+        open(anchor, content, selectionPolicy, false, dismissPolicy, onTerminal, onSelected)
 
     internal fun <T> open(anchor: View, content: NativeDropdownContent<T>, selectionPolicy: DropdownSelectionPolicy,
-        choiceRows: Boolean, onTerminal: () -> Unit, onSelected: (T) -> Unit): Boolean {
+        choiceRows: Boolean, onTerminal: () -> Unit, onSelected: (T) -> Unit): Boolean =
+        open(anchor, content, selectionPolicy, choiceRows, DropdownDismissPolicy.COMMIT, onTerminal, onSelected)
+
+    internal fun <T> open(anchor: View, content: NativeDropdownContent<T>, selectionPolicy: DropdownSelectionPolicy,
+        choiceRows: Boolean, dismissPolicy: DropdownDismissPolicy,
+        onTerminal: () -> Unit, onSelected: (T) -> Unit): Boolean {
         close()
         // A terminal callback can synchronously establish a newer session.
         if (sessionIdentity != null || !anchor.isAttachedToWindow || !anchor.isShown || anchor.width <= 0 || anchor.height <= 0) return false
@@ -122,7 +133,7 @@ class NativeAnchoredDropdown(
         val selected = options.indexOf(content.selected)
         if (!content.canOpen(selectionPolicy)) return false
         require(options.distinct().size == options.size) { "Choice identities must be unique" }
-        val session = Session(anchor, content.copy(options = options), selected, selectionPolicy, choiceRows, onSelected, onTerminal)
+        val session = Session(anchor, content.copy(options = options), selected, selectionPolicy, choiceRows, dismissPolicy, onSelected, onTerminal)
         sessionIdentity = session
         dismissCurrent = session::dispose
         try {
@@ -142,29 +153,44 @@ class NativeAnchoredDropdown(
 
     private inner class Session<T>(
         val anchor: View, val content: NativeDropdownContent<T>, val initial: Int,
-        val selectionPolicy: DropdownSelectionPolicy, val choiceRows: Boolean, val select: (T) -> Unit,
+        val selectionPolicy: DropdownSelectionPolicy, val choiceRows: Boolean,
+        val dismissPolicy: DropdownDismissPolicy, val select: (T) -> Unit,
         val onTerminal: () -> Unit,
     ) {
         val origin = IntArray(2).also(anchor::getLocationOnScreen)
         val observed = IntArray(2)
         val root = object : FrameLayout(context) {
             private var confirmationKey = KeyEvent.KEYCODE_UNKNOWN
+            private var dismissKey = KeyEvent.KEYCODE_UNKNOWN
 
             override fun onFocusChanged(gainFocus: Boolean, direction: Int, previous: Rect?) {
                 super.onFocusChanged(gainFocus, direction, previous)
-                if (!gainFocus) confirmationKey = KeyEvent.KEYCODE_UNKNOWN
+                if (!gainFocus) { confirmationKey = KeyEvent.KEYCODE_UNKNOWN; dismissKey = KeyEvent.KEYCODE_UNKNOWN }
             }
 
             override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
                 super.onWindowFocusChanged(hasWindowFocus)
-                if (!hasWindowFocus) confirmationKey = KeyEvent.KEYCODE_UNKNOWN
+                if (!hasWindowFocus) { confirmationKey = KeyEvent.KEYCODE_UNKNOWN; dismissKey = KeyEvent.KEYCODE_UNKNOWN }
+            }
+
+            override fun onDetachedFromWindow() {
+                super.onDetachedFromWindow()
+                // Do not remove this layer recursively inside the host's detach dispatch.
+                retireFromDispatch()
             }
 
             override fun focusSearch(focused: View?, direction: Int): View? =
                 FocusFinder.getInstance().findNextFocus(this, focused, direction) ?: this
             override fun dispatchKeyEvent(event: KeyEvent): Boolean {
                 if (event.keyCode == KeyEvent.KEYCODE_BACK || event.keyCode == KeyEvent.KEYCODE_ESCAPE) {
-                    if (event.action == KeyEvent.ACTION_UP) cancelSelection()
+                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) dismissKey = event.keyCode
+                    if (event.action == KeyEvent.ACTION_UP) {
+                        val accepted = dismissKey == event.keyCode && !event.isCanceled
+                        dismissKey = KeyEvent.KEYCODE_UNKNOWN
+                        if (accepted) {
+                            if (event.keyCode == KeyEvent.KEYCODE_ESCAPE) cancelSelection() else userDismiss()
+                        }
+                    }
                     return true
                 }
                 if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN || event.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
@@ -189,8 +215,41 @@ class NativeAnchoredDropdown(
                 return super.dispatchKeyEvent(event)
             }
         }
-        val overlay = NativeModalOverlay(overlayHost, root, ::cancelSelection)
-        val scrim = View(context).apply { setBackgroundColor(colors.scrim); alpha = 0f; setOnClickListener { cancelSelection() } }
+        private val retirementHandler = checkNotNull(anchor.handler)
+        private val retireAfterDetach = Runnable { if (!disposed) dispose() }
+        val overlay = NativeModalOverlay(overlayHost, root, ::userDismiss)
+        val scrim = object : View(context) {
+            private var pointer = -1
+            private var downX = 0f
+            private var downY = 0f
+            private val slop = ViewConfiguration.get(context).scaledTouchSlop
+            init { setBackgroundColor(colors.scrim); alpha = 0f; setOnClickListener { userDismiss() } }
+            override fun onTouchEvent(event: MotionEvent): Boolean {
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        pointer = event.getPointerId(0); downX = event.x; downY = event.y
+                    }
+                    MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP -> {
+                        val index = event.findPointerIndex(pointer)
+                        if (index < 0 || abs(event.getX(index) - downX) > slop || abs(event.getY(index) - downY) > slop) pointer = -1
+                        var sample = 0
+                        while (pointer >= 0 && sample < event.historySize) {
+                            if (abs(event.getHistoricalX(index, sample) - downX) > slop ||
+                                abs(event.getHistoricalY(index, sample) - downY) > slop) pointer = -1
+                            sample++
+                        }
+                        if (event.actionMasked == MotionEvent.ACTION_UP) {
+                            val accepted = pointer >= 0
+                            pointer = -1
+                            if (accepted) performClick()
+                        }
+                    }
+                    MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_POINTER_UP -> pointer = -1
+                }
+                return true
+            }
+            override fun onCancelPendingInputEvents() { pointer = -1; super.onCancelPendingInputEvents() }
+        }
         val wheel = Wheel()
         val rows = SparseArray<NativeDropdown<T>>()
         private val optionLabels = ArrayList<String>(content.options.size)
@@ -201,9 +260,11 @@ class NativeAnchoredDropdown(
         var position = 0f
         var settled = 0
         var lastPublished = initial
+        var candidatePosition = initial
         var reveal = 0f
         var closing = false
         var disposed = false
+        private var retiring = false
         var animator: ValueAnimator? = null
         var anchorY = 0
         var viewport: NativeDropdownViewport? = null
@@ -219,13 +280,15 @@ class NativeAnchoredDropdown(
         val rowWidth = anchor.width
         private var collapseAfterDraw = false
         private val startCollapse = Runnable {
-            if (closing && !disposed) animate(settled.toFloat(), 0f, style.collapseMillis) {
+            if (closing && !disposed && !retiring) animate(settled.toFloat(), 0f, style.collapseMillis) {
                 if (wheel.pointer < 0) dispose()
             }
         }
+        private var geometryObserver: ViewTreeObserver? = null
         val geometryGuard = ViewTreeObserver.OnPreDrawListener {
             anchor.getLocationOnScreen(observed)
-            if (!anchor.isShown || !anchor.isAttachedToWindow || observed[0] != origin[0] || observed[1] != origin[1]
+            if (!root.isAttachedToWindow || !anchor.isEnabled || !anchor.acceptsNativeInput() ||
+                !anchor.isShown || !anchor.isAttachedToWindow || observed[0] != origin[0] || observed[1] != origin[1]
                 || anchor.width != rowWidth || anchor.height != rowHeight) dispose()
             if (!disposed) {
                 root.getLocationOnScreen(observed)
@@ -239,7 +302,7 @@ class NativeAnchoredDropdown(
         }
         val anchorDetach = object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) = Unit
-            override fun onViewDetachedFromWindow(v: View) = dispose()
+            override fun onViewDetachedFromWindow(v: View) = retireFromDispatch()
         }
 
         fun nearestGroup(): NativeGroupLayout? {
@@ -288,8 +351,14 @@ class NativeAnchoredDropdown(
                 gravity = Gravity.TOP or Gravity.LEFT; leftMargin = x
             }
             overlay.relayout()
-            if (disposed) return
-            anchor.viewTreeObserver.addOnPreDrawListener(geometryGuard)
+            if (disposed || retiring) return
+            if (!anchor.isAttachedToWindow || !root.isAttachedToWindow || anchor.windowToken != root.windowToken) {
+                dispose()
+                return
+            }
+            val observer = anchor.viewTreeObserver
+            geometryObserver = observer
+            observer.addOnPreDrawListener(geometryGuard)
             anchor.addOnAttachStateChangeListener(anchorDetach)
             animate(position, 1f, style.expandMillis) {}
         }
@@ -326,8 +395,24 @@ class NativeAnchoredDropdown(
             }
         }
 
+        private fun liveInput(strictGeometry: Boolean = true): Boolean {
+            if (disposed || retiring || sessionIdentity !== this || !anchor.isAttachedToWindow || !anchor.isShown ||
+                !anchor.isEnabled || !anchor.acceptsNativeInput() || !root.isAttachedToWindow ||
+                !root.hasWindowFocus() || root.parent !== overlayHost || root.windowToken != anchor.windowToken) return false
+            if (!strictGeometry) return true // Pre-draw owns ongoing geometry/inset freshness.
+            anchor.getLocationOnScreen(observed)
+            if (observed[0] != origin[0] || observed[1] != origin[1] || anchor.width != rowWidth || anchor.height != rowHeight) return false
+            root.getLocationOnScreen(observed)
+            if (observed[0] != modalX || observed[1] != modalY || root.width != modalWidth || root.height != modalHeight) return false
+            readSafeEdges()
+            return safeTop == viewport?.top && safeBottom == viewport?.bottom
+        }
+
         fun publish(index: Int, activated: Boolean = false) {
-            if (selectionPolicy == DropdownSelectionPolicy.EXPLICIT && !activated) return
+            if (disposed || retiring || selectionPolicy == DropdownSelectionPolicy.EXPLICIT && !activated) return
+            if (!liveInput(strictGeometry = activated)) { dispose(); return }
+            if (activated) candidatePosition = index
+            if (candidatePosition < 0) return
             val option = plan?.optionAt(index) ?: return
             if (selectedPosition != index) {
                 rows[selectedPosition]?.isSelected = false
@@ -344,24 +429,36 @@ class NativeAnchoredDropdown(
             }
         }
 
-        fun settle(index: Int) {
-            if (closing || disposed || plan == null) return
-            wheel.stopFling()
+        fun settle(index: Int, browsed: Boolean = true) {
+            if (closing || disposed || retiring || plan == null) return
+            wheel.cancelMotion()
             val target = index.coerceIn(0, lastPosition)
+            if (browsed && target != settled) candidatePosition = target
             settled = target
             animate(target.toFloat(), 1f, style.settleMillis) {
                 publish(target)
-                if (!disposed) rows[target]?.announceForAccessibility(optionLabels[checkNotNull(plan).optionAt(target)])
+                if (!disposed && !retiring) rows[target]?.announceForAccessibility(optionLabels[checkNotNull(plan).optionAt(target)])
             }
         }
 
+        fun userDismiss() {
+            if (closing || disposed || retiring) return
+            if (!liveInput()) { dispose(); return }
+            if (dismissPolicy == DropdownDismissPolicy.COMMIT && candidatePosition >= 0) {
+                collapse(candidatePosition)
+            } else cancelSelection()
+        }
+
         fun cancelSelection() {
-            val target = if (selectionPolicy == DropdownSelectionPolicy.EXPLICIT) plan?.selectedPosition ?: settled else settled
+            // A pending keyboard/scroll target that was never delivered is not retained on Escape.
+            // Linear positions are original option indices; keep only the owner's last delivery.
+            candidatePosition = lastPublished
+            val target = if (lastPublished >= 0) lastPublished else plan?.selectedPosition ?: settled
             collapse(target, activated = false)
         }
 
         fun collapse(index: Int, activated: Boolean = true, afterTapIndication: Boolean = false) {
-            if (disposed) return
+            if (disposed || retiring) return
             wheel.cancelMotion()
             wheel.earlyTap = false
             if (closing) { if (reveal == 0f) dispose(); return }
@@ -369,8 +466,8 @@ class NativeAnchoredDropdown(
             closing = true
             val target = index.coerceIn(0, lastPosition)
             settled = target
-            publish(target, activated)
-            if (disposed) return
+            if (activated) publish(target, activated = true)
+            if (disposed || retiring) return
             if (afterTapIndication && ValueAnimator.areAnimatorsEnabled()) {
                 animator?.removeAllListeners()
                 animator?.cancel()
@@ -406,6 +503,15 @@ class NativeAnchoredDropdown(
             }
         }
 
+        private fun retireFromDispatch() {
+            if (disposed || retiring) return
+            retiring = true
+            // Android's child iteration may still own this array. Revoke input now, remove later.
+            wheel.retireMotion()
+            stopAnimation()
+            retirementHandler.post(retireAfterDetach)
+        }
+
         fun dispose() {
             if (disposed) return
             disposed = true
@@ -413,11 +519,14 @@ class NativeAnchoredDropdown(
             val motion = animator
             animator = null
             wheel.removeCallbacks(startCollapse)
+            retirementHandler.removeCallbacks(retireAfterDetach)
             var failure = closePreservingPrimaryFailure(null, wheel::retireMotion)
             failure = closePreservingPrimaryFailure(failure) { motion?.removeAllListeners() }
             failure = closePreservingPrimaryFailure(failure) { motion?.cancel() }
+            val observer = geometryObserver
+            geometryObserver = null
             failure = closePreservingPrimaryFailure(failure) {
-                if (anchor.viewTreeObserver.isAlive) anchor.viewTreeObserver.removeOnPreDrawListener(geometryGuard)
+                if (observer?.isAlive == true) observer.removeOnPreDrawListener(geometryGuard)
             }
             failure = closePreservingPrimaryFailure(failure) { anchor.removeOnAttachStateChangeListener(anchorDetach) }
             for (i in 0 until rows.size()) failure = closePreservingPrimaryFailure(failure, rows.valueAt(i)::close)
@@ -455,13 +564,45 @@ class NativeAnchoredDropdown(
             private var scroller: OverScroller? = null
             private var flinging = false
             private var stopTap = false
+            private var heldIndication: RowIndication? = null
+            private var pressedCue: NativeDropdownOverflowCue? = null
+            private var flingPath: NativeDropdownFlingPath? = null
+            private val previousCue = NativeDropdownOverflowCue(context, -1, density.density, palette.ink, ::stepCue)
+            private val nextCue = NativeDropdownOverflowCue(context, 1, density.density, palette.ink, ::stepCue)
             private var motionGeneration = 0
             private val flingFrame = Runnable { advanceFling() }
             private val revealTop get() = viewport?.revealTop(position, reveal) ?: anchorY.toFloat()
             private val revealBottom get() = viewport?.revealBottom(position, lastPosition, reveal) ?: (anchorY + rowHeight).toFloat()
             private var firstMounted = -1
             private var lastMounted = -1
-            init { setWillNotDraw(false); clipChildren = false; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES }
+            init {
+                setWillNotDraw(false); clipChildren = false; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
+                addView(previousCue); addView(nextCue)
+            }
+
+            private fun stepCue(direction: Int) {
+                if (closing || !liveInput()) return
+                settle((settled + direction).coerceIn(0, lastPosition))
+            }
+
+            private fun clearPress(cancel: Boolean) {
+                val cue = pressedCue
+                pressedCue = null
+                if (cancel) cue?.cancelPress() else cue?.releasePress()
+                val feedback = heldIndication
+                heldIndication = null
+                // Retire only the press; the row's keyboard/hover tokens keep their own lifetime.
+                if (cancel) feedback?.cancel() else feedback?.release()
+            }
+
+            private fun pressRow(index: Int, x: Float, y: Float) {
+                val row = rows[index] ?: return
+                prepareRow(row)
+                heldIndication = (row.foreground as? RowIndication)?.also {
+                    it.setVisible(true, false)
+                    it.press(x, y - row.translationY)
+                }
+            }
 
             fun stopFling() {
                 flinging = false
@@ -469,9 +610,11 @@ class NativeAnchoredDropdown(
                 removeCallbacks(flingFrame)
                 // Keep the displayed position; abortAnimation would jump the scroller to its end.
                 scroller?.forceFinished(true)
+                flingPath = null
             }
 
             fun cancelMotion() {
+                clearPress(cancel = true)
                 stopFling()
                 pointer = -1
                 dragging = false
@@ -490,19 +633,32 @@ class NativeAnchoredDropdown(
             private fun flingOrSettle(velocity: Float) {
                 if (disposed || closing) return
                 stopFling()
-                if (!velocity.isFinite() || abs(velocity) < minimumFlingVelocity ||
-                    velocity <= 0f && position <= 0f || velocity >= 0f && position >= lastPosition) {
-                    settle(settled)
+                if (!velocity.isFinite() || abs(velocity) < minimumFlingVelocity) {
+                    settle(settled, browsed = false)
                     return
                 }
-                // Pixel units retain native density-aware friction and bounded velocity. No flywheel
-                // accumulation or overshoot: the finite list and its existing end cues stay authoritative.
-                // stopFling() forces finished before reuse, so the public constructor's flywheel cannot accumulate.
                 val motion = scroller ?: OverScroller(context).also { scroller = it }
-                val maximum = (lastPosition.toLong() * rowHeight).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-                motion.fling(0, (position * rowHeight).roundToInt().coerceIn(0, maximum),
-                    0, velocity.coerceIn(-maximumFlingVelocity.toFloat(), maximumFlingVelocity.toFloat()).roundToInt(),
-                    0, 0, 0, maximum)
+                val nativeVelocity = velocity.coerceIn(-maximumFlingVelocity.toFloat(), maximumFlingVelocity.toFloat()).roundToInt()
+                // A virtual unbounded spline retains its zero-speed tail even at a list boundary.
+                motion.fling(0, 0, 0, nativeVelocity, 0, 0, Int.MIN_VALUE, Int.MAX_VALUE)
+                val distance = motion.finalY
+                val target = nativeDropdownFlingTarget(position, distance, rowHeight, lastPosition,
+                    nativeVelocity.toFloat()) ?: run { motion.forceFinished(true); return }
+                if (position == target.toFloat()) {
+                    motion.forceFinished(true)
+                    settled = target
+                    updatePositions()
+                    return
+                }
+                if (nativeDropdownFlingNeedsScroll(position, target, distance, rowHeight)) {
+                    val duration = style.settleMillis.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+                    val pixels = (abs(target.toDouble() - position.toDouble()) * rowHeight)
+                        .coerceIn(1.0, Int.MAX_VALUE.toDouble()).roundToInt()
+                    motion.forceFinished(true)
+                    if (duration > 0) motion.startScroll(0, 0, 0, pixels, duration)
+                    else motion.startScroll(0, 0, 0, pixels)
+                }
+                flingPath = NativeDropdownFlingPath(position, target, motion.startY, motion.finalY)
                 flinging = true
                 postOnAnimation(flingFrame)
             }
@@ -510,20 +666,21 @@ class NativeAnchoredDropdown(
             private fun advanceFling() {
                 if (!flinging || disposed || closing) return
                 val motion = scroller ?: return
+                val path = flingPath ?: return
                 val generation = motionGeneration
-                if (motion.computeScrollOffset()) {
+                motion.computeScrollOffset()
+                val next = path.positionAt(if (motion.isFinished) motion.finalY else motion.currY)
+                if (next != position) {
                     val previous = settled
-                    position = (motion.currY.toFloat() / rowHeight).coerceIn(0f, lastPosition.toFloat())
+                    position = next
                     settled = position.roundToInt()
+                    if (settled != previous) candidatePosition = settled
                     updatePositions()
                     if (settled != previous) publish(settled)
                 }
                 // Selection callbacks may close, settle, or establish a new touch/fling owner.
                 if (!flinging || disposed || closing || generation != motionGeneration) return
-                if (motion.isFinished) {
-                    stopFling()
-                    settle(settled)
-                } else postOnAnimation(flingFrame)
+                if (motion.isFinished) stopFling() else postOnAnimation(flingFrame)
             }
 
             override fun onDetachedFromWindow() {
@@ -534,14 +691,7 @@ class NativeAnchoredDropdown(
 
             override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
                 super.onWindowFocusChanged(hasWindowFocus)
-                if (!hasWindowFocus) {
-                    cancelMotion()
-                    stopAnimation()
-                    if (closing) dispose()
-                } else if (!disposed && !closing && plan != null && pointer < 0 &&
-                    (position != settled.toFloat() || reveal != 1f)) {
-                    settle(settled)
-                }
+                if (!hasWindowFocus) retireFromDispatch()
             }
 
             override fun onCancelPendingInputEvents() {
@@ -564,6 +714,12 @@ class NativeAnchoredDropdown(
                     row.isFocusable = visible
                     row.importantForAccessibility = if (visible) View.IMPORTANT_FOR_ACCESSIBILITY_YES else View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
                 }
+                val geometry = viewport
+                val above = !closing && reveal > 0f && geometry?.overflowsAbove(position) == true
+                val below = !closing && reveal > 0f && geometry?.overflowsBelow(position, lastPosition) == true
+                val inset = resolvedOutlineStroke() / 2f
+                previousCue.place(width, top + inset, bottom - inset, above && below, above)
+                nextCue.place(width, top + inset, bottom - inset, above && below, below)
                 invalidate()
             }
             private fun updateMountedRows(first: Int, last: Int) {
@@ -596,7 +752,7 @@ class NativeAnchoredDropdown(
                 if (!closing && !disposed && settled > 0) info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD)
             }
             override fun performAccessibilityAction(action: Int, args: android.os.Bundle?): Boolean = when (action) {
-                AccessibilityNodeInfo.ACTION_DISMISS -> if (!closing && !disposed) { cancelSelection(); true } else false
+                AccessibilityNodeInfo.ACTION_DISMISS -> if (!closing && !disposed) { userDismiss(); true } else false
                 AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> if (!closing && !disposed && settled < lastPosition) { settle(settled + 1); true } else false
                 AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> if (!closing && !disposed && settled > 0) { settle(settled - 1); true } else false
                 else -> super.performAccessibilityAction(action, args)
@@ -617,12 +773,13 @@ class NativeAnchoredDropdown(
             fun extents(): Pair<Float, Float> {
                 return revealTop to revealBottom
             }
-            private fun customOutlineStroke(): Float? = outlineWidthDp?.let {
-                (it * density.density).coerceAtMost(minOf(width.toFloat(), revealBottom - revealTop).coerceAtLeast(0f) / 2f)
+            private fun resolvedOutlineStroke(): Float {
+                val custom = outlineWidthDp ?: return density.density
+                return (custom * density.density).coerceAtMost(minOf(width.toFloat(), revealBottom - revealTop).coerceAtLeast(0f) / 2f)
             }
 
-            private fun updateRevealPath(stroke: Float? = customOutlineStroke()) {
-                val inset = (stroke ?: density.density) / 2f
+            private fun updateRevealPath(stroke: Float = resolvedOutlineStroke()) {
+                val inset = stroke / 2f
                 rectangle.set(inset, revealTop + inset, width - inset, revealBottom - inset)
                 for (corner in 0..3) {
                     val geometry = checkNotNull(viewport)
@@ -637,7 +794,7 @@ class NativeAnchoredDropdown(
 
             override fun draw(canvas: Canvas) {
                 if (plan == null) return
-                val customStroke = customOutlineStroke()
+                val customStroke = resolvedOutlineStroke()
                 updateRevealPath(customStroke)
                 val saved = canvas.save(); canvas.clipPath(path)
                 paint.style = Paint.Style.FILL; paint.color = palette.collapsed
@@ -646,7 +803,7 @@ class NativeAnchoredDropdown(
                 drawOverflowCues(canvas)
                 // The slot never moves. Its divider and outline share the existing group border role.
                 paint.style = Paint.Style.STROKE
-                paint.strokeWidth = customStroke ?: density.density
+                paint.strokeWidth = customStroke
                 paint.color = palette.divider
                 if (paint.strokeWidth > 0f) {
                     canvas.drawLine(0f, anchorY.toFloat(), width.toFloat(), anchorY.toFloat(), paint)
@@ -661,13 +818,12 @@ class NativeAnchoredDropdown(
             }
 
             private fun drawOverflowCues(canvas: Canvas) {
-                val geometry = viewport ?: return
-                if (reveal <= 0f) return
-                if (geometry.overflowsAbove(position)) drawCue(canvas, revealTop, upward = true)
-                if (geometry.overflowsBelow(position, lastPosition)) drawCue(canvas, revealBottom, upward = false)
+                if (viewport == null || reveal <= 0f) return
+                if (previousCue.visibility == VISIBLE) drawCue(canvas, revealTop, upward = true, target = previousCue)
+                if (nextCue.visibility == VISIBLE) drawCue(canvas, revealBottom, upward = false, target = nextCue)
             }
 
-            private fun drawCue(canvas: Canvas, edge: Float, upward: Boolean) {
+            private fun drawCue(canvas: Canvas, edge: Float, upward: Boolean, target: View) {
                 val saved = canvas.save()
                 canvas.translate(0f, edge)
                 if (!upward) canvas.scale(1f, -1f)
@@ -681,8 +837,10 @@ class NativeAnchoredDropdown(
                 cuePaint.strokeWidth = 1.5f * density.density
                 cuePaint.strokeCap = Paint.Cap.ROUND
                 val center = width / 2f
-                val half = 3f * density.density
-                val y = 5f * density.density
+                val half = minOf(3f * density.density, target.height / 3f, target.width / 3f)
+                val inset = if (upward) target.top - edge else edge - target.bottom
+                val y = inset + if (target.height >= 8f * density.density) 5f * density.density
+                    else (target.height - half) / 2f
                 canvas.drawLine(center - half, y + half, center, y, cuePaint)
                 canvas.drawLine(center, y, center + half, y + half, cuePaint)
                 canvas.restoreToCount(saved)
@@ -694,21 +852,28 @@ class NativeAnchoredDropdown(
                 if (child.bottom + shift <= rectangle.top || child.top + shift >= rectangle.bottom) return false
                 return super.drawChild(canvas, child, drawingTime)
             }
+            override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+                if (event.actionMasked == MotionEvent.ACTION_DOWN && plan != null && !insideReveal(event.x, event.y)) return false
+                return super.dispatchTouchEvent(event)
+            }
             override fun onInterceptTouchEvent(event: MotionEvent): Boolean = true
             private fun rowAt(y: Float): Int =
                 (position + (y - anchorY) / rowHeight - .5f).roundToInt().coerceIn(0, lastPosition)
 
             private fun trackExplicitTap(event: MotionEvent, index: Int) {
                 if (!explicitTap) return
-                fun withinSlop(x: Float, y: Float) = abs(x - downX) <= slop && abs(y - downY) <= slop
-                explicitTap = withinSlop(event.getX(index), event.getY(index)) &&
-                    (0 until event.historySize).all { sample ->
-                        withinSlop(event.getHistoricalX(index, sample), event.getHistoricalY(index, sample))
-                    }
+                explicitTap = abs(event.getX(index) - downX) <= slop && abs(event.getY(index) - downY) <= slop
+                var sample = 0
+                while (explicitTap && sample < event.historySize) {
+                    explicitTap = abs(event.getHistoricalX(index, sample) - downX) <= slop &&
+                        abs(event.getHistoricalY(index, sample) - downY) <= slop
+                    sample++
+                }
+                if (!explicitTap) clearPress(cancel = true)
             }
 
             override fun onTouchEvent(event: MotionEvent): Boolean {
-                if (disposed || closing && selectionPolicy == DropdownSelectionPolicy.EXPLICIT) return true
+                if (disposed || retiring || closing && selectionPolicy == DropdownSelectionPolicy.EXPLICIT) return true
                 if (plan == null || earlyTap) {
                     when (event.actionMasked) {
                         MotionEvent.ACTION_DOWN -> earlyTap = true
@@ -725,13 +890,22 @@ class NativeAnchoredDropdown(
                         // A closing gesture can reopen on drag/tap. Until then its terminal
                         // animation must keep running, including after cancellation/pointer loss.
                         if (!closing) stopAnimation()
-                        if (event.y < revealTop || event.y > revealBottom) { cancelSelection(); return true }
+                        if (!insideReveal(event.x, event.y)) return true
                         downRow = rowAt(event.y)
                         downRowWasFullyVisible = rows[downRow]?.importantForAccessibility == View.IMPORTANT_FOR_ACCESSIBILITY_YES
                         if (!closing && reveal < 1f) animate(position, 1f, style.expandMillis, move = false) {}
                         gesturePosition = position
                         pointer = event.getPointerId(0); downX = event.x; downY = event.y; dragging = false
-                        explicitTap = selectionPolicy == DropdownSelectionPolicy.EXPLICIT && event.x >= 0f && event.x < width
+                        explicitTap = event.x >= 0f && event.x < width
+                        if (!closing && !wasFlinging) {
+                            pressedCue = when {
+                                previousCue.contains(event.x, event.y) -> previousCue
+                                nextCue.contains(event.x, event.y) -> nextCue
+                                else -> null
+                            }
+                            val cue = pressedCue
+                            if (cue != null) cue.pressAt(event.x, event.y) else pressRow(downRow, event.x, event.y)
+                        }
                         val tracker = velocityTracker ?: VelocityTracker.obtain().also { velocityTracker = it }
                         tracker.addMovement(event)
                     }
@@ -750,9 +924,11 @@ class NativeAnchoredDropdown(
                         }
                         if (dragging) {
                             position = (gesturePosition + delta / rowHeight).coerceIn(0f, lastPosition.toFloat())
+                            val previous = settled
                             settled = position.roundToInt()
+                            if (settled != previous) candidatePosition = settled
                             updatePositions()
-                            publish(settled)
+                            if (settled != previous) publish(settled)
                         }
                     }
                     MotionEvent.ACTION_UP -> {
@@ -760,6 +936,8 @@ class NativeAnchoredDropdown(
                         val i = event.findPointerIndex(pointer)
                         if (i < 0) { endGesture(); return true }
                         trackExplicitTap(event, i)
+                        val tappedCue = pressedCue
+                        clearPress(cancel = false)
                         val delta = downY - event.getY(i)
                         val moved = dragging || abs(delta) > slop
                         val tracker = velocityTracker
@@ -780,16 +958,18 @@ class NativeAnchoredDropdown(
                             }
                             closing = false
                             position = (gesturePosition + delta / rowHeight).coerceIn(0f, lastPosition.toFloat())
+                            val previous = settled
                             settled = position.roundToInt()
+                            if (settled != previous) candidatePosition = settled
                             dragging = false
                             val generation = motionGeneration
                             updatePositions()
-                            publish(settled)
+                            if (settled != previous) publish(settled)
                             if (!disposed && !closing && pointer < 0 && generation == motionGeneration) flingOrSettle(velocity)
                         }
                         if (!moved) {
                             if (stoppedFling) {
-                                settle(settled)
+                                settle(settled, browsed = false)
                                 return true
                             }
                             val x = event.getX(i)
@@ -798,15 +978,17 @@ class NativeAnchoredDropdown(
                                 if (closing && reveal == 0f) dispose()
                                 return true
                             }
+                            if (tappedCue != null) {
+                                if (explicitTap && tappedCue.contains(x, y)) tappedCue.performClick()
+                                return true // A cue-owned tap never falls through to an option.
+                            }
                             if (closing) {
                                 closing = false
                                 animate(settled.toFloat(), 1f, style.expandMillis) {}
-                            } else if (selectionPolicy == DropdownSelectionPolicy.PROGRESSIVE ||
-                                explicitTap && rowAt(y) == downRow) {
+                            } else if (explicitTap && rowAt(y) == downRow) {
                                 val row = rows[downRow] ?: return true
                                 val rowY = y - row.translationY
                                 if (rowY >= 0f && rowY < rowHeight) {
-                                    row.showTapIndication(x, rowY)
                                     // A partial option is a scroll affordance. Bring it into the
                                     // slot before accepting a separate explicit activation.
                                     if (selectionPolicy == DropdownSelectionPolicy.EXPLICIT &&
@@ -820,6 +1002,7 @@ class NativeAnchoredDropdown(
                         }
                     }
                     MotionEvent.ACTION_POINTER_DOWN -> {
+                        clearPress(cancel = true)
                         explicitTap = false
                         if (pointer >= 0) velocityTracker?.addMovement(event)
                     }
@@ -842,7 +1025,8 @@ class NativeAnchoredDropdown(
 
             private fun endGesture() {
                 cancelMotion()
-                if (closing && reveal == 0f) dispose() else settle(settled)
+                if (disposed || retiring) return
+                if (closing && reveal == 0f) dispose() else settle(settled, browsed = false)
             }
         }
     }

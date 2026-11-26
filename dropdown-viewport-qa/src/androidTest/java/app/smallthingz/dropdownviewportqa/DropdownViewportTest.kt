@@ -90,16 +90,16 @@ class DropdownViewportTest {
                         WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout() or WindowInsets.Type.ime())
                     val expectedTop = maxOf(origin[1], visible.top, metrics.bounds.top + insets.top)
                     val expectedBottom = minOf(origin[1] + wheel.height, visible.bottom, metrics.bounds.bottom - insets.bottom)
+                    val rows = optionRows(wheel)
                     if (short) {
                         assertEquals(3 * rowHeight - 1f, rectangle.height(), .6f)
-                        assertEquals(3, wheel.childCount)
+                        assertEquals(3, rows.size)
                     } else {
                         assertEquals(expectedTop + .5f, origin[1] + rectangle.top, .6f)
                         assertEquals(expectedBottom - .5f, origin[1] + rectangle.bottom, .6f)
                     }
-                    assertMountedViewport(wheel, if (short) 3 else 40)
-                    for (i in 0 until wheel.childCount) {
-                        val row = wheel.getChildAt(i)
+                    assertMountedViewport(wheel, if (short) 3 else 40, rows)
+                    for (row in rows) {
                         val top = row.translationY
                         val fullyVisible = top >= rectangle.top - 1f && top + rowHeight <= rectangle.bottom + 1f
                         if (!fullyVisible) {
@@ -107,7 +107,7 @@ class DropdownViewportTest {
                             assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS, row.importantForAccessibility)
                         }
                     }
-                    val selected = (0 until wheel.childCount).map(wheel::getChildAt).single { it.isSelected }
+                    val selected = rows.single { it.isSelected }
                     val anchorOrigin = IntArray(2).also(anchor::getLocationOnScreen)
                     assertEquals(anchorOrigin[1].toFloat(), origin[1] + selected.translationY, .6f)
                     assertEquals(if (short) false to false else true to true, overflow(wheel))
@@ -162,8 +162,11 @@ class DropdownViewportTest {
         session.javaClass.getDeclaredField("position").apply { isAccessible = true }.getFloat(session)
     }
 
-    /** Check actual mounted children against pixel coverage, independently of the mount planner. */
-    private fun assertMountedViewport(wheel: ViewGroup, expectedCount: Int) {
+    private fun optionRows(wheel: ViewGroup): List<NativeDropdown<*>> =
+        (0 until wheel.childCount).map(wheel::getChildAt).filterIsInstance<NativeDropdown<*>>()
+
+    /** Check actual mounted options against pixel coverage, independently of the mount planner. */
+    private fun assertMountedViewport(wheel: ViewGroup, expectedCount: Int, rows: List<NativeDropdown<*>> = optionRows(wheel)) {
         val owner = session(wheel)
         fun integer(name: String) = owner.javaClass.getDeclaredField(name).apply { isAccessible = true }.getInt(owner)
         assertEquals("Logical choices survive sparse mounting", expectedCount, integer("lastPosition") + 1)
@@ -175,10 +178,9 @@ class DropdownViewportTest {
         val below = ceil((bottom - anchor - height).toDouble() / height).toInt()
         // Selected slot, one overscan on each side, and a possible fractional edge row.
         assertTrue("Mounted rows stay within viewport plus overscan",
-            wheel.childCount in 1..minOf(expectedCount, above + below + 4))
+            rows.size in 1..minOf(expectedCount, above + below + 4))
         val position = position(wheel)
-        val indices = (0 until wheel.childCount).map { slot ->
-            val row = wheel.getChildAt(slot)
+        val indices = rows.map { row ->
             val logical = position + (row.translationY - anchor) / height
             val index = logical.roundToInt()
             assertEquals("Row translation retains its logical slot", index.toFloat(), logical, .01f)
@@ -191,7 +193,7 @@ class DropdownViewportTest {
             val y = anchor + (index - position) * height
             if (y < bottom && y + height > top) {
                 assertTrue("Visible logical row $index is mounted", index in indices)
-                val row = wheel.getChildAt(indices.indexOf(index))
+                val row = rows[indices.indexOf(index)]
                 assertEquals(height, row.height)
                 assertEquals(wheel.width, row.width)
             }
