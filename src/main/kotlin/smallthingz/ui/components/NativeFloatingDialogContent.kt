@@ -11,4 +11,20 @@ class NativeFloatingDialogContent(
 ) {
     /** Optional paint below the caller's content and its input bounds. */
     internal var exteriorBottomPaintSpace: (() -> Int)? = null
+
+    companion object {
+        /**
+         * Use a shared panel as the complete dialog content. The window reserves its exterior
+         * highlight without adding padding to the panel, its viewport or its input bounds.
+         * Paint space follows surface rebinds; accessibility and disposal stay caller-owned.
+         */
+        fun forPanel(
+            surface: NativeFloatingPanelSurface,
+            bindWindowAccessibility: (View) -> Unit,
+            dispose: () -> Unit,
+        ): NativeFloatingDialogContent =
+            NativeFloatingDialogContent(surface, surface, bindWindowAccessibility, dispose).apply {
+                exteriorBottomPaintSpace = surface::exteriorBottomPaintSpace
+            }
+    }
 }

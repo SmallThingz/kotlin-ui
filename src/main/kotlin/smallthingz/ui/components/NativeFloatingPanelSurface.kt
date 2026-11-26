@@ -15,6 +15,7 @@ import android.widget.FrameLayout
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.geometry.Offset
 import smallthingz.ui.graphics.NoiseDrawable
+import kotlin.math.ceil
 
 /** Top panel paint, bottom-rounded child clipping and matching pointer shape. */
 open class NativeFloatingPanelSurface(
@@ -61,6 +62,7 @@ open class NativeFloatingPanelSurface(
     }
 
     fun bindSurface(density: Float, recipe: NativeFloatingPanelRecipe, palette: NativeColorScheme) {
+        val previousPaintSpace = exteriorBottomPaintSpace()
         val shapeChanged = this.density != density || this.recipe.cornerRadiusDp != recipe.cornerRadiusDp
         val nextGrainIntensity = palette.backgroundGrain
         val grainChanged = this.recipe.grainSeed != recipe.grainSeed || grainIntensity != nextGrainIntensity
@@ -71,6 +73,7 @@ open class NativeFloatingPanelSurface(
         this.recipe = recipe
         edgeColor = nextEdgeColor
         edgeWidthDp = nextEdgeWidthDp
+        if (previousPaintSpace != exteriorBottomPaintSpace()) requestLayout()
         fillMotion.retarget(recipe.surfaceColor(palette))
         if (grainChanged) {
             grainIntensity = nextGrainIntensity
@@ -98,8 +101,14 @@ open class NativeFloatingPanelSurface(
     internal fun bindDialogEdge(edge: NativeDialogEdge) {
         if (dialogEdge == edge) return
         dialogEdge = edge
+        requestLayout()
         if (width > 0 && height > 0) rebuildShape()
     }
+
+    internal fun exteriorBottomPaintSpace(): Int =
+        if (dialogEdge != NativeDialogEdge.TOP || edgeColor ushr 24 == 0 ||
+            !edgeWidthDp.isFinite() || edgeWidthDp <= 0f || !density.isFinite() || density <= 0f) 0
+        else ceil(edgeWidthDp * density).toInt()
 
     fun containsShape(point: Offset): Boolean {
         val x = point.x

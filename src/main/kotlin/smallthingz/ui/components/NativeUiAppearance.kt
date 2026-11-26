@@ -64,7 +64,8 @@ class NativeUiAppearance(
     val outlinedField: NativeOutlinedFieldRecipe = outlinedField ?: NativeOutlinedFieldRecipe(typography = typography)
     val compactField: NativeCompactFieldRecipe = compactField ?: NativeCompactFieldRecipe(typography)
     val modals: NativeModalRecipes = modals ?: NativeModalRecipes(typography)
-    internal val floatingWindowRecipe: NativeFloatingPanelRecipe = this.modals.floating.let { recipe ->
+    /** Floating window geometry and paint, using this appearance's common window grain seed. */
+    val floatingWindowRecipe: NativeFloatingPanelRecipe = this.modals.floating.let { recipe ->
         if (recipe.grainSeed == backdrops.windowGrainSeed) recipe
         else recipe.copy(grainSeed = backdrops.windowGrainSeed)
     }
