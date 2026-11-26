@@ -32,6 +32,12 @@ internal class ReverbBrowserPanelReorder<Key : Any> {
 
     fun canStart(key: Key): Boolean = keys.any { canMove(key, it) }
 
+    /** Next surviving neighbor, then preceding neighbors; callers filter current enabled rows. */
+    fun continuationAfterRemoval(key: Key): List<Key> {
+        val index = keys.indexOf(key)
+        return if (index < 0) emptyList() else keys.drop(index + 1) + keys.take(index).asReversed()
+    }
+
     fun begin(key: Key): Any? {
         if (dragging || !canStart(key)) return null
         return Any().also { dragIdentity = it; dragKey = key }
