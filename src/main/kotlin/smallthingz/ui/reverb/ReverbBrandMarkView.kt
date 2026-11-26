@@ -12,7 +12,9 @@ import smallthingz.ui.components.nativeLayeredMarkBounds
 
 /** Canonical Reverb artwork in the retained native renderer; palette ownership stays in this library. */
 class ReverbBrandMarkView(context: Context, description: CharSequence? = null) :
-    NativeLayeredMarkView(context, description, reverbBrandArt, ::readReverbBrandPalette)
+    NativeLayeredMarkView(context, description, reverbBrandArt, ::readReverbBrandPalette) {
+    init { bindDefaultReverbBrandSurface() }
+}
 
 private const val BRAND_SIZE_DP = 108f
 

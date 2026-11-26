@@ -68,3 +68,23 @@ androidComponents {
         variant.resValues.put(key, amoledBackground)
     }
 }
+
+tasks.register('verifyReverbBrandPlate', Exec) {
+    group = 'verification'
+    description = 'Verify the packaged Reverb mark plate against the shared foreground sources'
+    workingDir projectDir
+    def exporter = file('scripts/generate_reverb_brand_plate.py')
+    commandLine 'python3', '-B', exporter.absolutePath, '--check'
+    inputs.file(exporter)
+    inputs.files(fileTree('src/main/kotlin/smallthingz/ui') {
+        include 'components/NativeColorScheme.kt', 'components/NativeDarkSurfaces.kt',
+            'components/NativeDarkSurfacePreset.kt', 'components/NativeDefaultColorScheme.kt',
+            'components/NativeGroupSurfaceRecipes.kt', 'graphics/ProceduralNoise.kt'
+    })
+    inputs.files(fileTree('src/main/res') {
+        include 'values*/reverb_brand_surface.xml', 'drawable*/reverb_brand_*'
+    })
+}
+tasks.named('preBuild').configure {
+    dependsOn tasks.named('verifyReverbBrandPlate')
+}

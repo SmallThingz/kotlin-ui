@@ -4,6 +4,7 @@ import smallthingz.ui.animation.view.ViewColorTransition
 
 import android.content.Context
 import android.content.res.Configuration
+import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -14,6 +15,7 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.view.View
 import android.view.ViewOutlineProvider
@@ -47,10 +49,17 @@ open class NativeLayeredMarkView(
 ) : View(context) {
     private var palette = resolvePalette(context)
     private var paletteTarget = palette
+    private var boundPalette: NativeLayeredMarkPalette? = null
+    private var plateGrain: Drawable? = null
+    private var plateGrainFactory: ((Resources) -> Drawable)? = null
+    private var plateGrainAlpha = 0
     private val paletteMotion:ViewColorTransition by lazy {ViewColorTransition(this,
         intArrayOf(palette.background,palette.accent,palette.main),{
-            palette=NativeLayeredMarkPalette(paletteMotion.color(0),paletteMotion.color(1),paletteMotion.color(2))
-            cacheDirty=true;invalidate()
+            val accent = paletteMotion.color(1)
+            val main = paletteMotion.color(2)
+            if (palette.accent != accent || palette.main != main) cacheDirty = true
+            palette = NativeLayeredMarkPalette(paletteMotion.color(0), accent, main)
+            invalidate()
         })}
     private val backgroundPaint = Paint(BRAND_PAINT_FLAGS)
     private val strokePaint = Paint(BRAND_PAINT_FLAGS).apply {
@@ -100,13 +109,34 @@ open class NativeLayeredMarkView(
 
     override fun getAccessibilityClassName(): CharSequence = "android.widget.ImageView"
 
-    /** Re-resolves the same three released resources, without selecting a new palette locally. */
+    /** Re-resolves resource colors when the caller has not bound a window palette. */
     fun refreshResourcePalette() {
-        val next = resolvePalette(context)
+        val next = boundPalette ?: resolvePalette(context)
         if (next != paletteTarget) {
             paletteTarget=next
             paletteMotion.retarget(next.background,next.accent,next.main)
         }
+    }
+
+    internal fun bindMarkPlate(palette: NativeLayeredMarkPalette?, grainAlpha: Int, createGrain: (Resources) -> Drawable) {
+        boundPalette = palette
+        plateGrainFactory = createGrain
+        if (grainAlpha != plateGrainAlpha) {
+            plateGrainAlpha = grainAlpha
+            invalidate()
+        }
+        refreshResourcePalette()
+    }
+
+    private fun drawPlateGrain(canvas: Canvas) {
+        val alpha = (plateGrainAlpha * Color.alpha(palette.background) + 127) / 255
+        if (alpha == 0 || bounds.isEmpty) return
+        val grain = plateGrain ?: plateGrainFactory?.invoke(resources)?.also {
+            it.setBounds(0, 0, width, height)
+            plateGrain = it
+        } ?: return
+        if (grain.alpha != alpha) grain.alpha = alpha
+        grain.draw(canvas)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -149,6 +179,7 @@ open class NativeLayeredMarkView(
     private fun updateGeometry() {
         geometry = nativeLayeredMarkBounds(art.sizeDp, resources.displayMetrics.density, width, height)
         bounds.set(0f, 0f, width.toFloat(), height.toFloat())
+        plateGrain?.setBounds(0, 0, width, height)
         cornerRadius = min(width, height) / 2f
         softwareClip.rewind()
         softwareClip.addRoundRect(bounds, cornerRadius, cornerRadius, Path.Direction.CW)
@@ -172,6 +203,7 @@ open class NativeLayeredMarkView(
         super.onDraw(canvas)
         backgroundPaint.color = palette.background
         canvas.drawRect(bounds, backgroundPaint)
+        drawPlateGrain(canvas)
         if (geometry.cacheWidth <= 0 || geometry.cacheHeight <= 0) return
         ensureCache()
         val image = bitmap ?: return
