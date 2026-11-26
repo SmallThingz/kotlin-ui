@@ -68,7 +68,11 @@ internal class ReverbBrowserChromeMenuBody(context: Context, theme: ReverbTheme,
 /** Snapshot menu row: ordinary icon ink is independent of the muted supporting text role. */
 private class ReverbBrowserChromeMenuRow(context: Context, theme: ReverbTheme, colors: ControlPalette,
     private val item: ReverbBrowserChromeRow, onAction: (String) -> Unit,
-) : NativeSettingsRow(context, colors, NativeSettingsRowStyle(iconRole = NativeTextRole.CONTENT)), AutoCloseable {
+) : NativeSettingsRow(context, colors, NativeSettingsRowStyle(
+    iconRole = NativeTextRole.CONTENT,
+    // NativeMenuRowView.bindAction preserves supplied ink while disabling input.
+    dimDisabledContent = false,
+)), AutoCloseable {
     private val icon = item.icon?.drawable(context, theme)
     private var callback: ((String) -> Unit)? = onAction
     private var closed = false
