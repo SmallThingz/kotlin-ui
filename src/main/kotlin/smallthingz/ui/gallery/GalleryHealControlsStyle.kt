@@ -2,6 +2,7 @@ package smallthingz.ui.gallery
 
 import android.content.Context
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import smallthingz.ui.components.NativeButtonPalette
@@ -12,9 +13,25 @@ import smallthingz.ui.components.NativeUiAppearance
 import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.controls.ControlStyle
 import smallthingz.ui.text.NativeTypographyRole
+import kotlin.math.roundToInt
 
-/** Paint changes only: preserve the existing Heal selector metrics and canvas reservation. */
+/** Gallery-owned Heal appearance; selection metrics and action targets stay native. */
 object GalleryHealControlsStyle {
+    /** Fixed separation outside scrolling content, before the existing category divider.
+     * Apply after attaching the Heal viewport to its vertical controls parent. Natural
+     * parent measurement budgets this margin; never inset/clip the button or auto-scroll.
+     * This owns the viewport's bottom margin for that panel's lifetime; repeated binding
+     * replaces the resolved gap instead of accumulating it.
+     */
+    fun separateFromCategoryBar(viewport: View) {
+        val params = viewport.layoutParams as ViewGroup.MarginLayoutParams
+        val gap = (GalleryDesign.appearance.modals.sheet.actionsGapDp *
+            viewport.resources.displayMetrics.density).roundToInt().coerceAtLeast(0)
+        if (params.bottomMargin == gap) return
+        params.bottomMargin = gap
+        viewport.layoutParams = params
+    }
+
     val preparationChoice = NativeChoiceStyle(radiusDp = 12f, minHeightDp = 48f,
         horizontalPaddingDp = 8f, verticalPaddingDp = 8f, outlined = false,
         textStyle = GalleryDesign.textStyle(NativeTypographyRole.LABEL_LARGE),
