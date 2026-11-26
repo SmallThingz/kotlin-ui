@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.graphics.Rect
 import android.graphics.drawable.Drawable
+import android.os.SystemClock
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.DragEvent
@@ -76,12 +77,60 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
     private var focusHandoffToken: Any? = null
     private var pendingKeyboardContinuation: List<Key>? = null
     private var pendingAccessibilityContinuation: List<Key>? = null
+    private var edgeScrollIdentity: Any? = null
+    private var edgeScrollX = Float.NaN
+    private var edgeScrollY = Float.NaN
+    private var edgeScrollPosted = false
+    private var edgeScrollLastFrame = 0L
+    private val edgeScrollFrame = object : Runnable {
+        override fun run() {
+            edgeScrollPosted = false
+            val identity = edgeScrollIdentity
+            val direction = browserTabDragEdgeDirection(edgeScrollX, edgeScrollY, scroll.width, scroll.height, dp(48))
+            if (panelClosed || reorder.source(identity) == null || onTabMove == null ||
+                !scroll.browserPanelAdmitsInput() || direction == 0 || !scroll.canScrollVertically(direction)) {
+                if (edgeScrollIdentity === identity) stopEdgeScroll()
+                return
+            }
+            if (edgeScrollIdentity !== identity || reorder.source(identity) == null) return
+            val now = SystemClock.uptimeMillis()
+            val elapsed = (now - edgeScrollLastFrame).coerceIn(1L, 32L)
+            edgeScrollLastFrame = now
+            val distance = (dp(240) * elapsed / 1000f).roundToInt().coerceAtLeast(1)
+            val before = scroll.scrollY
+            scroll.scrollBy(0, direction * distance)
+            // One frame at a time, only while this live drag can make progress. Scroll callbacks
+            // may synchronously rebind/retire the panel, so recheck identity before scheduling.
+            if (edgeScrollIdentity !== identity) return
+            if (reorder.source(identity) != null && scroll.scrollY != before &&
+                scroll.canScrollVertically(direction)) scheduleEdgeScroll()
+            else stopEdgeScroll()
+        }
+    }
     private val spacing = dp(8)
     private var columns = 1
     private var cardWidth = 0
     private var cardViewportHeight: Int? = null
     private val grid = GridLayout(context).apply { setPadding(spacing, spacing, spacing, spacing) }
     private val scroll = object : ScrollView(context) {
+        override fun dispatchDragEvent(event: DragEvent): Boolean {
+            // Observe native viewport coordinates without intercepting the card's drag/drop route.
+            val identity = event.localState
+            val location = event.action == DragEvent.ACTION_DRAG_LOCATION
+            val x = event.x
+            val y = event.y
+            when (event.action) {
+                DragEvent.ACTION_DRAG_STARTED, DragEvent.ACTION_DRAG_EXITED,
+                DragEvent.ACTION_DROP, DragEvent.ACTION_DRAG_ENDED ->
+                    if (reorder.source(event.localState) != null ||
+                        (event.localState != null && edgeScrollIdentity === event.localState)) stopEdgeScroll()
+            }
+            val handled = super.dispatchDragEvent(event)
+            // Native drag-focus changes send EXITED directly to the old innermost receiver.
+            // Rearm only after that handoff, using the viewport coordinates saved above.
+            if (location) updateEdgeScroll(identity, x, y)
+            return handled
+        }
         override fun onMeasure(w: Int, h: Int) {
             // LinearLayout has already allocated the top bar and inset-owning footer. A grid
             // row may use this remaining viewport; further rows still scroll normally.
@@ -94,7 +143,21 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             }
             super.onMeasure(w, h)
         }
-    }.apply { addView(grid, FrameLayout.LayoutParams(-1, -2)) }
+    }.apply {
+        setOnDragListener { _, event ->
+            val current = reorder.source(event.localState) != null
+            when (event.action) {
+                // Keep native drag focus in the viewport even over gaps between cards.
+                DragEvent.ACTION_DRAG_STARTED, DragEvent.ACTION_DRAG_LOCATION -> current
+                DragEvent.ACTION_DRAG_EXITED, DragEvent.ACTION_DRAG_ENDED -> {
+                    if (current) stopEdgeScroll()
+                    current
+                }
+                else -> false // Only a card accepts DROP and requests a move.
+            }
+        }
+        addView(grid, FrameLayout.LayoutParams(-1, -2))
+    }
     private val footer = ReverbBottomActionDock(context, theme, newTab)
     init {
         background = theme.appearance.backdrops.pageBackground(theme.palette)
@@ -211,10 +274,39 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         cards.values.forEach { it.bindReorderActions() }
     }
     private fun cancelReorder() {
+        stopEdgeScroll()
         val source = dragSource
         dragSource = null
         reorder.cancel()
         source?.cancelDragAndDrop()
+    }
+    private fun stopEdgeScroll() {
+        edgeScrollIdentity = null
+        edgeScrollX = Float.NaN
+        edgeScrollY = Float.NaN
+        if (edgeScrollPosted) scroll.removeCallbacks(edgeScrollFrame)
+        edgeScrollPosted = false
+    }
+    private fun scheduleEdgeScroll() {
+        if (!edgeScrollPosted) {
+            edgeScrollPosted = true
+            scroll.postOnAnimation(edgeScrollFrame)
+        }
+    }
+    private fun updateEdgeScroll(identity: Any?, x: Float, y: Float) {
+        if (reorder.source(identity) == null) return
+        val direction = browserTabDragEdgeDirection(x, y, scroll.width, scroll.height, dp(48))
+        if (onTabMove == null || direction == 0 ||
+            !scroll.browserPanelAdmitsInput() || !scroll.canScrollVertically(direction)) {
+            stopEdgeScroll()
+            return
+        }
+        if (reorder.source(identity) == null) return
+        if (edgeScrollIdentity !== identity) edgeScrollLastFrame = SystemClock.uptimeMillis()
+        edgeScrollIdentity = identity
+        edgeScrollX = x
+        edgeScrollY = y
+        scheduleEdgeScroll()
     }
     private fun moveTab(key: Key, target: Key): Boolean {
         val callback = onTabMove ?: return false
@@ -366,6 +458,10 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
                 when (event.action) {
                     DragEvent.ACTION_DRAG_STARTED -> key != null && !closed && content.enabled && onTabMove != null
                     DragEvent.ACTION_DROP -> key != null && moveTab(key, content.key)
+                    DragEvent.ACTION_DRAG_EXITED -> {
+                        if (key != null) stopEdgeScroll()
+                        key != null
+                    }
                     DragEvent.ACTION_DRAG_ENDED -> {
                         if (key != null) { dragSource = null; reorder.cancel() }
                         true

@@ -48,3 +48,15 @@ internal class ReverbBrowserPanelReorder<Key : Any> {
 
     fun cancel() { dragIdentity = null; dragKey = null }
 }
+
+/** Coordinates are in the finite scroll viewport, before child scroll offsets are applied. */
+internal fun browserTabDragEdgeDirection(x: Float, y: Float, width: Int, height: Int, edge: Int): Int {
+    if (!x.isFinite() || !y.isFinite() || width <= 0 || height <= 0 ||
+        x < 0f || x >= width || y < 0f || y >= height) return 0
+    val zone = minOf(edge.coerceAtLeast(0), height / 2)
+    return when {
+        y < zone -> -1
+        y >= height - zone -> 1
+        else -> 0
+    }
+}
