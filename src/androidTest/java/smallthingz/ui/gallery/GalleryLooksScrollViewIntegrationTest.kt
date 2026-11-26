@@ -1,9 +1,11 @@
 package smallthingz.ui.gallery
 
 import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.view.View
 import android.widget.FrameLayout
@@ -13,13 +15,17 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeSurface
+import smallthingz.ui.components.NativeMenuAccessibilityTestActivity
+import smallthingz.ui.components.withRetiringTestActivity
 import smallthingz.ui.components.NativeSurfaceStyle
 import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.controls.textSurfaceForeground
 import smallthingz.ui.scroll.NativeScrollIndicatorStyle
 import smallthingz.ui.scroll.horizontalContentGutterPx
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
-/** Detached presentation checks; no activity, media, global configuration or input injection. */
+/** Presentation and owned-window listener checks; no media, global configuration or input injection. */
 @RunWith(AndroidJUnit4::class)
 class GalleryLooksScrollViewIntegrationTest {
     @Test fun gutterFollowsStyleAtFractionalDensitiesWithoutAccumulatingOrMovingContent() = main {
@@ -91,6 +97,87 @@ class GalleryLooksScrollViewIntegrationTest {
         }
     }
 
+    @Test fun attachedUnderlayRefreshRetiresAndReattachesExactlyOneObserver() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
+            NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val attached = CountDownLatch(1)
+        var panel: NativeSurface? = null
+        var scroll: GalleryLooksScrollView? = null
+        var samples = 0
+        var invalidations = 0
+        val attachment = object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(view: View) { attached.countDown() }
+            override fun onViewDetachedFromWindow(view: View) = Unit
+        }
+        withRetiringTestActivity(activity, root = { panel }, cleanup = {
+            scroll?.removeOnAttachStateChangeListener(attachment)
+            panel?.removeAllViews()
+        }) {
+            main {
+                val palette = GalleryDesign.palette(activity, false).pageControls.copy(muted = Color.BLACK, surfacePreset = null)
+                val ownedPanel = NativeSurface(activity, NativeSurfaceStyle(Color.WHITE, cornerRadiusDp = 0f))
+                panel = ownedPanel
+                val ownedScroll = object : GalleryLooksScrollView(activity, palette, {
+                    samples++
+                    ownedPanel.paintedTextSurface
+                }) {
+                    override fun invalidate() {
+                        invalidations++
+                        super.invalidate()
+                    }
+                }
+                scroll = ownedScroll
+                ownedScroll.addOnAttachStateChangeListener(attachment)
+                ownedPanel.addView(ownedScroll, FrameLayout.LayoutParams(240, 100))
+                activity.setContentView(ownedPanel)
+            }
+            assertTrue("Owned Looks viewport did not attach", attached.await(5, TimeUnit.SECONDS))
+            main {
+                val ownedPanel = checkNotNull(panel)
+                val ownedScroll = checkNotNull(scroll)
+                assertTrue(ownedScroll.isAttachedToWindow)
+                val observer = ownedPanel.viewTreeObserver
+                assertTrue(observer.isAlive)
+                observer.dispatchOnPreDraw() // Seed the currently painted white underlay.
+                // Snap this owned panel's local transition while hidden; its window stays attached.
+                ownedPanel.visibility = View.INVISIBLE
+                ownedPanel.applyStyle(NativeSurfaceStyle(Color.BLACK, cornerRadiusDp = 0f))
+                ownedPanel.visibility = View.VISIBLE
+                assertEquals(Color.BLACK, ownedPanel.paintedFillColor)
+                samples = 0
+                invalidations = 0
+                observer.dispatchOnPreDraw() // Do not call draw(): it has its own underlay refresh.
+                assertEquals("One attached observer must sample the changed panel", 1, samples)
+                assertTrue("Changed underlay must invalidate the viewport", invalidations > 0)
+                samples = 0
+                invalidations = 0
+                observer.dispatchOnPreDraw()
+                assertEquals(1, samples)
+                assertEquals("Unchanged underlay must not create a redraw loop", 0, invalidations)
+
+                ownedPanel.removeView(ownedScroll)
+                assertFalse(ownedScroll.isAttachedToWindow)
+                assertTrue(observer.isAlive) // The parent window remains attached.
+                samples = 0
+                observer.dispatchOnPreDraw()
+                assertEquals("Detached viewport must retire its old observer", 0, samples)
+
+                ownedPanel.addView(ownedScroll, FrameLayout.LayoutParams(240, 100))
+                assertTrue(ownedScroll.isAttachedToWindow)
+                ownedPanel.visibility = View.INVISIBLE
+                ownedPanel.applyStyle(NativeSurfaceStyle(Color.WHITE, cornerRadiusDp = 0f))
+                ownedPanel.visibility = View.VISIBLE
+                assertEquals(Color.WHITE, ownedPanel.paintedFillColor)
+                samples = 0
+                invalidations = 0
+                ownedPanel.viewTreeObserver.dispatchOnPreDraw()
+                assertEquals("Reattachment must register exactly one observer", 1, samples)
+                assertTrue("Reattached viewport must observe the current panel", invalidations > 0)
+            }
+        }
+    }
+
     private class Fixture(context: Context, palette: ControlPalette) {
         // Deliberately differ from palette.surface: the adapter must sample the actual panel.
         val panel = NativeSurface(context, NativeSurfaceStyle(palette.muted, cornerRadiusDp = 0f))
@@ -131,5 +218,9 @@ class GalleryLooksScrollViewIntegrationTest {
         }
     }
 
-    private fun main(block: () -> Unit) = InstrumentationRegistry.getInstrumentation().runOnMainSync(block)
+    private fun main(block: () -> Unit) {
+        var result: Result<Unit>? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { result = runCatching(block) }
+        checkNotNull(result).getOrThrow()
+    }
 }

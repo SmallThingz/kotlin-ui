@@ -101,8 +101,12 @@ open class NativeScrollIndicatorHorizontalScrollView(context: Context) : Horizon
             // ViewGroup's child drawing translates by -scrollX/-scrollY. Paint in viewport space.
             canvas.translate(scrollX.toFloat(), scrollY.toFloat())
             canvas.clipRect(0, 0, width, height)
-            withNativeHorizontalScrollIndicatorThumb(width, height, computeHorizontalScrollRange(), computeHorizontalScrollExtent(),
-                computeHorizontalScrollOffset(), style.widthDp * density, style.rightInsetDp * density,
+            // Match HorizontalScrollView's physical scroll clamp, not its scrollbar metrics:
+            // those use child.right and the outer width, which disagree when padding is present.
+            val extent = (width - paddingLeft - paddingRight).coerceAtLeast(0)
+            val range = if (childCount == 0) 0 else getChildAt(0).width
+            withNativeHorizontalScrollIndicatorThumb(width, height, range, extent,
+                scrollX, style.widthDp * density, style.rightInsetDp * density,
                 style.minThumbHeightDp * density) { left, top, right, bottom ->
                 bounds.set(left, top, right, bottom)
                 val radius = (bottom - top) / 2f

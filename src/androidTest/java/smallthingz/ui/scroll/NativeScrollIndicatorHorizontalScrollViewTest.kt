@@ -52,6 +52,34 @@ class NativeScrollIndicatorHorizontalScrollViewTest {
             f.scroll.visibility = View.GONE
             assertTrue(f.pixels().all { it == Color.TRANSPARENT })
             f.scroll.visibility = View.VISIBLE
+            // Padded near-fit overflow must paint, and larger content must not reach the
+            // thumb endpoint before the actual platform scroll endpoint (in either direction).
+            f.scroll.setPadding(7, 4, 11, 12)
+            for (childWidth in listOf(105, 600)) {
+                f.child.layoutParams = f.child.layoutParams.apply { width = childWidth }
+                f.place()
+                assertEquals(direction, f.scroll.layoutDirection)
+                val overflow = childWidth - (f.scroll.width - f.scroll.paddingLeft - f.scroll.paddingRight)
+                assertTrue(overflow > 0)
+                f.scroll.scrollTo(0, 0)
+                assertEquals(0, f.scroll.scrollX)
+                val left = f.thumbBounds()
+                assertFalse("Padded overflow must have a thumb", left.isEmpty)
+                assertEquals(0, left.left)
+                // The inherited scrollbar metrics previously exhausted this range early.
+                val beforeEnd = if (overflow > f.scroll.paddingRight) overflow - f.scroll.paddingRight else overflow / 2
+                f.scroll.scrollTo(beforeEnd, 0)
+                assertEquals(beforeEnd, f.scroll.scrollX)
+                val approaching = f.thumbBounds()
+                f.scroll.scrollTo(Int.MAX_VALUE, 0)
+                assertEquals(overflow, f.scroll.scrollX)
+                val right = f.thumbBounds()
+                assertTrue("Physical offset must advance the thumb", approaching.left > left.left)
+                assertTrue("Thumb must not reach its endpoint early", approaching.left < right.left)
+                assertEquals(f.scroll.width, right.right)
+                assertEquals(left.top, right.top)
+                assertEquals(left.bottom, right.bottom)
+            }
             f.child.layoutParams = f.child.layoutParams.apply { width = 20 }
             f.place()
             assertFalse(f.scroll.canScrollHorizontally(1))
@@ -164,6 +192,12 @@ class NativeScrollIndicatorHorizontalScrollViewTest {
         }
     }
 
+    private fun main(block: () -> Unit) {
+        var result: Result<Unit>? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { result = runCatching(block) }
+        checkNotNull(result).getOrThrow()
+    }
+
     private fun withShader(block: (Context) -> Unit) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val ready = CountDownLatch(1)
@@ -173,13 +207,13 @@ class NativeScrollIndicatorHorizontalScrollViewTest {
             override fun scheduleDrawable(who: Drawable, what: Runnable, at: Long) = Unit
             override fun unscheduleDrawable(who: Drawable, what: Runnable) = Unit
         }
-        instrumentation.runOnMainSync {
+        main {
             observer = NoiseDrawable().apply { this.callback = callback }
             if (NoiseTexture.shader(NoiseDrawable.SEED_BACKGROUND) != null) ready.countDown()
         }
         try {
             assertTrue("Shared shader did not become ready", ready.await(5, TimeUnit.SECONDS))
-            instrumentation.runOnMainSync { block(instrumentation.targetContext) }
-        } finally { instrumentation.runOnMainSync { observer.callback = null } }
+            main { block(instrumentation.targetContext) }
+        } finally { main { observer.callback = null } }
     }
 }
