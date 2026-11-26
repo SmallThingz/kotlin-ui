@@ -189,6 +189,8 @@ class NativeMenuContentBindingIntegrationTest {
             it.bindContent("Old action", "A very wide obsolete detail that must not affect intrinsic width", detailStyle,
                 7, false, colors) { staleCalls++ }
         }
+        assertEquals(listOf(View.IMPORTANT_FOR_ACCESSIBILITY_NO, View.IMPORTANT_FOR_ACCESSIBILITY_NO),
+            labels(reused).map { it.importantForAccessibility })
         val fresh = f.row()
         for (selected in listOf(true, false)) {
             reused.bind("Choice", selected, colors) { choiceCalls++ }
@@ -211,6 +213,8 @@ class NativeMenuContentBindingIntegrationTest {
             it.bindContent("Old information", "A very wide obsolete detail that must not affect intrinsic width",
                 detailStyle, null, false, colors, null)
         }
+        assertEquals(listOf(View.IMPORTANT_FOR_ACCESSIBILITY_YES, View.IMPORTANT_FOR_ACCESSIBILITY_YES),
+            labels(reused).map { it.importantForAccessibility })
         val fresh = f.row()
         reused.bindAction(NativeMenuAction("Share", 9, colors.ink, colors.primary) { calls++ }, colors)
         fresh.bindAction(NativeMenuAction("Share", 9, colors.ink, colors.primary) {}, colors)
@@ -241,6 +245,8 @@ class NativeMenuContentBindingIntegrationTest {
         assertEquals(bounds(reference), bounds(label))
         assertEquals("Rebinding must not suppress the original label's accessibility importance",
             reference.isImportantForAccessibility, label.isImportantForAccessibility)
+        assertEquals("Rebinding must restore the fresh label's declared accessibility importance",
+            reference.importantForAccessibility, label.importantForAccessibility)
         val freshChildren = arrayListOf<View>().also(fresh::addChildrenForAccessibility)
         val reusedChildren = arrayListOf<View>().also(reused::addChildrenForAccessibility)
         assertTrue("Canonical fresh label is exposed by the fixture", freshChildren.contains(reference))

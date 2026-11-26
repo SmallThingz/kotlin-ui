@@ -143,6 +143,18 @@ class NativeSegmentedControl private constructor(
             this.density = density
             requestLayout()
         }
+        applyPalette(palette)
+        if (boundOptions != options) {
+            boundOptions = options.toList()
+            choices.bind(options, selectedId)
+        } else {
+            choices.bindSelection(selectedId)
+        }
+    }
+
+    /** Repaint the retained capsule without replacing choices or changing selection. */
+    fun applyPalette(palette: ControlPalette) {
+        if (closed) return
         if (boundPalette != palette) {
             boundPalette = palette
             presentation.bindSurface(palette)
@@ -151,12 +163,6 @@ class NativeSegmentedControl private constructor(
             applyNoiseIntensity(noiseIntensityOverride ?: preset?.foregroundGrain ?: 0f)
             (presentation as? DefaultSegmentedPresentation)?.setOutlineWidth(
                 outlineWidthOverride ?: preset?.borderWidthDp ?: NativeDefaultColorScheme.THIN_OUTLINE_WIDTH_DP)
-        }
-        if (boundOptions != options) {
-            boundOptions = options.toList()
-            choices.bind(options, selectedId)
-        } else {
-            choices.bindSelection(selectedId)
         }
     }
 

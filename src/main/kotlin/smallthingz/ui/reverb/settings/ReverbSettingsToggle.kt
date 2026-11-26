@@ -65,7 +65,7 @@ class ReverbSettingsToggle private constructor(
     private var closed = false
     private var appIcon: ImageView? = null
 
-    /** Installed-app identity is decorative; the retained switch remains the only action. */
+    /** Installed-app identity is decorative; actions belong to the retained row. */
     fun bindAppIcon(drawable: Drawable?) {
         if (closed) return
         if (drawable == null) {
@@ -86,6 +86,11 @@ class ReverbSettingsToggle private constructor(
         if (closed) return
         row.bind(next, theme.controls)
         if (icon != null) glyph?.bind(icon, if (next.enabled) theme.controls.colors.ink else theme.controls.colors.muted)
+    }
+
+    /** Optional secondary disclosure, sharing the row's native pointer and semantic owner. */
+    fun bindDetails(maxLines: Int, actionLabel: String, onDetails: (() -> Boolean)?) {
+        if (!closed) row.bindDetails(maxLines, actionLabel, onDetails)
     }
     override fun close() {
         closed = true

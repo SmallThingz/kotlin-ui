@@ -33,6 +33,8 @@ internal class ReverbBrowserPanelSwipe(
     private var downX = 0f
     private var downY = 0f
     private var phase = ReverbBrowserPanelSwipePhase.IDLE
+    private var appearanceRevision = 0L
+    private var retiredTouch = false
 
     private var dismissal: ValueAnimator? = null
     private var dismissed = false
@@ -47,17 +49,21 @@ internal class ReverbBrowserPanelSwipe(
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         val action = event.actionMasked
+        if (action == MotionEvent.ACTION_DOWN) retiredTouch = false
+        if (retiredTouch) return true
+        val revision = appearanceRevision
         val trusted = onFilterTouchEventForSecurity(event) &&
             event.flags and (MotionEvent.FLAG_WINDOW_IS_OBSCURED or MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED) == 0
         if (dismissal != null || dismissed) {
-            if (!trusted || action == MotionEvent.ACTION_CANCEL || event.pointerCount != 1 || !canSwipe()) {
-                cancelDismissal()
-            }
+            val cancel = !trusted || action == MotionEvent.ACTION_CANCEL || event.pointerCount != 1 || !canSwipe()
+            if (revision == appearanceRevision && cancel) cancelDismissal()
             return true
         }
         if (action == MotionEvent.ACTION_DOWN) {
             finishGesture()
-            if (trusted && event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER && canSwipe()) {
+            val admitted = trusted && event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER && canSwipe()
+            if (revision != appearanceRevision) return true
+            if (admitted) {
                 downX = event.x
                 downY = event.y
                 velocityTracker = VelocityTracker.obtain()
@@ -66,7 +72,7 @@ internal class ReverbBrowserPanelSwipe(
         }
         val dx = event.x - downX
         val previous = phase
-        phase = when {
+        val next = when {
             action == MotionEvent.ACTION_CANCEL || event.pointerCount != 1 || !trusted -> phase.cancel()
             action == MotionEvent.ACTION_MOVE && velocityTracker != null -> phase.move(
                 dx, event.y - downY, slop,
@@ -75,6 +81,8 @@ internal class ReverbBrowserPanelSwipe(
             )
             else -> phase
         }
+        if (revision != appearanceRevision) return true
+        phase = next
         when (phase) {
             ReverbBrowserPanelSwipePhase.IDLE, ReverbBrowserPanelSwipePhase.CANCELED -> stopTracking()
             ReverbBrowserPanelSwipePhase.DRAGGING -> if (previous == ReverbBrowserPanelSwipePhase.PENDING) takeGesture(event)
@@ -86,6 +94,7 @@ internal class ReverbBrowserPanelSwipe(
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             val wasSwipe = phase.ownsTouch
             val direction = if (action == MotionEvent.ACTION_UP) swipeDirection(dx) else 0
+            if (revision != appearanceRevision) return true
             val releaseVelocity = velocityTracker?.xVelocity ?: 0f
             if (direction != 0 && onDrag != null) {
                 // Keep the release position visible; resetting here caused the mid-screen disappearance.
@@ -175,8 +184,11 @@ internal class ReverbBrowserPanelSwipe(
     }
 
     private fun dismiss(direction: Int, velocity: Float) {
+        val revision = appearanceRevision
         val target = exitOffset(direction)
-        if (target == null || !canSwipe()) {
+        val canStartExit = target != null && canSwipe()
+        if (revision != appearanceRevision) return
+        if (target == null || !canStartExit) {
             cancelDismissal()
             return
         }
@@ -186,14 +198,18 @@ internal class ReverbBrowserPanelSwipe(
         animation.interpolator = LinearInterpolator()
         animation.addUpdateListener {
             if (dismissal !== animation) return@addUpdateListener
-            if (!isAttachedToWindow || !canSwipe()) cancelDismissal()
+            val admitted = isAttachedToWindow && canSwipe()
+            if (dismissal !== animation) return@addUpdateListener
+            if (!admitted) cancelDismissal()
             else drag(it.animatedValue as Float)
         }
         animation.addListener(object : AnimatorListenerAdapter() {
             override fun onAnimationEnd(animator: Animator) {
                 if (dismissal !== animation) return
+                val admitted = isAttachedToWindow && canSwipe()
+                if (dismissal !== animation) return
                 dismissal = null
-                if (!isAttachedToWindow || !canSwipe()) {
+                if (!admitted) {
                     cancelDismissal()
                     return
                 }
@@ -237,6 +253,14 @@ internal class ReverbBrowserPanelSwipe(
     /** The host's authoritative list still contains this tab after the close request. */
     fun restoreRetainedTab() {
         if (dismissed) cancelDismissal()
+    }
+
+    fun retireForAppearanceChange() {
+        appearanceRevision++
+        // Discard the tail of any pre-bind stream, even if a child had taken its DOWN.
+        retiredTouch = true
+        // Card dispatch rejects a reentrant pre-delivery rebind and restores that exit itself.
+        if (!dismissed) cancelBrowserPanelInput()
     }
 
     override fun onCancelPendingInputEvents() {

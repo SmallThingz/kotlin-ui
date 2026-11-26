@@ -16,6 +16,8 @@ import android.widget.Button
 import android.widget.LinearLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -46,6 +48,12 @@ class ReverbBrowserTabOwnershipIntegrationTest {
                 .filterIsInstance<ReverbBrowserPanelSwipe>().first()
             surface = gesture.getChildAt(0)
             swipe(gesture) { assertEquals("No swipe translation without a close owner", 0f, surface.translationX, 0f) }
+        }
+        // The ownerless stroke can post a platform click while it stays inside the preview.
+        // Deliver that work before a separate gesture installs and uses its action owner.
+        instrumentation.waitForIdleSync()
+        main {
+            assertNull(f.panel.onTabAction)
             f.panel.onTabAction = { key, action -> actions.add(key to action) }
             swipe(gesture) { assertTrue("The owned gesture must move the card", surface.translationX > 0f) }
         }
@@ -163,6 +171,88 @@ class ReverbBrowserTabOwnershipIntegrationTest {
         }
     }
 
+    @Test fun themeRebindRetiresPendingGesturesAndKeepsDeliveredCloseOffscreen() = mounted { f ->
+        val actions = mutableListOf<Pair<String?, ReverbBrowserPanelTabAction>>()
+        lateinit var gesture: ReverbBrowserPanelSwipe
+        lateinit var surface: View
+        val context = f.panel.context
+        val frameAfterRetirement = CountDownLatch(1)
+        main {
+            val light = ReverbDesign.theme(context, false)
+            val dark = ReverbDesign.theme(context, true)
+            val row = f.row("Alpha")
+            gesture = generateSequence(row.parent as? View) { it.parent as? View }
+                .filterIsInstance<ReverbBrowserPanelSwipe>().first()
+            surface = gesture.getChildAt(0)
+            f.panel.onTabAction = { key, action -> actions.add(key to action) }
+            swipe(gesture, afterDown = { f.panel.bindTheme(dark) }) {
+                assertEquals("A pre-theme DOWN cannot take swipe ownership", 0f, surface.translationX, 0f)
+            }
+            assertTrue(actions.isEmpty())
+
+            f.panel.onTabMove = { _, _ -> throw AssertionError("A stale drag cannot request reorder") }
+            val reorder = reorder(f.panel)
+            val staleDrag = checkNotNull(reorder.begin("a"))
+            assertEquals("a", reorder.source(staleDrag))
+            f.panel.bindTheme(light)
+            // The card DROP listener resolves the source from this exact lease.
+            assertNull("The pre-theme token has no source for a later DROP", reorder.source(staleDrag))
+
+            swipe(gesture) {
+                assertTrue("Precondition: this swipe already owns motion", surface.translationX > 0f)
+                f.panel.bindTheme(dark)
+                assertEquals("Rebind retires the active swipe before CLOSE", 0f, surface.translationX, 0f)
+            }
+            assertTrue(actions.isEmpty())
+
+            swipe(gesture) { assertTrue(surface.translationX > 0f) }
+            assertTrue("The released swipe still draws its exit before CLOSE", surface.translationX > 0f)
+            assertTrue("Rebind must precede delivery of CLOSE", actions.isEmpty())
+            f.panel.bindTheme(light)
+            assertEquals("Rebind retires the released exit before CLOSE", 0f, surface.translationX, 0f)
+            gesture.postOnAnimation { frameAfterRetirement.countDown() }
+        }
+        assertTrue("Expected a frame before admitting a fresh swipe", frameAfterRetirement.await(5, TimeUnit.SECONDS))
+        instrumentation.waitForIdleSync()
+        main {
+            assertTrue("The retired exit must not publish CLOSE on the next frame", actions.isEmpty())
+            assertEquals("The retired animator cannot move the restored card", 0f, surface.translationX, 0f)
+            swipe(gesture) { assertTrue("A fresh gesture remains available", surface.translationX > 0f) }
+        }
+        await("Close from the fresh swipe") { actions.isNotEmpty() }
+        main {
+            val close = "a" to ReverbBrowserPanelTabAction.CLOSE
+            assertEquals(listOf(close), actions)
+            val deliveredTranslation = surface.translationX
+            assertTrue(deliveredTranslation > 0f)
+            f.panel.bindTheme(ReverbDesign.theme(context, true))
+            assertEquals("A delivered close must stay offscreen during paint binding",
+                deliveredTranslation, surface.translationX, 0f)
+            assertEquals(listOf(close), actions)
+            f.panel.bindTabs("Tabs", f.entries)
+            assertEquals("An authoritative retained key restores the same card", 0f, surface.translationX, 0f)
+        }
+    }
+
+    @Test fun themeRebindPreservesPendingAccessibilityRemovalHandoff() = withTouchExploration {
+        mounted { f ->
+            lateinit var beta: ReverbBrowserPanelSettingRow
+            main {
+                val alpha = f.row("Alpha")
+                beta = f.row("Beta")
+                assertTrue(f.sink.requestFocus())
+                assertTrue(alpha.performAccessibilityAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null))
+                f.panel.bindTabs("Tabs", listOf(f.beta, f.gamma))
+                assertFalse("The surviving row has not reached its deferred handoff", beta.isAccessibilityFocused)
+                f.panel.bindTheme(ReverbDesign.theme(f.panel.context, true))
+                assertSame(beta, f.row("Beta"))
+                assertSame(f.sink, f.root.findFocus())
+            }
+            await("Deferred accessibility focus on the surviving tab") { beta.isAccessibilityFocused }
+            main { assertSame(f.sink, f.root.findFocus()) }
+        }
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun reorder(panel: ReverbBrowserPanelTabs<String>): ReverbBrowserPanelReorder<String> {
         // Seed and read the local lease deterministically, independent of WindowManager drag pickup.
@@ -178,7 +268,7 @@ class ReverbBrowserTabOwnershipIntegrationTest {
         } finally { node.recycle() }
     }
 
-    private fun swipe(card: View, duringMove: () -> Unit) {
+    private fun swipe(card: View, afterDown: () -> Unit = {}, duringMove: () -> Unit) {
         assertTrue(card.width > 0 && card.height > 0)
         val downTime = SystemClock.uptimeMillis()
         val properties = arrayOf(MotionEvent.PointerProperties().apply {
@@ -194,6 +284,7 @@ class ReverbBrowserTabOwnershipIntegrationTest {
         }
         send(MotionEvent.ACTION_DOWN, 0L, card.width * .2f)
         try {
+            afterDown()
             send(MotionEvent.ACTION_MOVE, 16L, card.width * .8f)
             duringMove()
         } catch (failure: Throwable) {

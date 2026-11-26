@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Paint
 import android.os.Build
+import android.text.Layout
 import android.view.View
+import android.view.ViewGroup
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.filters.SdkSuppress
@@ -46,24 +48,51 @@ class ZfmFileGridMetricsIntegrationTest {
         val title = ZfmFilenameText(context, palette, recipe.titleStyle).apply {
             bindName("Documents", directory = true)
         }
-        val detail = NativeText(context, palette, recipe.detailStyle)
+        val detail = NativeText(context, palette, recipe.detailStyle).apply {
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT)
+        }
         val cellWidth = recipe.minimumCellWidthPx(context, paddingDp)
         val padding = (paddingDp * context.resources.displayMetrics.density).roundToInt()
         val contentWidth = cellWidth - 2 * padding
-        val titleWidth = title.paint.measureText("Documents")
-        val detailWidth = detailSamples.maxOf { detail.paint.measureText(it) }
-        assertEquals("Recipe width uses the actual title and detail typography",
+        val titleWidth = Layout.getDesiredWidth("Documents", title.paint)
+        val detailWidth = detailSamples.maxOf { Layout.getDesiredWidth(it, detail.paint) }
+        val metrics = "cell=$cellWidth content=$contentWidth padding=$padding " +
+            "fontScale=${context.resources.configuration.fontScale} " +
+            "titleDesired=$titleWidth detailDesired=$detailWidth " +
+            "titleAdvance=${title.paint.measureText("Documents")} " +
+            "titleSpacing=${title.letterSpacing} detailSpacing=${detail.letterSpacing}"
+        assertEquals("Recipe width uses the actual title and detail layout metrics: $metrics",
             maxOf((108 * context.resources.displayMetrics.density).roundToInt(),
                 ceil(maxOf(titleWidth, detailWidth)).toInt() + 2 * padding), cellWidth)
-        assertTrue("Tracked Documents advance fits the padded helper width", titleWidth <= contentWidth)
-        title.measure(View.MeasureSpec.makeMeasureSpec(contentWidth, View.MeasureSpec.EXACTLY),
+        assertTrue("Documents desired width fits the padded helper width: $metrics", titleWidth <= contentWidth)
+        assertLineFits(title, "Documents", contentWidth, metrics)
+        for (sample in detailSamples) {
+            detail.text = sample
+            assertLineFits(detail, sample, contentWidth, metrics)
+        }
+    }
+
+    private fun assertLineFits(view: NativeText, expectedText: String, width: Int, metrics: String) {
+        view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
-        title.layout(0, 0, title.measuredWidth, title.measuredHeight)
-        val layout = checkNotNull(title.layout)
-        assertEquals("Documents must not wrap at the helper's minimum width", 1, layout.lineCount)
-        assertEquals(0, layout.getEllipsisCount(0))
-        assertEquals("Documents", title.text.toString())
-        assertTrue("Actual rendered line fits", layout.getLineWidth(0) <= contentWidth)
+        view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+        val layout = checkNotNull(view.layout)
+        val content = view.width - view.compoundPaddingLeft - view.compoundPaddingRight
+        val advance = view.paint.measureText(expectedText)
+        val desired = Layout.getDesiredWidth(expectedText, view.paint)
+        val lineWidth = layout.getLineWidth(0)
+        val diagnostic = "$metrics text=$expectedText viewWidth=${view.width} " +
+            "compoundContent=$content advance=$advance desired=$desired line=$lineWidth " +
+            "layout=${layout.javaClass.simpleName} paintWeight=${view.paint.typeface.weight} " +
+            "textSize=${view.textSize} textScaleX=${view.textScaleX} spacing=${view.letterSpacing}"
+        assertEquals("Exact padded width: $diagnostic", width, view.width)
+        assertEquals("Sample must not wrap: $diagnostic", 1, layout.lineCount)
+        assertEquals("No ellipsis: $diagnostic", 0, layout.getEllipsisCount(0))
+        assertEquals("Full sample retained: $diagnostic", expectedText, view.text.toString())
+        assertTrue("Paint advance fits: $diagnostic", advance <= content)
+        assertTrue("Desired layout width fits: $diagnostic", desired <= content)
+        assertTrue("Actual rendered line fits: $diagnostic", lineWidth <= content)
     }
 
     @Test fun emTrackedItalicTitleFitsPaddedMinimumAtBothFontScales() = main {
@@ -128,9 +157,17 @@ class ZfmFileGridMetricsIntegrationTest {
             ZfmTheme.resolve(context, dark = false).palette, style)
         val normalTitle = title(ordinary)
         val adjustedTitle = title(adjusted)
+        val diagnostic = "config=${adjusted.resources.configuration.fontWeightAdjustment} " +
+            "original=${adjustedTitle.typeface.weight} paint=${adjustedTitle.paint.typeface.weight} " +
+            "ordinaryAdvance=${normalTitle.paint.measureText("Documents")} " +
+            "adjustedAdvance=${adjustedTitle.paint.measureText("Documents")}"
+        assertEquals("Exercise the requested configuration: $diagnostic", 300,
+            adjusted.resources.configuration.fontWeightAdjustment)
         assertEquals(400, normalTitle.typeface.weight)
-        assertEquals("Exercise the native configuration weight adjustment", 700, adjustedTitle.typeface.weight)
-        assertTrue("The chosen font must expose the metric regression",
+        assertEquals("TextView getter retains the original face: $diagnostic", 400, adjustedTitle.typeface.weight)
+        assertEquals("Ordinary renderer weight: $diagnostic", 400, normalTitle.paint.typeface.weight)
+        assertEquals("Exercise the adjusted renderer weight: $diagnostic", 700, adjustedTitle.paint.typeface.weight)
+        assertTrue("The chosen font must expose the metric regression: $diagnostic",
             adjustedTitle.paint.measureText("Documents") != normalTitle.paint.measureText("Documents"))
         assertRendererFits(adjusted, ZfmFileGridRecipe(titleStyle = style))
         assertRendererFits(adjusted, ZfmFileGridRecipe.Default)

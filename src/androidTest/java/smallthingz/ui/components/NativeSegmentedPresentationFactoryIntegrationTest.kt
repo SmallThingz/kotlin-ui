@@ -90,6 +90,14 @@ class NativeSegmentedPresentationFactoryIntegrationTest {
                 assertEquals(textSurfaceRange(Color.BLACK), presentation.paintedTextSurface)
                 assertEquals("one", options.selectedId)
 
+                before = notifications
+                control.applyPalette(grain)
+                assertEquals("Palette-only rebinding keeps the current selection", "one", options.selectedId)
+                assertEquals(textSurfaceRange(Color.BLACK, 0xff090909.toInt()), presentation.paintedTextSurface)
+                assertEquals(before + 1, notifications)
+                control.applyPalette(grain)
+                assertEquals("Equal direct palettes keep the surface quiet", before + 1, notifications)
+
                 assertSame(surface, presentation.surface)
                 assertSame(surface, control.getChildAt(0))
                 assertSame(retainedOne, options.choiceView("one"))

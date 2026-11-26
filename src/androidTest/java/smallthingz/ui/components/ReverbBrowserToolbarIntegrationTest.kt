@@ -215,6 +215,129 @@ class ReverbBrowserToolbarIntegrationTest {
         } finally { connection.closeConnection() }
     }
 
+    @Test fun attachedThemeRebindPreservesEditorCompositionAndRendererWithNewPalette() {
+        val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
+            NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        var installed: ReverbBrowserChrome? = null
+        var connection: android.view.inputmethod.InputConnection? = null
+        withRetiringTestActivity(activity, root = { installed }, cleanup = {
+            try { connection?.closeConnection() } finally { installed?.close() }
+        }) {
+            lateinit var chrome: ReverbBrowserChrome
+            lateinit var renderer: View
+            lateinit var editor: NativeTextField
+            lateinit var editable: android.text.Editable
+            lateinit var composing: List<Pair<Any, Triple<Int, Int, Int>>>
+            val focusEvents = mutableListOf<Boolean>()
+            var rendererAttaches = 0
+            var rendererDetaches = 0
+            var rendererCancels = 0
+            var admittedRendererCancels = 0
+            var submissions = 0
+            fun awaitMain(message: String, condition: () -> Boolean) {
+                val deadline = SystemClock.uptimeMillis() + 5000
+                var ready = false
+                while (!ready && SystemClock.uptimeMillis() < deadline) {
+                    main { ready = condition() }
+                    if (!ready) SystemClock.sleep(16)
+                }
+                assertTrue(message, ready)
+            }
+            fun assertRetained() {
+                assertSame(editor, chrome.addressEditor)
+                assertSame(editable, editor.text)
+                assertEquals("draft.test", editable.toString())
+                assertEquals(2, editor.selectionStart)
+                assertEquals(7, editor.selectionEnd)
+                assertEquals(0, BaseInputConnection.getComposingSpanStart(editable))
+                assertEquals(10, BaseInputConnection.getComposingSpanEnd(editable))
+                for ((span, before) in composing) {
+                    assertEquals(before.first, editable.getSpanStart(span))
+                    assertEquals(before.second, editable.getSpanEnd(span))
+                    assertEquals(before.third, editable.getSpanFlags(span))
+                }
+                assertTrue(editor.hasFocus())
+                assertEquals(listOf(true), focusEvents)
+                assertSame(chrome.pageHost, renderer.parent)
+                assertEquals(1, chrome.pageHost.childCount)
+                assertSame(renderer, chrome.pageHost.getChildAt(0))
+                assertTrue(renderer.isAttachedToWindow)
+                assertEquals(1, rendererAttaches)
+                assertEquals(0, rendererDetaches)
+                assertEquals("Paint-only binding must not cancel caller-owned renderer input",
+                    admittedRendererCancels, rendererCancels)
+            }
+            main {
+                chrome = createChrome(activity, ReverbDesign.theme(activity, false))
+                installed = chrome
+                renderer = object : View(activity) {
+                    override fun onAttachedToWindow() { super.onAttachedToWindow(); rendererAttaches++ }
+                    override fun onDetachedFromWindow() { rendererDetaches++; super.onDetachedFromWindow() }
+                    override fun onCancelPendingInputEvents() { rendererCancels++; super.onCancelPendingInputEvents() }
+                }.apply { isFocusableInTouchMode = true }
+                chrome.attachRenderer(renderer)
+                activity.setContentView(chrome)
+            }
+            awaitMain("Browser must be attached, laid out and own window focus") {
+                chrome.isAttachedToWindow && chrome.isShown && chrome.hasWindowFocus() &&
+                    chrome.isLaidOut && !chrome.isLayoutRequested && chrome.width > 0
+            }
+            main {
+                editor = chrome.addressEditor
+                editor.setText("example.test")
+                editor.onFocusChangeListener = View.OnFocusChangeListener { _, focused -> focusEvents.add(focused) }
+                editor.imeOptions = EditorInfo.IME_ACTION_GO
+                editor.setOnEditorActionListener { _, action, _ ->
+                    if (action == EditorInfo.IME_ACTION_GO) { submissions++; true } else false
+                }
+                assertTrue(renderer.requestFocus())
+                focusEvents.clear()
+                assertTrue(editor.requestFocus())
+                editable = editor.text
+                connection = checkNotNull(editor.onCreateInputConnection(EditorInfo()))
+                assertTrue(checkNotNull(connection).setSelection(0, editor.length()))
+                assertTrue(checkNotNull(connection).setComposingText("draft.test", 1))
+                assertTrue(checkNotNull(connection).setSelection(2, 7))
+                composing = editable.getSpans(0, editable.length, Any::class.java)
+                    .filter { editable.getSpanFlags(it) and android.text.Spanned.SPAN_COMPOSING != 0 }
+                    .map { it to Triple(editable.getSpanStart(it), editable.getSpanEnd(it), editable.getSpanFlags(it)) }
+                assertTrue("Precondition: an actual native composing span is present", composing.isNotEmpty())
+                admittedRendererCancels = rendererCancels
+                assertRetained()
+            }
+            // Both directions repaint the live retained objects. Wait off Main for native ink motion.
+            for (dark in listOf(true, false)) {
+                lateinit var next: ReverbTheme
+                main {
+                    next = ReverbDesign.theme(activity, dark)
+                    assertNotEquals("Precondition: rebind changes text ink", next.palette.pageControls.content, editor.currentTextColor)
+                    chrome.bindTheme(next)
+                    assertRetained()
+                }
+                awaitMain("Live editor must publish the new palette (dark=$dark)") {
+                    editor.currentTextColor == next.palette.pageControls.content &&
+                        editor.currentHintTextColor == next.palette.pageControls.muted &&
+                        editor.highlightColor == next.palette.pageControls.selection
+                }
+                main {
+                    assertRetained()
+                    assertEquals(next.palette.pageControls.content, editor.currentTextColor)
+                    assertEquals(next.palette.pageControls.muted, editor.currentHintTextColor)
+                    assertEquals(next.palette.pageControls.selection, editor.highlightColor)
+                }
+            }
+            main {
+                assertEquals(0, submissions)
+                assertTrue(checkNotNull(connection).performEditorAction(EditorInfo.IME_ACTION_GO))
+                assertEquals("The original InputConnection and host action listener remain live", 1, submissions)
+                assertTrue(checkNotNull(connection).finishComposingText())
+                assertEquals(-1, BaseInputConnection.getComposingSpanStart(editable))
+                assertTrue(renderer.requestFocus())
+                assertEquals(listOf(true, false), focusEvents)
+            }
+        }
+    }
+
     private fun createChrome(context: Context, theme: ReverbTheme): ReverbBrowserChrome {
         fun action(id: String) = ReverbBrowserChromeAction(id, id, ReverbBrowserChromeIcon.Shared(ReverbIcon.Browser))
         return ReverbBrowserChrome(context, theme, "Address", action("site"), action("tabs"), action("menu"))

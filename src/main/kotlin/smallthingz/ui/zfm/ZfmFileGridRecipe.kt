@@ -2,6 +2,8 @@ package smallthingz.ui.zfm
 
 import android.content.Context
 import android.graphics.Paint
+import android.text.Layout
+import android.text.TextPaint
 import smallthingz.ui.components.NativeTextStyle
 import smallthingz.ui.text.font.FontFamily
 import smallthingz.ui.text.font.FontStyle
@@ -27,7 +29,7 @@ data class ZfmFileGridRecipe(
         val compactWidth = dp(108)
         val density = Density(context)
         val fonts = createFontFamilyResolver(context)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val paint = TextPaint(Paint.ANTI_ALIAS_FLAG)
         fun useTypography(style: NativeTextStyle) {
             // Keep configuration weight adjustment and match NativeText's italic/tracking.
             paint.typeface = fonts.resolve(FontFamily.system(style.fontFamily), FontWeight(style.weight),
@@ -40,10 +42,11 @@ data class ZfmFileGridRecipe(
         }
         useTypography(titleStyle)
         // Fit a usual folder name and keep a size or status word intact on its own line.
-        val nameWidth = paint.measureText("Documents")
+        // TextLine metrics match NativeText's Layout, including tracked run edges.
+        val nameWidth = Layout.getDesiredWidth("Documents", paint)
         useTypography(detailStyle)
-        val textWidth = maxOf(nameWidth, paint.measureText("1023 MiB"), paint.measureText("99.9 MiB"),
-            paint.measureText("incomplete"), paint.measureText("unavailable"))
+        val textWidth = maxOf(nameWidth, Layout.getDesiredWidth("1023 MiB", paint), Layout.getDesiredWidth("99.9 MiB", paint),
+            Layout.getDesiredWidth("incomplete", paint), Layout.getDesiredWidth("unavailable", paint))
         return maxOf(compactWidth, ceil(textWidth).toInt() + 2 * dp(horizontalPaddingDp))
     }
 

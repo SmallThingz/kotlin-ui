@@ -3,7 +3,6 @@ package smallthingz.ui.reverb
 import android.content.Context
 import android.graphics.Color
 import android.os.Build
-import android.text.TextUtils
 import android.view.View
 import android.view.Window
 import android.widget.FrameLayout
@@ -13,10 +12,6 @@ import androidx.core.graphics.Insets
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import smallthingz.ui.components.NativeMaterialButtonView
-import smallthingz.ui.components.NativeText
-import smallthingz.ui.components.NativeTextRole
-import smallthingz.ui.components.nativeTextStyle
-import smallthingz.ui.text.NativeTypographyRole
 import kotlin.math.roundToInt
 
 /**
@@ -49,14 +44,6 @@ class ReverbControlScreenFrame(
     }
     val browserHost = FrameLayout(context)
     val content = FrameLayout(context)
-    val status = NativeText(context, theme.palette.pageControls,
-        appearance.typography.nativeTextStyle(NativeTypographyRole.BODY_SMALL), NativeTextRole.MUTED).apply {
-        accessibilityLiveRegion = ACCESSIBILITY_LIVE_REGION_POLITE
-        maxLines = 2
-        ellipsize = TextUtils.TruncateAt.END
-        visibility = GONE
-        setPaddingRelative(dp(sections.sideInsetDp), 0, dp(sections.sideInsetDp), 0)
-    }
     val primaryActionDock = ReverbBottomActionDock(context, theme, primaryAction)
     private val transition = ReverbScreenTransition(content)
     private var safeInsets = Insets.NONE
@@ -82,10 +69,7 @@ class ReverbControlScreenFrame(
             addView(transcript, FrameLayout.LayoutParams(-1, -1))
         }, FrameLayout.LayoutParams(-1, -1))
         content.addView(onboarding, FrameLayout.LayoutParams(-1, -1))
-        addView(column().apply {
-            addView(content, LayoutParams(-1, 0, 1f))
-            addView(status, row())
-        }, LayoutParams(-1, 0, 1f))
+        addView(content, LayoutParams(-1, 0, 1f))
         addView(primaryActionDock, row())
     }
 
@@ -140,17 +124,7 @@ class ReverbControlScreenFrame(
         bindSafeInsets()
     }
 
-    /** A pending decision must expose its complete instruction, including the discard action. */
-    fun showStatus(show: Boolean, actionRequired: Boolean) {
-        val lines = if (actionRequired) Int.MAX_VALUE else 2
-        if (status.maxLines != lines) status.maxLines = lines
-        val truncation = if (actionRequired) null else TextUtils.TruncateAt.END
-        if (status.ellipsize != truncation) status.ellipsize = truncation
-        status.visibility = if (show && status.text.isNotEmpty()) VISIBLE else GONE
-    }
-
     fun bindTheme(theme: ReverbTheme) {
         appearance.backdrops.bindPage(backdrop, theme.palette)
-        status.applyPalette(theme.palette.pageControls)
     }
 }

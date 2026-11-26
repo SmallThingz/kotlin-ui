@@ -286,7 +286,7 @@ internal class NativeMenuRowView<I>(
         isFocusable = action != null
         importantForAccessibility = if (action != null) IMPORTANT_FOR_ACCESSIBILITY_YES else IMPORTANT_FOR_ACCESSIBILITY_NO
         ViewCompat.setScreenReaderFocusable(this, action != null)
-        text.importantForAccessibility = if (action != null) IMPORTANT_FOR_ACCESSIBILITY_NO else IMPORTANT_FOR_ACCESSIBILITY_AUTO
+        text.importantForAccessibility = if (action != null) IMPORTANT_FOR_ACCESSIBILITY_NO else IMPORTANT_FOR_ACCESSIBILITY_YES
         if (twoLineTitle) text.setTextLayout(maxLines = 2, overflow = TextOverflow.Ellipsis)
         else text.setTextLayout()
         text.setText(label)
@@ -326,7 +326,7 @@ internal class NativeMenuRowView<I>(
         isFocusable = true
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         ViewCompat.setScreenReaderFocusable(this, true)
-        text.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_AUTO
+        text.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
     }
 
     fun maxIntrinsicWidth(): Int =

@@ -7,6 +7,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityEvent
 import smallthingz.ui.geometry.roundedGroupGeometry
 import smallthingz.ui.input.phase.NativeClickPhaseHost
 import smallthingz.ui.input.phase.ViewClickPhaseEndpoint
@@ -41,6 +42,10 @@ abstract class NativeClickableRow(
     final override val nativeClickEndpoint = ViewClickPhaseEndpoint(input)
     private var rowEnabled = false
     private var inputReady = false
+    private var rowLongClick: (() -> Boolean)? = null
+    protected var rowLongClickLabel: CharSequence? = null
+        private set
+    protected val hasRowLongAction get() = rowLongClick != null
     protected val rowInputEnabled get() = rowEnabled && isEnabled
     protected abstract val hasRowAction: Boolean
     protected abstract fun activateRow()
@@ -60,7 +65,24 @@ abstract class NativeClickableRow(
         bindInput()
     }
 
-    private fun bindInput() = input.bind(NativeClickBinding(this, rowInputEnabled, onClick = { performClick() }))
+    /** Explicit secondary action; the native controller owns long-press consumption. */
+    internal fun bindRowLongClick(label: CharSequence?, action: (() -> Boolean)?) {
+        val hadAction = hasRowLongAction
+        if (!hadAction && action == null) return
+        val previousLabel = rowLongClickLabel
+        input.cancel()
+        rowLongClick = action
+        rowLongClickLabel = if (action == null) null else label
+        bindInput()
+        // The merged row owns Details semantics. The native long-click flag belongs to callers.
+        if (isAttachedToWindow && (hadAction != hasRowLongAction || previousLabel != rowLongClickLabel)) {
+            sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED)
+        }
+    }
+
+    private fun bindInput() = input.bind(NativeClickBinding(this, rowInputEnabled,
+        onClick = { performClick() },
+        onLongClick = if (hasRowLongAction) ({ performLongClick(); Unit }) else null))
 
     override fun setEnabled(enabled: Boolean) {
         val changed = isEnabled != enabled
@@ -77,6 +99,8 @@ abstract class NativeClickableRow(
     }
 
     protected fun retireRow() {
+        rowLongClick = null
+        rowLongClickLabel = null
         rowEnabled = false
         isEnabled = false
         isFocusable = false
@@ -87,6 +111,10 @@ abstract class NativeClickableRow(
     protected fun canActivate() = rowInputEnabled && hasRowAction && isAttachedToWindow && isShown
 
     override fun performClick() = canActivate() && super.performClick()
+    override fun performLongClick(): Boolean {
+        val action = rowLongClick ?: return super.performLongClick()
+        return rowInputEnabled && isAttachedToWindow && isShown && hasWindowFocus() && action()
+    }
     override fun onTouchEvent(event: MotionEvent) = input.touch(event)
     override fun onKeyDown(code: Int, event: KeyEvent) =
         if (isNativeClickActivationKey(code)) input.key(event) else super.onKeyDown(code, event)

@@ -11,16 +11,26 @@ import smallthingz.ui.components.NativeMaterialButtonView
 import kotlin.math.roundToInt
 
 /** Main controls become a bounded browser disclosure without changing their retained content. */
-class ReverbBrowserChromeControlsScroll(context: Context, private val theme: ReverbTheme) : ScrollView(context) {
+class ReverbBrowserChromeControlsScroll(context: Context, private var theme: ReverbTheme) : ScrollView(context) {
     private var disclosure = false
-    private val disclosureBackground by lazy(LazyThreadSafetyMode.NONE) {
-        NativeForeground.foregroundBackground(theme.palette.pageControls, theme.palette.surface)
+    private var disclosureBackground: android.graphics.drawable.Drawable? = null
+    private fun disclosureBackground() = disclosureBackground ?: NativeForeground.foregroundBackground(
+        theme.palette.pageControls, theme.palette.surface).also { disclosureBackground = it }
+
+    /** Keep disclosure, layout parameters, children and scroll position; replace only cached paint. */
+    fun bindTheme(theme: ReverbTheme) {
+        if (this.theme === theme) return
+        cancelBrowserPanelInput()
+        this.theme = theme
+        disclosureBackground = null
+        if (disclosure) background = disclosureBackground()
+        ReverbTextSurface.invalidate(this)
     }
     fun showBrowserDisclosure(show: Boolean) {
         if (disclosure == show) return
         disclosure = show
         layoutParams = FrameLayout.LayoutParams(-1, if (show) -2 else -1)
-        background = if (show) disclosureBackground else null
+        background = if (show) disclosureBackground() else null
         isClickable = show
     }
     override fun onMeasure(w: Int, h: Int) {

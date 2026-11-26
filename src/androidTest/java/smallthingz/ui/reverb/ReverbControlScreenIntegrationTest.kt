@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.Rect
 import android.os.SystemClock
 import android.text.Spanned
 import android.view.ContextThemeWrapper
@@ -90,38 +91,61 @@ class ReverbControlScreenIntegrationTest {
         }
     }
 
-    @Test fun rtlLargeTextWarningIsCompleteLiveAndDoesNotLeaveAnInvisibleActionSlot() = withFixture(fontScale = 2f) { f ->
-        main {
-            val warning = "هناك تغييرات غير محفوظة. اضغط رجوع مرة أخرى لتجاهل التغييرات والخروج."
-            f.frame.layoutDirection = View.LAYOUT_DIRECTION_RTL
-            f.frame.status.text = warning
-            f.frame.showStatus(show = true, actionRequired = true)
-            f.frame.showPrimaryAction(false)
-            f.frame.applySafeInsets(Insets.of(11, 19, 23, 31))
-            f.measure(widthDp = 320, heightDp = 700)
-            assertTrue(f.frame.status.lineCount > 2)
-            assertNull(f.frame.status.ellipsize)
-            assertTrue(f.frame.content.height > 0)
-            assertTrue(f.frame.status.bottom <= (f.frame.status.parent as View).height)
-            val node = f.frame.status.createAccessibilityNodeInfo()
-            try {
-                assertEquals(warning, node.text.toString())
-                assertEquals(View.ACCESSIBILITY_LIVE_REGION_POLITE, node.liveRegion)
-            } finally { node.recycle() }
-            val textLayout = checkNotNull(f.frame.status.layout)
-            for (line in 0 until textLayout.lineCount) assertEquals(0, textLayout.getEllipsisCount(line))
-            assertEquals(View.GONE, f.primary.visibility)
-            assertEquals(View.GONE, (f.primary.parent as View).visibility)
+    @Test fun frameExposesNoPersistentStatusSlotOrCompatibilityApi() {
+        // Removing the slot is an API contract: a hidden view or no-op setter is not a replacement.
+        val type = ReverbControlScreenFrame::class.java
+        val retiredMethods = setOf("getStatus", "getStatusTextView", "showStatus")
+        assertFalse("Persistent status APIs must stay removed",
+            type.methods.any { it.name in retiredMethods })
+        assertFalse("A hidden persistent status view must not survive",
+            type.declaredFields.any { it.name == "status" || it.name == "statusTextView" })
+    }
 
-            val withoutAction = f.frame.content.height
-            f.frame.showPrimaryAction(true)
-            f.measure(widthDp = 320, heightDp = 700)
-            val target = f.primary.parent as View
-            assertTrue(target.height >= f.dp(48))
-            assertTrue(f.frame.content.height < withoutAction)
-            f.frame.showPrimaryAction(false)
-            f.measure(widthDp = 320, heightDp = 700)
-            assertEquals(withoutAction, f.frame.content.height)
+    @Test fun rtlLargeTextContentUsesTheSafeViewportWithoutAStatusOrHiddenActionGap() = withFixture(fontScale = 2f) { f ->
+        main {
+            f.frame.layoutDirection = View.LAYOUT_DIRECTION_RTL
+            f.frame.applySafeInsets(Insets.of(11, 19, 23, 31))
+            fun contentBounds() = Rect(0, 0, f.frame.content.width, f.frame.content.height).also {
+                f.frame.offsetDescendantRectToMyCoords(f.frame.content, it)
+            }
+            for ((width, height) in listOf(280 to 500, 320 to 700)) {
+                f.frame.showPrimaryAction(false)
+                f.frame.bindTheme(f.environment.theme)
+                f.measure(widthDp = width, heightDp = height)
+                val withoutAction = contentBounds()
+                assertTrue(withoutAction.height() > 0)
+                assertEquals(11, withoutAction.left)
+                assertEquals(f.frame.width - 23, withoutAction.right)
+                assertEquals("No status strip may consume the remaining page", f.frame.height - 31, withoutAction.bottom)
+                assertEquals(View.GONE, f.primary.visibility)
+                assertEquals(View.GONE, f.frame.primaryActionDock.visibility)
+
+                f.frame.showPrimaryAction(true)
+                f.measure(widthDp = width, heightDp = height)
+                val dock = f.frame.primaryActionDock
+                val withAction = contentBounds()
+                assertTrue(dock.height >= f.dp(48))
+                assertEquals(31, dock.safeBottomInset)
+                assertEquals(0, f.frame.paddingBottom)
+                assertEquals("Content must adjoin its action dock", dock.top, withAction.bottom)
+                assertEquals(f.frame.height, dock.bottom)
+                assertEquals(withoutAction.top, withAction.top)
+                assertTrue(withAction.height() < withoutAction.height())
+
+                f.frame.showPrimaryAction(false)
+                f.measure(widthDp = width, heightDp = height)
+                assertEquals("Hiding the action restores all page space", withoutAction, contentBounds())
+
+                f.frame.browserHost.visibility = View.VISIBLE
+                f.frame.showPrimaryAction(false)
+                f.measure(widthDp = width, heightDp = height)
+                assertEquals("Browser owns its bottom inset without a frame strip", f.frame.height, contentBounds().bottom)
+                assertEquals(Insets.of(0, 0, 0, 31), f.frame.browserSafeInsets)
+                f.frame.browserHost.visibility = View.GONE
+                f.frame.showPrimaryAction(false)
+                f.measure(widthDp = width, heightDp = height)
+                assertEquals(withoutAction, contentBounds())
+            }
         }
     }
 
@@ -245,7 +269,9 @@ class ReverbControlScreenIntegrationTest {
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         var fixture: Fixture? = null
-        try {
+        AutoCloseable {
+            AutoCloseable { main { activity.finish() } }.use { main { fixture?.close() } }
+        }.use {
             main {
                 val configured = activity.createConfigurationContext(Configuration(activity.resources.configuration).apply {
                     this.fontScale = fontScale
@@ -263,10 +289,12 @@ class ReverbControlScreenIntegrationTest {
             } while (!ready && SystemClock.uptimeMillis() < deadline)
             assertTrue("Control frame did not acquire its attached window", ready)
             block(current)
-        } finally {
-            main { fixture?.close(); activity.finish() }
         }
     }
 
-    private fun main(block: () -> Unit) = InstrumentationRegistry.getInstrumentation().runOnMainSync(block)
+    private fun main(block: () -> Unit) {
+        var result: Result<Unit>? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { result = runCatching(block) }
+        checkNotNull(result).getOrThrow()
+    }
 }

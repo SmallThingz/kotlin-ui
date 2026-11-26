@@ -44,8 +44,8 @@ data class ReverbBrowserPanelTab<Key : Any>(
 enum class ReverbBrowserPanelTabAction { BACK, NEW, SELECT, CLOSE }
 
 /** Candidate tab overview contract, built from Reverb toolbar, group and action recipes. */
-open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme: ReverbTheme,
-    title: String, backLabel: String, newLabel: String,
+open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private var theme: ReverbTheme,
+    title: String, backLabel: String, private val newLabel: String,
 ) : ReverbBrowserPanelLayout(context) {
     var onTabAction: ((Key?, ReverbBrowserPanelTabAction) -> Unit)? = null
     /**
@@ -60,7 +60,8 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             field = value
             cards.values.forEach { it.bindReorderActions() }
         }
-    private val environment = ReverbEnvironment(theme)
+    private var environment = ReverbEnvironment(theme)
+    private var appearanceRevision = 0L
     private val back = browserPanelToolbarAction(context, theme, backLabel, ReverbIcon.Back) {
         if (!panelClosed) onTabAction?.invoke(null, ReverbBrowserPanelTabAction.BACK)
     }
@@ -159,13 +160,33 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         addView(grid, FrameLayout.LayoutParams(-1, -2))
     }
     private val footer = ReverbBottomActionDock(context, theme, newTab)
+    private val toolbar = ReverbTitledTopBarLayout(context, theme.density.density, theme.palette, back, heading,
+        Space(context), style = theme.appearance.toolbars)
+
+    /** Retain keyed cards, previews, order, scroll and independent accessibility/keyboard focus. */
+    fun bindTheme(theme: ReverbTheme) {
+        if (panelClosed || this.theme === theme) return
+        this.theme = theme
+        val revision = ++appearanceRevision
+        // Panel-wide cancellation would also revoke a valid removal focus handoff.
+        cancelReorder()
+        if (panelClosed || appearanceRevision != revision) return
+        toolbar.cancelBrowserPanelInput()
+        newTab.cancelBrowserPanelInput()
+        environment = ReverbEnvironment(theme)
+        background = theme.appearance.backdrops.pageBackground(theme.palette)
+        toolbar.bindTitledToolbar(theme.density.density, theme.palette)
+        back.bindTheme(theme)
+        theme.bindParagraph(heading, theme.appearance.toolbars.centeredTitleRole)
+        newTab.bind(newLabel, newTab.isEnabled, theme.palette.buttonPalette, onClick = ::newTabRequested)
+        cards.values.forEach { it.bindTheme() }
+        ReverbTextSurface.invalidate(this)
+    }
     init {
         background = theme.appearance.backdrops.pageBackground(theme.palette)
         ViewCompat.setAccessibilityPaneTitle(this, title)
         ViewCompat.setAccessibilityHeading(heading, true)
-        addView(ReverbTitledTopBarLayout(context, theme.density.density, theme.palette, back, heading, Space(context),
-            style = theme.appearance.toolbars),
-            LayoutParams(-1, -2))
+        addView(toolbar, LayoutParams(-1, -2))
         addView(scroll, LayoutParams(-1, 0, 1f))
         addView(footer, LayoutParams(-1, -2))
     }
@@ -340,12 +361,13 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         scheduleEdgeScroll()
     }
     private fun moveTab(key: Key, target: Key): Boolean {
+        val revision = appearanceRevision
         val callback = onTabMove ?: return false
         if (panelClosed || !reorder.canMove(key, target)) return false
         val source = cards[key] ?: return false
         val destination = cards[target] ?: return false
-        fun current() = !panelClosed && onTabMove === callback && reorder.canMove(key, target) &&
-            cards[key] === source && cards[target] === destination &&
+        fun current() = !panelClosed && appearanceRevision == revision && onTabMove === callback &&
+            reorder.canMove(key, target) && cards[key] === source && cards[target] === destination &&
             source.content.enabled && destination.content.enabled
         fun admitted() = current() && source.row.browserPanelAdmitsInput() &&
             destination.row.browserPanelAdmitsInput() && current()
@@ -517,7 +539,9 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             fun ownsActions() = !closed && !panelClosed && onTabMove === owner &&
                 snapshot?.enabled == true && cards[key] === this
             if (reorder.canStart(key)) row.setOnLongClickListener {
-                if (!ownsActions() || !row.browserPanelAdmitsInput() || !ownsActions()) return@setOnLongClickListener false
+                val revision = appearanceRevision
+                if (!ownsActions() || !row.browserPanelAdmitsInput() || appearanceRevision != revision || !ownsActions())
+                    return@setOnLongClickListener false
                 val token = reorder.begin(key) ?: return@setOnLongClickListener false
                 dragSource = row
                 gesture.cancelBrowserPanelInput()
@@ -541,15 +565,30 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             if (!dispatch(ReverbBrowserPanelTabAction.CLOSE)) gesture.restoreRetainedTab()
         }
         private fun dispatch(action: ReverbBrowserPanelTabAction, source: View = surface): Boolean {
+            val revision = appearanceRevision
             val before = snapshot ?: return false
             val owner = onTabAction ?: return false
             if (!closed && !panelClosed && !reorder.dragging && before.enabled && cards[before.key] === this &&
-                source.browserPanelAdmitsInput() && !closed && !panelClosed && snapshot === before &&
-                cards[before.key] === this && onTabAction === owner) {
+                source.browserPanelAdmitsInput() && appearanceRevision == revision && !closed && !panelClosed &&
+                snapshot === before && cards[before.key] === this && onTabAction === owner) {
                 owner(before.key, action)
                 return true
             }
             return false
+        }
+        fun bindTheme() {
+            if (closed) return
+            val entry = snapshot ?: return
+            gesture.retireForAppearanceChange()
+            row.bindTheme(theme)
+            surface.setSurfacePreset(theme.palette.surfacePreset)
+            surface.setPaletteImmediately(recipe.fillColor(theme.palette),
+                if (entry.current) theme.palette.primary else recipe.borderColor(theme.palette))
+            close.visual.background = NativeForeground.foregroundBackground(theme.palette.pageControls)
+            close.bind(environment, ReverbIcon.Close, entry.closeLabel, entry.enabled, theme.palette.muted, theme.palette.ink) {
+                dispatch(ReverbBrowserPanelTabAction.CLOSE, close.visual)
+            }
+            if (entry.preview == null) image.imageTintList = ColorStateList.valueOf(theme.palette.muted)
         }
         fun bind(entry: ReverbBrowserPanelTab<Key>) {
             if (closed) return
