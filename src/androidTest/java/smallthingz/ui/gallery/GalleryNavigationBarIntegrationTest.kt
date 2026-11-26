@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.graphics.Outline
 import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.RippleDrawable
 import android.graphics.drawable.DrawableWrapper
 import android.os.SystemClock
@@ -253,6 +254,76 @@ class GalleryNavigationBarIntegrationTest {
                             } finally { surface.recycle() }
                         }
                     }
+                }
+            }
+    }
+
+    @Test fun contentSurfaceOutlineDoesNotReenterFromDelegateBoundsInvalidation() = main {
+        for (fontScale in listOf(1f, 2f))
+            for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
+                withBar(fontScale, listOf("Photos", "Search", "Albums"), direction) { f ->
+                    f.layout(600)
+                    val chip = f.chips.getValue(f.ids.first())
+                    val background = chip.background as DrawableWrapper
+                    val delegate = checkNotNull(background.drawable)
+                    val cell = Rect(0, 0, chip.width, chip.height)
+                    background.setBounds(cell)
+                    assertEquals("Start with nonempty full-cell delegate bounds before any draw",
+                        cell, delegate.bounds)
+                    assertSame(background, delegate.callback)
+                    val owner = background.callback
+                    var outlineDepth = 0
+                    var outlineQueries = 0
+                    var forwardedInvalidations = 0
+                    fun queryOutline(): Rect {
+                        outlineDepth++
+                        try {
+                            // Fail deterministically before exhausting the instrumentation stack.
+                            assertEquals("setBounds invalidation must not reenter the outline query",
+                                1, outlineDepth)
+                            outlineQueries++
+                            val outline = Outline()
+                            background.getOutline(outline)
+                            return Rect().also { assertTrue(outline.getRect(it)) }
+                        } finally { outlineDepth-- }
+                    }
+                    // Model the attached View's synchronous rebuildOutline callback. This uses
+                    // real Android Drawable.setBounds (which invalidates BEFORE storing bounds),
+                    // not a bitmap draw that settles the delegate bounds before the first query.
+                    val synchronousOwner = object : Drawable.Callback {
+                        override fun invalidateDrawable(who: Drawable) {
+                            assertSame(background, who)
+                            forwardedInvalidations++
+                            queryOutline()
+                        }
+                        override fun scheduleDrawable(who: Drawable, what: Runnable, at: Long) {
+                            owner?.scheduleDrawable(who, what, at)
+                        }
+                        override fun unscheduleDrawable(who: Drawable, what: Runnable) {
+                            owner?.unscheduleDrawable(who, what)
+                        }
+                    }
+                    try {
+                        background.callback = synchronousOwner
+                        val content = queryOutline()
+                        assertTrue("The first outline must actually narrow the full-cell bounds",
+                            content.left > 0 && content.right < cell.right)
+                        assertEquals(cell.top, content.top)
+                        assertEquals(cell.bottom, content.bottom)
+                        assertEquals(content, delegate.bounds)
+                        assertEquals(1, outlineQueries)
+                        assertEquals("Internal bounds invalidation must not escape", 0, forwardedInvalidations)
+                        repeat(2) { index ->
+                            // Suppression must end after setBounds: ordinary ripple/color/frame
+                            // invalidations still reach the owner and synchronously query outline.
+                            delegate.invalidateSelf()
+                            assertEquals(index + 1, forwardedInvalidations)
+                            assertEquals(index + 2, outlineQueries)
+                            assertEquals(content, delegate.bounds)
+                        }
+                        assertEquals(0, outlineDepth)
+                        assertTrue("Outline refresh cannot navigate", f.requests.isEmpty())
+                    } finally { background.callback = owner }
                 }
             }
     }
