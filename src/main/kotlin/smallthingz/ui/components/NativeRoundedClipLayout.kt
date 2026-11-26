@@ -54,7 +54,8 @@ open class NativeRoundedClipLayout(
     }
 
     override fun draw(canvas: Canvas) {
-        if (canvas.isHardwareAccelerated || path == null) super.draw(canvas) else {
+        // Detached views drawn into another view's hardware canvas have no outline clip.
+        if (path == null || (canvas.isHardwareAccelerated && isAttachedToWindow)) super.draw(canvas) else {
             val checkpoint = canvas.save()
             try {
                 canvas.clipPath(path)
