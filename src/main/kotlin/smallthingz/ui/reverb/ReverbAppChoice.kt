@@ -32,6 +32,8 @@ internal class ReverbAppChoiceRow(
     context: Context,
     theme: ReverbTheme,
     private val trigger: Boolean,
+    private val checkbox: Boolean = false,
+    private val showIdentityIcon: Boolean = true,
     action: (String) -> Unit,
 ) : NativeClickableRow(context, { null }), AutoCloseable {
     private val recipe = NativeSettingsRowStyle()
@@ -52,6 +54,7 @@ internal class ReverbAppChoiceRow(
     internal val trailing = ReverbGlyphView(context, ReverbIcon.ArrowDropDown, theme.palette.muted)
     private var choice: ReverbAppChoice? = null
     private var boundTheme: ReverbTheme? = null
+    private var boundSupportingText: String? = null
     private var action: ((String) -> Unit)? = action
     private var closed = false
     override val hasRowAction get() = !closed && action != null
@@ -66,9 +69,11 @@ internal class ReverbAppChoiceRow(
         addView(content, LayoutParams(-1, -2))
     }
 
-    fun bind(value: ReverbAppChoice, selected: Boolean, theme: ReverbTheme) {
-        if (closed || choice == value && isSelected == selected && boundTheme === theme) return
+    fun bind(value: ReverbAppChoice, selected: Boolean, theme: ReverbTheme, supportingText: String? = null) {
+        if (closed || choice == value && isSelected == selected && boundTheme === theme &&
+            boundSupportingText == supportingText) return
         boundTheme = theme
+        boundSupportingText = supportingText
         val density = theme.density.density
         fun dp(value: Float) = (value * density).roundToInt()
         minimumHeight = dp(recipe.minHeightDp)
@@ -85,10 +90,11 @@ internal class ReverbAppChoiceRow(
         theme.bindParagraph(label, NativeTypographyRole.BODY_MEDIUM)
         if (!value.enabled) label.animateTextColor(theme.palette.muted)
         val packageName = value.packageName?.takeIf { it.isNotBlank() }
-        packageLabel.setText(packageName?.let {
+        val detail = if (supportingText == null) packageName else supportingText.takeIf { it.isNotBlank() }
+        packageLabel.setText(if (supportingText != null) detail.orEmpty() else packageName?.let {
             BidiFormatter.getInstance().unicodeWrap(it, TextDirectionHeuristics.LTR)
         }.orEmpty())
-        packageLabel.visibility = if (packageName == null) GONE else VISIBLE
+        packageLabel.visibility = if (detail == null) GONE else VISIBLE
         theme.bindSupportingParagraph(packageLabel, NativeTypographyRole.BODY_SMALL)
         val explanation = value.disabledReason?.takeIf { !value.enabled && it.isNotBlank() }
         reason.setText(explanation.orEmpty())
@@ -96,11 +102,18 @@ internal class ReverbAppChoiceRow(
         theme.bindSupportingParagraph(reason, NativeTypographyRole.BODY_SMALL)
         // Installed icons retain their original pixels; only the shared fallback is themed.
         icon.imageTintList = null
-        icon.setImageDrawable(value.icon ?: ReverbIconDrawable(ReverbIcon.Browser, density, theme.palette.muted))
-        trailing.bind(if (trigger) ReverbIcon.ArrowDropDown else ReverbIcon.Check, theme.palette.muted)
-        trailing.visibility = if (trigger || selected) VISIBLE else GONE
+        icon.visibility = if (showIdentityIcon) VISIBLE else GONE
+        icon.setImageDrawable(if (showIdentityIcon)
+            value.icon ?: ReverbIconDrawable(ReverbIcon.Browser, density, theme.palette.muted) else null)
+        val glyph = when {
+            trigger -> ReverbIcon.ArrowDropDown
+            checkbox -> if (selected) ReverbIcon.Checked else ReverbIcon.Unchecked
+            else -> ReverbIcon.Check
+        }
+        trailing.bind(glyph, if (checkbox && selected) theme.palette.primary else theme.palette.muted)
+        trailing.visibility = if (trigger || checkbox || selected) VISIBLE else GONE
         isSelected = selected
-        contentDescription = listOfNotNull(value.label, packageName, explanation).joinToString(", ")
+        contentDescription = listOfNotNull(value.label, detail, explanation).joinToString(", ")
         bindAction(value.enabled, theme.palette.ink)
         isClickable = value.enabled
         requestLayout()
@@ -120,9 +133,14 @@ internal class ReverbAppChoiceRow(
 
     override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
         super.onInitializeAccessibilityNodeInfo(info)
-        info.className = if (trigger) "android.widget.Spinner" else "android.widget.RadioButton"
+        info.className = when {
+            trigger -> "android.widget.Spinner"
+            checkbox -> "android.widget.CheckBox"
+            else -> "android.widget.RadioButton"
+        }
         info.isCheckable = !trigger
         info.isChecked = !trigger && isSelected
+        if (checkbox) info.isSelected = false
         if (!isEnabled) info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK)
     }
 

@@ -3,6 +3,7 @@ package smallthingz.ui.components
 import android.app.Dialog
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
 import android.os.SystemClock
 import android.view.Gravity
@@ -20,6 +21,7 @@ import org.junit.runner.RunWith
 import smallthingz.ui.reverb.ReverbAppChoice
 import smallthingz.ui.reverb.ReverbAppChoicePicker
 import smallthingz.ui.reverb.ReverbAppChoiceTrigger
+import smallthingz.ui.reverb.ReverbCheckedSettingsRow
 import smallthingz.ui.reverb.ReverbDesign
 import smallthingz.ui.reverb.ReverbTheme
 import smallthingz.ui.unit.Density
@@ -33,6 +35,154 @@ class ReverbAppChoiceIntegrationTest {
         null, "false" -> false
         "true" -> true
         else -> error("reverb_semantic_exclude_ime must be true or false")
+    }
+
+    @Test fun checkedSettingsRowBindsSilentlyAndRequestsStateThroughOneCheckboxTarget() = withFixture { f ->
+        withCheckedRow(f) { control, requests ->
+            main {
+                val row = control.row
+                control.bind("Example app", "Unavailable component", false, true, f.theme)
+                control.bind("Example app", "Unavailable component", false, true, f.theme)
+                assertTrue(requests.isEmpty())
+                val info = row.createAccessibilityNodeInfo()
+                assertEquals("android.widget.CheckBox", info.className)
+                assertEquals("Example app, Unavailable component", info.contentDescription.toString())
+                assertTrue(info.isCheckable)
+                assertFalse(info.isChecked)
+                assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO, control.importantForAccessibility)
+                assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS,
+                    row.getChildAt(0).importantForAccessibility)
+                assertTrue(row.requestFocus())
+                press(row, KeyEvent.KEYCODE_ENTER)
+                assertEquals(listOf(true), requests)
+                assertFalse("Activation must wait for owner binding", row.createAccessibilityNodeInfo().isChecked)
+                control.bind("Example app", "Unavailable component", true, true, f.theme)
+                assertEquals(listOf(true), requests)
+                assertTrue(row.createAccessibilityNodeInfo().isChecked)
+                assertFalse(row.createAccessibilityNodeInfo().isSelected)
+                assertTrue(row.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                assertEquals(listOf(true, false), requests)
+                assertTrue("Requesting false must not silently change owner state", row.createAccessibilityNodeInfo().isChecked)
+                control.bind("Example app", "Unavailable component", true, false, f.theme)
+                assertFalse(row.performClick())
+                assertFalse(row.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                control.bind("Example app", "Unavailable component", true, true, f.theme)
+                f.root.allowed = false
+                assertFalse(row.performClick())
+                assertFalse(row.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                f.root.allowed = true
+                control.close()
+                control.bind("Must remain retired", null, false, true, f.theme)
+                assertFalse(row.performClick())
+                assertFalse(row.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                assertEquals(listOf(true, false), requests)
+            }
+        }
+    }
+
+    @Test fun checkedSettingsRowWrapperDisableRetiresChildAdmissionWithoutChangingSelection() = withFixture { f ->
+        withCheckedRow(f) { control, requests ->
+            main {
+                val row = control.row
+                control.bind("Example app", "Component", true, true, f.theme)
+                assertTrue(row.requestFocus())
+                control.isEnabled = false
+                assertFalse(row.isEnabled)
+                assertFalse(row.isFocusable)
+                val info = row.createAccessibilityNodeInfo()
+                assertFalse(info.isEnabled)
+                assertTrue(info.isChecked)
+                assertFalse(info.actionList.contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK))
+                press(row, KeyEvent.KEYCODE_ENTER)
+                assertFalse(row.performClick())
+                assertFalse(row.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                assertTrue(requests.isEmpty())
+                control.isEnabled = true
+                assertTrue(row.isEnabled)
+                assertTrue(row.requestFocus())
+                press(row, KeyEvent.KEYCODE_ENTER)
+                assertEquals(listOf(false), requests)
+                assertTrue(row.createAccessibilityNodeInfo().isChecked)
+                control.bind("Example app", "Component", true, false, f.theme)
+                control.isEnabled = true
+                assertFalse(row.isEnabled)
+                assertFalse(row.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                control.close()
+                control.isEnabled = true
+                assertFalse(row.isEnabled)
+                assertFalse(row.performClick())
+                assertEquals(listOf(false), requests)
+            }
+        }
+    }
+
+    @Test fun checkedSettingsRowWrapperDisableCancelsHeldPointerBeforeReenable() = withFixture { f ->
+        withCheckedRow(f) { control, requests ->
+            main {
+                val row = control.row
+                control.bind("Example app", "Component", true, true, f.theme)
+                assertTrue(row.requestFocus())
+                fun pointer(action: Int, downTime: Long): Boolean {
+                    val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action,
+                        row.width / 2f, row.height / 2f, 0)
+                    return try { row.dispatchTouchEvent(event) } finally { event.recycle() }
+                }
+                val heldDown = SystemClock.uptimeMillis()
+                assertTrue(pointer(MotionEvent.ACTION_DOWN, heldDown))
+                control.isEnabled = false
+                control.isEnabled = true
+                pointer(MotionEvent.ACTION_UP, heldDown)
+                assertTrue("Re-enabling must not accept the retired pointer", requests.isEmpty())
+                assertTrue(row.createAccessibilityNodeInfo().isChecked)
+                val freshDown = SystemClock.uptimeMillis()
+                assertTrue(pointer(MotionEvent.ACTION_DOWN, freshDown))
+                pointer(MotionEvent.ACTION_UP, freshDown)
+                assertEquals("A fresh pointer still requests exactly once", listOf(false), requests)
+                assertTrue(row.createAccessibilityNodeInfo().isChecked)
+            }
+        }
+    }
+
+    @Test fun checkedSettingsRowRetainsTitleDetailAndGlyphAtNarrowLargeFontRtl() = withFixture(rtl = true) { f ->
+        withCheckedRow(f, widthDp = 220) { control, requests ->
+            val original = control.row
+            main {
+                val dark = ReverbDesign.theme(f.activity, true)
+                val enlarged = ReverbDesign.windowTheme(Density(dark.density.density, 2f), dark.fontResolver, dark.palette)
+                control.bind("An application with a long name", "Unavailable component with a long name",
+                    true, true, enlarged)
+            }
+            await { control.row.isLaidOut && !control.row.isLayoutRequested }
+            main {
+                val row = control.row
+                assertSame(original, row)
+                assertEquals(View.GONE, row.icon.visibility)
+                assertEquals(View.VISIBLE, row.trailing.visibility)
+                assertEquals(View.VISIBLE, row.packageLabel.visibility)
+                assertEquals("Unavailable component with a long name", row.packageLabel.getText())
+                fun bounds(view: View) = Rect(0, 0, view.width, view.height).also {
+                    row.offsetDescendantRectToMyCoords(view, it)
+                }
+                val title = bounds(row.label)
+                val detail = bounds(row.packageLabel)
+                val glyph = bounds(row.trailing)
+                for (rect in listOf(title, detail, glyph)) {
+                    assertTrue(rect.width() > 0 && rect.height() > 0)
+                    assertTrue(rect.left >= 0 && rect.right <= row.width)
+                    assertTrue(rect.top >= 0 && rect.bottom <= row.height)
+                }
+                assertTrue(detail.top >= title.bottom)
+                assertTrue("RTL end glyph must not overlap either label", glyph.right <= minOf(title.left, detail.left))
+                assertTrue(row.height >= (48 * f.theme.density.density).roundToInt())
+                control.bind("Short name", null, false, true, f.theme)
+                assertSame(original, control.row)
+                assertEquals(View.VISIBLE, row.trailing.visibility)
+                assertEquals(View.GONE, row.packageLabel.visibility)
+                assertEquals("Short name", row.contentDescription.toString())
+                assertFalse(row.createAccessibilityNodeInfo().isChecked)
+                assertTrue(requests.isEmpty())
+            }
+        }
     }
 
     @Test fun triggerPreservesIdentityIconAndSingleDisabledExplanationAcrossThemeAndRtl() = withFixture { f ->
@@ -77,6 +227,7 @@ class ReverbAppChoiceIntegrationTest {
             val enabled = picker.rows[1]
             assertTrue(disabled.isSelected)
             val info = disabled.createAccessibilityNodeInfo()
+            assertEquals("android.widget.RadioButton", info.className)
             assertTrue(info.isCheckable)
             assertTrue(info.isChecked)
             assertFalse(info.isEnabled)
@@ -293,6 +444,25 @@ class ReverbAppChoiceIntegrationTest {
         }
     }
 
+    private fun withCheckedRow(f: Fixture, widthDp: Int = 320,
+        block: (ReverbCheckedSettingsRow, MutableList<Boolean>) -> Unit) {
+        val requests = mutableListOf<Boolean>()
+        lateinit var control: ReverbCheckedSettingsRow
+        main {
+            control = ReverbCheckedSettingsRow(f.activity, f.theme) { requests += it }
+            control.bind("Example app", null, false, true, f.theme)
+            f.root.removeView(f.trigger)
+            f.root.addView(control, FrameLayout.LayoutParams(
+                (widthDp * f.theme.density.density).roundToInt().coerceAtMost(f.root.width), -2, Gravity.TOP or Gravity.START))
+        }
+        try {
+            await { control.row.isLaidOut && control.row.hasWindowFocus() }
+            block(control, requests)
+        } finally {
+            main { control.close(); f.root.removeView(control) }
+        }
+    }
+
     private fun open(f: Fixture, choices: List<ReverbAppChoice> = listOf(
         ReverbAppChoice("a", "Browser A", "org.example.a"), ReverbAppChoice("b", "Browser B", "org.example.b")),
         selected: String = "a", canSelect: () -> Boolean = { true }, onSelect: (String) -> Unit): ReverbAppChoicePicker {
@@ -372,7 +542,13 @@ class ReverbAppChoiceIntegrationTest {
         view.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, key))
         view.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, key))
     }
-    private fun main(block: () -> Unit) = InstrumentationRegistry.getInstrumentation().runOnMainSync(block)
+    private fun main(block: () -> Unit) {
+        var failure: Throwable? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            try { block() } catch (error: Throwable) { failure = error }
+        }
+        failure?.let { throw it }
+    }
     private fun await(condition: () -> Boolean) {
         val deadline = SystemClock.uptimeMillis() + 5000
         do {
