@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="NativeSegmentedTestTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:checkboxStyle">@style/NativeSegmentedTestCheckBox</item>
+    </style>
+
+    <style name="NativeSegmentedTestCheckBox">
+        <item name="android:button">@drawable/native_segmented_test_checkbox_glyph</item>
+        <item name="android:fontFeatureSettings">"'kern' 0"</item>
+    </style>
+</resources>
