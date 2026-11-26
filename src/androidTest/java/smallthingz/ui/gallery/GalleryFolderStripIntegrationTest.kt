@@ -31,7 +31,8 @@ class GalleryFolderStripIntegrationTest {
                 assertTrue("Adaptive cap: $scenario", f.chips.first().width <= (usable * .6f).roundToInt())
                 assertTrue("Absolute cap: $scenario", f.chips.first().width <= f.dp(240))
                 assertTrue("Next-folder reserve: $scenario", f.chips.first().width <= usable - f.dp(8) - f.dp(24))
-                assertTrue(f.labels.first().layout.getEllipsisCount(0) > 0)
+                assertEquals(2, f.labels.first().layout.lineCount)
+                assertTrue(f.labels.first().layout.let { it.getEllipsisCount(it.lineCount - 1) } > 0)
                 val first = f.chips[0]
                 val second = f.chips[1]
                 assertTrue("Short second chip keeps natural width: $scenario", second.width < first.width)
@@ -61,6 +62,33 @@ class GalleryFolderStripIntegrationTest {
             }
     }
 
+    @Test fun twoLinesExposeMoreTextWithoutWideningMixedTargets() = main {
+        for (font in listOf(1f, 2f)) for (density in listOf(160, 240))
+            for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL))
+                for (width in listOf(180, 320)) {
+                    val f = Fixture(font, density, direction, listOf(longLabel, "A"))
+                    // Measure the previous one-line policy using this same production component.
+                    f.labels.first().maxLines = 1
+                    f.layout(width)
+                    val before = f.labels.first().layout
+                    val beforeVisibleEnd = before.getLineEnd(0) - before.getEllipsisCount(0)
+                    val beforeWidth = f.chips.first().width
+                    val beforeHeight = f.strip.height
+                    val shortHeight = f.chips[1].height
+                    f.labels.first().maxLines = 2
+                    f.layout(width)
+                    val after = f.labels.first().layout
+                    assertEquals(2, after.lineCount)
+                    val last = after.lineCount - 1
+                    assertTrue(after.getLineEnd(last) - after.getEllipsisCount(last) > beforeVisibleEnd)
+                    assertEquals(beforeWidth, f.chips.first().width)
+                    assertEquals(shortHeight, f.chips[1].height)
+                    assertTrue("Two lines require intrinsic row height", f.strip.height > beforeHeight)
+                    f.assertLabels()
+                    assertEquals(0, f.calls)
+                }
+    }
+
     @Test fun singleFolderUsesViewportAndShortFoldersKeepNaturalWidth() = main {
         val single = Fixture(2f, 160, View.LAYOUT_DIRECTION_LTR, listOf(longLabel))
         single.layout(320)
@@ -68,7 +96,8 @@ class GalleryFolderStripIntegrationTest {
         val grainAlpha = (checkNotNull(palette.surfacePreset).foregroundGrain * 255f).roundToInt()
         assertEquals(noiseSurfaceRange(palette.surface, grainAlpha), single.chips.single().paintedTextSurface)
         assertEquals(single.dp(320), single.chips.single().width)
-        assertTrue(single.labels.single().layout.getEllipsisCount(0) > 0)
+        assertEquals(2, single.labels.single().layout.lineCount)
+        assertTrue(single.labels.single().layout.let { it.getEllipsisCount(it.lineCount - 1) } > 0)
         single.assertLabels()
         val short = Fixture(2f, 160, View.LAYOUT_DIRECTION_LTR, listOf("A", "B"))
         short.layout(320)
@@ -100,9 +129,11 @@ class GalleryFolderStripIntegrationTest {
             assertEquals(f.dp(width), f.strip.width)
             assertTrue("Narrow viewports must not compress targets", f.chips.all { it.width >= f.dp(48) })
             assertTrue(f.strip.height >= f.dp(48))
+            f.assertVerticalGeometry()
         }
         f.layout(null)
         assertTrue(f.chips.first().width > f.dp(320))
+        assertEquals(1, f.labels.first().layout.lineCount)
         assertEquals(0, f.labels.first().layout.getEllipsisCount(0))
         f.assertLabels()
         f.layout(320)
@@ -145,7 +176,21 @@ class GalleryFolderStripIntegrationTest {
             strip.offsetDescendantRectToMyCoords(chip, it)
             it.offset(-strip.scrollX, -strip.scrollY)
         }
+        fun assertVerticalGeometry() {
+            if (chips.isEmpty()) return
+            assertEquals(chips.maxOf { it.height }, row.height)
+            assertTrue(row.height <= strip.height)
+            chips.forEachIndexed { index, chip ->
+                // Native LinearLayout centers with integer division; no pixel tolerance.
+                assertEquals((row.height - chip.height) / 2, chip.top)
+                val label = labels[index]
+                assertTrue(label.layout.lineCount in 1..2)
+                assertTrue(label.layout.height <= label.height - label.compoundPaddingTop - label.compoundPaddingBottom)
+                assertTrue(label.top >= chip.paddingTop && label.bottom <= chip.height - chip.paddingBottom)
+            }
+        }
         fun assertLabels() {
+            assertVerticalGeometry()
             chips.forEachIndexed { index, chip ->
                 val label = labels[index]
                 val layout = checkNotNull(label.layout)
@@ -155,9 +200,11 @@ class GalleryFolderStripIntegrationTest {
                 assertEquals(names[index], chip.tooltipText.toString())
                 assertEquals(names[index], label.text.toString())
                 assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO, label.importantForAccessibility)
-                assertEquals(detail, 1, layout.lineCount)
+                assertTrue(detail, layout.lineCount in 1..2)
+                if (names[index] == "A" || names[index] == "B") assertEquals(detail, 1, layout.lineCount)
                 assertTrue(detail, layout.height <= label.height - label.compoundPaddingTop - label.compoundPaddingBottom)
-                assertTrue(detail, layout.getLineMax(0) <= label.width - label.compoundPaddingLeft - label.compoundPaddingRight + .5f)
+                for (line in 0 until layout.lineCount)
+                    assertTrue(detail, layout.getLineMax(line) <= label.width - label.compoundPaddingLeft - label.compoundPaddingRight + .5f)
                 assertTrue(detail, chip.width >= dp(48) && chip.height >= dp(48))
                 assertTrue(detail, label.left >= chip.paddingLeft && label.right <= chip.width - chip.paddingRight)
                 assertTrue(detail, label.top >= chip.paddingTop && label.bottom <= chip.height - chip.paddingBottom)

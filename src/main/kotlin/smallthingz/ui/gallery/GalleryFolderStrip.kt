@@ -27,6 +27,7 @@ class GalleryFolderStrip(
     private val chips = entries.map { FolderChip(context, palette, it) }
     private val row = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.START or Gravity.CENTER_VERTICAL
         chips.forEach { addView(it, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)) }
     }
 
@@ -107,7 +108,7 @@ class GalleryFolderStrip(
             updateSpacing()
             addView(NativeText(context, palette, GalleryDesign.textStyle(NativeTypographyRole.BODY_MEDIUM)).apply {
                 text = entry.label
-                maxLines = 1
+                maxLines = 2
                 ellipsize = TextUtils.TruncateAt.END
                 importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             }, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL))
