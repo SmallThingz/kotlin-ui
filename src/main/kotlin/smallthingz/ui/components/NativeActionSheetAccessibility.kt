@@ -78,7 +78,8 @@ class NativeActionSheetAccessibility internal constructor(
         }
     }
     fun sourceNode(view:View,minimumTouch:Float=0f):NativeSourceAccessibilityNode {
-        if(!view.isAttachedToWindow)return NativeSourceAccessibilityNode.absent()
+        if(!view.isAttachedToWindow || view === scrim && !scrim.isEnabled)
+            return NativeSourceAccessibilityNode.absent()
         var current:View?=view
         var hidden=false
         while(current!=null) {
