@@ -261,8 +261,9 @@ class NativeActionSheet(
 
     /**
      * Keep actions visible when the IME or window height constrains a form. The title and body
-     * scroll together. When the footer is taller than the available area, it joins that viewport
-     * so the actions remain reachable by scrolling. Supply separate hit trees for the two parts.
+     * scroll together. Hide the optional handle before sacrificing a usable form viewport; when
+     * the footer cannot leave that viewport, it joins the same scroll content so both parts remain
+     * reachable. Supply separate hit trees for the two parts.
      * A retained sheet must keep the same action layout mode across content updates.
      */
     fun setContentWithPinnedActions(
