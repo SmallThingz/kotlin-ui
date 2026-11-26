@@ -41,6 +41,10 @@ abstract class NativeClickableRow(
     final override val nativeClickEndpoint = ViewClickPhaseEndpoint(input)
     private var rowEnabled = false
     private var inputReady = false
+    private var rowLongClick: (() -> Boolean)? = null
+    protected var rowLongClickLabel: CharSequence? = null
+        private set
+    protected val hasRowLongAction get() = rowLongClick != null
     protected val rowInputEnabled get() = rowEnabled && isEnabled
     protected abstract val hasRowAction: Boolean
     protected abstract fun activateRow()
@@ -60,7 +64,18 @@ abstract class NativeClickableRow(
         bindInput()
     }
 
-    private fun bindInput() = input.bind(NativeClickBinding(this, rowInputEnabled, onClick = { performClick() }))
+    /** Explicit secondary action; the native controller owns long-press consumption. */
+    internal fun bindRowLongClick(label: CharSequence?, action: (() -> Boolean)?) {
+        input.cancel()
+        rowLongClick = action
+        rowLongClickLabel = if (action == null) null else label
+        isLongClickable = action != null
+        bindInput()
+    }
+
+    private fun bindInput() = input.bind(NativeClickBinding(this, rowInputEnabled,
+        onClick = { performClick() },
+        onLongClick = if (hasRowLongAction) ({ performLongClick(); Unit }) else null))
 
     override fun setEnabled(enabled: Boolean) {
         val changed = isEnabled != enabled
@@ -77,6 +92,9 @@ abstract class NativeClickableRow(
     }
 
     protected fun retireRow() {
+        rowLongClick = null
+        rowLongClickLabel = null
+        isLongClickable = false
         rowEnabled = false
         isEnabled = false
         isFocusable = false
@@ -87,6 +105,9 @@ abstract class NativeClickableRow(
     protected fun canActivate() = rowInputEnabled && hasRowAction && isAttachedToWindow && isShown
 
     override fun performClick() = canActivate() && super.performClick()
+    override fun performLongClick(): Boolean =
+        rowInputEnabled && isAttachedToWindow && isShown && hasWindowFocus() &&
+            rowLongClick?.invoke() == true
     override fun onTouchEvent(event: MotionEvent) = input.touch(event)
     override fun onKeyDown(code: Int, event: KeyEvent) =
         if (isNativeClickActivationKey(code)) input.key(event) else super.onKeyDown(code, event)

@@ -21,11 +21,12 @@ abstract class NativeControlRow(
 
     protected open fun accessibilityState(): NativeMergedRowAccessibilityState =
         NativeMergedRowAccessibilityState(rowInputEnabled, rowChecked, accessibilityClickLabel,
-            accessibilityChildren())
+            accessibilityChildren(), longClickable = rowInputEnabled && hasRowLongAction,
+            longClickLabel = rowLongClickLabel)
 
     final override val mergedRowAccessibility = MergedRowAccessibility(this, role, ::accessibilityState, {
         if (canActivate()) { activateRow(); true } else false
-    })
+    }, { performLongClick() })
 
     protected fun addRowAccessibilityRole() {
         addView(mergedRowAccessibility.roleView)

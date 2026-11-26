@@ -6,6 +6,7 @@ import smallthingz.ui.components.NativeMaterialSwitchView
 import smallthingz.ui.components.NativeTextSurface
 import smallthingz.ui.components.NativeToggleRow
 import smallthingz.ui.text.NativeTypographyRole
+import smallthingz.ui.text.style.TextOverflow
 import smallthingz.ui.text.view.ParagraphView
 import java.util.function.LongSupplier
 
@@ -56,6 +57,16 @@ class ToggleRow(
     fun setTrackNoiseIntensity(intensity: Float) { if (!closed) switch.setTrackNoiseIntensity(intensity) }
 
     fun setTrackOutline(widthDp: Float, color: Int) { if (!closed) switch.setTrackOutline(widthDp, color) }
+
+    /** Visual summary bound only; its backing text is retained for accessibility/disclosure. */
+    fun bindDetails(maxLines: Int, actionLabel: String, onDetails: (() -> Boolean)?) {
+        require(maxLines > 0)
+        require(onDetails == null || actionLabel.isNotBlank())
+        if (closed) return
+        summary.setTextLayout(maxLines = maxLines,
+            overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis)
+        row.bindRowLongClick(actionLabel, onDetails)
+    }
 
     fun bind(next: ToggleState, theme: ControlTheme) {
         if (closed) return
