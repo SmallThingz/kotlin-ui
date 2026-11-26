@@ -38,6 +38,7 @@ internal class ReverbBrowserPanelSwipe(
     private var dismissed = false
     private var dragOffset = 0f
     private var viewport: View? = null
+    private var restingTranslationZ: Float? = null
     private val unclipped = mutableListOf<ViewGroup>()
 
     init {
@@ -112,6 +113,11 @@ internal class ReverbBrowserPanelSwipe(
         }
         parent?.requestDisallowInterceptTouchEvent(true)
         if (onDrag != null) {
+            // Cross neighboring columns above their cards, without changing the grid's child order.
+            restingTranslationZ = translationZ
+            val siblings = parent as? ViewGroup
+            val highest = (0 until (siblings?.childCount ?: 0)).maxOfOrNull { siblings!!.getChildAt(it).z } ?: z
+            translationZ = maxOf(z, highest) + resources.displayMetrics.density - elevation
             var ancestor = parent
             while (ancestor is View && ancestor !is ScrollView) ancestor = ancestor.parent
             viewport = (ancestor as? View) ?: rootView
@@ -212,6 +218,8 @@ internal class ReverbBrowserPanelSwipe(
     }
 
     private fun restoreClipping() {
+        restingTranslationZ?.let { translationZ = it }
+        restingTranslationZ = null
         unclipped.forEach(::releaseSwipeClip)
         unclipped.clear()
         viewport = null
