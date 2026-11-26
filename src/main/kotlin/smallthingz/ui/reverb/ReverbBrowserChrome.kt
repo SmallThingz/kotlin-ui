@@ -1,6 +1,8 @@
 package smallthingz.ui.reverb
 
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.text.InputFilter
@@ -42,14 +44,19 @@ data class ReverbBrowserChromeAction(val id: String, val label: String, val icon
 class ReverbBrowserChromeActionView internal constructor(context: Context, private val theme: ReverbTheme,
     initial: ReverbBrowserChromeAction, onAction: (String) -> Unit,
     inputAllowed: () -> Boolean = { true },
-) : ReverbToolbarActionView(context, theme.density.density, theme.palette, { null }, initial.label, rolePresent = true), AutoCloseable {
+) : ReverbToolbarActionView(context, theme.density.density, theme.palette, { null }, initial.label,
+    sharedSurface = true, rolePresent = true), AutoCloseable {
     private var action = initial
     private var bindingRevision = 0L
     private var callback: ((String) -> Unit)? = onAction
     private var admission: (() -> Boolean)? = inputAllowed
     private var closed = false
     private var bound = false
-    init { bindContent(initial) }
+    init {
+        // Browser controls share their parent's material, while each keeps a full input target.
+        bindStyle(theme.appearance.toolbars.action.copy(sizeDp = 48f, glyphDp = 22f))
+        bindContent(initial)
+    }
     fun bindContent(next: ReverbBrowserChromeAction) {
         if (closed) return
         if (bound && action == next) return
@@ -102,9 +109,10 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
     val tabsAction = ReverbBrowserChromeActionView(context, chromeTheme, tabs, ::action, ::admitsChromeAction)
     val menuAction = ReverbBrowserChromeActionView(context, chromeTheme, menu, ::action, ::admitsChromeAction)
     private val field = chromeTheme.appearance.compactField.style
-    // The native editor owns its field surface and focus outline, independently of toolbar actions.
+    // The address is an editor in the continuous browser toolbar, not another rounded button.
     val addressEditor: NativeTextField = ReverbBrowserChromeAddressEditor(context, chromeTheme.palette.pageControls,
-        field.copy(outlined = true)).apply {
+        field.copy(outlined = false, filled = false, minHeightDp = 48f,
+            startPaddingDp = 4f, endPaddingDp = 8f, verticalPaddingDp = 8f)).apply {
         hint = addressHint
     }
     val pageHost = FrameLayout(context)
@@ -116,12 +124,13 @@ open class ReverbBrowserChrome(context: Context, private val chromeTheme: Reverb
             gravity = Gravity.CENTER_VERTICAL
             val recipe = chromeTheme.appearance.toolbars
             NativeToolbarBackground(this, recipe, chromeTheme.palette) { ReverbTextSurface.invalidate(this) }
+            minimumHeight = recipe.compactHeightPx(chromeTheme.density.density)
             val inset = (recipe.centeredPaddingDp * chromeTheme.density.density).roundToInt()
             setPaddingRelative(inset, 0, inset, 0)
             addView(siteAction)
-            addView(addressEditor, LayoutParams(0, -2, 1f).apply { marginEnd = dp(2) })
+            addView(addressEditor, LayoutParams(0, -2, 1f))
             addView(tabsAction)
-            addView(menuAction, LayoutParams(-2, -2).apply { marginStart = dp(2) })
+            addView(menuAction)
         }, FrameLayout.LayoutParams(-1, -2))
     }
     private val progress = NativeDeterminateLinearProgress(context, chromeTheme.palette.primary,
@@ -197,6 +206,7 @@ private class ReverbBrowserChromeAddressEditor(context: Context, palette: Contro
     NativeTextField(context, palette, style) {
     private var settingText = 0
     private var accessibilityInput = 0
+    private val focusPaint = Paint().apply { color = palette.accent }
     init {
         // TextView otherwise adds its own 5,000-character filter, including on setText(). A
         // LengthFilter subclass also prevents later setSingleLine/inputType calls replacing it.
@@ -207,6 +217,16 @@ private class ReverbBrowserChromeAddressEditor(context: Context, palette: Contro
         }
         filters = filters.filterNot { it is InputFilter.LengthFilter }.toTypedArray() + userLimit
         setSingleLine(true)
+    }
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        if (!isFocused || !isEnabled) return
+        // Keep a visible editing cue without taking the host's focus listener or painting a box.
+        // TextView scrolls its canvas for long URLs; this rule stays fixed to the editor viewport.
+        val density = resources.displayMetrics.density
+        val bottom = scrollY + height - 2f * density
+        canvas.drawRect(scrollX + paddingLeft.toFloat(), bottom - 2f * density,
+            scrollX + width - paddingRight.toFloat(), bottom, focusPaint)
     }
     override fun setText(text: CharSequence?, type: BufferType?) {
         // TextView's constructor can call this override before this subclass is initialized.
