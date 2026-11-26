@@ -2,6 +2,9 @@ package smallthingz.ui.zfm
 
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
+import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
@@ -104,6 +107,45 @@ class ZfmChooserViewportIntegrationTest {
         assertNull(pending())
     }
 
+    @Test fun declinedDownThroughTheParentDoesNotBlockLaterAnchoring() = withChooser {
+        viewport.layoutParams = FrameLayout.LayoutParams(-1, -1).apply { bottomMargin = 20 }
+        val footerActions = mutableListOf<Int>()
+        val footer = View(viewport.context).apply {
+            setOnTouchListener { _, event ->
+                footerActions.add(event.actionMasked)
+                assertTrue("A reentrant render during DOWN must see the active touch", touchActive())
+                management.minimumHeight = 40
+                assertTrue(viewport.publish(items))
+                assertNull(pending())
+                false
+            }
+        }
+        panel.addView(footer, FrameLayout.LayoutParams(-1, 20, Gravity.BOTTOM))
+        layout()
+        assertEquals(80, viewport.height)
+        viewport.scrollTo(0, 60)
+
+        val declinedDownTime = SystemClock.uptimeMillis()
+        assertFalse(dispatchTouch(MotionEvent.ACTION_DOWN, 90f, declinedDownTime))
+        assertFalse("A declined DOWN must release the touch before any terminal event", touchActive())
+        assertFalse(dispatchTouch(MotionEvent.ACTION_UP, 90f, declinedDownTime))
+        assertEquals(listOf(MotionEvent.ACTION_DOWN), footerActions)
+        layout()
+        assertEquals(60, viewport.scrollY)
+
+        management.minimumHeight = 60
+        assertTrue(viewport.publish(items))
+        assertNotNull(pending())
+        layout()
+        assertEquals(80, viewport.scrollY)
+
+        val acceptedDownTime = SystemClock.uptimeMillis()
+        assertTrue(dispatchTouch(MotionEvent.ACTION_DOWN, 30f, acceptedDownTime))
+        assertTrue(touchActive())
+        assertTrue(dispatchTouch(MotionEvent.ACTION_CANCEL, 30f, acceptedDownTime))
+        assertFalse(touchActive())
+    }
+
     private fun withChooser(hidden: Boolean = false, test: Fixture.() -> Unit) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
@@ -127,8 +169,9 @@ class ZfmChooserViewportIntegrationTest {
             var failure: Throwable? = null
             instrumentation.runOnMainSync {
                 try {
-                    val chooser = Fixture(activity, hidden).also { fixture = it }
-                    requireNotNull(host).addView(chooser.boundary, FrameLayout.LayoutParams(120, 100))
+                    val parent = requireNotNull(host)
+                    val chooser = Fixture(parent, hidden).also { fixture = it }
+                    parent.addView(chooser.boundary, FrameLayout.LayoutParams(120, 100))
                     chooser.test()
                 } catch (error: Throwable) {
                     failure = error
@@ -138,7 +181,8 @@ class ZfmChooserViewportIntegrationTest {
         }
     }
 
-    private class Fixture(context: Context, hidden: Boolean) {
+    private class Fixture(private val parent: FrameLayout, hidden: Boolean) {
+        private val context = parent.context
         val management = View(context).apply { minimumHeight = 20 }
         val viewport = ZfmChooserViewport(context, management, 1L, { it == 1L })
         val rows = List(6) { TestRow(context) }
@@ -159,6 +203,12 @@ class ZfmChooserViewportIntegrationTest {
 
         fun initialSnapshot() = field(boundary, "initialScrollPositions") as List<*>
         fun pending() = field(viewport, "pending")
+        fun touchActive() = field(viewport, "touchActive") as Boolean
+
+        fun dispatchTouch(action: Int, y: Float, downTime: Long): Boolean {
+            val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, 60f, y, 0)
+            return try { parent.dispatchTouchEvent(event) } finally { event.recycle() }
+        }
 
         private fun field(owner: Any, name: String): Any? = owner.javaClass.getDeclaredField(name)
             .apply { isAccessible = true }.get(owner)

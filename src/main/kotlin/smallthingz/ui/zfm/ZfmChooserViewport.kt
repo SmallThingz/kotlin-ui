@@ -354,12 +354,20 @@ class ZfmChooserViewport(
 
         override fun dispatchTouchEvent(event: MotionEvent): Boolean {
             retirePosition()
-            if (event.actionMasked == MotionEvent.ACTION_DOWN) touchActive = true
+            val action = event.actionMasked
+            if (action == MotionEvent.ACTION_DOWN) touchActive = true
             dispatchDepth++
-            return try { super.dispatchTouchEvent(event) } finally {
+            var handled = false
+            try {
+                handled = super.dispatchTouchEvent(event)
+                return handled
+            } finally {
                 dispatchDepth--
-                if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL)
+                // A declined DOWN never gives this boundary a parent touch target or terminal event.
+                if ((action == MotionEvent.ACTION_DOWN && !handled) ||
+                    action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                     touchActive = false
+                }
             }
         }
 
