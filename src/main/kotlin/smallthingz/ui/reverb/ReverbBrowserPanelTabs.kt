@@ -299,7 +299,10 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             setPaddingRelative(dp(8), dp(4), 0, dp(4))
             minimumHeight = dp(48)
         }
-        private val close = ReverbStandardIconButtonView(context, environment, { this@ReverbBrowserPanelTabs })
+        // The input/semantic owner must fill the slot; a 48dp wrapper around a 40dp
+        // ActionVisual does not receive DOWN in its outer band. The glyph stays 24dp.
+        private val close = ReverbStandardIconButtonView(context, environment,
+            { this@ReverbBrowserPanelTabs }, actionSizeDp = 48f)
         private val moveActions = mutableListOf<Int>()
         fun ownsAccessibilityFocus(): Boolean = hasAccessibilityFocus(row) || hasAccessibilityFocus(close)
         private val header = FrameLayout(context).apply {
