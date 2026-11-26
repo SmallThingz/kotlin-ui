@@ -1433,11 +1433,27 @@ private class ChoiceVisualBackground(
     private val horizontalInset: (() -> Int)? = null,
     private val inset: () -> Int,
 ) : DrawableWrapper(drawable) {
+    private var updatingContentBounds = false
+
     private fun updateContentBounds() {
         val vertical = inset().coerceIn(0, bounds.height() / 2)
         val horizontal = (horizontalInset?.invoke() ?: 0).coerceIn(0, bounds.width() / 2)
-        drawable?.setBounds(bounds.left + horizontal, bounds.top + vertical,
-            bounds.right - horizontal, bounds.bottom - vertical)
+        // Drawable.setBounds invalidates before assigning its new bounds. An attached
+        // TextView can synchronously rebuild this background's outline in that callback,
+        // recursively requesting the same bounds forever. This update is already inside
+        // draw/getOutline; its owner separately invalidates when the inset changes.
+        updatingContentBounds = true
+        try {
+            drawable?.setBounds(bounds.left + horizontal, bounds.top + vertical,
+                bounds.right - horizontal, bounds.bottom - vertical)
+        } finally {
+            updatingContentBounds = false
+        }
+    }
+
+    override fun invalidateDrawable(who: Drawable) {
+        // Vertical-only legacy surfaces do not update bounds from getOutline.
+        if (!updatingContentBounds || horizontalInset == null) super.invalidateDrawable(who)
     }
 
     override fun draw(canvas: Canvas) {
