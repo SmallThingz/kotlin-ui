@@ -142,7 +142,12 @@ class NoiseDrawable(
         val currentSeed = seed ?: return false
         if (noisePaint.shader == null) {
             noisePaint.shader = NoiseTexture.shader(currentSeed)
-            if (noisePaint.shader == null) NoiseTexture.observe(this)
+            if (noisePaint.shader == null) {
+                NoiseTexture.observe(this)
+                // Generation can settle between the first read and subscription. If observe
+                // sees an already-ready tile it need not notify us: acquire it in this draw.
+                noisePaint.shader = NoiseTexture.shader(currentSeed)
+            }
         }
         // Until generation completes, leave the owner's exact fill visible.
         return noisePaint.shader != null
