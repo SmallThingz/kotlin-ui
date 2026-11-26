@@ -115,11 +115,17 @@ open class NativeScrollIndicatorHorizontalScrollView(context: Context) : Horizon
                 if ((colors.surfacePreset?.foregroundGrain ?: 0f) > 0f && fill.color ushr 24 != 0) {
                     // Keep the direct fill's exact alpha/AA silhouette, including translucent ink.
                     val layer = canvas.saveLayer(bounds, overlay)
+                    val fillAlpha = fill.alpha
                     try {
+                        // SRC_ATOP applies the destination alpha; do not also bake it into the mask.
+                        fill.alpha = 255
                         canvas.drawRoundRect(bounds, radius, radius, fill)
                         if (!grain.draw(canvas, this, bounds, radius, Color.WHITE, grainMask))
                             canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
-                    } finally { canvas.restoreToCount(layer) }
+                    } finally {
+                        fill.alpha = fillAlpha
+                        canvas.restoreToCount(layer)
+                    }
                 }
             }
         } finally { canvas.restoreToCount(saved) }

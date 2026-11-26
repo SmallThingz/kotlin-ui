@@ -32,13 +32,18 @@ class NativeScrollIndicatorHorizontalScrollViewTest {
             f.scroll.bindIndicator(f.flat, f.style)
             f.scroll.bindIndicatorUnderlay(textSurfaceRange(Color.WHITE))
             f.scroll.scrollTo(0, 0)
+            assertEquals(0, f.scroll.scrollX)
             assertFalse(f.scroll.willNotDraw())
             val first = f.thumbBounds()
             assertFalse(first.isEmpty)
             f.scroll.scrollTo(200, 0)
+            assertEquals(200, f.scroll.scrollX)
             val middle = f.thumbBounds()
             assertTrue(middle.left > first.left)
-            f.scroll.scrollTo(Int.MAX_VALUE, 0)
+            // Keep the over-end request finite: the platform clamp adds the viewport extent.
+            val end = f.child.width - (f.scroll.width - f.scroll.paddingLeft - f.scroll.paddingRight)
+            f.scroll.scrollTo(f.child.width, 0)
+            assertEquals(end, f.scroll.scrollX)
             val last = f.thumbBounds()
             assertTrue(last.left > middle.left)
             assertEquals(first.top, last.top)
@@ -71,7 +76,7 @@ class NativeScrollIndicatorHorizontalScrollViewTest {
                 f.scroll.scrollTo(beforeEnd, 0)
                 assertEquals(beforeEnd, f.scroll.scrollX)
                 val approaching = f.thumbBounds()
-                f.scroll.scrollTo(Int.MAX_VALUE, 0)
+                f.scroll.scrollTo(childWidth, 0)
                 assertEquals(overflow, f.scroll.scrollX)
                 val right = f.thumbBounds()
                 assertTrue("Physical offset must advance the thumb", approaching.left > left.left)
@@ -132,11 +137,14 @@ class NativeScrollIndicatorHorizontalScrollViewTest {
             val flat = f.pixels()
             f.scroll.bindIndicator(palette.copy(surfacePreset = NativeGrainPreset(backgroundGrain = 0f, foregroundGrain = 1f)), f.style)
             val grain = f.pixels()
-            for (i in flat.indices) assertEquals(Color.alpha(flat[i]), Color.alpha(grain[i]))
-            if (alpha == 0) assertArrayEquals(flat, grain)
-            else assertTrue("Grain must alter actual indicator pixels", flat.indices.any { flat[it] != grain[it] })
+            val alphaDiffCount = flat.indices.count { Color.alpha(flat[it]) != Color.alpha(grain[it]) }
+            val rgbDiffCount = flat.indices.count { (flat[it] and 0x00ffffff) != (grain[it] and 0x00ffffff) }
+            val detail = "alpha=$alpha alphaDiffCount=$alphaDiffCount rgbDiffCount=$rgbDiffCount"
+            for (i in flat.indices) assertEquals("$detail pixel=$i", Color.alpha(flat[i]), Color.alpha(grain[i]))
+            if (alpha == 0) assertArrayEquals(detail, flat, grain)
+            else assertTrue("Grain must alter actual indicator pixels: $detail", flat.indices.any { flat[it] != grain[it] })
             f.scroll.bindIndicator(palette, f.style)
-            assertArrayEquals(flat, f.pixels())
+            assertArrayEquals("Flat recovery: $detail", flat, f.pixels())
         }
     }
 
