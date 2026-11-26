@@ -25,7 +25,7 @@ enum class GalleryDialogWidthPolicy {
 }
 
 /** Gallery's centered content dialogs share the library's surfaces and typography. */
-internal class GalleryDialogSurface(context: Context, dark: Boolean) : NativeSurface(
+class GalleryDialogSurface(context: Context, dark: Boolean) : NativeSurface(
     context, surfaceStyle(ReverbDesign.appearance.resolveColorScheme(context, dark)),
 ) {
     init { bindTheme(dark) }
