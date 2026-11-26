@@ -6,28 +6,29 @@ import kotlin.math.roundToInt
 
 /** Shared geometry and checked-control styling for installed-application grids. */
 class NativeApplicationGridRecipe internal constructor(appearance: NativeUiAppearance) {
-    val iconSizeDp = 40f
-    val iconLabelGapDp = 4f
-    val contentInsetDp = 6f
+    val iconSizeDp = 36f
+    val iconLabelGapDp = 3f
+    val contentInsetDp = 4f
     val horizontalInsetDp = 4f
     val markerSizeDp = 18f
-    val markerInsetDp = 6f
+    val markerInsetDp = 4f
     val labelMaxLines = 2
     val unavailableIconAlpha = .55f
-    val cellMinWidthDp = 96f
-    val cellMinHeightDp = 100f
+    val cellMinWidthDp = 80f
+    val cellMinHeightDp = 88f
     val maxColumns = 6
-    val cellMarginDp = NativeScreenSpacing.CONTROL_GAP_DP / 2f
+    val cellMarginDp = 0f
+    val cornerRadiusDp = appearance.groupSurfaces.settingsChoices.cornerRadiusDp
     val labelTopInsetDp get() = contentInsetDp + iconSizeDp + iconLabelGapDp
     val iconToLabelDp get() = iconSizeDp + iconLabelGapDp
 
     val choiceStyle = NativeChoiceStyle(
-        radiusDp = appearance.groupSurfaces.settingsChoices.cornerRadiusDp,
+        radiusDp = 0f,
         minHeightDp = cellMinHeightDp,
         textStyle = appearance.typography.nativeTextStyle(NativeTypographyRole.BODY_SMALL),
         horizontalPaddingDp = horizontalInsetDp,
         verticalPaddingDp = contentInsetDp,
-        outlined = true,
+        outlined = false,
         retainContentColorsWhenDisabled = true,
     )
 

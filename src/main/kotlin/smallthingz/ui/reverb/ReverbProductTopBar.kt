@@ -14,9 +14,10 @@ data class ReverbHeaderAction(
     val onClick: () -> Unit,
     val enabled: Boolean = true,
     val icon: ReverbIcon? = null,
+    val alert: Boolean = false,
 ) {
     internal fun withIcon(defaultIcon: ReverbIcon) =
-        ReverbTopBarActionContent(icon ?: defaultIcon, label, onClick, enabled)
+        ReverbTopBarActionContent(icon ?: defaultIcon, label, onClick, enabled, alert)
 }
 
 /** The visible copy can abbreviate the value. Accessibility gets the supplied full phrase. */

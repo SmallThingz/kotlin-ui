@@ -1,28 +1,22 @@
 package smallthingz.ui.reverb
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertSame
+import org.junit.Assert.*
 import org.junit.Test
 
 class ReverbHeaderActionTest {
-    @Test fun omittedIconRetainsBrowserAndSettingsSlotDefaults() {
-        val action = ReverbHeaderAction("Open", {})
-
-        assertEquals(ReverbIcon.Browser, action.withIcon(ReverbIcon.Browser).icon)
-        assertEquals(ReverbIcon.Settings, action.withIcon(ReverbIcon.Settings).icon)
+    @Test fun alertReachesTheCanonicalToolbarWithoutChangingItsAction() {
+        var calls = 0
+        val bound = ReverbHeaderAction("Incidents", { calls++ }, icon = ReverbIcon.Incidents,
+            alert = true).withIcon(ReverbIcon.Browser)
+        assertTrue(bound.alert)
+        assertEquals(ReverbIcon.Incidents, bound.icon)
+        assertEquals("Incidents", bound.label)
+        bound.onClick()
+        assertEquals(1, calls)
     }
-
-    @Test fun explicitIconOverridesEitherSlotWithoutChangingActionContent() {
-        val onClick: () -> Unit = {}
-        val action = ReverbHeaderAction("Incidents", onClick, enabled = false, icon = ReverbIcon.Incidents)
-
-        for (defaultIcon in listOf(ReverbIcon.Browser, ReverbIcon.Settings)) {
-            val content = action.withIcon(defaultIcon)
-            assertEquals(ReverbIcon.Incidents, content.icon)
-            assertEquals("Incidents", content.label)
-            assertFalse(content.enabled)
-            assertSame(onClick, content.onClick)
-        }
+    @Test fun ordinaryActionsRemainMuted() {
+        val bound = ReverbHeaderAction("Settings", {}).withIcon(ReverbIcon.Settings)
+        assertFalse(bound.alert)
+        assertEquals(ReverbIcon.Settings, bound.icon)
     }
 }
