@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Keep day/night host selection while exposing the page's unpainted window cutouts. -->
+    <style name="Base.ReverbCutoutHostTheme" parent="ReverbHostTheme">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowBackgroundFallback">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
+    <style name="ReverbCutoutHostTheme" parent="Base.ReverbCutoutHostTheme" />
+</resources>
