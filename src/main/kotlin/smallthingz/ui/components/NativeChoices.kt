@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.Paint
+import android.graphics.Outline
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.RectF
@@ -40,6 +41,7 @@ import smallthingz.ui.controls.selectionForeground
 import smallthingz.ui.controls.selectionIndication
 import smallthingz.ui.graphics.ViewGrain
 import smallthingz.ui.graphics.bindGrainLayer
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -85,6 +87,12 @@ data class NativeChoiceStyle(
     val focusedSelectedOutline: NativeChoiceColor? = null,
     /** Opt in to preserving complete short labels when equal-width choices choose their columns. */
     val minimumLabelWidth: NativeChoiceLabelWidth = NativeChoiceLabelWidth.GlyphMinimum,
+    /**
+     * Opt-in visual padding for a centered, single-line label with a stacked icon.
+     * Narrows only the retained surface/ripple/outline, never the View or text layout.
+     * Null keeps the cell surface. Wrapped, styled or unsupported content keeps it too.
+     */
+    val contentSurfacePaddingDp: Float? = null,
 ) {
     init {
         require(floatArrayOf(radiusDp, minHeightDp, textSizeSp, horizontalPaddingDp,
@@ -94,6 +102,7 @@ data class NativeChoiceStyle(
         require(visualMinHeightDp == null || visualMinHeightDp.isFinite() && visualMinHeightDp > 0f)
         require(startPaddingDp == null || startPaddingDp.isFinite() && startPaddingDp >= 0f)
         require(endPaddingDp == null || endPaddingDp.isFinite() && endPaddingDp >= 0f)
+        require(contentSurfacePaddingDp == null || contentSurfacePaddingDp.isFinite() && contentSurfacePaddingDp >= 0f)
     }
 }
 
@@ -330,7 +339,10 @@ class NativeChip private constructor(
     private var indicatorGrain: ViewGrain? = null
     private var typography: ChoiceTypography? = null
     private var visualInsetPx = 0
+    private var contentSurfaceInsetPx = 0
     internal val selectedFillInset: Int get() = visualInsetPx
+    internal val selectedFillHorizontalInset: Int
+        get() = if (uniformSelectionForeground == null) contentSurfaceInsetPx else 0
     private var selectionAnimation: StateColorSurface? = null
     private var visualBackground: Drawable? = null
     private var indicatorColor = style.indicatorColor ?: palette.accent
@@ -610,6 +622,40 @@ class NativeChip private constructor(
         val inset = if (minimum == null) 0 else
             max(0, (measuredHeight - max(dp(minimum), contentHeight)) / 2)
         if (visualInsetPx != inset) { visualInsetPx = inset; invalidate() }
+        updateContentSurfaceInset(measuredWidth)
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        super.onLayout(changed, left, top, right, bottom)
+        updateContentSurfaceInset(width)
+    }
+
+    private fun updateContentSurfaceInset(cellWidth: Int) {
+        if (choiceStyle.contentSurfacePaddingDp == null) return
+        val next = contentSurfaceInset(cellWidth)
+        if (contentSurfaceInsetPx == next) return
+        contentSurfaceInsetPx = next
+        invalidateOutline()
+        invalidate()
+    }
+
+    private fun contentSurfaceInset(cellWidth: Int): Int {
+        val visualPadding = choiceStyle.contentSurfacePaddingDp ?: return 0
+        // Retain the established renderer for arbitrary spans, transformations, compound
+        // trailing content, wrapping, asymmetric padding and non-centered text.
+        if (!choiceStyle.iconAbove || trailingIcon != null || text.isNullOrEmpty() ||
+            transformationMethod != null || hasSelectionPaintSpans(text) ||
+            paddingLeft != paddingRight ||
+            (gravity and Gravity.HORIZONTAL_GRAVITY_MASK) != Gravity.CENTER_HORIZONTAL) return 0
+        val textLayout = layout ?: return 0
+        if (textLayout.alignment != Layout.Alignment.ALIGN_CENTER || textLayout.lineCount != 1 ||
+            textLayout.getEllipsisCount(0) != 0 || hasSelectionPaintSpans(textLayout.text)) return 0
+        val labelWidth = textLayout.getLineWidth(0)
+        if (!labelWidth.isFinite()) return 0
+        val contentWidth = max(ceil(labelWidth).toInt(), activeIcon()?.bounds?.width() ?: 0)
+        // No maximum label width: content that needs the cell keeps the complete surface.
+        val surfaceWidth = max(dp(48f).toFloat(), contentWidth + 2f * visualPadding * density)
+        return max(0, ((cellWidth - ceil(surfaceWidth)) / 2f).toInt())
     }
 
     override fun getBaseline(): Int = if (ready && iconOnlyDrawable() != null) -1 else super.getBaseline()
@@ -779,8 +825,12 @@ class NativeChip private constructor(
         retained.setSurfacePreset(currentPalette.surfacePreset)
         retained.bind(fill,stroke,text,ripple,choiceStyle.radiusDp*density,density,icons,accent,currentPalette.surface)
         retained.paintFill = !parentDrawsSelectedFill
-        val visual = visualBackground ?: (if (choiceStyle.visualMinHeightDp == null) retained.background
-            else ChoiceVisualBackground(retained.background) { visualInsetPx }).also { visualBackground = it }
+        val visual = visualBackground ?: (when {
+            choiceStyle.contentSurfacePaddingDp != null -> ChoiceVisualBackground(
+                retained.background, horizontalInset = { selectedFillHorizontalInset }) { visualInsetPx }
+            choiceStyle.visualMinHeightDp != null -> ChoiceVisualBackground(retained.background) { visualInsetPx }
+            else -> retained.background
+        }).also { visualBackground = it }
         if (background !== visual) background = visual
     }
 
@@ -1246,7 +1296,8 @@ open class NativeSegmentedChoice(
         indicator.bindColor(color)
         if (child.isLaidOut) {
             val inset = child.selectedFillInset.toFloat()
-            indicator.retarget(child.left.toFloat(), child.top + inset, child.right.toFloat(), child.bottom - inset)
+            val horizontal = child.selectedFillHorizontalInset.toFloat()
+            indicator.retarget(child.left + horizontal, child.top + inset, child.right - horizontal, child.bottom - inset)
         }
     }
 
@@ -1376,11 +1427,29 @@ class NativeSwatchGrid(
     }
 }
 
-private class ChoiceVisualBackground(drawable: Drawable, private val inset: () -> Int) : DrawableWrapper(drawable) {
-    override fun draw(canvas: Canvas) {
+/** Bounds only: the original StateColorSurface retains color, motion, grain, outline and ripple. */
+private class ChoiceVisualBackground(
+    drawable: Drawable,
+    private val horizontalInset: (() -> Int)? = null,
+    private val inset: () -> Int,
+) : DrawableWrapper(drawable) {
+    private fun updateContentBounds() {
         val vertical = inset().coerceIn(0, bounds.height() / 2)
-        drawable?.setBounds(bounds.left, bounds.top + vertical, bounds.right, bounds.bottom - vertical)
+        val horizontal = (horizontalInset?.invoke() ?: 0).coerceIn(0, bounds.width() / 2)
+        drawable?.setBounds(bounds.left + horizontal, bounds.top + vertical,
+            bounds.right - horizontal, bounds.bottom - vertical)
+    }
+
+    override fun draw(canvas: Canvas) {
+        updateContentBounds()
         super.draw(canvas)
+    }
+
+    override fun getOutline(outline: Outline) {
+        // The new opt-in mode must also expose its inset before the first draw.
+        // Leave the existing vertical-only/default outline path unchanged.
+        if (horizontalInset != null) updateContentBounds()
+        super.getOutline(outline)
     }
 }
 

@@ -9,6 +9,7 @@ import android.graphics.Outline
 import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.RippleDrawable
+import android.graphics.drawable.DrawableWrapper
 import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
@@ -22,7 +23,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeChip
 import smallthingz.ui.components.NativeChoice
+import smallthingz.ui.components.NativeChoiceStyle
 import smallthingz.ui.components.NativeTabBar
+import smallthingz.ui.components.NativeSegmentedChoice
+import smallthingz.ui.components.ChoiceArrangement
 import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.graphics.NoiseTexture
 import kotlin.math.roundToInt
@@ -142,7 +146,10 @@ class GalleryNavigationBarIntegrationTest {
             Thread.sleep(10)
         }
         checkNotNull(NoiseTexture.shader(NoiseDrawable.SEED_BACKGROUND)) { "Shared noise texture did not become ready" }
-        main { assertSelectedSurfacePaint() }
+        main {
+            assertSelectedSurfacePaint()
+            assertMovingSurfaceUsesTheSameContentBounds()
+        }
     }
 
     private fun assertSelectedSurfacePaint() {
@@ -154,6 +161,7 @@ class GalleryNavigationBarIntegrationTest {
                     val parents = nodes.mapValues { it.value.parent }
                     val ids = nodes.mapValues { it.value.id }
                     val backgrounds = nodes.mapValues { it.value.background }
+                    val ripples = nodes.mapValues { retainedRipple(it.value) }
                     val bounds = nodes.mapValues { boundsIn(f.bar, it.value) }
                     val barSize = f.bar.width to f.bar.height
                     // Detached ViewColorTransition.retarget snaps to its target. No sleep,
@@ -170,6 +178,7 @@ class GalleryNavigationBarIntegrationTest {
                             assertSame(parents.getValue(id), chip.parent)
                             assertEquals(ids.getValue(id), chip.id)
                             assertSame(backgrounds.getValue(id), chip.background)
+                            assertSame(ripples.getValue(id), retainedRipple(chip))
                             assertEquals(bounds.getValue(id), boundsIn(f.bar, chip))
                             assertEquals("Navigate $id", chip.contentDescription.toString())
                             assertEquals(id == selected, chip.isChecked)
@@ -186,7 +195,18 @@ class GalleryNavigationBarIntegrationTest {
                                     assertNotEquals("Selection needs a container behind its content", palette.surface, middle)
                                     assertEquals("Rounded corner keeps the footer underlay", palette.surface, surface.getPixel(0, 0))
                                     val outline = Outline()
-                                    (chip.background as RippleDrawable).getDrawable(0).getOutline(outline)
+                                    chip.background.getOutline(outline)
+                                    val painted = Rect()
+                                    assertTrue(outline.getRect(painted))
+                                    assertTrue("Short content must not paint the entire200dp target", painted.left > 0)
+                                    assertTrue(painted.right < chip.width)
+                                    assertEquals("Only horizontal paint bounds change", 0, painted.top)
+                                    assertEquals(chip.height, painted.bottom)
+                                    assertTrue(kotlin.math.abs(painted.left - (chip.width - painted.right)) <= 1)
+                                    assertEquals("Empty target margin retains the footer", palette.surface,
+                                        surface.getPixel(painted.left / 2, chip.height / 2))
+                                    assertTrue("Complete centered label fits the surface",
+                                        text.getLineWidth(0) <= painted.width())
                                     assertEquals("Existing16dp recipe radius", f.dp(16).toFloat(), outline.radius, .01f)
                                 } else assertEquals("Unselected cell has no filled container", palette.surface, middle)
                                 val iconInk = checkNotNull(chip.compoundDrawableTintList)
@@ -235,6 +255,116 @@ class GalleryNavigationBarIntegrationTest {
                     }
                 }
             }
+    }
+
+    @Test fun contentSurfaceLeavesDefaultGeometryAndWrappedFallbackIntact() = main {
+        for (fontScale in listOf(1f, 2f))
+            for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
+                withBar(fontScale, listOf("Photos", "Search", "Albums"), direction) { f ->
+                    val palette = GalleryDesign.palette(f.context, dark = true).pageControls
+                    val style = NativeChoiceStyle(iconAbove = true, animateSelection = false)
+                    val original = NativeChip(f.context, palette, style)
+                    val fitted = NativeChip(f.context, palette,
+                        style.copy(contentSurfacePaddingDp = style.horizontalPaddingDp))
+                    try {
+                        for (chip in listOf(original, fitted)) {
+                            // TextView rebinding after measure requires real LayoutParams even detached.
+                            chip.layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT)
+                            chip.layoutDirection = direction
+                            chip.maxLines = Int.MAX_VALUE
+                            chip.ellipsize = null
+                            chip.setIcons(ColorDrawable(Color.WHITE))
+                        }
+                        val retained = fitted.background
+                        for ((label, width) in listOf("Search" to 200,
+                            "Shared photographs and videos" to 48, "Search" to 200)) {
+                            for (chip in listOf(original, fitted)) {
+                                chip.bind(label, checked = true)
+                                chip.measure(exact(f.dp(width)), unspecified())
+                                chip.layout(0, 0, chip.measuredWidth, chip.measuredHeight)
+                            }
+                            assertSame(retained, fitted.background)
+                            assertEquals(original.width, fitted.width)
+                            assertEquals(original.height, fitted.height)
+                            assertEquals(original.paddingLeft, fitted.paddingLeft)
+                            assertEquals(original.paddingRight, fitted.paddingRight)
+                            val originalText = checkNotNull(original.layout)
+                            val fittedText = checkNotNull(fitted.layout)
+                            assertEquals(originalText.lineCount, fittedText.lineCount)
+                            assertEquals(label.length, fittedText.getLineEnd(fittedText.lineCount - 1))
+                            for (line in 0 until fittedText.lineCount)
+                                assertEquals(0, fittedText.getEllipsisCount(line))
+                            // The old null/default mode still exposes the original native background.
+                            assertTrue(original.background is RippleDrawable)
+                            val oldBounds = surfaceBounds(original)
+                            val newBounds = surfaceBounds(fitted)
+                            assertEquals(Rect(0, 0, original.width, original.height), oldBounds)
+                            if (width == 48) {
+                                assertTrue("Fixture must exercise actual wrapping", fittedText.lineCount > 1)
+                                assertEquals("Wrapped labels retain full surface; no fixed cap", oldBounds, newBounds)
+                            } else {
+                                assertEquals(1, fittedText.lineCount)
+                                assertTrue(newBounds.width() < oldBounds.width())
+                                assertTrue(newBounds.width() >= fittedText.getLineWidth(0))
+                            }
+                        }
+                    } finally { original.close(); fitted.close() }
+                }
+            }
+    }
+
+    private fun assertMovingSurfaceUsesTheSameContentBounds() {
+        for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
+            withBar(2f, listOf("Photos", "Search", "Albums"), direction) { f ->
+                val palette = GalleryDesign.palette(f.context, dark = true).pageControls
+                val style = NativeChoiceStyle(iconAbove = true, verticalPaddingDp = 8f,
+                    contentSurfacePaddingDp = NativeChoiceStyle().horizontalPaddingDp)
+                val group = NativeSegmentedChoice(f.context, palette, style, gapDp = 0f,
+                    arrangement = ChoiceArrangement.EqualWidth, fixedColumns = 2, fillRowHeight = true,
+                    movingSelectionBackground = true).apply { layoutDirection = direction }
+                val choices = listOf("one", "two").map { NativeChoice(it, "Search", ColorDrawable(Color.WHITE)) }
+                try {
+                    var retained: List<View>? = null
+                    for (selected in listOf("one", "two", "one")) {
+                        group.bind(choices, selected)
+                        group.measure(exact(f.dp(400)), unspecified())
+                        group.layout(0, 0, group.measuredWidth, group.measuredHeight)
+                        val children = choices.map { checkNotNull(group.choiceView(it.id)) }
+                        retained?.let { previous -> children.forEachIndexed { index, child -> assertSame(previous[index], child) } }
+                        retained = children
+                        val chip = checkNotNull(group.choiceView(selected))
+                        val painted = surfaceBounds(chip)
+                        assertTrue(painted.left > 0 && painted.right < chip.width)
+                        val bitmap = Bitmap.createBitmap(group.width, group.height, Bitmap.Config.ARGB_8888)
+                        try {
+                            val canvas = Canvas(bitmap)
+                            canvas.drawColor(palette.surface)
+                            group.draw(canvas)
+                            // Empty target margin: neither a full-cell parent fill nor child ripple
+                            // may leave a second container outside the shared measured surface.
+                            assertEquals(palette.surface,
+                                bitmap.getPixel(chip.left + painted.left / 2, chip.top + f.dp(4)))
+                            assertNotEquals(palette.surface,
+                                bitmap.getPixel(chip.left + chip.width / 2, chip.top + f.dp(4)))
+                        } finally { bitmap.recycle() }
+                    }
+                } finally { group.close() }
+            }
+        }
+    }
+
+    private fun surfaceBounds(chip: NativeChip): Rect {
+        chip.background.setBounds(0, 0, chip.width, chip.height)
+        val outline = Outline()
+        chip.background.getOutline(outline)
+        return Rect().also { assertTrue(outline.getRect(it)) }
+    }
+
+    private fun retainedRipple(chip: NativeChip): RippleDrawable {
+        var drawable = chip.background
+        while (drawable is DrawableWrapper) drawable = checkNotNull(drawable.drawable)
+        return drawable as RippleDrawable
     }
 
     private fun renderNavigationChip(chip: NativeChip, underlay: Int, backgroundOnly: Boolean): Bitmap {

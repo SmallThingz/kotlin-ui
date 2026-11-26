@@ -28,6 +28,8 @@ class GalleryNavigationBar(
         verticalPaddingDp = 6f,
         outlined = false,
         selectedFill = true,
+        // Native choice visual spacing, independent of the retained4dp target padding.
+        contentSurfacePaddingDp = NativeChoiceStyle().horizontalPaddingDp,
         iconAbove = true,
         iconSizeDp = 24f,
         iconGapDp = 4f,
