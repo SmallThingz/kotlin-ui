@@ -12,6 +12,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeButtonColorRole
@@ -21,6 +22,41 @@ import smallthingz.ui.controls.ControlStyle
 
 @RunWith(AndroidJUnit4::class)
 class GalleryHealControlsStyleIntegrationTest {
+    @Test fun selectionActionsRetainGeometryAndUseDisabledNativeInk() = main {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        for (dark in listOf(false, true)) {
+            val colors = NativeColorScheme.fallback(dark).copy(surfacePreset = null)
+            var clicks = 0
+            val button = Button(context).apply {
+                text = "Clear selection"
+                contentDescription = text
+                maxLines = 2
+                minimumHeight = 52
+                setPaddingRelative(7, 4, 9, 6)
+                setOnClickListener { clicks++ }
+            }
+            GalleryHealControlsStyle.paintSelectionAction(button, colors.pageControls)
+            val background = layoutBackground(button, 60)
+            val enabledInk = button.currentTextColor
+            repeat(2) {
+                button.isEnabled = false
+                assertTrue("Disabled command must have reduced native ink opacity",
+                    Color.alpha(button.currentTextColor) < Color.alpha(enabledInk))
+                assertSame(background, button.background)
+                button.isEnabled = true
+                assertEquals(enabledInk, button.currentTextColor)
+            }
+            assertEquals("Clear selection", button.text.toString())
+            assertEquals("Clear selection", button.contentDescription.toString())
+            assertEquals(2, button.maxLines)
+            assertEquals(52, button.minimumHeight)
+            assertEquals(listOf(7, 4, 9, 6),
+                listOf(button.paddingStart, button.paddingTop, button.paddingEnd, button.paddingBottom))
+            button.performClick()
+            assertEquals(1, clicks)
+        }
+    }
+
     @Test fun previewUsesWindowRecipeWhileRetainingPlatformButton() = main {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val colors = NativeColorScheme.fallback(false).copy(surfacePreset = null)

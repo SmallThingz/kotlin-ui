@@ -25,6 +25,15 @@ object GalleryHealControlsStyle {
     val comparisonChoice = preparationChoice.copy(outlined = true, unselectedOutlined = true, selectedFill = true,
         normalTextRole = NativeTextRole.CONTENT, selectedTextRole = null)
 
+    /** Selection commands share the native text-button disabled state without replacing the view. */
+    fun paintSelectionAction(button: Button, palette: ControlPalette) {
+        val colors = NativeButtonPalette(accent = palette.accent, onAccent = palette.onAccent,
+            content = palette.content, muted = palette.muted, quietSurface = palette.raised,
+            tonalSurface = palette.selection, onTonal = palette.content, errorSurface = palette.raised,
+            onError = palette.content, surfacePreset = palette.surfacePreset)
+        ControlStyle(button.context, palette).applyButton(button, GalleryDesign.appearance.buttons.text, colors)
+    }
+
     /** Keep the existing Button, target, text layout and input-owner callbacks. */
     fun emphasizePreview(button: Button, palette: ControlPalette) {
         val colors = NativeButtonPalette(accent = palette.accent, onAccent = palette.onAccent,
