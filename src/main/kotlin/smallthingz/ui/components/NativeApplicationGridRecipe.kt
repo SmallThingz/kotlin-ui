@@ -27,8 +27,10 @@ class NativeApplicationGridRecipe internal constructor(appearance: NativeUiAppea
     val iconLabelGapDp = 2f
     val contentInsetDp = 3f
     val horizontalInsetDp = 3f
-    val markerSizeDp = 18f
-    val markerInsetDp = 4f
+    // A 64dp cell leaves 16dp beside its centered 32dp icon: 14dp badge +
+    // 1dp end inset + 1dp clear space. This is decorative, not the checked target.
+    val markerSizeDp = 14f
+    val markerInsetDp = 1f
     val labelMaxLines = 2
     val unavailableIconAlpha = .55f
     val cellMinWidthDp = NativeApplicationGridSizing.cellMinWidthDp
