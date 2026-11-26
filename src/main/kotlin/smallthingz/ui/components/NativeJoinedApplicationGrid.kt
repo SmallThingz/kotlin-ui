@@ -23,7 +23,7 @@ private class JoinedApplicationGridSurface(context: Context, palette: NativeColo
     private val stroke = density * (palette.surfacePreset?.borderWidthDp ?: 1f)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = palette.border; style = Paint.Style.STROKE; strokeWidth = stroke
-        strokeJoin = Paint.Join.ROUND
+        strokeJoin = Paint.Join.MITER
     }
     private val shape = Path()
     private val mask = Path()
@@ -55,7 +55,7 @@ private class JoinedApplicationGridSurface(context: Context, palette: NativeColo
         for (corner in corners) {
             shape.lineTo(corner.start.x, corner.start.y)
             if (!corner.concave) {
-            shape.quadTo(corner.vertex.x, corner.vertex.y, corner.end.x, corner.end.y)
+                shape.quadTo(corner.vertex.x, corner.vertex.y, corner.end.x, corner.end.y)
             }
         }
         shape.close()
