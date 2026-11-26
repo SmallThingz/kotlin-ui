@@ -139,7 +139,7 @@ class NativeJoinedApplicationGridIntegrationTest {
         assertEquals(4f, recipe.markerInsetDp, 0f)
         assertEquals(80f, recipe.cellMinWidthDp, 0f)
         assertEquals(88f, recipe.cellMinHeightDp, 0f)
-        assertEquals(6, recipe.maxColumns)
+        assertEquals(4, recipe.maxColumns)
         assertEquals(2, recipe.labelMaxLines)
         assertEquals(4f, recipe.horizontalInsetDp, 0f)
         assertEquals(2f, recipe.iconLabelGapDp, 0f)

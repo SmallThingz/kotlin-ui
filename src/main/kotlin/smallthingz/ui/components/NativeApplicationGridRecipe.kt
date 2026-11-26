@@ -11,7 +11,7 @@ internal object NativeApplicationGridSizing {
     // fallback-font lines. Budget 3dp top + 36dp icon + 2dp gap + 44dp text +
     // 3dp bottom = 88dp; retain fallback line spacing and the full icon.
     const val cellMinHeightDp = 88f
-    const val maxColumns = 6
+    const val maxColumns = 4
 
     fun columns(widthDp: Float, fontScale: Float): Int {
         val scale = fontScale.coerceAtLeast(1f)
