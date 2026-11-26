@@ -19,6 +19,8 @@ open class NativeRoundedClipLayout(
     private val bounds = if (softwareClip) RectF() else null
 
     init {
+        // A backgroundless ViewGroup can skip draw() and dispatch straight to its children.
+        if (softwareClip) setWillNotDraw(false)
         clipToOutline = true
         outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) {
