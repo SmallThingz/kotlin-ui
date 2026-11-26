@@ -73,6 +73,9 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
     private val cards = linkedMapOf<Key, Card>()
     private val reorder = ReverbBrowserPanelReorder<Key>()
     private var dragSource: View? = null
+    private var focusHandoffToken: Any? = null
+    private var pendingKeyboardContinuation: List<Key>? = null
+    private var pendingAccessibilityContinuation: List<Key>? = null
     private val spacing = dp(8)
     private var columns = 1
     private var cardWidth = 0
@@ -124,13 +127,22 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         val keys = entries.map { it.key }.toSet()
         require(keys.size == entries.size) { "Tab keys must be unique" }
         cancelReorder()
+        // Capture each focus channel before closing a node. Keyboard focus does not imply
+        // TalkBack focus, including the close button's separate semantic role child.
+        for (card in cards.values) if (card.content.key !in keys) {
+            val continuation = (reorder.continuationAfterRemoval(card.content.key) + entries.map { it.key }).distinct()
+            if (card.gesture.hasFocus()) pendingKeyboardContinuation = continuation
+            if (card.ownsAccessibilityFocus()) pendingAccessibilityContinuation = continuation
+        }
+        // A second authoritative bind before layout must not lose an already pending handoff.
+        pendingKeyboardContinuation = pendingKeyboardContinuation?.let { (it + entries.map { entry -> entry.key }).distinct() }
+        pendingAccessibilityContinuation = pendingAccessibilityContinuation?.let { (it + entries.map { entry -> entry.key }).distinct() }
+        focusHandoffToken = null
         reorder.bind(entries.map { it.key }, entries.filter { it.enabled }.map { it.key }.toSet())
-        var removedFocusIndex: Int? = null
         val iterator = cards.values.iterator()
         while (iterator.hasNext()) {
             val card = iterator.next()
             if (card.content.key !in keys) {
-                if (card.gesture.hasFocus()) removedFocusIndex = grid.indexOfChild(card.gesture)
                 card.close()
                 grid.removeView(card.gesture)
                 iterator.remove()
@@ -148,9 +160,47 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             } else card.gesture.layoutParams = cardParams(index)
         }
         cards.values.forEach { it.bindReorderActions() }
-        removedFocusIndex?.let { index ->
-            val next = entries.getOrNull(index.coerceAtMost(entries.lastIndex))
-            if (next == null || cards[next.key]?.row?.requestFocus() != true) focusBackAction()
+        scheduleRemovedFocusHandoff()
+    }
+    private fun hasAccessibilityFocus(view: View): Boolean = view.isAccessibilityFocused ||
+        (view is ViewGroup && (0 until view.childCount).any { hasAccessibilityFocus(view.getChildAt(it)) })
+
+    private fun cancelFocusHandoff() {
+        focusHandoffToken = null
+        pendingKeyboardContinuation = null
+        pendingAccessibilityContinuation = null
+    }
+
+    private fun scheduleRemovedFocusHandoff() {
+        if (pendingKeyboardContinuation == null && pendingAccessibilityContinuation == null) return
+        val token = Any().also { focusHandoffToken = it }
+        grid.doOnLayout {
+            if (panelClosed || focusHandoffToken !== token) return@doOnLayout
+            val keyboard = pendingKeyboardContinuation
+            val accessibility = pendingAccessibilityContinuation
+            pendingKeyboardContinuation = null
+            pendingAccessibilityContinuation = null
+            fun currentRow(candidates: List<Key>): View? = candidates.firstNotNullOfOrNull { key ->
+                cards[key]?.takeIf { it.content.enabled && it.row.browserPanelAdmitsInput() }?.row
+            }
+            // Undo and other host actions may acquire focus between bind and layout.
+            // Honor the current window owner independently for each focus channel.
+            if (keyboard != null && rootView.findFocus() == null) {
+                val target = currentRow(keyboard)
+                if (focusHandoffToken === token && rootView.findFocus() == null && target?.requestFocus() != true &&
+                    browserPanelAdmitsInput() && focusHandoffToken === token && rootView.findFocus() == null) focusBackAction()
+            }
+            if (accessibility != null && !panelClosed && focusHandoffToken === token && !hasAccessibilityFocus(rootView)) {
+                val target = currentRow(accessibility) ?: back.accessibilityAction
+                // The surviving neighbor may be outside the scroll viewport after a removal.
+                if (target.browserPanelAdmitsInput()) {
+                    target.requestRectangleOnScreen(Rect(0, 0, target.width, target.height), true)
+                    if (target.browserPanelAdmitsInput() && focusHandoffToken === token &&
+                        !hasAccessibilityFocus(rootView)) target.performAccessibilityAction(
+                        AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null)
+                }
+            }
+            if (focusHandoffToken === token) focusHandoffToken = null
         }
     }
     fun updateTab(entry: ReverbBrowserPanelTab<Key>) {
@@ -189,24 +239,28 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         return true
     }
     override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
-        if (!hasWindowFocus) cancelReorder()
+        if (!hasWindowFocus) { cancelFocusHandoff(); cancelReorder() }
         super.onWindowFocusChanged(hasWindowFocus)
     }
     override fun onCancelPendingInputEvents() {
         // Long-press takeover cancels only the child gesture; panel-wide retirement owns this token.
         if (dragSource != null) cancelReorder()
+        cancelFocusHandoff()
         super.onCancelPendingInputEvents()
     }
     override fun onVisibilityChanged(changedView: View, visibility: Int) {
         super.onVisibilityChanged(changedView, visibility)
+        if (visibility != VISIBLE) cancelFocusHandoff()
         // Visibility callbacks may arrive during View construction, before reorder is initialized.
         if (visibility != VISIBLE && dragSource != null) cancelReorder()
     }
     override fun onWindowVisibilityChanged(visibility: Int) {
         super.onWindowVisibilityChanged(visibility)
+        if (visibility != VISIBLE) cancelFocusHandoff()
         if (visibility != VISIBLE && dragSource != null) cancelReorder()
     }
     override fun onDetachedFromWindow() {
+        cancelFocusHandoff()
         cancelReorder()
         super.onDetachedFromWindow()
     }
@@ -247,6 +301,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         }
         private val close = ReverbStandardIconButtonView(context, environment, { this@ReverbBrowserPanelTabs })
         private val moveActions = mutableListOf<Int>()
+        fun ownsAccessibilityFocus(): Boolean = hasAccessibilityFocus(row) || hasAccessibilityFocus(close)
         private val header = FrameLayout(context).apply {
             // Keep SELECT and CLOSE separate. Reserve the close target before measuring the
             // single-line title, rather than overlaying it or stacking it below long text.
@@ -413,6 +468,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
     }
     override fun close() {
         if (panelClosed) return
+        cancelFocusHandoff()
         onTabAction = null
         onTabMove = null
         cancelReorder()
