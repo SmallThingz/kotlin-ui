@@ -27,6 +27,8 @@ class GalleryHealStatusRow(
         probe.accessibilityLiveRegion = ACCESSIBILITY_LIVE_REGION_NONE
         probe.isFocusable = false
         probe.visibility = INVISIBLE
+        // TextView relayout reads LayoutParams when changing already-measured probe text.
+        probe.layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
         alternate.importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         alternate.accessibilityLiveRegion = ACCESSIBILITY_LIVE_REGION_NONE
         alternate.isFocusable = false
