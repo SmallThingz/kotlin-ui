@@ -50,6 +50,15 @@ class NativeVerticalScrollOwner(
 ) {
     val state: NativeVerticalScrollState get() = engine.state
 
+    // Sheet paging belongs to the content; only a gesture may move its dismissal anchor.
+    internal var localPageScroll = false
+
+    private fun scrollPageBy(logicalDelta: Float): Float = if (localPageScroll) {
+        state.scrollBy(logicalDelta)
+    } else {
+        -engine.dispatch(-logicalDelta, NativeVerticalScrollSource.USER_INPUT)
+    }
+
     var isFlinging = false
         private set
 
@@ -76,7 +85,7 @@ class NativeVerticalScrollOwner(
     /** Scrollable.semanticsScrollBy: default spring, logical deltas, consumed-distance accumulator. */
     suspend fun semanticsScrollBy(logicalDelta: Float): Float {
         var consumedTotal = 0f
-        scrollWithoutOverscroll {
+        state.mutate(MutatePriority.Default) {
             val animation = TargetBasedAnimation(spring<Float>(), Float.VectorConverter, 0f, logicalDelta)
             var firstFrame: Long? = null
             var finished = false
@@ -90,7 +99,7 @@ class NativeVerticalScrollOwner(
                     else ((frame - start) / scale).toLong()
                     val current = animation.getValueFromNanos(playTime)
                     val delta = current - consumedTotal
-                    consumedTotal += -scrollBy(-delta)
+                    consumedTotal += scrollPageBy(delta)
                     finished = animation.isFinishedFromNanos(playTime)
                 }
             }
@@ -110,10 +119,10 @@ class NativeVerticalScrollOwner(
         nodeScope: CoroutineScope,
     ): Boolean {
         if (!enabled || !keyDown || ctrlPressed) return false
-        val amount = if (pageDown) -state.viewportSize.toFloat() else state.viewportSize.toFloat()
+        val amount = if (pageDown) state.viewportSize.toFloat() else -state.viewportSize.toFloat()
         nodeScope.launch {
             state.mutate(MutatePriority.UserInput) {
-                engine.dispatch(amount, NativeVerticalScrollSource.USER_INPUT)
+                scrollPageBy(amount)
             }
         }
         return true
