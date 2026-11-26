@@ -8,8 +8,10 @@ import android.graphics.Rect
 import android.graphics.drawable.Drawable
 import android.text.TextUtils
 import android.view.Gravity
+import android.view.DragEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import android.widget.GridLayout
 import android.widget.ImageView
@@ -18,6 +20,7 @@ import android.widget.Space
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.doOnLayout
+import smallthingz.ui.R
 import smallthingz.ui.components.NativeForeground
 import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.NativeMaterialButtonView
@@ -44,6 +47,18 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
     title: String, backLabel: String, newLabel: String,
 ) : ReverbBrowserPanelLayout(context) {
     var onTabAction: ((Key?, ReverbBrowserPanelTabAction) -> Unit)? = null
+    /**
+     * Request moving key into targetKey's current slot: after it when moving forward, before it
+     * when moving backward. The host owns ordering and may synchronously commit with bindTabs.
+     * Null removes drag and accessibility move affordances; it does not change tab actions.
+     */
+    var onTabMove: ((key: Key, targetKey: Key) -> Unit)? = null
+        set(value) {
+            if (field === value) return
+            cancelReorder()
+            field = value
+            cards.values.forEach { it.bindReorderActions() }
+        }
     private val environment = ReverbEnvironment(theme)
     private val back = browserPanelToolbarAction(context, theme, backLabel, ReverbIcon.Back) {
         if (!panelClosed) onTabAction?.invoke(null, ReverbBrowserPanelTabAction.BACK)
@@ -56,6 +71,8 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         filterTouchesWhenObscured = true
     }
     private val cards = linkedMapOf<Key, Card>()
+    private val reorder = ReverbBrowserPanelReorder<Key>()
+    private var dragSource: View? = null
     private val spacing = dp(8)
     private var columns = 1
     private var cardWidth = 0
@@ -106,6 +123,8 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         if (panelClosed) return
         val keys = entries.map { it.key }.toSet()
         require(keys.size == entries.size) { "Tab keys must be unique" }
+        cancelReorder()
+        reorder.bind(entries.map { it.key }, entries.filter { it.enabled }.map { it.key }.toSet())
         var removedFocusIndex: Int? = null
         val iterator = cards.values.iterator()
         while (iterator.hasNext()) {
@@ -128,12 +147,69 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
                 focus?.requestFocus()
             } else card.gesture.layoutParams = cardParams(index)
         }
+        cards.values.forEach { it.bindReorderActions() }
         removedFocusIndex?.let { index ->
             val next = entries.getOrNull(index.coerceAtMost(entries.lastIndex))
             if (next == null || cards[next.key]?.row?.requestFocus() != true) focusBackAction()
         }
     }
-    fun updateTab(entry: ReverbBrowserPanelTab<Key>) { if (!panelClosed) cards[entry.key]?.bind(entry) }
+    fun updateTab(entry: ReverbBrowserPanelTab<Key>) {
+        if (panelClosed || entry.key !in cards) return
+        cancelReorder()
+        reorder.setEnabled(entry.key, entry.enabled)
+        cards[entry.key]?.bind(entry)
+        cards.values.forEach { it.bindReorderActions() }
+    }
+    private fun cancelReorder() {
+        val source = dragSource
+        dragSource = null
+        reorder.cancel()
+        source?.cancelDragAndDrop()
+    }
+    private fun moveTab(key: Key, target: Key): Boolean {
+        val callback = onTabMove ?: return false
+        if (panelClosed || !reorder.canMove(key, target)) return false
+        val source = cards[key] ?: return false
+        val destination = cards[target] ?: return false
+        if (!source.content.enabled || !destination.content.enabled ||
+            !source.row.browserPanelAdmitsInput() || !destination.row.browserPanelAdmitsInput()) return false
+        val restoreAccessibilityFocus = source.row.isAccessibilityFocused
+        // Keep keyboard focus on the moved key when the host synchronously rebinds the grid.
+        source.row.requestFocus()
+        cancelReorder()
+        if (panelClosed || onTabMove !== callback || !reorder.canMove(key, target) ||
+            cards[key] !== source || cards[target] !== destination ||
+            !source.row.browserPanelAdmitsInput() || !destination.row.browserPanelAdmitsInput()) return false
+        callback(key, target)
+        // A synchronous host rebind may detach/reinsert the moved row. Resolve it afresh by key.
+        if (restoreAccessibilityFocus && !panelClosed) cards[key]?.row?.let { row ->
+            if (row.browserPanelAdmitsInput()) row.performAccessibilityAction(
+                AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null)
+        }
+        return true
+    }
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        if (!hasWindowFocus) cancelReorder()
+        super.onWindowFocusChanged(hasWindowFocus)
+    }
+    override fun onCancelPendingInputEvents() {
+        // Long-press takeover cancels only the child gesture; panel-wide retirement owns this token.
+        if (dragSource != null) cancelReorder()
+        super.onCancelPendingInputEvents()
+    }
+    override fun onVisibilityChanged(changedView: View, visibility: Int) {
+        super.onVisibilityChanged(changedView, visibility)
+        // Visibility callbacks may arrive during View construction, before reorder is initialized.
+        if (visibility != VISIBLE && dragSource != null) cancelReorder()
+    }
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility != VISIBLE && dragSource != null) cancelReorder()
+    }
+    override fun onDetachedFromWindow() {
+        cancelReorder()
+        super.onDetachedFromWindow()
+    }
     override fun onMeasure(w: Int, h: Int) {
         val width = MeasureSpec.getSize(w)
         val count = columnCount(width / resources.displayMetrics.density)
@@ -157,7 +233,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         private val recipe = theme.appearance.groupSurfaces.settingsChoices
         private val surface = recipe.create(context, ReverbTextSurface::invalidate).also { recipe.bind(it, theme.palette) }
         val gesture = ReverbBrowserPanelSwipe(context, { it * .35f },
-            canSwipe = { !closed && content.enabled && surface.browserPanelAdmitsInput() },
+            canSwipe = { !closed && !reorder.dragging && content.enabled && surface.browserPanelAdmitsInput() },
             onDrag = { surface.translationX = it }, onSwipe = { dispatch(ReverbBrowserPanelTabAction.CLOSE) })
         val row = ReverbBrowserPanelSettingRow(context, theme, ReverbBrowserPanelSetting(initial.title, actionId = "select")) {
             dispatch(ReverbBrowserPanelTabAction.SELECT)
@@ -170,6 +246,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             minimumHeight = dp(48)
         }
         private val close = ReverbStandardIconButtonView(context, environment, { this@ReverbBrowserPanelTabs })
+        private val moveActions = mutableListOf<Int>()
         private val header = FrameLayout(context).apply {
             // Keep SELECT and CLOSE separate. Reserve the close target before measuring the
             // single-line title, rather than overlaying it or stacking it below long text.
@@ -226,11 +303,52 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
             close.visual.background = NativeForeground.foregroundBackground(theme.palette.pageControls)
             surface.addRow(body, NativeGroupLayout.LayoutParams(-1, -2))
             gesture.addView(surface, FrameLayout.LayoutParams(-1, -2))
+            surface.setOnDragListener { _, event ->
+                val key = reorder.source(event.localState)
+                when (event.action) {
+                    DragEvent.ACTION_DRAG_STARTED -> key != null && !closed && content.enabled && onTabMove != null
+                    DragEvent.ACTION_DROP -> key != null && moveTab(key, content.key)
+                    DragEvent.ACTION_DRAG_ENDED -> {
+                        if (key != null) { dragSource = null; reorder.cancel() }
+                        true
+                    }
+                    else -> key != null
+                }
+            }
             bind(initial)
+        }
+        fun bindReorderActions() {
+            moveActions.forEach { ViewCompat.removeAccessibilityAction(row, it) }
+            moveActions.clear()
+            row.setOnLongClickListener(null)
+            row.isLongClickable = false
+            val entry = snapshot ?: return
+            if (closed || panelClosed || !entry.enabled || onTabMove == null) return
+            if (reorder.canStart(entry.key)) row.setOnLongClickListener {
+                if (closed || panelClosed || onTabMove == null || snapshot !== entry ||
+                    cards[entry.key] !== this || !row.browserPanelAdmitsInput()) return@setOnLongClickListener false
+                val token = reorder.begin(entry.key) ?: return@setOnLongClickListener false
+                dragSource = row
+                gesture.cancelBrowserPanelInput()
+                val started = try { row.startDragAndDrop(null, View.DragShadowBuilder(surface), token, 0) }
+                catch (failure: RuntimeException) { cancelReorder(); throw failure }
+                if (!started) cancelReorder()
+                started
+            }
+            for ((step, label) in listOf(-1 to R.string.reverb_browser_tab_move_earlier,
+                1 to R.string.reverb_browser_tab_move_later)) {
+                if (reorder.adjacent(entry.key, step) == null) continue
+                moveActions += ViewCompat.addAccessibilityAction(row, context.getString(label)) { _, _ ->
+                    if (closed || snapshot !== entry) false else {
+                        val target = reorder.adjacent(entry.key, step)
+                        target != null && moveTab(entry.key, target)
+                    }
+                }
+            }
         }
         private fun dispatch(action: ReverbBrowserPanelTabAction, source: View = surface) {
             val before = snapshot ?: return
-            if (!closed && !panelClosed && before.enabled && cards[before.key] === this &&
+            if (!closed && !panelClosed && !reorder.dragging && before.enabled && cards[before.key] === this &&
                 source.browserPanelAdmitsInput() && !closed && !panelClosed && snapshot === before && cards[before.key] === this)
                 onTabAction?.invoke(before.key, action)
         }
@@ -276,6 +394,11 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
         override fun close() {
             if (closed) return
             closed = true
+            moveActions.forEach { ViewCompat.removeAccessibilityAction(row, it) }
+            moveActions.clear()
+            row.setOnLongClickListener(null)
+            row.isLongClickable = false
+            surface.setOnDragListener(null)
             // Preview ownership stays with the host; release references even if input retirement throws.
             preview.setOnClickListener(null)
             var failure = closePreservingPrimaryFailure(null) { gesture.cancelBrowserPanelInput() }
@@ -291,6 +414,8 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private val theme
     override fun close() {
         if (panelClosed) return
         onTabAction = null
+        onTabMove = null
+        cancelReorder()
         var failure = closePreservingPrimaryFailure(null) { super.close() }
         cards.values.forEach { failure = closePreservingPrimaryFailure(failure, it::close) }
         cards.clear()
