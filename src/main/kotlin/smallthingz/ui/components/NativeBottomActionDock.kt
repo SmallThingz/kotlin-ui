@@ -15,16 +15,18 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * Full-width primary action with rounded top corners and a square, inset-filled bottom edge.
+ * Side-inset primary action with rounded top corners and a square, inset-filled bottom edge.
  * The existing button retains input, accessibility, state, callback and lifetime ownership.
  * Pass remaining insets only; the navigation region is painted but is not an action target.
  */
-open class NativeBottomActionDock(
+open class NativeBottomActionDock @JvmOverloads constructor(
     context: Context,
     density: Density,
     val action: NativeMaterialButtonView,
+    horizontalInsetDp: Int = NativeScreenSpacing.HORIZONTAL_DP,
 ) : ViewGroup(context) {
     private val densityScale = density.density
+    private val horizontalInsetPx = (horizontalInsetDp.coerceAtLeast(0) * densityScale).roundToInt()
     val topCornerRadiusPx: Float = 28f * densityScale
     val minimumActionHeightPx: Int = (64f * densityScale).roundToInt()
     private var safeInsets = Insets.NONE
@@ -63,8 +65,9 @@ open class NativeBottomActionDock(
     }
 
     override fun onMeasure(w: Int, h: Int) {
-        val width = resolveSize(action.preferredWidth(false) + safeInsets.left + safeInsets.right, w)
-        val actionWidth = (width - safeInsets.left - safeInsets.right).coerceAtLeast(0)
+        val width = resolveSize(action.preferredWidth(false) + safeInsets.left + safeInsets.right +
+            2 * horizontalInsetPx, w)
+        val actionWidth = surfaceRight(width) - surfaceLeft(width)
         val wanted = max(minimumActionHeightPx, action.intrinsicHeight(actionWidth))
         val height = resolveSize(wanted + safeInsets.bottom, h)
         action.measure(exact(actionWidth), exact((height - safeInsets.bottom).coerceAtLeast(0)))
@@ -72,10 +75,12 @@ open class NativeBottomActionDock(
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        action.layout(safeInsets.left, 0, safeInsets.left + action.measuredWidth, action.measuredHeight)
-        val radius = min(topCornerRadiusPx, min(width / 2f, height.toFloat()))
+        val left = surfaceLeft(width)
+        val right = surfaceRight(width)
+        action.layout(left, 0, left + action.measuredWidth, action.measuredHeight)
+        val radius = surfaceRadius()
         clip.rewind()
-        clip.addRoundRect(0f, 0f, width.toFloat(), height.toFloat(),
+        clip.addRoundRect(left.toFloat(), 0f, right.toFloat(), height.toFloat(),
             floatArrayOf(radius, radius, radius, radius, 0f, 0f, 0f, 0f), Path.Direction.CW)
     }
 
@@ -89,9 +94,7 @@ open class NativeBottomActionDock(
 
     override fun onDraw(canvas: Canvas) {
         // Avoid double-compositing translucent disabled paint underneath the button itself.
-        drawInset(canvas, 0f, action.bottom.toFloat(), width.toFloat(), height.toFloat())
-        drawInset(canvas, 0f, 0f, action.left.toFloat(), action.bottom.toFloat())
-        drawInset(canvas, action.right.toFloat(), 0f, width.toFloat(), action.bottom.toFloat())
+        drawInset(canvas, action.left.toFloat(), action.bottom.toFloat(), action.right.toFloat(), height.toFloat())
     }
 
     private fun drawInset(canvas: Canvas, left: Float, top: Float, right: Float, bottom: Float) {
@@ -106,11 +109,15 @@ open class NativeBottomActionDock(
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-            val radius = min(topCornerRadiusPx, min(width / 2f, height.toFloat()))
+            val left = surfaceLeft(width).toFloat()
+            val right = surfaceRight(width).toFloat()
+            val radius = surfaceRadius()
             val x = event.x
             val y = event.y
-            if (y < radius && (x < radius || x > width - radius)) {
-                val center = if (x < radius) radius else width - radius
+            // Neither the transparent gutters nor the navigation fill is an action target.
+            if (x < left || x >= right || y < 0f || y >= action.bottom) return false
+            if (y < radius && (x < left + radius || x > right - radius)) {
+                val center = if (x < left + radius) left + radius else right - radius
                 val dx = x - center
                 val dy = y - radius
                 if (dx * dx + dy * dy > radius * radius) return false
@@ -118,6 +125,13 @@ open class NativeBottomActionDock(
         }
         return super.dispatchTouchEvent(event)
     }
+
+    // Design spacing is additional to remaining safe insets; never re-read window insets here.
+    private fun surfaceLeft(width: Int) = (safeInsets.left + horizontalInsetPx).coerceAtMost(width)
+    private fun surfaceRight(width: Int) =
+        (width - safeInsets.right - horizontalInsetPx).coerceAtLeast(surfaceLeft(width))
+    private fun surfaceRadius() =
+        min(topCornerRadiusPx, min((surfaceRight(width) - surfaceLeft(width)) / 2f, height.toFloat()))
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
