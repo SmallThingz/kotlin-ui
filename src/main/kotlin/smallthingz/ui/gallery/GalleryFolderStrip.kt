@@ -40,8 +40,10 @@ class GalleryFolderStrip(
         val limit = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED) null else {
             val usable = (MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight).coerceAtLeast(0)
             val reserve = if (chips.size > 1) dp(8) + dp(24) else 0
+            val preferred = if (chips.size > 1)
+                minOf(usable - reserve, (usable * .6f).roundToInt(), dp(240)) else usable
             // Below 48dp the native viewport may clip/scroll a target; never compress the target.
-            maxOf(dp(48), usable - reserve)
+            maxOf(dp(48), preferred)
         }
         if (chipWidthLimit != limit) {
             chipWidthLimit = limit

@@ -21,17 +21,21 @@ class GalleryFolderStripIntegrationTest {
     @Test fun largeLabelsLeaveNextPeekAndRemainReachableInBothDirections() = main {
         for (font in listOf(1f, 2f)) for (density in listOf(160, 240))
             for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
-                val f = Fixture(font, density, direction, listOf(longLabel, "Camera", longLabel + " last"))
+                val f = Fixture(font, density, direction, listOf(longLabel, "A", longLabel + " last"))
                 f.strip.setPadding(f.dp(5), 0, f.dp(7), 0)
                 f.strip.isHorizontalFadingEdgeEnabled = false
                 f.strip.isSmoothScrollingEnabled = false
                 f.layout(320)
                 val scenario = "font=$font density=$density direction=$direction"
                 val usable = f.strip.width - f.strip.paddingLeft - f.strip.paddingRight
-                assertEquals(usable - f.dp(8) - f.dp(24), f.chips.first().width)
+                assertTrue("Adaptive cap: $scenario", f.chips.first().width <= (usable * .6f).roundToInt())
+                assertTrue("Absolute cap: $scenario", f.chips.first().width <= f.dp(240))
+                assertTrue("Next-folder reserve: $scenario", f.chips.first().width <= usable - f.dp(8) - f.dp(24))
                 assertTrue(f.labels.first().layout.getEllipsisCount(0) > 0)
                 val first = f.chips[0]
                 val second = f.chips[1]
+                assertTrue("Short second chip keeps natural width: $scenario", second.width < first.width)
+                assertEquals(0, f.labels[1].layout.getEllipsisCount(0))
                 assertEquals(f.dp(8), if (direction == View.LAYOUT_DIRECTION_RTL)
                     first.left - second.right else second.left - first.right)
                 // Observe native initial placement before any focus or scrolling request.
@@ -42,8 +46,8 @@ class GalleryFolderStripIntegrationTest {
                 val secondBounds = f.visible(second)
                 val visibleWidth = minOf(secondBounds.right, f.strip.width - f.strip.paddingRight) -
                     maxOf(secondBounds.left, f.strip.paddingLeft)
-                assertEquals("Initial next-folder peek: $scenario scrollX=${f.strip.scrollX} bounds=$secondBounds",
-                    f.dp(24), visibleWidth)
+                assertTrue("Initial next-folder peek: $scenario scrollX=${f.strip.scrollX} bounds=$secondBounds",
+                    visibleWidth >= f.dp(24))
                 f.assertLabels()
                 for (chip in f.chips) {
                     chip.isFocusableInTouchMode = true
@@ -68,7 +72,7 @@ class GalleryFolderStripIntegrationTest {
         single.assertLabels()
         val short = Fixture(2f, 160, View.LAYOUT_DIRECTION_LTR, listOf("A", "B"))
         short.layout(320)
-        assertTrue(short.chips.all { it.width < short.dp(288) })
+        assertTrue(short.chips.all { it.width < short.dp(192) })
         assertTrue(short.labels.all { it.layout.getEllipsisCount(0) == 0 })
         short.assertLabels()
     }
@@ -76,9 +80,9 @@ class GalleryFolderStripIntegrationTest {
     @Test fun resizeRefreshesCapsWithoutReplacingNodesOrDispatchingActions() = main {
         val f = Fixture(2f, 160, View.LAYOUT_DIRECTION_RTL, listOf(longLabel, "Camera"))
         val nodes = f.chips.toList()
-        for (width in listOf(320, 180, 480, 320)) {
+        for ((width, expectedCap) in listOf(320 to 192, 180 to 108, 480 to 240, 320 to 192)) {
             f.layout(width)
-            assertEquals(f.dp(width) - f.dp(8) - f.dp(24), f.chips.first().width)
+            assertEquals(f.dp(expectedCap), f.chips.first().width)
             f.chips.forEachIndexed { i, chip -> assertSame(nodes[i], chip) }
             f.assertLabels()
             val oldHeight = f.strip.height
@@ -102,11 +106,12 @@ class GalleryFolderStripIntegrationTest {
         assertEquals(0, f.labels.first().layout.getEllipsisCount(0))
         f.assertLabels()
         f.layout(320)
-        assertEquals(f.dp(288), f.chips.first().width)
+        assertEquals(f.dp(192), f.chips.first().width)
         f.strip.measure(View.MeasureSpec.makeMeasureSpec(f.dp(240), View.MeasureSpec.AT_MOST), unspecified())
         f.strip.layout(0, 0, f.strip.measuredWidth, f.strip.measuredHeight)
-        assertEquals(f.dp(240), f.strip.width)
-        assertEquals(f.dp(208), f.chips.first().width)
+        assertTrue(f.strip.width <= f.dp(240))
+        assertEquals(f.dp(144), f.chips.first().width)
+        assertTrue(f.strip.width - f.chips.first().width - f.dp(8) >= f.dp(24))
         f.assertLabels()
         val empty = Fixture(2f, 160, View.LAYOUT_DIRECTION_LTR, emptyList())
         empty.layout(0)
