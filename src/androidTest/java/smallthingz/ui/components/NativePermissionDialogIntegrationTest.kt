@@ -724,8 +724,12 @@ class NativePermissionDialogIntegrationTest {
         NativePermissionDialog(activity, NativeColorScheme.fallback(false), null, "Reader", summary,
             "Deny", "Allow", body, deny, allow, cancel, appearance, showDragHandle = showDragHandle)
 
-    private fun platform(prompt: NativePermissionDialog): Dialog =
-        NativePermissionDialog::class.java.getDeclaredField("dialog").apply { isAccessible = true }.get(prompt) as Dialog
+    private fun platform(prompt: NativePermissionDialog): Dialog {
+        val presentation = requireNotNull(NativePermissionDialog::class.java.getDeclaredField("presentation")
+            .apply { isAccessible = true }.get(prompt))
+        return presentation.javaClass.getDeclaredField("dialog").apply { isAccessible = true }
+            .get(presentation) as Dialog
+    }
 
     private fun showFixture(prompt: NativePermissionDialog) {
         val dialog = platform(prompt)

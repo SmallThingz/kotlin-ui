@@ -756,8 +756,10 @@ class NativeMergedActionLayoutIntegrationTest {
             var failure: Throwable? = null
             try {
                 // Construct real dialog content, but never show/admit a consent window in this geometry test.
-                val dialog = NativePermissionDialog::class.java.getDeclaredField("dialog")
-                    .apply { isAccessible = true }.get(prompt) as android.app.Dialog
+                val presentation = requireNotNull(NativePermissionDialog::class.java.getDeclaredField("presentation")
+                    .apply { isAccessible = true }.get(prompt))
+                val dialog = presentation.javaClass.getDeclaredField("dialog").apply { isAccessible = true }
+                    .get(presentation) as android.app.Dialog
                 val surface = dialog.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
                 val footer = descendants(surface).filterIsInstance<NativeMergedActionLayout>().single()
                 val viewport = descendants(surface).filterIsInstance<android.widget.ScrollView>().last()
