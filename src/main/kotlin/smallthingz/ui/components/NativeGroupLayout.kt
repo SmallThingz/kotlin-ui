@@ -111,6 +111,11 @@ class NativeGroupLayout(
         if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
     }
 
+    /** Append an ordinary full-width row using the group's shared layout defaults. */
+    fun addRow(child: View) {
+        addRow(child, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    }
+
     fun addRow(child: View, params: LayoutParams) {
         content.addView(child, params)
     }
