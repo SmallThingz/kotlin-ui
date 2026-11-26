@@ -149,6 +149,25 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
         onSurfacePaintChanged(range)
     }
 
+    private fun releaseRasterCache() {
+        if (bitmap == null && maskCanvas == null) return
+        // Display lists may still own the previous mask; do not recycle it.
+        bitmap = null
+        maskCanvas = null
+        borderGeometryDirty = true
+        invalidate()
+    }
+
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility != VISIBLE) releaseRasterCache()
+    }
+
+    override fun onDetachedFromWindow() {
+        releaseRasterCache()
+        super.onDetachedFromWindow()
+    }
+
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
         updateShape(w, h)
     }
