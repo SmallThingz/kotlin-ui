@@ -5,6 +5,8 @@
  */
 package smallthingz.ui.components
 
+import smallthingz.ui.animation.core.AnimationPlayTime
+
 import smallthingz.ui.controls.textSurfaceRange
 import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
 import smallthingz.ui.text.view.NativePlainTextViewGeometry
@@ -61,7 +63,6 @@ import kotlinx.coroutines.withTimeout
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.math.roundToLong
 
 internal data class NativeTooltipPlacement(val x:Int,val y:Int)
 internal fun nativeTooltipAbove(
@@ -85,7 +86,7 @@ internal class NativeSheetTooltipMotion {
         {AnimationVector1D(0f)})
     private var current=false
     private var target=false
-    private var origin:Long?=null
+    private val clock = AnimationPlayTime(roundToNearest = true)
     private var playTime=0L
     val shouldExist get()=current||target
     val alpha get()=fade.value
@@ -106,11 +107,10 @@ internal class NativeSheetTooltipMotion {
     }
     fun frame(time:Long,durationScale:Float) {
         if(!scale.running&&!fade.running)return
-        if(origin==null)origin=time
         val toEnd=durationScale==0f
-        if(!toEnd)playTime=((time-checkNotNull(origin)).toDouble()/durationScale).roundToLong()
+        if(!toEnd)playTime=clock.advance(time, durationScale)
         scale.frame(playTime,toEnd);fade.frame(playTime,toEnd)
-        if(!scale.running&&!fade.running) {current=target;origin=null;playTime=0L}
+        if(!scale.running&&!fade.running) {current=target;clock.reset();playTime=0L}
     }
 }
 
@@ -213,6 +213,7 @@ internal class NativeSheetTooltip(
             }
         }
         if(animation==null&&popup!=null) {
+            readCachedAnimatorDurationScale(anchor.context)
             val next=scope.launch(start=CoroutineStart.LAZY) {
                 motion.animate { runtime.frames.withFrameNanos {time->
                     motion.frame(time,readCachedAnimatorDurationScale(anchor.context))

@@ -30,6 +30,9 @@ open class NativeFloatingPanelSurface(
     private val path = Path()
     private val bounds = RectF()
     private val radii = FloatArray(8)
+    private val edgeHighlight = NativeModalEdgeHighlight()
+    private var edgeColor = palette.border
+    private var edgeWidthDp = palette.modalEdgeWidthDp()
     private var dialogEdge = NativeDialogEdge.TOP
     private val clipped = NativeFloatingPanelClip(context)
     private var grainIntensity = palette.surfacePreset?.foregroundGrain ?: 1f
@@ -61,8 +64,13 @@ open class NativeFloatingPanelSurface(
         val shapeChanged = this.density != density || this.recipe.cornerRadiusDp != recipe.cornerRadiusDp
         val nextGrainIntensity = palette.surfacePreset?.foregroundGrain ?: 1f
         val grainChanged = this.recipe.grainSeed != recipe.grainSeed || grainIntensity != nextGrainIntensity
+        val nextEdgeColor = palette.border
+        val nextEdgeWidthDp = palette.modalEdgeWidthDp()
+        val edgeChanged = edgeColor != nextEdgeColor || edgeWidthDp != nextEdgeWidthDp
         this.density = density
         this.recipe = recipe
+        edgeColor = nextEdgeColor
+        edgeWidthDp = nextEdgeWidthDp
         fillMotion.retarget(recipe.surfaceColor(palette))
         if (grainChanged) {
             grainIntensity = nextGrainIntensity
@@ -72,6 +80,10 @@ open class NativeFloatingPanelSurface(
             invalidate()
         }
         if (shapeChanged) rebuildShape()
+        else if (edgeChanged) {
+            updateEdgeHighlight(recipe.cornerRadiusPx(density, width, height))
+            invalidate()
+        }
     }
 
     private fun publishFill() {
@@ -123,8 +135,12 @@ open class NativeFloatingPanelSurface(
         path.rewind()
         path.addRoundRect(bounds, radii, Path.Direction.CW)
         clipped.setShape(path)
+        updateEdgeHighlight(radius)
         invalidate()
     }
+
+    private fun updateEdgeHighlight(radius: Float) =
+        edgeHighlight.update(width, height, radius, density, dialogEdge, edgeColor, edgeWidthDp)
 
     override fun verifyDrawable(who: android.graphics.drawable.Drawable): Boolean =
         who === grain || super.verifyDrawable(who)
@@ -139,6 +155,11 @@ open class NativeFloatingPanelSurface(
         super.onDraw(canvas)
         canvas.drawPath(path, fill)
         grain.drawGrain(canvas, path)
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        super.dispatchDraw(canvas)
+        edgeHighlight.draw(canvas)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean = true

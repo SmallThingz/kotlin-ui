@@ -78,10 +78,11 @@ private fun sheetWindowContext(anchor: Context): Context {
  * One caller-owned sheet route. Title Close invokes the current owner immediately by default;
  * scrim/drag/Back use M3's respective hide-then-callback paths. No implicit busy/permission policy.
  *
- * Construct, create caller bodies against [contentContext], call [setContent], then show().
+ * Call [create] with a theme-resolved style, create caller bodies against [contentContext],
+ * call [setContent], then show().
  * The owner calls dismiss() when its source route is removed. Bodies/actions rebind in place.
  */
-class NativeActionSheet(
+class NativeActionSheet internal constructor(
     private val anchor:View,
     initialStyle:NativeActionSheetStyle,
     title:String,
@@ -92,7 +93,7 @@ class NativeActionSheet(
     statusBarProtection: NativeStatusBarProtection?,
     entryEdge: NativeDialogEdge,
 ):ComponentDialog(sheetWindowContext(anchor.context)) {
-    constructor(
+    internal constructor(
         anchor: View,
         initialStyle: NativeActionSheetStyle,
         title: String,
@@ -102,7 +103,7 @@ class NativeActionSheet(
         statusBarProtection: NativeStatusBarProtection?,
     ) : this(anchor, initialStyle, title, onDismiss, closeIcon, contentBackground, statusBarProtection, NativeDialogEdge.BOTTOM)
 
-    constructor(
+    internal constructor(
         anchor: View,
         initialStyle: NativeActionSheetStyle,
         title: String,
@@ -115,7 +116,7 @@ class NativeActionSheet(
      * A sheet without a header close button. The drag handle, backdrop and Back remain available
      * for dismissal.
      */
-    constructor(
+    internal constructor(
         anchor: View,
         initialStyle: NativeActionSheetStyle,
         title: String,
@@ -125,7 +126,7 @@ class NativeActionSheet(
     ) : this(anchor, initialStyle, title, onDismiss, null, contentBackground, statusBarProtection)
 
     /** A close-free sheet entering from a specific edge. */
-    constructor(
+    internal constructor(
         anchor: View,
         initialStyle: NativeActionSheetStyle,
         title: String,
@@ -602,7 +603,22 @@ class NativeActionSheet(
         release {runtime.close()}
         failure?.let {throw it}
     }
-    companion object {private val PREDICTIVE_EASING=CubicBezierEasing(.1f,.1f,0f,1f)}
+    companion object {
+        private val PREDICTIVE_EASING = CubicBezierEasing(.1f,.1f,0f,1f)
+
+        /** A sheet using the window's theme paint, with optional close action and entry edge. */
+        fun create(
+            anchor: View,
+            initialStyle: NativeActionSheetStyle,
+            title: String,
+            onDismiss: () -> Unit,
+            closeIcon: NativeActionSheetIcon? = null,
+            statusBarProtection: NativeStatusBarProtection? = null,
+            entryEdge: NativeDialogEdge = NativeDialogEdge.BOTTOM,
+        ): NativeActionSheet = NativeActionSheet(
+            anchor, initialStyle, title, onDismiss, closeIcon, null, statusBarProtection, entryEdge,
+        )
+    }
 }
 
 /** Passed once to concrete body/action owners, without discovering or guessing their input shapes. */

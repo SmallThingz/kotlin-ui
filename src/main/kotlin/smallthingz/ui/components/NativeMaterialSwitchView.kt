@@ -11,6 +11,8 @@
  */
 package smallthingz.ui.components
 
+import smallthingz.ui.animation.core.AnimationPlayTime
+
 import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
 import android.content.Context
 import android.content.res.Configuration
@@ -402,7 +404,7 @@ private class SwitchFloatMotion(initial: Float) {
     private var initialVelocity = 0f
     private var velocity = 0f
     private var durationNanos = 0L
-    private var startFrame = UNSET_FRAME
+    private val clock = AnimationPlayTime()
     private var lastFrame = UNSET_FRAME
     private var snap = false
     var isRunning = false
@@ -415,7 +417,7 @@ private class SwitchFloatMotion(initial: Float) {
         target = next
         this.snap = snap
         durationNanos = if (snap) 0L else SPRING.getDurationNanos(initialValue, target, initialVelocity)
-        startFrame = lastFrame
+        clock.reset()
         isRunning = true
         if (lastFrame != UNSET_FRAME) frame(lastFrame, durationScale)
     }
@@ -423,9 +425,7 @@ private class SwitchFloatMotion(initial: Float) {
     fun frame(frameNanos: Long, durationScale: Float) {
         if (!isRunning) return
         require(durationScale >= 0f)
-        val start = if (startFrame == UNSET_FRAME) frameNanos.also { startFrame = it } else startFrame
-        val playTime = if (durationScale == 0f) durationNanos
-            else ((frameNanos - start) / durationScale).toLong()
+        val playTime = clock.advance(frameNanos, durationScale, durationNanos)
         lastFrame = frameNanos
         if (snap || playTime >= durationNanos) {
             stop()
@@ -440,7 +440,7 @@ private class SwitchFloatMotion(initial: Float) {
         value = target
         isRunning = false
         velocity = 0f
-        startFrame = UNSET_FRAME
+        clock.reset()
         lastFrame = UNSET_FRAME
     }
 

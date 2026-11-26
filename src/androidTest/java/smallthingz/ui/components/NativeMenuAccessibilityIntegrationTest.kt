@@ -134,7 +134,7 @@ class NativeMenuAccessibilityIntegrationTest {
         assertEquals(listOf(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED to false), requests)
         column.bind(NativeMenuChoices(1, listOf(1, 2)) { "Choice $it" }, colors) {}
         requests.clear()
-        column.bindActions(listOf(NativeMenuAction("Disabled action", 7, colors.ink, colors.primary, false) {
+        column.bindActions(listOf(ResolvedMenuAction("Disabled action", 7, colors.ink, colors.primary, false) {
             error("Disabled action executed")
         }), colors)
         assertSame(row, column.rows.single())
@@ -142,7 +142,7 @@ class NativeMenuAccessibilityIntegrationTest {
         assertFalse(row.performClick())
         assertTrue(requests.contains(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED to false))
         requests.clear()
-        column.bindActions(listOf(NativeMenuAction("Enabled action", 7, colors.ink, colors.primary) {}), colors)
+        column.bindActions(listOf(ResolvedMenuAction("Enabled action", 7, colors.ink, colors.primary) {}), colors)
         assertNode(row, false, true, "Enabled action")
         assertFalse(requests.any { it.first == AccessibilityEvent.TYPE_VIEW_SELECTED })
         column.bind(NativeMenuChoices(1, listOf(1)) { "Choice $it" }, colors) {}

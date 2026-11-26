@@ -126,6 +126,9 @@ internal class NativeSheetSurface(
         }
         override val paintedTextSurface: Long get() = grain.paintedTextSurface
         private val shape=Path()
+        private val shapeBounds = RectF()
+        private val shapeRadii = FloatArray(8)
+        private val edgeHighlight = NativeModalEdgeHighlight()
         private val colorMotion:ViewColorTransition by lazy {ViewColorTransition(this,intArrayOf(fill.color),{
             val next = colorMotion.color(0)
             if (fill.color != next) {
@@ -140,6 +143,8 @@ internal class NativeSheetSurface(
             val shapeChanged=env.textDensity!=next.textDensity || env.recipe.radiusDp!=next.recipe.radiusDp
             val grainChanged=env.recipe.grainSeed!=next.recipe.grainSeed ||
                 env.recipe.grainIntensity!=next.recipe.grainIntensity
+            val edgeChanged = env.palette.edgeColor != next.palette.edgeColor ||
+                env.palette.edgeWidthDp != next.palette.edgeWidthDp
             env=next;colorMotion.retarget(next.palette.surfaceContainerLow)
             if (grainChanged) {
                 grain.setGrainSeed(next.recipe.grainSeed)
@@ -148,6 +153,10 @@ internal class NativeSheetSurface(
                 invalidate()
             }
             if(shapeChanged) { onSizeChanged(width,height,width,height);invalidate() }
+            else if (edgeChanged) {
+                updateEdgeHighlight(width, height)
+                invalidate()
+            }
         }
         override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int) {
             grain.setBounds(0,0,w,h)
@@ -158,19 +167,26 @@ internal class NativeSheetSurface(
             val resolved=if(raw>minimum)raw*(minimum/raw)else raw
             radius=min(resolved,w*.5f)
             shape.rewind()
-            val rounds = if (entryEdge == NativeDialogEdge.TOP) {
-                floatArrayOf(0f,0f,0f,0f,resolved,resolved,resolved,resolved)
-            } else {
-                floatArrayOf(resolved,resolved,resolved,resolved,0f,0f,0f,0f)
+            for (index in shapeRadii.indices) {
+                shapeRadii[index] = if ((index >= 4) == (entryEdge == NativeDialogEdge.TOP)) resolved else 0f
             }
-            shape.addRoundRect(RectF(0f,0f,w.toFloat(),h.toFloat()),rounds,Path.Direction.CW)
+            shapeBounds.set(0f, 0f, w.toFloat(), h.toFloat())
+            shape.addRoundRect(shapeBounds, shapeRadii, Path.Direction.CW)
             clip.setShape(shape)
+            updateEdgeHighlight(w, h)
         }
+        private fun updateEdgeHighlight(width: Int, height: Int) =
+            edgeHighlight.update(width, height, radius, env.textDensity.density, entryEdge,
+                env.palette.edgeColor, env.palette.edgeWidthDp)
         override fun verifyDrawable(who: android.graphics.drawable.Drawable): Boolean =
             who === grain || super.verifyDrawable(who)
         override fun onDraw(canvas:Canvas) {
             canvas.drawPath(shape,fill)
             grain.drawGrain(canvas,shape)
+        }
+        override fun dispatchDraw(canvas: Canvas) {
+            super.dispatchDraw(canvas)
+            edgeHighlight.draw(canvas)
         }
         fun containsShape(p:Offset):Boolean {
             if(p.x<0f||p.y<0f||p.x>=width||p.y>=height)return false

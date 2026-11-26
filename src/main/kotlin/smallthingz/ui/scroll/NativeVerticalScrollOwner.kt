@@ -15,7 +15,7 @@ import smallthingz.ui.MotionDurationScale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.coroutineScope
 import kotlin.coroutines.coroutineContext
 
 /** The existing ancestor chain owns these real suspendable continuations. Units are physical Y. */
@@ -87,22 +87,19 @@ class NativeVerticalScrollOwner(
         var consumedTotal = 0f
         state.mutate(MutatePriority.Default) {
             val animation = TargetBasedAnimation(spring<Float>(), Float.VectorConverter, 0f, logicalDelta)
-            var firstFrame: Long? = null
+            val clock = ScrollPlayTime()
+            val duration = coroutineContext[MotionDurationScale]
+            // Initialize the platform cache before the clock admits the first frame.
+            duration?.scaleFactor
             var finished = false
-            while (!finished) {
-                // Source reads scale before requesting each frame, rather than forcing fling's 1f.
-                val scale = coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f
-                check(scale >= 0f) { "negative scale factor" }
-                frames.withFrameNanos { frame ->
-                    val start = firstFrame ?: frame.also { firstFrame = it }
-                    val playTime = if (scale == 0f) animation.durationNanos
-                    else ((frame - start) / scale).toLong()
-                    val current = animation.getValueFromNanos(playTime)
-                    val delta = current - consumedTotal
-                    consumedTotal += scrollPageBy(delta)
-                    finished = animation.isFinishedFromNanos(playTime)
-                }
+            val sample: (Long) -> Unit = { frame ->
+                val playTime = clock.advance(frame, duration?.scaleFactor ?: 1f)
+                val current = animation.getValueFromNanos(playTime)
+                val delta = current - consumedTotal
+                consumedTotal += scrollPageBy(delta)
+                finished = animation.isFinishedFromNanos(playTime)
             }
+            while (!finished) frames.withFrameNanos(sample)
         }
         return consumedTotal
     }
@@ -159,7 +156,7 @@ class NativeVerticalScrollOwner(
 
     /**
      * Source's physical-axis fling and mutation boundary. A competing higher/equal priority
-     * mutation cancels this coroutine; its withContext/coroutineScope boundaries still propagate
+     * mutation cancels this coroutine; its coroutineScope boundaries still propagate
      * that cancellation even though the inner default fling catches CancellationException.
      */
     suspend fun doFlingAnimation(availablePhysicalY: Float): Float {
@@ -176,7 +173,8 @@ class NativeVerticalScrollOwner(
     }
 
     private suspend fun performDefaultFling(logicalVelocity: Float): Float =
-        withContext(DefaultNativeScrollMotionDurationScale) {
+        coroutineScope {
+            val duration = coroutineContext[MotionDurationScale]
             var leftover = logicalVelocity
             val fling = NativeVerticalFling(
                 decay = decay,
@@ -190,11 +188,12 @@ class NativeVerticalScrollOwner(
                 },
                 finished = { leftover = it },
             )
+            val sample: (Long) -> Unit = { fling.frame(it, duration?.scaleFactor ?: 1f) }
             fling.start(logicalVelocity)
             try {
-                while (fling.isRunning) {
-                    frames.withFrameNanos { fling.frame(it) }
-                }
+                // Initialize the platform cache before awaiting an animation frame.
+                if (fling.isRunning) duration?.scaleFactor
+                while (fling.isRunning) frames.withFrameNanos(sample)
             } catch (_: CancellationException) {
                 leftover = fling.remainingVelocity
             } finally {
@@ -210,10 +209,6 @@ class NativeVerticalScrollOwner(
         return if (edge != null) engine.dispatchWithOverscroll(physicalY, source, edge)
         else engine.dispatch(physicalY, source)
     }
-}
-
-private object DefaultNativeScrollMotionDurationScale : MotionDurationScale {
-    override val scaleFactor: Float get() = 1f
 }
 
 private class NativeDetachedScrollFlingCancellation : CancellationException(

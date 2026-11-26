@@ -31,6 +31,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import smallthingz.ui.common.ControlTheme
+import smallthingz.ui.util.closePreservingPrimaryFailure
 
 class NativeLargeFontPermissionActivity : Activity() {
     override fun attachBaseContext(base: Context) {
@@ -111,17 +113,17 @@ class NativePermissionDialogIntegrationTest {
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         var prompt: NativePermissionDialog? = null
         var decor: View? = null
-        fun main(action: () -> Unit) {
-            var result: Result<Unit>? = null
-            instrumentation.runOnMainSync { result = runCatching(action) }
-            checkNotNull(result).getOrThrow()
-        }
+        val same = 0xffdddddd.toInt()
         var cancels = 0
         withRetiringTestActivity(activity, root = { decor }, cleanup = { prompt?.dismiss() }) {
             main {
-                val same = 0xffdddddd.toInt()
-                val colors = NativeColorScheme.fallback(false).copy(surfaceContainerHigh = same, onSurfaceVariant = same)
-                prompt = NativePermissionDialog(activity, colors, null, "Reader", "Allow access?", "Deny", "Allow",
+                val colors = NativeColorScheme.fallback(false).copy(
+                    background = same,
+                    surfaceContainerHigh = 0xff807665.toInt(),
+                    onSurfaceVariant = same,
+                )
+                val theme = ControlTheme.resolve(activity, false).withColorScheme(colors)
+                prompt = NativePermissionDialog(activity, theme, null, "Reader", "Allow access?", "Deny", "Allow",
                     onDeny = { fail("Handle must not deny") }, onAllow = { fail("Handle must not allow") },
                     onCancel = { cancels++ }, showDragHandle = true).also { it.show() }
                 decor = requireNotNull(platform(checkNotNull(prompt)).window).decorView
@@ -139,6 +141,7 @@ class NativePermissionDialogIntegrationTest {
                 assertEquals((2f * density).roundToInt().coerceAtLeast(1), handle.mark.height)
                 val surface = generateSequence(handle.parent as? View) { it.parent as? View }
                     .filterIsInstance<NativeSurface>().first()
+                assertEquals("The permission surface must paint the custom background role", same, surface.paintedFillColor)
                 val range = NativeModalTextSurface.sample(handle.mark, forHandle = true)
                 assertEquals(surface.paintedTextSurface, range)
                 assertNotEquals(0L, range)
@@ -808,6 +811,12 @@ class NativePermissionDialogIntegrationTest {
         }
     }
 
+    private fun main(action: () -> Unit) {
+        var result: Result<Unit>? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { result = runCatching(action) }
+        checkNotNull(result).getOrThrow()
+    }
+
     private fun changeWindowFocus(view: View, focused: Boolean, gainingFocus: View? = null, change: () -> Unit) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val changed = CountDownLatch(1)
@@ -816,18 +825,18 @@ class NativePermissionDialogIntegrationTest {
         // Focus-loss and focus-gain are separate window messages. Losing this window's focus (or
         // draining today's main queue) does not prove the interrupting window acquired it.
         val listener = ViewTreeObserver.OnWindowFocusChangeListener { if (ready()) changed.countDown() }
-        instrumentation.runOnMainSync {
-            view.viewTreeObserver.addOnWindowFocusChangeListener(listener)
-            gainingFocus?.viewTreeObserver?.addOnWindowFocusChangeListener(listener)
-        }
-        try {
-            instrumentation.runOnMainSync {
+        val failure = try {
+            main {
+                view.viewTreeObserver.addOnWindowFocusChangeListener(listener)
+                gainingFocus?.viewTreeObserver?.addOnWindowFocusChangeListener(listener)
+            }
+            main {
                 change()
                 if (ready()) changed.countDown()
             }
             if (!changed.await(5, TimeUnit.SECONDS)) {
                 var detail = ""
-                instrumentation.runOnMainSync {
+                main {
                     detail = "permission(attached=${view.isAttachedToWindow}, shown=${view.isShown}, " +
                         "focus=${view.hasWindowFocus()}); cover(attached=${gainingFocus?.isAttachedToWindow}, " +
                         "shown=${gainingFocus?.isShown}, focus=${gainingFocus?.hasWindowFocus()})"
@@ -835,19 +844,23 @@ class NativePermissionDialogIntegrationTest {
                 fail("Permission focus handoff did not reach permission=$focused within 5 seconds: $detail")
             }
             instrumentation.waitForIdleSync()
-            instrumentation.runOnMainSync {
+            main {
                 assertEquals(focused, view.hasWindowFocus())
                 gainingFocus?.let {
                     assertTrue("Interrupting window must be attached", it.isAttachedToWindow)
                     assertTrue("Interrupting window must own focus", it.hasWindowFocus())
                 }
             }
-        } finally {
-            instrumentation.runOnMainSync {
+            null
+        } catch (error: Throwable) {
+            error
+        }
+        closePreservingPrimaryFailure(failure) {
+            main {
                 view.viewTreeObserver.removeOnWindowFocusChangeListener(listener)
                 gainingFocus?.viewTreeObserver?.removeOnWindowFocusChangeListener(listener)
             }
-        }
+        }?.let { throw it }
     }
 
     private fun attached(activityClass: Class<out Activity> = NativeMenuAccessibilityTestActivity::class.java,

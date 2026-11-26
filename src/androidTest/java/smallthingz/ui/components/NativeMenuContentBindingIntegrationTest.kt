@@ -104,7 +104,7 @@ class NativeMenuContentBindingIntegrationTest {
             for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
                 val plain = f.row()
                 if (icon == null) plain.bind(title, false, colors) {}
-                else plain.bindAction(NativeMenuAction(title, icon, colors.ink, colors.ink) {}, colors)
+                else plain.bindAction(ResolvedMenuAction(title, icon, colors.ink, colors.ink) {}, colors)
                 val rich = f.row {
                     it.bindContent(title, detail, detailStyle, icon, true, colors) {}
                 }
@@ -216,8 +216,8 @@ class NativeMenuContentBindingIntegrationTest {
         assertEquals(listOf(View.IMPORTANT_FOR_ACCESSIBILITY_YES, View.IMPORTANT_FOR_ACCESSIBILITY_YES),
             labels(reused).map { it.importantForAccessibility })
         val fresh = f.row()
-        reused.bindAction(NativeMenuAction("Share", 9, colors.ink, colors.primary) { calls++ }, colors)
-        fresh.bindAction(NativeMenuAction("Share", 9, colors.ink, colors.primary) {}, colors)
+        reused.bindAction(ResolvedMenuAction("Share", 9, colors.ink, colors.primary) { calls++ }, colors)
+        fresh.bindAction(ResolvedMenuAction("Share", 9, colors.ink, colors.primary) {}, colors)
         layout(reused)
         layout(fresh)
         assertOriginalBindingMatchesFresh(fresh, reused)
@@ -226,7 +226,7 @@ class NativeMenuContentBindingIntegrationTest {
         assertEquals(View.VISIBLE, glyph(reused).visibility)
         assertTrue(reused.performClick())
         assertEquals(1, calls)
-        reused.bindAction(NativeMenuAction("Share", 9, colors.ink, colors.primary, false) { calls++ }, colors)
+        reused.bindAction(ResolvedMenuAction("Share", 9, colors.ink, colors.primary, false) { calls++ }, colors)
         assertFalse(reused.performClick())
         tap(reused)
         assertEquals(1, calls)

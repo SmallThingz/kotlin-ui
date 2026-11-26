@@ -14,7 +14,7 @@ object AllDocAppearance {
     fun bindGroup(view: NativeGroupLayout, palette: ControlPalette) = NativeForeground.bindGroup(view, palette)
     fun bindGroup(view: NativeGroupLayout, field: Int, outline: Int, palette: ControlPalette) =
         NativeForeground.bindGroup(view, field, outline, palette)
-    fun menuColors(palette: ControlPalette): NativeMenuColors = NativeForeground.menuColors(palette)
+    internal fun menuColors(palette: ControlPalette): NativeMenuColors = NativeForeground.menuColors(palette)
     fun foregroundDrawable(fill: Int, palette: ControlPalette): NoiseDrawable =
         NativeForeground.foregroundDrawable(fill, palette)
     fun foregroundBackground(palette: ControlPalette, color: Int = palette.raised): NoiseDrawable =

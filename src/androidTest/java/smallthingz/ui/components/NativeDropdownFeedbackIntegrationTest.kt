@@ -485,6 +485,7 @@ class NativeDropdownFeedbackIntegrationTest {
             lateinit var observer: ViewTreeObserver.OnPreDrawListener
             lateinit var oldWheel: ViewGroup
             lateinit var observedTree: ViewTreeObserver
+            lateinit var native: NativeDropdownFlingTiming
             main {
                 oldWheel = f.wheel
                 observedTree = oldWheel.viewTreeObserver
@@ -496,6 +497,7 @@ class NativeDropdownFeedbackIntegrationTest {
                 swipe(f, direction)
                 release = position(f)
                 assertTrue("Real native fling must start", field(f.wheel, "flinging") as Boolean)
+                native = field(f.wheel, "flingTiming") as NativeDropdownFlingTiming
                 target = (field(f.wheel, "flingPath") as NativeDropdownFlingPath).targetRow
                 assertTrue(target in 0 until f.content.options.size)
                 assertTrue((target - release) * direction > 0f)
@@ -518,13 +520,12 @@ class NativeDropdownFeedbackIntegrationTest {
                     assertEquals(target.toFloat(), position(f), 0f)
                     assertRows(f)
                     assertTrue(f.deliveries.isEmpty())
-                    val native = field(f.wheel, "scroller") as android.widget.OverScroller
                     assertTrue(native.isFinished)
                     val animator = field(session(f), "animator") as? android.animation.ValueAnimator
                     assertFalse("No terminal settle animator", animator?.isRunning == true)
                     f.group.dismiss()
                     assertFalse(oldWheel.isAttachedToWindow)
-                    assertNull(field(oldWheel, "scroller"))
+                    assertNull(field(oldWheel, "flingTiming"))
                     (field(oldWheel, "flingFrame") as Runnable).run()
                     assertEquals(target.toFloat(), position(f), 0f)
                     assertTrue(f.deliveries.isEmpty())

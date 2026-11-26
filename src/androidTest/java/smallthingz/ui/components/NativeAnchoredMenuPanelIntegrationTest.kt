@@ -25,7 +25,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
 import smallthingz.ui.scroll.NativeVerticalScrollState
-import smallthingz.ui.text.TextStyle
+import smallthingz.ui.text.NativeTypography
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
 
@@ -151,13 +151,11 @@ class NativeAnchoredMenuPanelIntegrationTest {
                 assertFalse(requireNotNull(window).isShowing)
 
                 val clock = NativeModalWindowRuntime(activity).also { runtime = it; it.setStarted(true) }
-                val colors = NativeMenuColors(palette.raised, palette.surfaceContainerHigh,
-                    palette.ink, palette.muted, palette.primary)
-                val menu = NativePopupMenu(anchor, density, TextStyle.Default, createFontFamilyResolver(activity),
-                    colors, NativeVerticalScrollState(), clock.frames, clock.scope, glyphs,
+                val menu = NativePopupMenu(anchor, density, NativeTypography.Default, createFontFamilyResolver(activity),
+                    palette, NativeVerticalScrollState(), clock.frames, clock.scope, glyphs,
                     onDismissRequest = {}, onTerminal = {})
                 legacy = menu
-                menu.bindActions(listOf(NativeMenuAction("Audio details", 0, palette.ink, palette.ink) {}), colors)
+                menu.bindActions(listOf(NativeMenuAction("Audio details", 0) {}))
                 menu.show()
             }
             val menu = requireNotNull(legacy)

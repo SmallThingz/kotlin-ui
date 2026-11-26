@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 package smallthingz.ui.components.blob
 
-import kotlin.math.sqrt
-
-/** Render-only energy. Gate suppression calms the material without changing capture analysis. */
-internal fun audioBlobMotionEnergy(activity: Float, low: Float, high: Float, silence: Float): Float =
-    sqrt(maxOf(activity, low * .9f + high * .7f).coerceIn(0f, 1f)) *
-        (1f - .92f * silence.coerceIn(0f, 1f))
+/** Smoothstep gives quiet normalized activity a soft onset and reaches full motion at 1. */
+internal fun audioBlobMotionEnergy(activity: Float, silence: Float): Float {
+    val level = activity.coerceIn(0f, 1f)
+    return level * level * (3f - 2f * level) * (1f - .92f * silence.coerceIn(0f, 1f))
+}
 
 /** Broad liquid folds and a smaller treble ripple, bounded inside the existing render footprint. */
 internal fun audioBlobFold(h3: Float, h7: Float, energy: Float, low: Float, high: Float): Float =

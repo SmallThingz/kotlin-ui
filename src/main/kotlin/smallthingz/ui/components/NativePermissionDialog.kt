@@ -21,6 +21,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.ImageView
 import android.widget.LinearLayout
 import androidx.core.view.doOnLayout
+import smallthingz.ui.common.ControlTheme
 import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.text.font.createFontFamilyResolver
@@ -72,7 +73,7 @@ data class NativePermissionDialogRecipe(
 class NativePermissionDialog internal constructor(private val presentation: NativePermissionPresentation) {
     constructor(
         activity: Activity,
-        colors: NativeColorScheme,
+        theme: ControlTheme,
         icon: Drawable?,
         appName: CharSequence,
         summary: CharSequence,
@@ -82,11 +83,10 @@ class NativePermissionDialog internal constructor(private val presentation: Nati
         onDeny: () -> Unit,
         onAllow: () -> Unit,
         onCancel: () -> Unit,
-        appearance: NativeUiAppearance = NativeUiAppearance.Default,
-        recipe: NativePermissionDialogRecipe = appearance.modals.permissionDialog,
+        recipe: NativePermissionDialogRecipe = theme.appearance.modals.permissionDialog,
         showDragHandle: Boolean = false,
-    ) : this(NativePermissionWindow(activity, colors, icon, appName, summary, denyLabel, allowLabel,
-        scopeBody, onDeny, onAllow, onCancel, appearance, recipe, showDragHandle))
+    ) : this(NativePermissionWindow(activity, theme.colors, icon, appName, summary, denyLabel, allowLabel,
+        scopeBody, onDeny, onAllow, onCancel, theme.appearance, recipe, showDragHandle))
 
     // Retain the legacy window field used by the existing in-module native-window contract tests.
     @Suppress("unused")
@@ -101,6 +101,27 @@ class NativePermissionDialog internal constructor(private val presentation: Nati
     fun setProgress(message: CharSequence?) = presentation.setProgress(message)
     fun setError(message: CharSequence?) = presentation.setError(message)
 }
+
+/** Raw palette entry for the library's permission-window fixtures. */
+@JvmSynthetic
+@Suppress("FunctionName")
+internal fun NativePermissionDialog(
+    activity: Activity,
+    colors: NativeColorScheme,
+    icon: Drawable?,
+    appName: CharSequence,
+    summary: CharSequence,
+    denyLabel: CharSequence,
+    allowLabel: CharSequence,
+    scopeBody: View? = null,
+    onDeny: () -> Unit,
+    onAllow: () -> Unit,
+    onCancel: () -> Unit,
+    appearance: NativeUiAppearance = NativeUiAppearance.Default,
+    recipe: NativePermissionDialogRecipe = appearance.modals.permissionDialog,
+    showDragHandle: Boolean = false,
+): NativePermissionDialog = NativePermissionDialog(NativePermissionWindow(activity, colors, icon, appName, summary,
+    denyLabel, allowLabel, scopeBody, onDeny, onAllow, onCancel, appearance, recipe, showDragHandle))
 
 private class NativePermissionWindow(
     activity: Activity,
@@ -284,8 +305,12 @@ private class NativePermissionWindow(
         }
         val panel = NativeBoundedDialogContentLayout(activity, body, actions, recipe.contentInsetDp,
             availableHeight = { Rect().also(host::getWindowVisibleDisplayFrame).height() }, header = handle)
-        val surface = NativeSurface(activity, NativeSurfaceStyle(colors.surfaceContainerHigh,
-            cornerRadiusDp = recipe.cornerRadiusDp, noise = recipe.noiseSeed != null,
+        val surface = NativeSurface(activity, NativeSurfaceStyle(
+            fillColor = appearance.modals.sheet.surfaceColor(colors),
+            cornerRadiusDp = recipe.cornerRadiusDp,
+            outlineColor = colors.border,
+            outlineWidthDp = colors.modalEdgeWidthDp(),
+            noise = recipe.noiseSeed != null,
             noiseSeed = recipe.noiseSeed ?: NoiseDrawable.SEED_BACKGROUND)).apply {
             setNoiseIntensity(colors.surfacePreset?.foregroundGrain ?: 1f)
             addView(panel, ViewGroup.LayoutParams(MATCH_PARENT, WRAP_CONTENT))

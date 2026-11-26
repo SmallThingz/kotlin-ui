@@ -14,6 +14,43 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AnimationFailureCleanupTest {
+    @Test(timeout = 10_000) fun animateToSamplesScaleOnDeliveryAndReleasesCancelledWait() = runBlocking {
+        val clock = CapturedFrameClock()
+        val scale = object : MotionDurationScale { override var scaleFactor = 0f }
+        val state = AnimationState(0f)
+        val samples = mutableListOf<Pair<Float, Boolean>>()
+        fun start(target: Float) = launch(clock + scale, start = CoroutineStart.UNDISPATCHED) {
+            state.animateTo(target, tween(100, easing = LinearEasing)) {
+                assertEquals(value, state.value, 0f)
+                assertEquals(isRunning, state.isRunning)
+                samples += value to isRunning
+            }
+        }
+        val job = start(1f)
+        suspend fun deliver(ms: Long, factor: Float) {
+            assertEquals(1, clock.pendingCount)
+            scale.scaleFactor = factor
+            clock.frame(ms * 1_000_000L)
+            yield()
+        }
+        deliver(0, 1f)
+        deliver(20, .5f)
+        deliver(40, 2f)
+        deliver(50, 0f)
+        job.join()
+        assertEquals(listOf(0f to true, .4f to true, .5f to true, 1f to false), samples)
+        assertEquals(0, clock.pendingCount)
+        val next = start(2f)
+        deliver(60, 1f)
+        assertEquals(1, clock.pendingCount)
+        next.cancelAndJoin()
+        assertFalse(state.isRunning)
+        assertNull(state.activeScope)
+        assertEquals(0, clock.pendingCount)
+        clock.frame(70_000_000L)
+        assertEquals(5, samples.size)
+    }
+
     @Test(timeout = 10_000) fun firstCallbackFailureClearsPublishedScope() = stateFailure(1, false)
     @Test(timeout = 10_000) fun subsequentCallbackFailureClearsScope() = stateFailure(2, false)
     @Test(timeout = 10_000) fun firstFrameSpecFailureClearsScope() = stateFailure(1, true)
@@ -180,10 +217,10 @@ class AnimationFailureCleanupTest {
             }
         }
         try {
-            scale.scaleFactor = 0f
             clock.frame(firstFrame); yield()
             assertEquals(1, callbackCount)
             assertEquals(1, clock.pendingCount)
+            scale.scaleFactor = 0f
             clock.frame(lastFrame)
             first.join()
             replacementEntered.await()

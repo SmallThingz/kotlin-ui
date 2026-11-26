@@ -18,12 +18,13 @@ import smallthingz.ui.graphics.NoiseDrawable
  * document/page texture is independent. Binding retains existing views and drawing owners.
  */
 object NativeForeground {
-    /** Shared floating treatment; attached edges remain the caller's geometry. */
+    /** Shared treatment for an independent rounded floating surface. */
     fun floatingSurfaceStyle(palette: NativeColorScheme,
                              appearance: NativeUiAppearance = NativeUiAppearance.Default): NativeSurfaceStyle {
         val recipe = appearance.modals.floating
         return NativeSurfaceStyle(fillColor = recipe.surfaceColor(palette),
-            cornerRadiusDp = recipe.cornerRadiusDp, elevationDp = recipe.shadowDp)
+            cornerRadiusDp = recipe.cornerRadiusDp, elevationDp = recipe.shadowDp,
+            outlineColor = palette.border, outlineWidthDp = palette.modalEdgeWidthDp())
     }
 
     /** Progress geometry, values and colors remain with the existing progress owner. */
@@ -50,7 +51,7 @@ object NativeForeground {
         view.setPalette(field, outline)
     }
 
-    fun menuColors(palette: ControlPalette): NativeMenuColors = NativeMenuColors(
+    internal fun menuColors(palette: ControlPalette): NativeMenuColors = NativeMenuColors(
         palette.raised, palette.raised, palette.content, palette.muted, palette.accent,
         palette.surfacePreset?.foregroundGrain ?: 0f,
     )

@@ -13,6 +13,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import smallthingz.ui.animation.splineBasedDecay
 import smallthingz.ui.unit.Density
 
 /** Contract probes use recording platform edges, not a duplicate overscroll implementation. */
@@ -20,6 +21,26 @@ import smallthingz.ui.unit.Density
 class NativeAxisOverscrollTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private fun main(block: () -> Unit) = InstrumentationRegistry.getInstrumentation().runOnMainSync(block)
+
+    @Test fun zeroScaleSplinePreservesBoundaryVelocityForNestedPostFling() {
+        val spec = splineBasedDecay(Density(1f))
+        val velocity = 1800f
+        val boundaryTime = 48_000_000L
+        val boundary = spec.getValueFromNanos(boundaryTime, 0f, velocity)
+        val cases = listOf(
+            0f to velocity,
+            boundary to spec.getVelocityFromNanos(boundaryTime, 0f, velocity),
+            spec.getTargetValue(0f, velocity) to 0f,
+        )
+        for ((capacity, expected) in cases) {
+            val completed = mutableListOf<Float>()
+            val fling = NativeVerticalFling(spec, { it.coerceAtMost(capacity) }, completed::add)
+            fling.start(velocity)
+            fling.frame(0L, 0f)
+            assertEquals(expected, completed.single(), .001f)
+            assertFalse(fling.isRunning)
+        }
+    }
 
     private class Edge(context: Context) : EdgeEffect(context) {
         val pulls = mutableListOf<Pair<Float, Float>>()

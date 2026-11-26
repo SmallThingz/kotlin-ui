@@ -4,6 +4,8 @@
  */
 package smallthingz.ui.reverb.home
 
+import smallthingz.ui.animation.core.AnimationPlayTime
+
 import smallthingz.ui.animation.TransitionValue
 import smallthingz.ui.animation.core.AnimationVector1D
 import smallthingz.ui.animation.core.AnimationVector2D
@@ -11,7 +13,6 @@ import smallthingz.ui.animation.core.Spring
 import smallthingz.ui.animation.core.VectorConverter
 import smallthingz.ui.animation.core.spring
 import smallthingz.ui.unit.IntOffset
-import kotlin.math.roundToLong
 
 /** Slide/fade never changes measured card height; only the completed exit removes the subtree. */
 class CaptureSaveStatusMotion(initiallyVisible: Boolean) {
@@ -27,7 +28,7 @@ class CaptureSaveStatusMotion(initiallyVisible: Boolean) {
     private var fullHeight: Int? = null
     private var slide: TransitionValue<IntOffset, AnimationVector2D>? = null
     private var fade: TransitionValue<Float, AnimationVector1D>? = null
-    private var startFrame: Long? = null
+    private val clock = AnimationPlayTime(roundToNearest = true)
     private var playTime = 0L
     private var stateUpdate = false
     var exitCompleted = false
@@ -76,14 +77,12 @@ class CaptureSaveStatusMotion(initiallyVisible: Boolean) {
     fun frame(timeNanos: Long, durationScale: Float) {
         if (!running) return
         require(durationScale >= 0f)
-        val start = startFrame ?: timeNanos.also { startFrame = it }
-        playTime = if (durationScale == 0f) timeNanos - start
-            else ((timeNanos - start) / durationScale.toDouble()).roundToLong()
+        if (durationScale != 0f) playTime = clock.advance(timeNanos, durationScale)
         slide?.frame(playTime, durationScale == 0f)
         fade?.frame(playTime, durationScale == 0f)
         if (!running) {
             current = target
-            startFrame = null
+            clock.reset()
             playTime = 0L
             if (target == Phase.PostExit) exitCompleted = true
         }

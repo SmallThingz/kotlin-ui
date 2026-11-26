@@ -17,7 +17,7 @@
 
 ## Integration
 
-Create one controller per visible screen using its outer `FrameLayout`, `NativeUiAppearance`, resolved `NativeColorScheme`, `Density` and font resolver. The explicit frame must sit outside scrolling/clipping content. The library mounts a modal layer in that same window, suppresses/restores sibling accessibility and focus, and handles Back. There is no separate popup window or cancelled first draw. Each returned field retains typed option identity and caller-provided/localized labels. Update the field binding after `onSelected`; dispose fields and the controller with their screen. Keep source mutations outside rendering callbacks.
+Create one controller per visible screen with `NativeAnchoredDropdown(context, overlayHost, theme)`. Pass the window's resolved `ControlTheme` as `theme` and its outer `FrameLayout` as `overlayHost`. The frame must sit outside scrolling/clipping content. The library mounts a modal layer in that same window, suppresses/restores sibling accessibility and focus, and handles Back. There is no separate popup window or cancelled first draw. Each returned field retains typed option identity and caller-provided/localized labels. Update the field binding after `onSelected`; dispose fields and the controller with their screen. Keep source mutations outside rendering callbacks.
 
 The expansion recipe is `NativeUiAppearance.anchoredDropdown`. See [dropdown selection and dismissal](reference-guide.md#dropdown-selection-and-dismissal) for the public policies.
 

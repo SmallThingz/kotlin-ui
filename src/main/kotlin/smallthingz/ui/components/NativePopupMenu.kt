@@ -18,6 +18,7 @@ import android.view.WindowManager
 import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
 import androidx.annotation.RequiresApi
+import smallthingz.ui.text.NativeTypography
 import smallthingz.ui.text.TextStyle
 import smallthingz.ui.text.font.FontFamily
 import smallthingz.ui.scroll.NativeVerticalScrollState
@@ -39,6 +40,7 @@ import kotlin.math.roundToInt
 /** Actual focusable sub-panel with the released Android Popup flags and geometry. */
 class NativePopupMenu<I> private constructor(
     private val anchor: View,
+    private var palette: NativeColorScheme,
     private val menu: NativeMenuContent<I>,
     private val density: Density,
     private val recipe: NativeAnchoredMenuRecipe,
@@ -57,43 +59,47 @@ class NativePopupMenu<I> private constructor(
     private constructor(anchor: View, density: Density, frames: MonotonicFrameClock,
                         scope: CoroutineScope, parts: Parts<I>, onDismissRequest: () -> Unit,
                         onTerminal: () -> Unit, recipe: NativeAnchoredMenuRecipe) :
-        this(anchor, parts.content, density, recipe, frames, scope, parts.input, onDismissRequest, onTerminal)
+        this(anchor, parts.palette, parts.content, density, recipe, frames, scope, parts.input, onDismissRequest, onTerminal)
 
-    constructor(anchor: View, density: Density, textStyle: TextStyle, resolver: FontFamily.Resolver,
-                colors: NativeMenuColors, state: NativeVerticalScrollState,
+    constructor(anchor: View, density: Density, typography: NativeTypography, resolver: FontFamily.Resolver,
+                palette: NativeColorScheme, state: NativeVerticalScrollState,
                 frames: MonotonicFrameClock, scope: CoroutineScope, icons: NativeMenuIcons<I>,
+                recipe: NativeAnchoredMenuRecipe = NativeAnchoredMenuRecipe.Default,
                 onDismissRequest: () -> Unit, onTerminal: () -> Unit) :
-        this(anchor, density, textStyle, resolver, colors, state, frames, scope, icons,
-            NativeAnchoredMenuRecipe.Default, onDismissRequest, onTerminal)
-
-    constructor(anchor: View, density: Density, textStyle: TextStyle, resolver: FontFamily.Resolver,
-                colors: NativeMenuColors, state: NativeVerticalScrollState,
-                frames: MonotonicFrameClock, scope: CoroutineScope, icons: NativeMenuIcons<I>,
-                recipe: NativeAnchoredMenuRecipe, onDismissRequest: () -> Unit, onTerminal: () -> Unit) :
         this(anchor, density, frames, scope,
-            Parts(anchor, density, textStyle, resolver, colors, state, frames, scope, icons, recipe),
+            Parts(anchor, density, typography.buttonLabelStyle, resolver, palette, state, frames, scope, icons, recipe),
             onDismissRequest, onTerminal, recipe)
 
-    fun <T> bindChoices(choices: NativeMenuChoices<T>, colors: NativeMenuColors, select: (T) -> Unit) {
-        menu.bind(choices, colors, select)
+    private var render: () -> Unit = { menu.bindActions(emptyList(), recipe.colors(palette)) }
+
+    fun bindTheme(palette: NativeColorScheme) {
+        this.palette = palette
+        render()
+    }
+
+    fun <T> bindChoices(choices: NativeMenuChoices<T>, select: (T) -> Unit) {
+        val snapshot = choices.copy(options = choices.options.toList())
+        render = { menu.bind(snapshot, recipe.colors(palette), select) }
+        render()
         input.refreshRows()
     }
 
-    fun bindActions(actions: List<NativeMenuAction<I>>, colors: NativeMenuColors,
-                    background: Int = colors.surfaceContainerHigh) {
-        menu.bindActions(actions, colors, background)
+    fun bindActions(actions: List<NativeMenuAction<I>>) {
+        val snapshot = actions.toList()
+        render = { menu.bindActions(snapshot.map { it.resolve(palette) }, recipe.colors(palette)) }
+        render()
         input.refreshRows()
     }
 
     private class Parts<I>(anchor: View, density: Density, style: TextStyle, resolver: FontFamily.Resolver,
-                           colors: NativeMenuColors, state: NativeVerticalScrollState,
+                           val palette: NativeColorScheme, state: NativeVerticalScrollState,
                            frames: MonotonicFrameClock, scope: CoroutineScope, icons: NativeMenuIcons<I>,
                            recipe: NativeAnchoredMenuRecipe) {
         val content: NativeMenuContent<I>
         val input: NativeMenuPointerBinding<I>
         init {
             lateinit var binding: NativeMenuPointerBinding<I>
-            content = NativeMenuContent(anchor.context, density, style, resolver, colors, recipe, icons,
+            content = NativeMenuContent(anchor.context, density, style, resolver, recipe.colors(palette), recipe, icons,
                 state, frames, scope) { event -> binding.interestedParent(event) }
             binding = NativeMenuPointerBinding(content, density)
             input = binding
@@ -380,6 +386,7 @@ class NativePopupMenu<I> private constructor(
     override fun close() {
         if (closed) return
         closed = true
+        render = {}
         frameJob?.cancel()
         frameJob = null
         var failure: Throwable? = null

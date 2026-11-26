@@ -162,6 +162,50 @@ class UpdatableScrollAnimationTest {
         } finally { job.cancel(); job.join() }
     }
 
+    @Test fun durationScaleInitializesBeforeAwaitAndChangesApplyToEveryFrame() = runBlocking {
+        val clock = CapturedFrameClock()
+        var scaleReads = 0
+        val scale = object : MotionDurationScale {
+            override var scaleFactor = 0f
+                get() {
+                    scaleReads++
+                    return field
+                }
+        }
+        val animation = UpdatableScrollAnimation(tween(100, easing = LinearEasing))
+        animation.value = 8f
+        val deltas = mutableListOf<Float>()
+        val publishedValues = mutableListOf<Float>()
+        val job = CoroutineScope(coroutineContext + clock + scale).launch {
+            animation.animateToZero({ deltas += it }, { publishedValues += animation.value })
+        }
+        try {
+            yield()
+            assertEquals(1, clock.pendingCount)
+            assertEquals(1, scaleReads)
+            scale.scaleFactor = 1f
+            clock.frame(0L); yield()
+            assertEquals(2, scaleReads)
+            assertEquals(1, clock.pendingCount)
+            clock.frame(25_000_000L); yield()
+            assertEquals(6f, animation.value, 0f)
+            assertEquals(1, clock.pendingCount)
+
+            scale.scaleFactor = 2f
+            clock.frame(75_000_000L); yield()
+            assertEquals(4.5f, animation.value, 0f)
+            assertEquals(1, clock.pendingCount)
+
+            scale.scaleFactor = 0f
+            clock.frame(100_000_000L); yield()
+            assertTrue(job.isCompleted)
+            assertFalse(job.isCancelled)
+            assertEquals(listOf(0f, 2f, 1.5f, 4.5f), deltas)
+            assertEquals(listOf(8f, 6f, 4.5f, 0f), publishedValues)
+            assertEquals(0, clock.pendingCount)
+        } finally { job.cancel(); job.join() }
+    }
+
     @Test fun cancelledRetargetedTailCannotPublishIntoReplacementOwner() = runBlocking {
         val clock = CapturedFrameClock()
         val disabled = object : MotionDurationScale { override val scaleFactor = 0f }

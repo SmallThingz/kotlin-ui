@@ -33,7 +33,7 @@ class NativeModalContrastTest {
         assertEquals(menu, palette.menuColors().raised)
         assertEquals(menu, palette.menuColors().surfaceContainerHigh)
         assertEquals(.5f, palette.menuColors().grainIntensity, 0f)
-        assertTrue(NativeFloatingPanelRecipe().surfaceColor(palette) > palette.surfaceContainerHigh)
+        assertEquals(palette.background, NativeFloatingPanelRecipe().surfaceColor(palette))
         assertTrue(NativeFloatingLinkStyle().fill(palette) > palette.surfaceContainerHighest)
         assertEquals(0xff000000.toInt(), palette.surface)
         assertEquals(NativeColorScheme.fallback(true).primary, palette.primary)

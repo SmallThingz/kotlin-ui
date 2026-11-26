@@ -11,6 +11,23 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class CachedAnimatorDurationScaleTest {
+    @Test fun viewWakeBeforeCacheRefreshCanScheduleTheNextFrame() {
+        var setting = 0f
+        var reads = 0
+        val cache = CachedAnimatorDurationScale { reads++; setting }
+        assertEquals(0f, legacyFrameScale(cache.value, enabled = false), 0f)
+
+        setting = 0.5f
+        // The view handles its only wake before the cache observer sees the same notification.
+        val wakeScale = legacyFrameScale(cache.value, enabled = true)
+        assertEquals(1f, wakeScale, 0f)
+        assertEquals(1, reads)
+        cache.refresh()
+        assertEquals(0.5f, legacyFrameScale(cache.value, enabled = true), 0f)
+        assertEquals(0f, legacyFrameScale(cache.value, enabled = false), 0f)
+        assertEquals(2, reads)
+    }
+
     @Test fun framesReadMemoryUntilSettingsObserverRefreshes() {
         var setting = 0.5f
         var reads = 0

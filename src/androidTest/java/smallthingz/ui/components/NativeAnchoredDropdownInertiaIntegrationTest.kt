@@ -59,8 +59,9 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
                         addView(root, FrameLayout.LayoutParams(-1, 4 * anchor.layoutParams.height, Gravity.CENTER))
                     })
                 } else activity.setContentView(root)
-                val owner = NativeAnchoredDropdown(activity, root, appearance,
-                    appearance.resolveColorScheme(activity, false), Density(scale), createFontFamilyResolver(activity),
+                val theme = smallthingz.ui.common.ControlTheme.resolve(activity, false, appearance)
+                    .withTypography(Density(scale), createFontFamilyResolver(activity))
+                val owner = NativeAnchoredDropdown(activity, root, theme,
                     appearance.anchoredDropdown.copy(expandMillis = 0, settleMillis = 0, collapseMillis = collapseMillis))
                 fixture = Fixture(activity, root, anchor, owner, optionCount)
             }
@@ -332,18 +333,18 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
             touch(f, MotionEvent.ACTION_MOVE, now - 40, now - 20, start - f.anchor.height)
             touch(f, MotionEvent.ACTION_CANCEL, now - 40, now, start - f.anchor.height)
             assertFalse(flinging(f))
-            assertNull(field(f.wheel, "scroller"))
+            assertNull(field(f.wheel, "flingTiming"))
             assertEquals(-1, field(f.wheel, "pointer"))
             touch(f, MotionEvent.ACTION_DOWN, now + 1, now + 1, start)
             assertSame(tracker, field(f.wheel, "velocityTracker"))
             touch(f, MotionEvent.ACTION_MOVE, now + 1, now + 15, start - f.anchor.height, pointerId = 7)
             touch(f, MotionEvent.ACTION_UP, now + 1, now + 30, start - f.anchor.height)
             assertFalse(flinging(f))
-            assertNull(field(f.wheel, "scroller"))
+            assertNull(field(f.wheel, "flingTiming"))
             assertEquals(-1, field(f.wheel, "pointer"))
             f.owner.close()
             assertNull(field(f.wheel, "velocityTracker"))
-            assertNull(field(f.wheel, "scroller"))
+            assertNull(field(f.wheel, "flingTiming"))
         }
     }
 
@@ -359,7 +360,7 @@ class NativeAnchoredDropdownInertiaIntegrationTest {
             val count = f.selections.size
             assertFalse(flinging(f))
             assertNull(field(f.wheel, "velocityTracker"))
-            assertNull(field(f.wheel, "scroller"))
+            assertNull(field(f.wheel, "flingTiming"))
             assertFalse(f.wheel.isAttachedToWindow)
             (field(f.wheel, "flingFrame") as Runnable).run()
             assertEquals(before, position(f), 0f)

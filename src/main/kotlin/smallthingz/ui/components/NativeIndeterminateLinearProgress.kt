@@ -68,6 +68,7 @@ open class NativeIndeterminateLinearProgress(
                     Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, observer)
                 AutoCloseable { context.contentResolver.unregisterContentObserver(observer) }
             }
+            durationScale()
             frameJob = scope.launch(frames) {
                 while (isActive) {
                     var sampledScale = 1f

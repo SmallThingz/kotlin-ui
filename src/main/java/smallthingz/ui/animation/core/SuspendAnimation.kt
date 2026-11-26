@@ -84,6 +84,8 @@ internal suspend fun <T, V : AnimationVector> AnimationState<T, V>.animate(
     startTimeNanos: Long = AnimationConstants.UnspecifiedTime,
     block: AnimationScope<T, V>.() -> Unit = {},
 ) {
+    val clock = AnimationPlayTime()
+    val context = coroutineContext
     val initialValue = animation.getValueFromNanos(0)
     val initialVelocityVector = animation.getVelocityVectorFromNanos(0)
     var scope: AnimationScope<T, V>? = null
@@ -95,7 +97,8 @@ internal suspend fun <T, V : AnimationVector> AnimationState<T, V>.animate(
     }
     try {
         if (startTimeNanos == AnimationConstants.UnspecifiedTime) {
-            val durationScale = coroutineContext.durationScale
+            // Prime a lazily initialized scale provider before admitting a frame.
+            context.durationScale
             animation.callWithFrameNanos { frameTime ->
                 val firstScope = AnimationScope(
                     initialValue = initialValue,
@@ -108,7 +111,7 @@ internal suspend fun <T, V : AnimationVector> AnimationState<T, V>.animate(
                     onCancel = onCancel,
                 )
                 scope = firstScope
-                firstScope.doAnimationFrameWithScale(frameTime, durationScale, animation, this, block)
+                firstScope.doAnimationFrameWithScale(frameTime, clock, context.durationScale, animation, this, block)
             }
         } else {
             val firstScope = AnimationScope(
@@ -123,14 +126,13 @@ internal suspend fun <T, V : AnimationVector> AnimationState<T, V>.animate(
             )
             scope = firstScope
             firstScope.doAnimationFrameWithScale(
-                startTimeNanos, coroutineContext.durationScale, animation, this, block,
+                startTimeNanos, clock, context.durationScale, animation, this, block,
             )
         }
         val animationScope = scope!!
         while (animationScope.isRunning) {
-            val durationScale = coroutineContext.durationScale
             animation.callWithFrameNanos {
-                animationScope.doAnimationFrameWithScale(it, durationScale, animation, this, block)
+                animationScope.doAnimationFrameWithScale(it, clock, context.durationScale, animation, this, block)
             }
         }
     } finally {
@@ -177,17 +179,13 @@ private fun <T, V : AnimationVector> AnimationScope<T, V>.updateState(
 
 private fun <T, V : AnimationVector> AnimationScope<T, V>.doAnimationFrameWithScale(
     frameTimeNanos: Long,
+    clock: AnimationPlayTime,
     durationScale: Float,
     anim: Animation<T, V>,
     state: AnimationState<T, V>,
     block: AnimationScope<T, V>.() -> Unit,
 ) {
-    val playTimeNanos =
-        if (durationScale == 0f) {
-            anim.durationNanos
-        } else {
-            ((frameTimeNanos - startTimeNanos) / durationScale).toLong()
-        }
+    val playTimeNanos = clock.advance(frameTimeNanos, durationScale, anim.durationNanos)
     doAnimationFrame(frameTimeNanos, playTimeNanos, anim, state, block)
 }
 

@@ -9,21 +9,24 @@ package smallthingz.ui.reverb.onboarding
 
 import androidx.annotation.MainThread
 import smallthingz.ui.animation.core.AnimationSpec
-import smallthingz.ui.animation.core.AnimationState
+import smallthingz.ui.animation.core.AnimationVector1D
 import smallthingz.ui.animation.core.Spring
 import smallthingz.ui.animation.core.animate
-import smallthingz.ui.animation.core.animateTo
+import smallthingz.ui.animation.core.TargetBasedAnimation
+import smallthingz.ui.animation.core.VectorConverter
 import smallthingz.ui.animation.core.spring
 import smallthingz.ui.foundation.MutatePriority
 import smallthingz.ui.foundation.MutatorMutex
 import smallthingz.ui.foundation.gestures.ScrollScope
 import smallthingz.ui.MotionDurationScale
+import smallthingz.ui.runtime.MonotonicFrameClock
+import smallthingz.ui.scroll.ScrollPlayTime
 import smallthingz.ui.unit.Density
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.coroutineScope
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
@@ -196,7 +199,8 @@ class NativeOnboardingPager(
         val velocity = physicalToLogicalDelta(physicalVelocityX)
         var remainingVelocity = 0f
         scroll {
-            remainingVelocity = withContext(PinnedPagerFlingDurationScale) {
+            var immediateSnapConsumed: Boolean? = null
+            remainingVelocity = coroutineScope {
                 // atMost(1) makes abs(proposedOffset)-pageWidth <=0 for every decay target.
                 // Therefore no decay/approach animation runs; source starts the snap at velocity.
                 updateFlingTarget(0f)
@@ -204,30 +208,52 @@ class NativeOnboardingPager(
                 var remaining = distance
                 updateFlingTarget(remaining)
                 var consumed = 0f
-                val animation = AnimationState(initialValue = 0f, initialVelocity = velocity)
-                animation.animateTo(
-                    distance,
+                val animation = TargetBasedAnimation(
                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = 1f),
-                    sequentialAnimation = velocity != 0f,
-                ) {
+                    typeConverter = Float.VectorConverter,
+                    initialValue = 0f,
+                    targetValue = distance,
+                    initialVelocityVector = AnimationVector1D(velocity),
+                )
+                val frames = checkNotNull(coroutineContext[MonotonicFrameClock])
+                val duration = coroutineContext[MotionDurationScale]
+                // Initialize the platform scale cache before entering the frame callback.
+                duration?.scaleFactor
+                // The source requests sequential animation for nonzero velocity, but its fresh
+                // state has no prior frame timestamp. Both paths start on the first real frame.
+                val playTime = ScrollPlayTime()
+                var sampledVelocity = velocity
+                var finished = false
+                val sample: (Long) -> Unit = { frame ->
+                    val scale = duration?.scaleFactor ?: 1f
+                    val time = playTime.advance(frame, scale)
+                    val value = animation.getValueFromNanos(time)
+                    // An immediate snap attempts the remaining distance without advancing velocity.
+                    if (scale != 0f) sampledVelocity = animation.getVelocityVectorFromNanos(time).value
                     val realValue = nativePagerCoerceAnimationValue(value, distance)
                     val delta = realValue - consumed
                     var used = 0f
                     try {
                         used = deliverLogicalDelta(delta)
                     } catch (_: CancellationException) {
-                        cancelAnimation()
+                        finished = true
                     }
+                    if (scale == 0f) immediateSnapConsumed = !finished && used == delta
                     remaining -= used
                     updateFlingTarget(remaining)
-                    if (abs(delta - used) > 0.5f || realValue != value) cancelAnimation()
                     consumed += used
+                    finished = finished || abs(delta - used) > 0.5f || realValue != value ||
+                        animation.isFinishedFromNanos(time)
                 }
-                val correctedVelocity = nativePagerCoerceAnimationValue(animation.velocity, velocity)
-                if (distance - consumed == 0f) 0f else correctedVelocity
+                while (!finished) frames.withFrameNanos(sample)
+                val correctedVelocity = nativePagerCoerceAnimationValue(sampledVelocity, velocity)
+                val snapConsumed = immediateSnapConsumed ?: (distance - consumed == 0f)
+                if (snapConsumed) 0f else correctedVelocity
             }
             updateFlingTarget(0f)
-            if (currentPageOffsetFraction != 0f && abs(currentPageOffsetFraction) < 1e-3f) {
+            if (immediateSnapConsumed != false && currentPageOffsetFraction != 0f &&
+                abs(currentPageOffsetFraction) < 1e-3f
+            ) {
                 requestScrollToPage(currentPage)
             }
         }
@@ -320,9 +346,4 @@ class NativeOnboardingPager(
         currentPageOffsetFraction = if (pageWidthPx == 0) 0f else
             ((offset - currentPage.toLong() * pageWidthPx) / pageWidthPx.toFloat()).coerceIn(-0.5f, 0.5f)
     }
-}
-
-/** Pinned SnapFlingBehavior overrides caller animation scale to 1, unlike animateScrollToPage. */
-private object PinnedPagerFlingDurationScale : MotionDurationScale {
-    override val scaleFactor: Float = 1f
 }

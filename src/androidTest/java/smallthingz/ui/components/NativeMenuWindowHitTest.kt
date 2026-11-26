@@ -16,7 +16,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.scroll.NativeVerticalScrollState
-import smallthingz.ui.text.TextStyle
+import smallthingz.ui.text.NativeTypography
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
 
@@ -32,13 +32,14 @@ class NativeMenuWindowHitTest {
         var runtime: NativeModalWindowRuntime? = null
         lateinit var root: FrameLayout
         lateinit var anchor: View
+        val glyphColors = mutableMapOf<Int, Int>()
         var shares = 0
         var renameState = false
         var otherActions = 0
         var dismissed = 0
         var failure: Throwable? = null
         try {
-            instrumentation.runOnMainSync {
+            onMain {
                 root = FrameLayout(activity)
                 anchor = View(activity)
                 root.addView(anchor, FrameLayout.LayoutParams(180, 72).apply {
@@ -47,33 +48,39 @@ class NativeMenuWindowHitTest {
                 activity.setContentView(root)
             }
             awaitDraw(anchor)
-            instrumentation.runOnMainSync {
+            onMain {
                 val clock = NativeModalWindowRuntime(activity).also { runtime = it; it.setStarted(true) }
-                val colors = NativeMenuColors(-1, -1, 0xff202020.toInt(), 0xff606060.toInt(), 0xff305080.toInt())
+                val palette = NativeColorScheme.fallback(false)
                 val icons = object : NativeMenuIcons<Int> {
                     override val check = 0
                     override fun create(context: Context, icon: Int, color: Int) = View(context)
-                    override fun bind(view: View, icon: Int, color: Int) = Unit
+                    override fun bind(view: View, icon: Int, color: Int) { glyphColors[icon] = color }
                 }
-                popup = NativePopupMenu(anchor, Density(1f), TextStyle.Default, createFontFamilyResolver(activity),
-                    colors, NativeVerticalScrollState(), clock.frames, clock.scope, icons,
+                popup = NativePopupMenu(anchor, Density(1f), NativeTypography.Default, createFontFamilyResolver(activity),
+                    palette, NativeVerticalScrollState(), clock.frames, clock.scope, icons,
                     onDismissRequest = { dismissed++ }, onTerminal = {})
                 requireNotNull(popup).bindActions(listOf(
-                    NativeMenuAction("Rename", 0, colors.ink, colors.ink) { renameState = true },
-                    NativeMenuAction("Info", 1, colors.ink, colors.ink) { otherActions++ },
-                    NativeMenuAction("Share", 2, colors.ink, colors.ink) { shares++ },
-                    NativeMenuAction("Trim", 3, colors.ink, colors.ink) { otherActions++ },
-                    NativeMenuAction("Delete", 4, colors.ink, colors.ink) { otherActions++ },
-                    NativeMenuAction("Multi-select", 5, colors.ink, colors.ink) { otherActions++ },
-                ), colors)
+                    NativeMenuAction("Rename", 0) { renameState = true },
+                    NativeMenuAction("Info", 1, NativeMenuActionRole.MUTED_ICON) { otherActions++ },
+                    NativeMenuAction("Share", 2) { shares++ },
+                    NativeMenuAction("Trim", 3) { otherActions++ },
+                    NativeMenuAction("Delete", 4, NativeMenuActionRole.DESTRUCTIVE) { otherActions++ },
+                    NativeMenuAction("Multi-select", 5) { otherActions++ },
+                ))
                 requireNotNull(popup).setOrigin(NativeMenuOrigin(137f, 31f))
                 requireNotNull(popup).show()
             }
             val menu = requireNotNull(popup)
             awaitDraw(menu, expanded = true)
             injectShare(menu)
-            instrumentation.runOnMainSync {
+            onMain {
                 assertEquals(1, shares); assertFalse(renameState); assertEquals(0, otherActions)
+                val rebound = NativeColorScheme.fallback(true).copy(onSurface = 0xff223344.toInt(),
+                    onSurfaceVariant = 0xff556677.toInt(), error = 0xff992233.toInt())
+                menu.bindTheme(rebound)
+                assertEquals(rebound.onSurface, glyphColors.getValue(2))
+                assertEquals(rebound.onSurfaceVariant, glyphColors.getValue(1))
+                assertEquals(rebound.error, glyphColors.getValue(4))
                 // Move the same origin close to the opposite viewport corner. Reuse the popup
                 // and its retained row endpoints, which must not retain the old window location.
                 root.scrollTo(5, 7)
@@ -86,14 +93,14 @@ class NativeMenuWindowHitTest {
             }
             awaitDraw(menu, expanded = true)
             injectShare(menu)
-            instrumentation.runOnMainSync {
+            onMain {
                 assertEquals(2, shares); assertFalse(renameState); assertEquals(0, otherActions)
                 menu.setOrigin(null) // Keyboard/accessibility placement must clear prior pointer origin.
                 menu.requestLayout()
             }
             awaitDraw(menu, expanded = true)
             injectShare(menu)
-            instrumentation.runOnMainSync {
+            onMain {
                 assertEquals(3, shares); assertFalse(renameState)
                 assertEquals(0, otherActions); assertEquals(0, dismissed)
             }
@@ -102,7 +109,7 @@ class NativeMenuWindowHitTest {
             throw error
         } finally {
             var cleanup: Throwable? = null
-            instrumentation.runOnMainSync {
+            onMain {
                 for (close in listOf<() -> Unit>({ popup?.close() }, { runtime?.close() }, { activity.finish() })) {
                     try { close() } catch (error: Throwable) {
                         val previous = failure ?: cleanup
@@ -114,10 +121,16 @@ class NativeMenuWindowHitTest {
         }
     }
 
+    private fun onMain(action: () -> Unit) {
+        var result: Result<Unit>? = null
+        instrumentation.runOnMainSync { result = runCatching(action) }
+        checkNotNull(result).getOrThrow()
+    }
+
     private fun injectShare(menu: NativePopupMenu<Int>) {
         val screen = IntArray(2)
         var x = 0f; var y = 0f
-        instrumentation.runOnMainSync {
+        onMain {
             val panel = menu.getChildAt(0) as NativeAnchoredMenuPanel
             assertEquals(1f, panel.scaleX, 0f)
             val content = panel.getChildAt(0) as NativeMenuContent<*>
@@ -148,11 +161,11 @@ class NativeMenuWindowHitTest {
             }
             true
         }
-        instrumentation.runOnMainSync {
+        onMain {
             observer[0] = view.viewTreeObserver.also { it.addOnPreDrawListener(listener) }
             view.invalidate()
         }
         try { assertTrue("Owned popup did not draw in time", drawn.await(5, TimeUnit.SECONDS)) }
-        finally { instrumentation.runOnMainSync { observer[0]?.takeIf { it.isAlive }?.removeOnPreDrawListener(listener) } }
+        finally { onMain { observer[0]?.takeIf { it.isAlive }?.removeOnPreDrawListener(listener) } }
     }
 }

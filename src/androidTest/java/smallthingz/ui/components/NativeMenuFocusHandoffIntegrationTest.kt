@@ -20,7 +20,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.animation.core.SpringSpec
 import smallthingz.ui.scroll.NativeVerticalScrollState
-import smallthingz.ui.text.TextStyle
+import smallthingz.ui.text.NativeTypography
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.unit.Density
 
@@ -54,7 +54,7 @@ class NativeMenuFocusHandoffIntegrationTest {
             awaitState(anchor) { anchor.isLaidOut && anchor.hasWindowFocus() }
             instrumentation.runOnMainSync {
                 val clock = NativeModalWindowRuntime(activity).also { runtime = it; it.setStarted(true) }
-                val colors = NativeMenuColors(-1, -1, 0xff202020.toInt(), 0xff606060.toInt(), 0xff305080.toInt())
+                val palette = NativeColorScheme.fallback(false)
                 val icons = object : NativeMenuIcons<Int> {
                     override val check = 0
                     override fun create(context: Context, icon: Int, color: Int) = View(context)
@@ -63,11 +63,11 @@ class NativeMenuFocusHandoffIntegrationTest {
                 val slow = NativeAnchoredMenuRecipe(motion = NativeAnchoredMenuMotionStyle(
                     scaleSpring = SpringSpec(dampingRatio = 1f, stiffness = 16f),
                     alphaSpring = SpringSpec(dampingRatio = 1f, stiffness = 16f)))
-                val menu = NativePopupMenu(anchor, Density(1f), TextStyle.Default, createFontFamilyResolver(activity),
-                    colors, NativeVerticalScrollState(), clock.frames, clock.scope, icons, slow,
+                val menu = NativePopupMenu(anchor, Density(1f), NativeTypography.Default, createFontFamilyResolver(activity),
+                    palette, NativeVerticalScrollState(), clock.frames, clock.scope, icons, slow,
                     onDismissRequest = { dismisses++ }, onTerminal = { terminals++; popup?.close() })
                 popup = menu
-                menu.bindActions(listOf(NativeMenuAction("Rename", 0, colors.ink, colors.ink) {
+                menu.bindActions(listOf(NativeMenuAction("Rename", 0) {
                     if (menu.acceptAction()) {
                         // Input authority is retired before the editor's own readiness handling.
                         assertEquals(retiredFlags, (menu.layoutParams as WindowManager.LayoutParams).flags and retiredFlags)
@@ -77,7 +77,7 @@ class NativeMenuFocusHandoffIntegrationTest {
                         editor.requestFocus()
                         accepted.countDown()
                     }
-                }), colors)
+                }))
                 menu.show()
             }
             val menu = requireNotNull(popup)

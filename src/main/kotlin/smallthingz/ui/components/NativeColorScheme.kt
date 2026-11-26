@@ -22,6 +22,8 @@ import androidx.annotation.RequiresApi
 import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.components.waveform.WaveformStyle
 import smallthingz.ui.graphics.hct.Cam16Color
+import smallthingz.ui.graphics.Color
+import smallthingz.ui.graphics.toArgb
 
 /** Stateless strategy for the current window. Use [resolve]'s resource reader synchronously. */
 fun interface NativeColorSchemeResolver {
@@ -85,6 +87,8 @@ data class NativeColorScheme(
     val onTertiaryFixed: Int,
     val onTertiaryFixedVariant: Int,
     internal val surfacePreset: NativeSurfacePreset? = null,
+    /** Optional acknowledged-status ink. Null follows the current theme's semantic default. */
+    val acknowledgedStatusTintOverride: Int? = null,
 ) {
     val buttonPalette = NativeButtonPalette(accent = primary, onAccent = onPrimary, content = onSurface,
         muted = onSurfaceVariant, quietSurface = surfaceContainerLow, tonalSurface = secondaryContainer,
@@ -101,6 +105,9 @@ data class NativeColorScheme(
     val raised: Int get() = surfaceContainerHigh
     val ink: Int get() = onSurface
     val muted: Int get() = onSurfaceVariant
+    /** Shared dark presets use white; other palettes follow current ink. Explicit theme overrides win. */
+    val acknowledgedStatusTint: Int get() = acknowledgedStatusTintOverride
+        ?: if (surfacePreset is NativeDarkSurfacePreset) Color.White.toArgb() else ink
     val border: Int get() = surfacePreset?.borderColor ?: srgbColorWithAlpha(onSurface, 0.14f)
 
     val settingsSelection: Int get() = primary

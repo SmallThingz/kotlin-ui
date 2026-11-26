@@ -239,14 +239,36 @@ See the [theme icon source record](../SOURCE-theme.json).
 
 `NativePopupMenu<I>` is a concrete focusable sub-panel using the shared phase
 pointer root, vertical viewport, paragraph renderer and retained spring transition.
-Pass an attached anchor, density, fully resolved inherited text style/font resolver,
-`NativeMenuColors`, retained `NativeVerticalScrollState`, window frame clock/scope,
-and one `NativeMenuIcons<I>` rendering adapter. The adapter creates each retained
+Pass an attached anchor, density, the window's typography, font resolver and
+resolved `NativeColorScheme`, retained scroll state, frame clock/scope and a
+`NativeMenuIcons<I>` adapter. The adapter creates each retained
 icon View once and binds any icon token of I to that same View; keep it nonfocusable
 and excluded from accessibility. An app can use its existing vector/icon renderer.
 
-Bind `NativeMenuChoices<T>` with typed labels/selection or `NativeMenuAction<I>`
-with domain callbacks, then call `show()`. Row identity is positional. Call
+When migrating from `NativeMenuColors`, pass the window's `NativeTypography`
+and `NativeColorScheme` to the constructor. Replace action text and icon
+colors with a `NativeMenuActionRole`. The default is `NORMAL`. Use
+`MUTED_ICON` for a secondary glyph or `DESTRUCTIVE` for a destructive action.
+
+```kotlin
+val palette = appearance.resolveColorScheme(anchor.context, darkTheme)
+val menu = NativePopupMenu(
+    anchor, density, appearance.typography, resolver, palette, scrollState,
+    frames, scope, icons, recipe = appearance.modals.anchoredPanel,
+    onDismissRequest = onDismissRequest, onTerminal = onTerminal,
+)
+menu.bindActions(listOf(
+    NativeMenuAction(deleteLabel, deleteIcon, role = NativeMenuActionRole.DESTRUCTIVE, onClick = onDelete),
+))
+menu.show()
+```
+
+Use `bindChoices(choices, select)` for a choice menu. On a palette change, call
+`menu.bindTheme(palette)` with the newly resolved window palette. Reverb callers
+using `ReverbActionMenuHost` migrate from `bindPalette` to `bindTheme(theme)`,
+passing the current `ReverbTheme`.
+
+Row identity is positional. Call
 `expanded(false)` to animate dismissal; the terminal callback must retire/close
 that same popup identity. `close()` is immediate and idempotent. Owners retain
 scroll state and admit callback identity/reentrancy; the component does not route
@@ -283,17 +305,13 @@ a pending collapse callback. The panel uses the platform animator duration scale
 
 ## Action sheets and floating windows
 
-Use [shared modal surfaces](appearance-controls.md#shared-modal-surfaces)
-for the action-sheet grain, alpha and fill rules and floating-panel recipes.
-
 `NativeActionSheet` owns a real `ComponentDialog`, its two-anchor state, phase
 pointer root, nested drag/scroll connection, predictive transform, scrim, title,
-close action, drag handle and tooltip. Supply an anchor, `NativeActionSheetStyle`
-(density, font resolver, text styles and colors), title, dismissal
-callback and `NativeActionSheetIcon`. The icon supplies an existing glyph View,
-its accessibility binding and tint callback; input/ripple/merged role use the
-shared `NativeStandardIconButtonView`. An optional caller Drawable decorates the
-content. No application environment or domain policy is retained by the library.
+close action, drag handle and tooltip. Resolve the sheet style from the window
+theme and pass it to `NativeActionSheet.create(anchor, style, title, onDismiss)`.
+An optional `NativeActionSheetIcon` supplies the close glyph, accessibility
+binding and tint callback. The shared `NativeStandardIconButtonView` handles
+input, ripple and the merged role. See [shared modal surfaces](appearance-controls.md#shared-modal-surfaces).
 
 Build body/actions against `contentContext`, then call `setContent` with their
 explicit hit layouts and `show()`. The context supplies the real pointer root,
@@ -329,9 +347,9 @@ this adds no layout, frame loop or inset observer. Hidden status bars produce no
 protection; cutout, navigation-bar and IME insets are not substituted for
 status-bar insets.
 
-The explicit protected constructors of `NativeActionSheet` and
-`NativeFloatingDialog` perform this wiring themselves. Their original
-constructors retain their existing behavior. This policy does not observe
+Pass `statusBarProtection = protection` to `NativeActionSheet.create(...)` or
+to the `NativeFloatingDialog` constructor. Both wire the protection to their
+window. This policy does not observe
 SystemUI's rendered icon tint or guarantee other windows' appearance.
 Navigation-bar appearance keeps its existing owner.
 

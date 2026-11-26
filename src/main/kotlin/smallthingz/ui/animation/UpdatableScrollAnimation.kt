@@ -90,10 +90,12 @@ class UpdatableScrollAnimation(animationSpec: AnimationSpec<Float>) {
         check(!isRunning) { "animateToZero called while previous animation is running" }
 
         val animationContext = coroutineContext
-        val durationScale = animationContext[MotionDurationScale]?.scaleFactor ?: 1f
+        val motionScale = animationContext[MotionDurationScale]
         isRunning = true
 
         try {
+            // Initialize the platform cache before the first frame await.
+            motionScale?.scaleFactor
             // afterFrame may retarget even the final residual frame.
             do {
                 // A target accepted after the final frame starts with fresh timing.
@@ -104,9 +106,10 @@ class UpdatableScrollAnimation(animationSpec: AnimationSpec<Float>) {
                 // running the animation.
                 while (!value.isZeroish()) {
                     animationContext.ensureActive()
-                    withFrameNanos { frameTime ->
+                    val motionDisabled = withFrameNanos { frameTime ->
                         // A frame already dequeued by the window clock can outlive cancellation.
                         animationContext.ensureActive()
+                        val durationScale = motionScale?.scaleFactor ?: 1f
                         if (lastFrameTime == UnspecifiedTime) {
                             lastFrameTime = frameTime
                         }
@@ -145,12 +148,13 @@ class UpdatableScrollAnimation(animationSpec: AnimationSpec<Float>) {
                         val delta = value - newValue
                         value = newValue
                         beforeFrame(delta)
+                        durationScale == 0f
                     }
                     // A supplied clock may return normally after beforeFrame cancels this job.
                     animationContext.ensureActive()
                     afterFrame()
 
-                    if (durationScale == 0f) {
+                    if (motionDisabled) {
                         // Use one snap per sequence when animations are disabled.
                         break
                     }

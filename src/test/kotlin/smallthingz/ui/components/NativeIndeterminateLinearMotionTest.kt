@@ -49,17 +49,16 @@ class NativeIndeterminateLinearMotionTest {
         assertEquals(values, listOf(motion.firstHead, motion.firstTail, motion.secondHead, motion.secondTail))
     }
 
-    @Test fun scaleChangesRestartAllTracksOnTheSampledFrame() {
+    @Test fun positiveScaleChangesContinueFromTheSampledPhase() {
         val motion = NativeIndeterminateLinearMotion()
         motion.frame(ms(100), 1f)
         motion.frame(ms(800), 1f)
         assertTrue(motion.firstHead > 0f)
         motion.frame(ms(900), 2f)
-        assertEquals(0f, motion.firstHead, 0f)
         motion.frame(ms(1300), 2f)
         val normal = NativeIndeterminateLinearMotion()
         normal.frame(0, 1f)
-        normal.frame(ms(200), 1f)
+        normal.frame(ms(950), 1f)
         assertEquals(normal.firstHead, motion.firstHead, 0f)
         assertEquals(normal.firstTail, motion.firstTail, 0f)
     }

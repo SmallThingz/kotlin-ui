@@ -29,7 +29,8 @@ data class NativeModalRecipes(
     fun actionSheetStyle(density: Density, resolver: FontFamily.Resolver, palette: NativeColorScheme): NativeActionSheetStyle =
         NativeActionSheetStyle(density, resolver,
             NativeActionSheetColors(sheet.surfaceColor(palette), palette.onSurface, palette.onSurfaceVariant,
-                palette.scrim, palette.inverseSurface, palette.inverseOnSurface, palette.onSurface),
+                palette.scrim, palette.inverseSurface, palette.inverseOnSurface, palette.onSurface,
+                palette.border, palette.modalEdgeWidthDp()),
             typography[sheet.titleRole], typography[sheet.tooltipRole],
             sheet.copy(grainIntensity = palette.surfacePreset?.foregroundGrain ?: sheet.grainIntensity))
 }
@@ -77,18 +78,14 @@ data class NativeActionSheetRecipe(
     val topPaddingDp: Float = NativeMergedActionLayout.ACTION_FOOTER_BOTTOM_PADDING_DP,
     val grainIntensity: Float = 1f,
 ) {
-    /** Shared sheet fill; preserve opacity while lowering only the surface RGB. */
-    fun surfaceColor(palette: NativeColorScheme): Int {
-        val color = palette.surfaceContainerLow
-        fun channel(shift: Int): Int = (((color ushr shift) and 255) * .92f).toInt()
-        return (color and 0xff000000.toInt()) or (channel(16) shl 16) or
-            (channel(8) shl 8) or channel(0)
-    }
+    /** Use the same fill as the normal app background. */
+    fun surfaceColor(palette: NativeColorScheme): Int = palette.background
 }
 
 /** Top-origin panel with a retained rounded viewport and themed brand/detail content. */
 data class NativeFloatingPanelRecipe(
     val cornerRadiusDp: Float = 32f,
+    /** Retained for constructor compatibility. Fill follows the window theme background. */
     val surfaceElevationDp: Float = 6f,
     val shadowDp: Float = 8f,
     val grainSeed: Int? = NoiseDrawable.SEED_BACKGROUND,
@@ -108,8 +105,7 @@ data class NativeFloatingPanelRecipe(
     val link: NativeFloatingLinkStyle = NativeFloatingLinkStyle(),
     val error: NativeFloatingErrorStyle = NativeFloatingErrorStyle(),
 ) {
-    fun surfaceColor(palette: NativeColorScheme): Int =
-        raisedModalColor(modalTonalColor(palette.surfaceContainerHigh, palette, surfaceElevationDp), palette)
+    fun surfaceColor(palette: NativeColorScheme): Int = palette.background
 
     internal fun cornerRadiusPx(density: Float, width: Int, height: Int): Float =
         min(cornerRadiusDp * density, min(width / 2f, height.toFloat()))

@@ -218,7 +218,7 @@ internal class FloatDecayAnimation(
 ) {
     private val velocityThreshold = spec.absVelocityThreshold
     private val targetValue = spec.getTargetValue(0f, initialVelocity)
-    private val durationNanos = maxOf(0L, spec.getDurationNanos(0f, initialVelocity))
+    val durationNanos = maxOf(0L, spec.getDurationNanos(0f, initialVelocity))
     private val endVelocity = spec.getVelocityFromNanos(durationNanos, 0f, initialVelocity)
         .coerceIn(-velocityThreshold, velocityThreshold)
 

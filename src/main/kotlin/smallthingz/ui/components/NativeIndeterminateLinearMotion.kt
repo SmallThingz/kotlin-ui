@@ -4,6 +4,8 @@
  */
 package smallthingz.ui.components
 
+import smallthingz.ui.animation.core.AnimationPlayTime
+
 import smallthingz.ui.animation.core.CubicBezierEasing
 import smallthingz.ui.animation.core.TargetBasedAnimation
 import smallthingz.ui.animation.core.VectorConverter
@@ -20,23 +22,18 @@ internal class NativeIndeterminateLinearMotion {
         private set
     var secondTail = 0f
         private set
-    private var origin = Long.MIN_VALUE
-    private var lastScale = 1f
+    private val clock = AnimationPlayTime()
 
-    /** InfiniteTransition restarts all children at the next frame after a duration-scale change. */
     fun frame(timeNanos: Long, durationScale: Float) {
-        if (origin == Long.MIN_VALUE || lastScale != durationScale) {
-            origin = timeNanos
-            lastScale = durationScale
-        }
         if (durationScale == 0f) {
+            clock.reset()
             // skipToEnd uses each child's target (1), not its value at the repeat boundary.
             firstHead = 1f
             firstTail = 1f
             secondHead = 1f
             secondTail = 1f
         } else {
-            val playTime = ((timeNanos - origin) / durationScale).toLong()
+            val playTime = clock.advance(timeNanos, durationScale)
             firstHead = LinearIndeterminateTracks.firstHead.getValueFromNanos(playTime)
             firstTail = LinearIndeterminateTracks.firstTail.getValueFromNanos(playTime)
             secondHead = LinearIndeterminateTracks.secondHead.getValueFromNanos(playTime)
@@ -45,8 +42,7 @@ internal class NativeIndeterminateLinearMotion {
     }
 
     fun reset() {
-        origin = Long.MIN_VALUE
-        lastScale = 1f
+        clock.reset()
         firstHead = 0f
         firstTail = 0f
         secondHead = 0f

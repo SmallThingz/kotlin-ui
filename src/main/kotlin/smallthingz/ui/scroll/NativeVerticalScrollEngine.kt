@@ -166,6 +166,32 @@ class NativeVerticalScrollEngine(
 }
 
 /**
+ * Source play time for a single scroll or snap. Reset when a new animation starts.
+ * Supply monotonic frame timestamps and the live nonnegative animator scale. Zero selects the
+ * terminal sample. Positive scales apply to the interval since the previous frame.
+ */
+class ScrollPlayTime {
+    private var previousFrame = Long.MIN_VALUE
+    private var elapsed = 0.0
+
+    fun reset() {
+        previousFrame = Long.MIN_VALUE
+        elapsed = 0.0
+    }
+
+    fun advance(frame: Long, scale: Float): Long {
+        require(scale >= 0f)
+        if (scale == 0f) return Long.MAX_VALUE
+        if (previousFrame != Long.MIN_VALUE) {
+            elapsed += (frame - previousFrame).coerceAtLeast(0L) / scale.toDouble()
+        }
+        previousFrame = frame
+        // Source converts elapsed nanos through Float before its millisecond-based sampler.
+        return elapsed.toFloat().toLong()
+    }
+}
+
+/**
  * Scalar sampling of DefaultFlingBehavior. The owner supplies a spline for its current density.
  *
  * [consume] receives logical ScrollState deltas. The host reverses to physical Y, wraps nested
@@ -177,7 +203,7 @@ class NativeVerticalFling(
     private val finished: (remainingVelocity: Float) -> Unit,
 ) {
     private var animation: FloatDecayAnimation? = null
-    private var startFrameNanos: Long? = null
+    private val clock = ScrollPlayTime()
     private var lastValue = 0f
     var remainingVelocity = 0f
         private set
@@ -191,7 +217,7 @@ class NativeVerticalFling(
         check(!isRunning) { "Retire the previous fling sampler first" }
         remainingVelocity = initialVelocity
         lastValue = 0f
-        startFrameNanos = null
+        clock.reset()
         if (!(abs(initialVelocity) > 1f)) {
             finished(initialVelocity)
             return
@@ -199,23 +225,42 @@ class NativeVerticalFling(
         animation = FloatDecayAnimation(decay, initialVelocity)
     }
 
-    /**
-     * First accepted frame samples t=0. DefaultScrollMotionDurationScale is always 1f, but
-     * preserve the source Float division/toLong precision loss even with that fixed scale.
-     * Reading ValueAnimator's user scale here would change released scroll behavior.
-     */
-    fun frame(frameTimeNanos: Long) {
+    fun frame(frameTimeNanos: Long) = frame(frameTimeNanos, 1f)
+
+    fun frame(frameTimeNanos: Long, durationScale: Float) {
         val current = animation ?: return
-        val first = startFrameNanos ?: frameTimeNanos.also { startFrameNanos = it }
-        val playTimeNanos = ((frameTimeNanos - first) / 1f).toLong()
+        val playTimeNanos = clock.advance(frameTimeNanos, durationScale)
         val value = current.getValueFromNanos(playTimeNanos)
         val velocity = current.getVelocityFromNanos(playTimeNanos)
         val delta = value - lastValue
-        remainingVelocity = velocity
+        // A disabled animation crosses the entire remaining path in this callback. Until the host
+        // tells us how much moved, its incoming velocity is still the correct boundary handoff.
+        if (durationScale != 0f) remainingVelocity = velocity
         val consumed = consume(delta)
         if (animation !== current) return // The admitted mutation may retire this owner during consumption.
+        if (durationScale == 0f) {
+            remainingVelocity = when {
+                delta == 0f -> velocity
+                consumed * delta <= 0f -> remainingVelocity
+                abs(consumed) >= abs(delta) -> velocity
+                else -> velocityAtBoundary(current, lastValue + consumed, delta > 0f)
+            }
+        }
         lastValue = value
         if (abs(delta - consumed) > .5f || current.isFinishedFromNanos(playTimeNanos)) finish()
+    }
+
+    /** Only a clipped terminal jump needs to locate its boundary on the monotone decay curve. */
+    private fun velocityAtBoundary(current: FloatDecayAnimation, position: Float, forward: Boolean): Float {
+        var low = 0L
+        var high = current.durationNanos
+        while (low < high) {
+            val middle = low + (high - low) / 2
+            val sample = current.getValueFromNanos(middle)
+            val beforeBoundary = if (forward) sample < position else sample > position
+            if (beforeBoundary) low = middle + 1 else high = middle
+        }
+        return current.getVelocityFromNanos(low)
     }
 
     /** Retains sampled velocity; the coroutine owner decides whether source permits continuation. */
@@ -226,7 +271,6 @@ class NativeVerticalFling(
     private fun finish() {
         val remaining = remainingVelocity
         animation = null
-        startFrameNanos = null
         finished(remaining)
     }
 }

@@ -11,6 +11,8 @@
  */
 package smallthingz.ui.interaction.view
 
+import smallthingz.ui.animation.core.AnimationPlayTime
+
 import android.graphics.Color
 import android.graphics.Outline
 import android.os.Build
@@ -206,7 +208,7 @@ class FilledButtonElevationState(initialEnabled: Boolean = true) {
     private var initialValue = 0f
     private var initialVelocity = 0f
     private var velocity = 0f
-    private var startFrame = UNSET_FRAME
+    private val clock = AnimationPlayTime()
     private var lastFrame = UNSET_FRAME
     private var tween = INCOMING
     var valueDp: Float = 0f
@@ -252,7 +254,7 @@ class FilledButtonElevationState(initialEnabled: Boolean = true) {
         initialValue = valueDp
         initialVelocity = velocity
         targetDp = next
-        startFrame = lastFrame
+        clock.reset()
         isRunning = true
         if (lastFrame != UNSET_FRAME) frame(lastFrame, durationScale)
     }
@@ -260,8 +262,7 @@ class FilledButtonElevationState(initialEnabled: Boolean = true) {
     fun frame(frameTimeNanos: Long, durationScale: Float) {
         if (!isRunning) return
         require(durationScale.isFinite() && durationScale >= 0f)
-        val start = if (startFrame == UNSET_FRAME) frameTimeNanos.also { startFrame = it } else startFrame
-        val playTime = if (durationScale == 0f) DURATION_NS else ((frameTimeNanos - start) / durationScale).toLong()
+        val playTime = clock.advance(frameTimeNanos, durationScale, DURATION_NS)
         lastFrame = frameTimeNanos
         if (playTime >= DURATION_NS) {
             valueDp = targetDp
@@ -286,7 +287,7 @@ class FilledButtonElevationState(initialEnabled: Boolean = true) {
     private fun stop() {
         isRunning = false
         velocity = 0f
-        startFrame = UNSET_FRAME
+        clock.reset()
         lastFrame = UNSET_FRAME
     }
 

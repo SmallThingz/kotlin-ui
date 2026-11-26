@@ -376,7 +376,7 @@ class ReverbIncidentsContentView(
         appearance = value
         value.backdrops.bindPage(backdrop, value.card.palette)
         bindScrollIndicatorUnderlay()
-        menus.bindPalette(theme.palette)
+        menus.bindTheme(theme)
         list.bindScrollIndicator(theme.appearance.scrollIndicator, theme.palette.muted)
         bindHeader()
         clearSheet?.bindTheme(theme)

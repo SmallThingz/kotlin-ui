@@ -9,8 +9,10 @@ import smallthingz.ui.text.view.ParagraphView
 import smallthingz.ui.text.view.PlainTextAccessibilityWindowScope
 import smallthingz.ui.unit.Density
 
-/** Explicit immutable colors; no application palette or global theme registry is retained. */
-data class NativeActionSheetColors(
+/** Immutable paint resolved from the sheet's window theme. */
+@ConsistentCopyVisibility
+data class NativeActionSheetColors internal constructor(
+    /** The resolved sheet fill, under the original property name. */
     val surfaceContainerLow: Int,
     val onSurface: Int,
     val onSurfaceVariant: Int,
@@ -18,10 +20,36 @@ data class NativeActionSheetColors(
     val inverseSurface: Int,
     val inverseOnSurface: Int,
     val title: Int,
-)
+    val edgeColor: Int,
+    val edgeWidthDp: Float,
+) {
+    internal constructor(
+        surfaceContainerLow: Int,
+        onSurface: Int,
+        onSurfaceVariant: Int,
+        scrim: Int,
+        inverseSurface: Int,
+        inverseOnSurface: Int,
+        title: Int,
+    ) : this(surfaceContainerLow, onSurface, onSurfaceVariant, scrim, inverseSurface,
+        inverseOnSurface, title, 0, NativeDefaultColorScheme.THIN_OUTLINE_WIDTH_DP)
 
-/** Typography and colors for one window configuration. Recreate the owner for density changes. */
-data class NativeActionSheetStyle(
+    @Deprecated("Retained for binary compatibility", level = DeprecationLevel.HIDDEN)
+    fun copy(
+        surfaceContainerLow: Int = this.surfaceContainerLow,
+        onSurface: Int = this.onSurface,
+        onSurfaceVariant: Int = this.onSurfaceVariant,
+        scrim: Int = this.scrim,
+        inverseSurface: Int = this.inverseSurface,
+        inverseOnSurface: Int = this.inverseOnSurface,
+        title: Int = this.title,
+    ): NativeActionSheetColors = NativeActionSheetColors(surfaceContainerLow, onSurface, onSurfaceVariant,
+        scrim, inverseSurface, inverseOnSurface, title, edgeColor, edgeWidthDp)
+}
+
+/** Use [NativeModalRecipes.actionSheetStyle] to resolve paint and typography for a window. */
+@ConsistentCopyVisibility
+data class NativeActionSheetStyle internal constructor(
     val textDensity: Density,
     val sharedFontResolver: FontFamily.Resolver,
     val palette: NativeActionSheetColors,
@@ -29,6 +57,10 @@ data class NativeActionSheetStyle(
     val tooltipStyle: TextStyle,
     val recipe: NativeActionSheetRecipe = NativeActionSheetRecipe(grainSeed = null),
 ) {
+    /** Change sheet geometry and behavior while retaining the resolved window paint. */
+    fun copy(recipe: NativeActionSheetRecipe): NativeActionSheetStyle =
+        NativeActionSheetStyle(textDensity, sharedFontResolver, palette, titleStyle, tooltipStyle, recipe)
+
     internal fun title(context: Context, text: String) = paragraph(context,text,titleStyle,palette.title)
     internal fun tooltip(context: Context, text: String) = paragraph(context,text,tooltipStyle,palette.inverseOnSurface)
     private fun paragraph(context: Context,text: String,style: TextStyle,color: Int) =

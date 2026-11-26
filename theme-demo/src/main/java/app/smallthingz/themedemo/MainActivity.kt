@@ -170,11 +170,7 @@ class MainActivity : Activity() {
                 override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
                     if (!fromUser) return
                     amounts[setting.ordinal] = progress
-                    when (setting) {
-                        Adjustment.TINT, Adjustment.BACKGROUND_LIGHTNESS, Adjustment.FOREGROUND_LIGHTNESS -> bindTheme()
-                        Adjustment.BORDER_WIDTH, Adjustment.BORDER_LIGHTNESS -> bindBorders()
-                        Adjustment.BACKGROUND, Adjustment.CARDS -> bindGrain()
-                    }
+                    bindTheme() // Border/grain changes belong to the shared window preset too.
                 }
                 override fun onStartTrackingTouch(seekBar: SeekBar) = Unit
                 override fun onStopTrackingTouch(seekBar: SeekBar) = Unit
@@ -195,7 +191,7 @@ class MainActivity : Activity() {
         return preferences.getInt(keyFor(setting), initial).coerceIn(0, setting.maximum)
     }
 
-    private fun palette(): NativeColorScheme {
+    private fun surfacePalette(): NativeColorScheme {
         if (mode == NativeDarkSurfaces.AMOLED) {
             val customizedLightness = Adjustment.entries.any { setting ->
                 setting.amoledInitial != null &&
@@ -208,6 +204,16 @@ class MainActivity : Activity() {
             backgroundLightness = amount(Adjustment.BACKGROUND_LIGHTNESS) / 100f,
             foregroundLightness = amount(Adjustment.FOREGROUND_LIGHTNESS) / 100f)
     }
+
+    private fun palette(): NativeColorScheme = surfacePalette().copy(surfacePreset = NativeDarkSurfacePreset(
+        style = mode,
+        backgroundLightness = amount(Adjustment.BACKGROUND_LIGHTNESS) / 100f,
+        foregroundLightness = amount(Adjustment.FOREGROUND_LIGHTNESS) / 100f,
+        backgroundGrain = amount(Adjustment.BACKGROUND) / 100f,
+        foregroundGrain = amount(Adjustment.CARDS) / 100f,
+        borderWidthDp = amount(Adjustment.BORDER_WIDTH) / 4f,
+        borderLightness = amount(Adjustment.BORDER_LIGHTNESS) / 100f,
+    ))
 
     private fun bindTheme() {
         val colors = palette()

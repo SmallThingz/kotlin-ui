@@ -4,6 +4,8 @@
  */
 package smallthingz.ui.components
 
+import smallthingz.ui.animation.core.AnimationPlayTime
+
 import smallthingz.ui.animation.view.ViewColorTransition
 
 import android.content.Context
@@ -63,8 +65,7 @@ open class NativeCircularProgress(
     },durationScale)}
     private var frameJob: Job? = null
     private var presentationActive = true
-    private var origin = Long.MIN_VALUE
-    private var lastScale = Float.NaN
+    private val clock = AnimationPlayTime()
     private var rotation = 0f
     private var progress = 0.1f
     private val scaleObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
@@ -100,7 +101,7 @@ open class NativeCircularProgress(
         super.onAttachedToWindow()
         context.contentResolver.registerContentObserver(
             Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, scaleObserver)
-        origin = Long.MIN_VALUE
+        clock.reset()
         updateScheduling()
     }
 
@@ -131,8 +132,7 @@ open class NativeCircularProgress(
             stopFrames()
             rotation = 1080f + 360f
             progress = 0.87f
-            lastScale = 0f
-            origin = Long.MIN_VALUE
+            clock.reset()
             invalidate()
         } else if (frameJob?.isActive != true) {
             frameJob = scope.launch {
@@ -152,11 +152,7 @@ open class NativeCircularProgress(
         if (!presentationActive || !isAttachedToWindow || !isShown || windowVisibility != VISIBLE) return
         val scale = durationScale()
         if (scale == 0f) { updateScheduling(); return }
-        if (origin == Long.MIN_VALUE || lastScale != scale) {
-            origin = frameTimeNanos
-            lastScale = scale
-        }
-        val playTime = ((frameTimeNanos - origin) / scale).toLong()
+        val playTime = clock.advance(frameTimeNanos, scale)
         rotation = IncidentLoadingMotion.global.getValueFromNanos(playTime) +
             IncidentLoadingMotion.additional.getValueFromNanos(playTime)
         progress = IncidentLoadingMotion.progress.getValueFromNanos(playTime)

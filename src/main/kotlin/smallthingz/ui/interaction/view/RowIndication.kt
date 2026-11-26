@@ -8,6 +8,8 @@
  */
 package smallthingz.ui.interaction.view
 
+import smallthingz.ui.animation.core.AnimationPlayTime
+
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.animation.view.AnimationScaleReader
 
@@ -175,6 +177,7 @@ class RowIndication private constructor(
             if (previous?.kind == StateKind.DRAG) 150 else 15
         }
         stateScale.retryOnNewTarget()
+        stateScale.read()
         stateAlpha.animateTo(target, durationMillis)
         requestFrame()
     }
@@ -318,7 +321,7 @@ internal class RowStateAlpha {
     private var initial = 0f
     private var target = 0f
     private var durationNanos = 0L
-    private var startFrame = Long.MIN_VALUE
+    private val clock = AnimationPlayTime()
     private var lastFrame = Long.MIN_VALUE
 
     fun animateTo(target: Float, durationMillis: Int) {
@@ -326,16 +329,15 @@ internal class RowStateAlpha {
         this.target = target
         durationNanos = durationMillis * 1_000_000L
         // Animatable retains the previous frame on interruption, but resets it after completion.
-        startFrame = if (running) lastFrame else Long.MIN_VALUE
+        clock.reset()
+        if (running && lastFrame != Long.MIN_VALUE) clock.advance(lastFrame, 1f)
         running = true
     }
 
     fun frame(frameTimeNanos: Long, durationScale: Float) {
         if (!running) return
         require(durationScale >= 0f)
-        if (startFrame == Long.MIN_VALUE) startFrame = frameTimeNanos
-        val playTime = if (durationScale == 0f) durationNanos
-            else ((frameTimeNanos - startFrame) / durationScale).toLong()
+        val playTime = clock.advance(frameTimeNanos, durationScale, durationNanos)
         val fraction = playTime.coerceIn(0L, durationNanos) / durationNanos.toFloat()
         value = initial * (1f - fraction) + target * fraction
         lastFrame = frameTimeNanos
@@ -351,7 +353,7 @@ internal class RowStateAlpha {
         initial = 0f
         target = 0f
         durationNanos = 0L
-        startFrame = Long.MIN_VALUE
+        clock.reset()
         lastFrame = Long.MIN_VALUE
     }
 }

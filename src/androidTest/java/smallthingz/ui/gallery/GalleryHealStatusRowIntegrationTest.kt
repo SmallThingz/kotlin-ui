@@ -26,7 +26,11 @@ import kotlin.math.roundToInt
 @RunWith(AndroidJUnit4::class)
 class GalleryHealStatusRowIntegrationTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
-    private fun onMain(block: () -> Unit) = instrumentation.runOnMainSync(block)
+    private fun onMain(block: () -> Unit) {
+        var result: Result<Unit>? = null
+        instrumentation.runOnMainSync { result = runCatching(block) }
+        checkNotNull(result).getOrThrow()
+    }
     private val palette = ControlPalette(-1, -1, 0xff202020.toInt(), 0xff606060.toInt(),
         0xff3458a0.toInt(), -1, 0xff3458a0.toInt(), 0xffaaaaaa.toInt())
     private fun fixture(context: Context): Fixture {

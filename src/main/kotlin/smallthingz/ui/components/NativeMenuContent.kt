@@ -88,7 +88,7 @@ internal class NativeMenuContent<I>(
     }
 
     /** Released Incidents/Library use default12dp horizontal/zero vertical item padding. */
-    fun bindActions(actions: List<NativeMenuAction<I>>, palette: NativeMenuColors, background: Int = palette.surfaceContainerHigh) {
+    fun bindActions(actions: List<ResolvedMenuAction<I>>, palette: NativeMenuColors, background: Int = palette.surfaceContainerHigh) {
         bindFill(background)
         viewport.setGlowColor(palette.muted)
         bindGrain(palette.grainIntensity)
@@ -135,7 +135,7 @@ internal class NativeMenuColumn<I>(
         requestLayout()
     }
 
-    fun bindActions(actions: List<NativeMenuAction<I>>, palette: NativeMenuColors) {
+    fun bindActions(actions: List<ResolvedMenuAction<I>>, palette: NativeMenuColors) {
         while (rows.size > actions.size) {
             val row = rows.removeAt(rows.lastIndex)
             row.close()
@@ -249,7 +249,7 @@ internal class NativeMenuRowView<I>(
         if (selectionChanged) publishSelectionChange()
     }
 
-    fun bindAction(value: NativeMenuAction<I>, palette: NativeMenuColors) {
+    fun bindAction(value: ResolvedMenuAction<I>, palette: NativeMenuColors) {
         resetCustomContent()
         action = value.onClick
         val checkState = (icons as? NativeCheckableMenuIcons<I>)?.checkState(value.icon)

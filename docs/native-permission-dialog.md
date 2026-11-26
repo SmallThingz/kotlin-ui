@@ -1,12 +1,12 @@
 # NativePermissionDialog
 
-Use `smallthingz.ui.components.NativePermissionDialog` from an Activity on the main thread. Supply a trusted requester name and icon, a short localized description, localized action labels, and the app's `smallthingz.ui.components.NativeColorScheme`. `scopeBody` accepts an optional unattached Android `View`. The caller owns its selection, request identity, authorization and lifecycle.
+Use `smallthingz.ui.components.NativePermissionDialog` from an Activity on the main thread. Supply a trusted requester name and icon, a short localized description, localized action labels, and the window's resolved `smallthingz.ui.common.ControlTheme`. `scopeBody` accepts an optional unattached Android `View`. The caller owns its selection, request identity, authorization and lifecycle.
 
 ```kotlin
 lateinit var prompt: NativePermissionDialog
 prompt = NativePermissionDialog(
     activity = this,
-    colors = colors,
+    theme = windowTheme,
     icon = requesterIcon,
     appName = requesterLabel,
     summary = requestSummary,

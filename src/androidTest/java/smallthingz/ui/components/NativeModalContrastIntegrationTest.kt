@@ -88,7 +88,7 @@ class NativeModalContrastIntegrationTest {
                 if (dark) assertTrue(colors.raised > palette.raised)
                 else assertEquals(palette.raised, colors.raised)
                 // A stale/equal ink target must still be corrected against the current paint.
-                menu.bindActions(listOf(NativeMenuAction("Copy", 0, palette.raised, palette.ink) {}), colors)
+                menu.bindActions(listOf(ResolvedMenuAction("Copy", 0, palette.raised, palette.ink) {}), colors)
                 assertRetainedGlow(colors.muted)
                 val label = descendants(menu).filterIsInstance<ParagraphView>().single()
                 assertEquals(grainRange(colors.raised, intensity), menu.paintedTextSurface)
@@ -116,9 +116,9 @@ class NativeModalContrastIntegrationTest {
         fun bind(scheme: NativeColorScheme) {
             val (share, copy, delete) = semanticTints(scheme)
             menu.bindActions(listOf(
-                NativeMenuAction("Share", ReverbIcon.Share, scheme.onSurface, share) {},
-                NativeMenuAction("Copy", ReverbIcon.Copy, scheme.onSurface, copy) {},
-                NativeMenuAction("Delete", ReverbIcon.Delete, scheme.error, delete) {},
+                ResolvedMenuAction("Share", ReverbIcon.Share, scheme.onSurface, share) {},
+                ResolvedMenuAction("Copy", ReverbIcon.Copy, scheme.onSurface, copy) {},
+                ResolvedMenuAction("Delete", ReverbIcon.Delete, scheme.error, delete) {},
             ), scheme.menuColors())
             menu.measure(atMost(320), atMost(320))
             menu.layout(0, 0, menu.measuredWidth, menu.measuredHeight)
@@ -257,7 +257,7 @@ class NativeModalContrastIntegrationTest {
         } finally { about.dispose(); runtime.close() }
     }
 
-    @Test fun sheetTitleFirstPaintRebindAndControlPaintOwnership() = instrumentation.runOnMainSync {
+    @Test fun sheetTitleFirstPaintRebindAndControlPaintOwnership() = mainChecked {
         val context = instrumentation.targetContext
         val resolver = createFontFamilyResolver(context)
         fun style(dark: Boolean) = reverbActionSheetStyle(
@@ -290,9 +290,7 @@ class NativeModalContrastIntegrationTest {
             val source = palette(dark)
             val common = NativeUiAppearance.Default.modals.actionSheetStyle(Density(1f), resolver, source)
             assertEquals(common, current)
-            val low = source.surfaceContainerLow
-            val expectedFill = Color.argb(Color.alpha(low), (Color.red(low) * .92f).toInt(),
-                (Color.green(low) * .92f).toInt(), (Color.blue(low) * .92f).toInt())
+            val expectedFill = source.background
             assertEquals(expectedFill, current.palette.surfaceContainerLow)
             assertEquals(grainRange(expectedFill, current.recipe.grainIntensity),
                 surface.paintedTextSurface)

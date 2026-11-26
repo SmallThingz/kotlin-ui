@@ -34,7 +34,7 @@ apply when the caller selects Light under a night configuration. The resolver
 preserves every other Light Material color role and the existing light outline
 policy, and adds `NativeGrainPreset(backgroundGrain = 1f, foregroundGrain = .5f)`.
 
-Apps can explicitly configure these APIs. Raw Material, gray, tinted and custom
+Apps can configure the window theme. Raw Material, gray, tinted and custom
 resolvers remain supported, including overrides supplied through `appearance.copy`.
 Copying an appearance without supplying `colorScheme` preserves its existing
 resolver; the shared default does not replace an explicit choice.
@@ -90,25 +90,23 @@ ZFM itself does not construct a toolbar.
 
 ## Shared modal surfaces
 
-`appearance.modals.actionSheetStyle(density, fontResolver, colors)` is the common
-sheet factory, also used by Reverb. The default handle is 2 dp high with 16 dp
-vertical padding. `sheet.surfaceColor(colors)` darkens `surfaceContainerLow`
-by 8% in RGB, preserving alpha and the palette's text roles.
+Use the window's resolved theme for dialog and popup fills, text and icons.
+Configure the color scheme on `NativeUiAppearance` to change these roles across
+an app. Action sheets and floating panels use `palette.background`, so they
+follow the app background in Light mode and the default AMOLED background in
+Dark mode. Anchored menus use the theme's raised surface for contrast.
 
-The factory uses `surfacePreset.foregroundGrain` when present. **A raw palette
-without a preset now keeps the recipe's grain**, including its default background
-seed and intensity `1f`. For raw palettes, choose `grainSeed = null` or
-`grainIntensity = 0f` explicitly when a flat sheet is required. Custom handle
-geometry and seed remain caller-owned.
+Reverb's About panel and discard confirmations inherit the shared modal fill.
+A bottom sheet highlights its exposed top edge and rounded corners. A panel
+attached at the top highlights its bottom edge. Both use the palette's border
+color and the shared thin outline. About's link uses its own theme roles,
+`surfaceContainerHighest` for the raised fill and `onSurface` for the label.
 
-About uses the same `NativeFloatingPanelRecipe` and palette as other apps.
-Its panel resolves `surfaceContainerHigh`; its link resolves
-`surfaceContainerHighest` through `floating.link.fill(colors)`, with semantic
-`onSurface` ink. Both retain ordinary tonal elevation and the AMOLED neutral
-lift. Reverb no longer remaps the panel to the sheet fill or forces zero
-elevation, and its link uses the common higher-contrast fill. The white AMOLED
-lift uses source-over compositing, which can increase translucent fill alpha;
-it is not an RGB-only darkening operation.
+Resolve a sheet's style with
+`appearance.modals.actionSheetStyle(density, fontResolver, palette)`. The
+factory uses `onSurface` and `onSurfaceVariant` for foregrounds and takes
+grain intensity from the surface preset when present. The default handle is
+2 dp high with 16 dp vertical padding.
 
 ## Grouped surfaces
 
@@ -271,7 +269,7 @@ state. Rebind enabled state and actions independently of the row.
 ## Shared foreground bindings
 
 `smallthingz.ui.components.NativeForeground` binds the window palette to retained
-progress indicators, toggle rows, groups, surfaces, buttons, menu colors and plain
+progress indicators, toggle rows, groups, surfaces, buttons and plain
 foreground drawables. It uses the same foreground intensity independently of page
 or document texture. Pass the resolved window's `palette.pageControls`; rebind when
 the palette changes. Colors, progress values, input and lifecycle remain with the

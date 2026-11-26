@@ -2,6 +2,7 @@
 // Source-derived sampling seam; see SOURCE-view-animation.json.
 package smallthingz.ui.animation
 
+import smallthingz.ui.animation.core.AnimationPlayTime
 import smallthingz.ui.animation.core.AnimationVector
 import smallthingz.ui.animation.core.FiniteAnimationSpec
 import smallthingz.ui.animation.core.SpringSpec
@@ -22,9 +23,8 @@ class AnimatedValue<T, V : AnimationVector>(
     val running get() = animation != null
     private var animation: TargetBasedAnimation<T, V>? = null
     private var velocity = zero()
-    private var startFrame = 0L
+    private val clock = AnimationPlayTime()
     private var lastFrame = 0L
-    private var hasStartFrame = false
     private var hasLastFrame = false
 
     fun target(next: T, scale: Float) {
@@ -36,19 +36,13 @@ class AnimatedValue<T, V : AnimationVector>(
         animation = TargetBasedAnimation(spec, converter, value, next,
             initialVelocity = converter.convertFromVector(velocity))
         target = next
-        startFrame = previousFrame
-        hasStartFrame = hadPreviousFrame
+        clock.reset()
         if (hadPreviousFrame) frame(previousFrame, scale)
     }
 
     fun frame(time: Long, scale: Float) {
         val active = animation ?: return
-        require(scale >= 0f) { "negative scale factor" }
-        val start = if (hasStartFrame) startFrame else time.also {
-            startFrame = it
-            hasStartFrame = true
-        }
-        val play = if (scale == 0f) active.durationNanos else ((time - start) / scale).toLong()
+        val play = clock.advance(time, scale, active.durationNanos)
         lastFrame = time
         hasLastFrame = true
         value = active.getValueFromNanos(play)
@@ -59,7 +53,6 @@ class AnimatedValue<T, V : AnimationVector>(
     fun stop() {
         animation = null
         velocity = zero()
-        hasStartFrame = false
         hasLastFrame = false
     }
 

@@ -1,6 +1,11 @@
 package smallthingz.ui.scroll
 
+import smallthingz.ui.MotionDurationScale
+import smallthingz.ui.animation.core.FloatDecayAnimation
+import smallthingz.ui.animation.core.TargetBasedAnimation
+import smallthingz.ui.animation.core.VectorConverter
 import smallthingz.ui.animation.core.exponentialDecay
+import smallthingz.ui.animation.core.spring
 import smallthingz.ui.geometry.Offset
 import smallthingz.ui.runtime.MonotonicFrameClock
 import kotlinx.coroutines.CompletableDeferred
@@ -10,17 +15,156 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.roundToInt
 
 /** Proposal tests only: no compilation, execution or actual frame-phase qualification credited. */
 class NativeVerticalScrollOwnerTest {
+    @Test fun semanticsInitializesScaleBeforeAwaitAndSamplesAgainOnTheFirstFrame() = boundedTest {
+        val fixture = Fixture()
+        var consumed = 0f
+        val scale = TestMotionScale(1f)
+        val scroll = launch(scale, start = CoroutineStart.UNDISPATCHED) {
+            consumed = fixture.owner.semanticsScrollBy(80f)
+        }
+        assertTrue(fixture.state.isScrollInProgress)
+        assertEquals(0, fixture.state.value)
+        fixture.frames.frame(1_000_000_000L) {
+            assertEquals(1, scale.reads)
+            scale.scaleFactor = 0f
+        }
+        scroll.join()
+        assertEquals(2, scale.reads)
+        assertEquals(80f, consumed, .001f)
+        assertEquals(80, fixture.state.value)
+        assertEquals(1, fixture.frames.delivered)
+        assertFalse(fixture.state.isScrollInProgress)
+    }
+
+    @Test fun semanticsReadsChangedScaleWhenThePendingFrameArrives() = boundedTest {
+        val fixture = Fixture()
+        val scale = TestMotionScale(1f)
+        val scroll = launch(scale, start = CoroutineStart.UNDISPATCHED) {
+            fixture.owner.semanticsScrollBy(80f)
+        }
+        fixture.frames.frame(1_000_000_000L)
+        fixture.frames.frame(1_016_666_667L) { scale.scaleFactor = 2f }
+        val spring = TargetBasedAnimation(spring<Float>(), Float.VectorConverter, 0f, 80f)
+        val halfTimeNanos = 16_666_667L / 2
+        assertEquals(spring.getValueFromNanos(halfTimeNanos).roundToInt(), fixture.state.value)
+        assertTrue(fixture.state.isScrollInProgress)
+
+        fixture.frames.frame(1_033_333_334L) { scale.scaleFactor = 0f }
+        scroll.join()
+        assertEquals(80, fixture.state.value)
+        assertEquals(3, fixture.frames.delivered)
+        assertFalse(fixture.state.isScrollInProgress)
+    }
+
+    @Test fun zeroInheritedScaleLeavesDirectDragImmediate() = boundedTest {
+        val fixture = Fixture()
+        launch(TestMotionScale(0f), start = CoroutineStart.UNDISPATCHED) {
+            fixture.owner.drag {
+                assertTrue(fixture.state.isScrollInProgress)
+                assertEquals(-24f, scrollBy(-24f), 0f)
+                assertEquals(24, fixture.state.value)
+            }
+        }.join()
+        assertEquals(0, fixture.frames.delivered)
+        assertTrue(fixture.preVelocities.isEmpty())
+        assertTrue(fixture.postVelocities.isEmpty())
+        assertFalse(fixture.state.isScrollInProgress)
+    }
+
+    @Test fun zeroScaleAtAnEdgePassesTheWholeVelocityToNestedPostFling() = boundedTest {
+        val fixture = Fixture()
+        val fling = launch(TestMotionScale(0f), start = CoroutineStart.UNDISPATCHED) {
+            fixture.owner.onScrollStopped(1800f)
+        }
+        fixture.frames.frame(0L)
+        fling.join()
+        assertEquals(0, fixture.state.value)
+        val (consumed, available) = fixture.postVelocities.single()
+        assertEquals(0f, consumed, 0f)
+        assertEquals(1800f, available, 0f)
+        assertFalse(fixture.owner.isFlinging)
+    }
+
+    @Test fun flingInitializesScaleBeforeAwaitAndSamplesAgainOnTheFirstFrame() = boundedTest {
+        val fixture = Fixture()
+        val scale = TestMotionScale(1f)
+        val fling = launch(scale, start = CoroutineStart.UNDISPATCHED) {
+            fixture.owner.onScrollStopped(-1000f)
+        }
+        assertTrue(fixture.owner.isFlinging)
+        assertEquals(0, fixture.state.value)
+        assertTrue(fixture.postVelocities.isEmpty())
+        fixture.frames.frame(1_000_000_000L) {
+            assertEquals(1, scale.reads)
+            scale.scaleFactor = 0f
+        }
+        fling.join()
+        assertEquals(2, scale.reads)
+        assertFalse(fling.isCancelled)
+        val decay = FloatDecayAnimation(exponentialDecay(), 1000f)
+        assertEquals(decay.getValueFromNanos(Long.MAX_VALUE).roundToInt(), fixture.state.value)
+        assertEquals(listOf(-1000f), fixture.preVelocities)
+        val (consumed, remaining) = fixture.postVelocities.single()
+        assertEquals(-decay.getVelocityFromNanos(Long.MAX_VALUE), remaining, .001f)
+        assertEquals(-1000f, consumed + remaining, .001f)
+        assertEquals(1, fixture.frames.delivered)
+        assertFalse(fixture.owner.isFlinging)
+        assertFalse(fixture.state.isScrollInProgress)
+    }
+
+    @Test fun flingSamplesChangedInheritedScaleAndKeepsItForNestedCallbacks() = boundedTest {
+        val baseline = Fixture()
+        val baselineFling = launch(start = CoroutineStart.UNDISPATCHED) {
+            baseline.owner.onScrollStopped(1000f)
+        }
+        baseline.frames.frame(0L)
+        baseline.frames.frame(4_000_000L)
+        baselineFling.join()
+
+        val fixture = Fixture()
+        val scale = TestMotionScale(2f)
+        fixture.pre = {
+            assertSame(scale, currentCoroutineContext()[MotionDurationScale])
+            assertEquals(2f, scale.scaleFactor, 0f)
+            assertFalse(fixture.state.isScrollInProgress)
+            assertFalse(fixture.owner.isFlinging)
+            0f
+        }
+        fixture.post = { _, _ ->
+            assertSame(scale, currentCoroutineContext()[MotionDurationScale])
+            assertEquals(4f, scale.scaleFactor, 0f)
+            assertFalse(fixture.state.isScrollInProgress)
+            assertFalse(fixture.owner.isFlinging)
+            0f
+        }
+        val fling = launch(scale, start = CoroutineStart.UNDISPATCHED) {
+            fixture.owner.onScrollStopped(1000f)
+        }
+        fixture.frames.frame(0L)
+        assertTrue(fixture.owner.isFlinging)
+        assertTrue(fixture.postVelocities.isEmpty())
+        fixture.frames.frame(16_000_000L) { scale.scaleFactor = 4f }
+        fling.join()
+        assertFalse(fling.isCancelled)
+        assertEquals(listOf(1000f), fixture.preVelocities)
+        assertEquals(baseline.postVelocities.single(), fixture.postVelocities.single())
+        assertEquals(2, fixture.frames.delivered)
+    }
+
     @Test fun onlyPointerCancelReturnsTheModalAfterANestedDrag() = boundedTest {
         val fixture = Fixture()
         var modalReturns = 0
@@ -233,6 +377,16 @@ class NativeVerticalScrollOwnerTest {
         )
     }
 
+    private class TestMotionScale(initialFactor: Float) : MotionDurationScale {
+        var reads = 0
+            private set
+        override var scaleFactor = initialFactor
+            get() {
+                reads++
+                return field
+            }
+    }
+
     /** Controlled callback phase, with no wall-clock sleeps or Android frame scheduler. */
     private class ControlledFrames : MonotonicFrameClock {
         private val requests = Channel<Unit>(Channel.UNLIMITED)
@@ -245,8 +399,9 @@ class NativeVerticalScrollOwnerTest {
             delivered++
             return onFrame(time)
         }
-        suspend fun frame(time: Long) {
+        suspend fun frame(time: Long, beforeDelivery: () -> Unit = {}) {
             requests.receive()
+            beforeDelivery()
             times.send(time)
             yield()
         }

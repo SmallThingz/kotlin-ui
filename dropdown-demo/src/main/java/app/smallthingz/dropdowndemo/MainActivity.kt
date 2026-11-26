@@ -81,7 +81,8 @@ class MainActivity : Activity() {
                 insets
             }
         }
-        val host = NativeAnchoredDropdown(this, root, appearance, palette, density, resolver).also { popup = it }
+        val host = NativeAnchoredDropdown(this, root, ControlTheme.resolve(this, dark, appearance)
+            .withColorScheme(palette).withTypography(density, resolver)).also { popup = it }
         val page = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(8), dp(16), dp(8)) }
         val scroll = ScrollView(this).apply { isFillViewport = true; isVerticalScrollBarEnabled = false; addView(page, FrameLayout.LayoutParams(-1, -2)) }
         root.addView(scroll, FrameLayout.LayoutParams(-1, -1))

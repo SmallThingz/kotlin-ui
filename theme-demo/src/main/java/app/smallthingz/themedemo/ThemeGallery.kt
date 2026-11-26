@@ -153,14 +153,12 @@ internal class ThemeGallery(
         player.applyStyle(cardStyle(colors.raised))
         editorCard.applyStyle(cardStyle(colors.field))
         fileName.applyStyle(fieldStyle(colors))
-        formatField.setPopupOutline(borders.widthDp, borders.color)
         normalizeRow.setTrackOutline(borders.widthDp, borders.color)
     }
 
     fun setForegroundGrain(intensity: Float) {
         player.setNoiseIntensity(intensity)
         editorCard.setNoiseIntensity(intensity)
-        formatField.setNoiseIntensity(intensity)
         normalizeRow.setTrackNoiseIntensity(intensity)
     }
     fun dismissPopup() = dropdowns.dismiss()

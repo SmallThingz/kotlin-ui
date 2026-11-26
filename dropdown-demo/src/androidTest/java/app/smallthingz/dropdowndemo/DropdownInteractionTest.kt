@@ -422,8 +422,8 @@ class DropdownInteractionTest {
             val appearance = NativeUiAppearance.Default
             val host = activity.findViewById<FrameLayout>(android.R.id.content)
             val resources = activity.resources
-            controller = NativeAnchoredDropdown(activity, host, appearance, appearance.resolveColorScheme(activity, true),
-                Density(resources.displayMetrics.density, resources.configuration.fontScale), createFontFamilyResolver(activity))
+            controller = NativeAnchoredDropdown(activity, host, ControlTheme.resolve(activity, true, appearance)
+                .withTypography(Density(resources.displayMetrics.density, resources.configuration.fontScale), createFontFamilyResolver(activity)))
             val options = NativeDropdownContent(label, "First", listOf("First", "Second")) { it }
             mounted = controller.open(anchor, options, onTerminal = { terminalCalls++; throw cleanup }) { value ->
                 selectedValues += value

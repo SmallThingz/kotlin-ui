@@ -81,9 +81,9 @@ class AudioReactiveBlobView(
         val base = currentBaseRadiusFraction()
         val low = currentBands[0] * .34f + currentBands[1] * .30f + currentBands[2] * .21f + currentBands[3] * .15f
         val high = currentBands[4] * .34f + currentBands[5] * .30f + currentBands[6] * .21f + currentBands[7] * .15f
-        val energy = audioBlobMotionEnergy(currentActivity, low, high, currentSilence) * currentLife * currentPresence
+        val energy = currentMotionEnergy()
         val fold = energy * (.043f + .035f * low + .018f * high)
-        val minimumBody = base - fold - .008f * currentLife * currentPresence
+        val minimumBody = base - fold
         val covered = radius <= minimumBody - .012f
         val fallback = renderer is FallbackRenderer
         return audioBlobInkNeedsSupport(materialPrimary, materialTertiary, materialPaused,
@@ -183,13 +183,12 @@ class AudioReactiveBlobView(
         isClickable = false
     }
 
-    /** Copies the bounded band peaks immediately. The source array is borrowed for this call. */
+    /** Activity supplies amplitude. Bins supply relative shape and are borrowed for this call. */
     fun submitFrame(activity: Float, bins: FloatArray, silenceSuppressed: Boolean) {
         val hadRecentSignal = hasRecentAudioSignal()
         this.silenceSuppressed = silenceSuppressed
         targetActivity = activity.coerceIn(0f, 1f)
         val source = bins
-        var hasSignal = targetActivity > SIGNAL_ACTIVITY_THRESHOLD
         if (source.isEmpty()) {
             targetBands.fill(0f)
         } else {
@@ -198,12 +197,10 @@ class AudioReactiveBlobView(
                 val end = max(start + 1, (band + 1) * source.size / BAND_COUNT).coerceAtMost(source.size)
                 var peak = 0f
                 for (index in start until end) peak = max(peak, source[index])
-                val value = peak.coerceIn(0f, 1f)
-                targetBands[band] = value
-                if (value > SIGNAL_BAND_THRESHOLD) hasSignal = true
+                targetBands[band] = peak.coerceIn(0f, 1f)
             }
         }
-        if (hasSignal) lastAudioSignalNanos = System.nanoTime()
+        if (targetActivity > SIGNAL_ACTIVITY_THRESHOLD) lastAudioSignalNanos = System.nanoTime()
         if (!hadRecentSignal && hasRecentAudioSignal() && framePosted) {
             // A quiet onset can be below the "hot" threshold while an idle 33 ms callback is
             // pending. Pull that first response forward to the very next vsync. Subsequent audio
@@ -212,7 +209,7 @@ class AudioReactiveBlobView(
             framePosted = false
             postNextFrame(immediate = true)
         } else {
-            ensureAnimationState()
+            ensureAnimationState(audioSubmission = true)
         }
     }
 
@@ -281,6 +278,9 @@ class AudioReactiveBlobView(
         publishReadoutAppearance()
     }
 
+    private fun currentMotionEnergy(): Float =
+        audioBlobMotionEnergy(currentActivity, currentSilence) * currentLife * currentPresence
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         renderer.draw(
@@ -289,6 +289,7 @@ class AudioReactiveBlobView(
             height = height,
             timeSeconds = shaderTimeSeconds,
             activity = currentActivity,
+            energy = currentMotionEnergy(),
             bands = currentBands,
             life = currentLife,
             active = currentPresence,
@@ -329,7 +330,7 @@ class AudioReactiveBlobView(
 
     private fun silenceMoving(): Boolean = kotlin.math.abs(currentSilence - targetSilence) > SILENCE_EPSILON
 
-    private fun ensureAnimationState() {
+    private fun ensureAnimationState(audioSubmission: Boolean = false) {
         if (motionDurationScale() == 0f) {
             stopFrames()
             snapPresentationToTargets()
@@ -352,8 +353,10 @@ class AudioReactiveBlobView(
                 currentLife = targetLife
                 currentPresence = targetPresence
             }
-            invalidate()
-            publishReadoutAppearance()
+            if (!audioSubmission || !renderingVisible || !active || saving) {
+                invalidate()
+                publishReadoutAppearance()
+            }
         }
     }
 
@@ -415,21 +418,13 @@ class AudioReactiveBlobView(
         }
     }
 
-    private fun hasHotAudio(): Boolean {
-        if (currentActivity > ACTIVE_FRAME_THRESHOLD || targetActivity > ACTIVE_FRAME_THRESHOLD) return true
-        for (index in currentBands.indices) {
-            if (currentBands[index] > ACTIVE_BAND_THRESHOLD || targetBands[index] > ACTIVE_BAND_THRESHOLD) return true
-        }
-        return false
-    }
+    private fun hasHotAudio(): Boolean =
+        currentActivity > ACTIVE_FRAME_THRESHOLD || targetActivity > ACTIVE_FRAME_THRESHOLD
 
-    private fun hasResidualAudio(): Boolean {
-        if (currentActivity > RESIDUAL_FRAME_THRESHOLD || targetActivity > RESIDUAL_FRAME_THRESHOLD) return true
-        for (index in currentBands.indices) {
-            if (currentBands[index] > RESIDUAL_BAND_THRESHOLD || targetBands[index] > RESIDUAL_BAND_THRESHOLD) return true
-        }
-        return false
-    }
+    private fun hasResidualAudio(): Boolean =
+        targetActivity > SIGNAL_ACTIVITY_THRESHOLD ||
+            (currentActivity > RESIDUAL_FRAME_THRESHOLD &&
+                kotlin.math.abs(currentActivity - targetActivity) > RESIDUAL_FRAME_THRESHOLD)
 
     private fun hasRecentAudioSignal(): Boolean {
         if (!active || lastAudioSignalNanos == 0L) return false
@@ -472,7 +467,7 @@ class AudioReactiveBlobView(
         publishReadoutAppearance()
     }
 
-    private interface Renderer {
+    internal interface Renderer {
         val idleFrameDelayMillis: Long
         fun resize(width: Int, height: Int)
         fun setPalette(primary: Int, tertiary: Int, paused: Int): Boolean
@@ -482,6 +477,7 @@ class AudioReactiveBlobView(
             height: Int,
             timeSeconds: Float,
             activity: Float,
+            energy: Float,
             bands: FloatArray,
             life: Float,
             active: Float,
@@ -490,7 +486,7 @@ class AudioReactiveBlobView(
     }
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
-    private class ShaderRenderer : Renderer {
+    internal class ShaderRenderer : Renderer {
         override val idleFrameDelayMillis = 33L
         private val shader = RuntimeShader(SHADER_SOURCE)
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG).also { it.shader = shader }
@@ -524,13 +520,14 @@ class AudioReactiveBlobView(
             height: Int,
             timeSeconds: Float,
             activity: Float,
+            energy: Float,
             bands: FloatArray,
             life: Float,
             active: Float,
             silence: Float,
         ) {
             if (width <= 0 || height <= 0) return
-            shader.setFloatUniform("time", timeSeconds)
+            shader.setFloatUniform("timeAndEnergy", timeSeconds, energy)
             if (activity != lastActivity) {
                 shader.setFloatUniform("activity", activity)
                 lastActivity = activity
@@ -570,7 +567,7 @@ class AudioReactiveBlobView(
         }
     }
 
-    private class FallbackRenderer : Renderer {
+    internal class FallbackRenderer : Renderer {
         override val idleFrameDelayMillis = 33L
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         private val pausedPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -607,6 +604,7 @@ class AudioReactiveBlobView(
             height: Int,
             timeSeconds: Float,
             activity: Float,
+            energy: Float,
             bands: FloatArray,
             life: Float,
             active: Float,
@@ -619,16 +617,12 @@ class AudioReactiveBlobView(
             val base = minSize * (0.095f + life * (0.235f + activity * 0.018f))
             val low = bands[0] * .34f + bands[1] * .30f + bands[2] * .21f + bands[3] * .15f
             val high = bands[4] * .34f + bands[5] * .30f + bands[6] * .21f + bands[7] * .15f
-            val energy = audioBlobMotionEnergy(activity, low, high, silence) * life * active
             for (index in 0 until FALLBACK_POINTS) {
                 val angle = angles[index]
                 val h3 = sin(angle * 3f + timeSeconds * .78f)
                 val h7 = sin(angle * 7f - timeSeconds * .39f + 1.8f)
-                val idle = if (active > 0f) {
-                    (h3 * .0056f + h7 * .0024f) * minSize * life * active
-                } else 0f
                 val fold = audioBlobFold(h3, h7, energy, low, high) * minSize
-                val radius = base + fold + idle
+                val radius = base + fold
                 x[index] = cx + cosines[index] * radius
                 y[index] = cy + sines[index] * radius
             }
@@ -676,11 +670,8 @@ class AudioReactiveBlobView(
         private const val BAND_COUNT = 8
         private const val FALLBACK_POINTS = 40
         private const val ACTIVE_FRAME_THRESHOLD = 0.018f
-        private const val ACTIVE_BAND_THRESHOLD = 0.030f
         private const val RESIDUAL_FRAME_THRESHOLD = 0.003f
-        private const val RESIDUAL_BAND_THRESHOLD = 0.006f
         private const val SIGNAL_ACTIVITY_THRESHOLD = 0.006f
-        private const val SIGNAL_BAND_THRESHOLD = 0.010f
         private const val RECENT_AUDIO_HOLD_NANOS = 480_000_000L
         private const val COLLAPSED_LIFE = 0.38f
         private const val DISABLED_LIFE = 0.36f
@@ -689,7 +680,7 @@ class AudioReactiveBlobView(
 
         private const val SHADER_SOURCE = """
             uniform float2 resolution;
-            uniform float time;
+            uniform float2 timeAndEnergy;
             uniform float activity;
             uniform float life;
             uniform float active;
@@ -708,16 +699,13 @@ class AudioReactiveBlobView(
 
                 float low = dot(bands0, float4(0.34, 0.30, 0.21, 0.15));
                 float high = dot(bands1, float4(0.34, 0.30, 0.21, 0.15));
-                float h3 = sin(angle * 3.0 + time * 0.78);
-                float h7 = sin(angle * 7.0 - time * 0.39 + 1.8);
-                float energy = sqrt(clamp(max(activity, low * 0.9 + high * 0.7), 0.0, 1.0)) *
-                    (1.0 - 0.92 * skipSilence) * active * life;
-                float fold = energy * (h3 * (0.035 + 0.035 * low) + h7 * (0.008 + 0.018 * high));
+                float h3 = sin(angle * 3.0 + timeAndEnergy.x * 0.78);
+                float h7 = sin(angle * 7.0 - timeAndEnergy.x * 0.39 + 1.8);
+                float fold = timeAndEnergy.y * (h3 * (0.035 + 0.035 * low) + h7 * (0.008 + 0.018 * high));
 
-                float idle = h3 * 0.0056 + h7 * 0.0024;
                 float liveRadius = 0.330 + activity * 0.018;
                 float baseRadius = mix(0.095, liveRadius, life);
-                float blobRadius = baseRadius + active * life * idle + fold;
+                float blobRadius = baseRadius + fold;
                 float distanceToEdge = radius - blobRadius;
 
                 float body = smoothstep(0.012, -0.006, distanceToEdge);

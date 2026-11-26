@@ -221,13 +221,18 @@ class ReverbIncidentCardView internal constructor(
         val unacknowledged = !current.row.acknowledged
         val style = appearance.style
         val selected = current.selected == true
+        val checkTint = when (current.selected) {
+            true -> colors.onPrimaryContainer
+            false -> colors.muted
+            null -> if (unacknowledged) colors.error else colors.acknowledgedStatusTint
+        }
         val fill = if (selected) colors.primaryContainer else style.surface.fillColor(colors)
         val border = style.surface.borderColor(colors)
         surface.setJoinedSeparatorColor(border)
         if (immediately) surface.setPaletteImmediately(fill, border) else surface.setPalette(fill, border)
         body.setColors(if (selected) colors.onPrimaryContainer else colors.ink,
             if (selected) colors.onPrimaryContainer else colors.muted,
-            if (selected) colors.onPrimaryContainer else if (unacknowledged) colors.primary else colors.muted, immediately)
+            checkTint, immediately)
     }
 
     private fun performPrimaryAction(): Boolean {

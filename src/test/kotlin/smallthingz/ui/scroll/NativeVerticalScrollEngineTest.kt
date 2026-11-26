@@ -132,6 +132,154 @@ class NativeVerticalScrollEngineTest {
         assertFalse(fling.isRunning)
     }
 
+    @Test fun positiveDurationScalesSampleAtScaledElapsedTime() {
+        val decay = exponentialDecay()
+        val initialVelocity = 1000f
+        val firstFrame = 1_000_000_000L
+        val elapsed = 32_000_000L
+        for ((scale, playTime) in listOf(.5f to 64_000_000L, 1f to 32_000_000L, 2f to 16_000_000L)) {
+            val deltas = mutableListOf<Float>()
+            val fling = NativeVerticalFling(decay, { delta ->
+                deltas += delta
+                delta
+            }, { error("Fling completed early at scale $scale") })
+            fling.start(initialVelocity)
+            fling.frame(firstFrame, scale)
+            assertEquals(listOf(0f), deltas)
+            fling.frame(firstFrame + elapsed, scale)
+
+            assertEquals(2, deltas.size)
+            assertEquals("delta at scale $scale", decay.getValueFromNanos(playTime, 0f, initialVelocity),
+                deltas.last(), .0001f)
+            assertEquals("velocity at scale $scale", decay.getVelocityFromNanos(playTime, 0f, initialVelocity),
+                fling.remainingVelocity, .0001f)
+            assertTrue(fling.isRunning)
+        }
+    }
+
+    @Test fun unitScalePreservesSourceRoundingAtAMillisecondBoundary() {
+        val decay = exponentialDecay()
+        val velocity = 10_000f
+        val elapsed = 1_125_000_000L
+        val sourceTime = (elapsed / 1f).toLong()
+        assertEquals(1_124_999_936L, sourceTime)
+        val deltas = mutableListOf<Float>()
+        val fling = NativeVerticalFling(decay, { deltas += it; it }, {})
+        fling.start(velocity)
+        fling.frame(0L)
+        fling.frame(elapsed)
+        assertEquals(decay.getValueFromNanos(sourceTime, 0f, velocity), deltas.last(), 0f)
+        assertEquals(decay.getVelocityFromNanos(sourceTime, 0f, velocity), fling.remainingVelocity, 0f)
+    }
+
+    @Test fun oneArgumentFrameMatchesExplicitUnitScale() {
+        val decay = exponentialDecay()
+        val implicitDeltas = mutableListOf<Float>()
+        val explicitDeltas = mutableListOf<Float>()
+        val implicit = NativeVerticalFling(decay, { implicitDeltas += it; it }, {})
+        val explicit = NativeVerticalFling(decay, { explicitDeltas += it; it }, {})
+        implicit.start(1000f)
+        explicit.start(1000f)
+        for (time in listOf(1_000_000_000L, 1_032_000_000L)) {
+            implicit.frame(time)
+            explicit.frame(time, 1f)
+        }
+        assertEquals(explicitDeltas, implicitDeltas)
+        assertEquals(explicit.remainingVelocity, implicit.remainingVelocity, 0f)
+        assertTrue(implicit.isRunning)
+    }
+
+    @Test fun blockedZeroScaleFlingHandsOffItsIncomingVelocity() {
+        for (velocity in listOf(-1000f, 1000f)) {
+            val completed = mutableListOf<Float>()
+            val fling = NativeVerticalFling(exponentialDecay(), { 0f }, completed::add)
+            fling.start(velocity)
+            fling.frame(0L, 0f)
+            assertEquals(listOf(velocity), completed)
+            assertFalse(fling.isRunning)
+        }
+    }
+
+    @Test fun partiallyConsumedZeroScaleJumpHandsOffVelocityAtTheActualBoundary() {
+        val spec = exponentialDecay()
+        for (velocity in listOf(-1000f, 1000f)) {
+            val completed = mutableListOf<Float>()
+            val boundaryTime = 48_000_000L
+            val boundary = spec.getValueFromNanos(boundaryTime, 0f, velocity)
+            var position = 0f
+            val fling = NativeVerticalFling(spec, { delta ->
+                val next = (position + delta).coerceIn(minOf(0f, boundary), maxOf(0f, boundary))
+                val consumed = next - position
+                position = next
+                consumed
+            }, completed::add)
+            fling.start(velocity)
+            fling.frame(0L, 1f)
+            fling.frame(16_000_000L, 1f)
+            fling.frame(32_000_000L, 0f)
+            assertEquals(boundary, position, .0001f)
+            assertEquals(spec.getVelocityFromNanos(boundaryTime, 0f, velocity), completed.single(), .001f)
+            assertFalse(fling.isRunning)
+        }
+    }
+
+    @Test fun zeroScaleDispatchesTerminalTargetBeforeCompletingOnce() {
+        val decay = exponentialDecay()
+        val initialVelocity = -1000f
+        val target = decay.getTargetValue(0f, initialVelocity)
+        val terminalVelocity = decay.getVelocityFromNanos(
+            decay.getDurationNanos(0f, initialVelocity), 0f, initialVelocity,
+        ).coerceIn(-decay.absVelocityThreshold, decay.absVelocityThreshold)
+        val deltas = mutableListOf<Float>()
+        val completed = mutableListOf<Float>()
+        val fling = NativeVerticalFling(decay, { delta ->
+            deltas += delta
+            delta
+        }, { remaining ->
+            assertEquals(listOf(target), deltas)
+            completed += remaining
+        })
+        fling.start(initialVelocity)
+        fling.frame(1_000_000_000L, 0f)
+
+        assertFalse(fling.isRunning)
+        assertEquals(terminalVelocity, fling.remainingVelocity, .0001f)
+        assertEquals(terminalVelocity, completed.single(), .0001f)
+        fling.frame(1_032_000_000L)
+        fling.cancel()
+        assertEquals(listOf(target), deltas)
+        assertEquals(1, completed.size)
+    }
+
+    @Test fun midflightScaleChangesAdvanceByIntervalAndZeroConsumesOnlyRemainder() {
+        val decay = exponentialDecay()
+        val initialVelocity = 1000f
+        val firstFrame = 1_000_000_000L
+        val deltas = mutableListOf<Float>()
+        val completed = mutableListOf<Float>()
+        val fling = NativeVerticalFling(decay, { delta ->
+            deltas += delta
+            delta
+        }, completed::add)
+        fling.start(initialVelocity)
+        fling.frame(firstFrame, 2f)
+        fling.frame(firstFrame + 32_000_000L, 2f)
+        val firstValue = decay.getValueFromNanos(16_000_000L, 0f, initialVelocity)
+        assertEquals(firstValue, deltas.last(), .0001f)
+
+        fling.frame(firstFrame + 64_000_000L, .5f)
+        val secondValue = decay.getValueFromNanos(80_000_000L, 0f, initialVelocity)
+        assertEquals(secondValue - firstValue, deltas.last(), .0001f)
+        assertTrue(fling.isRunning)
+        assertTrue(completed.isEmpty())
+
+        fling.frame(firstFrame + 96_000_000L, 0f)
+        assertEquals(4, deltas.size)
+        assertEquals(decay.getTargetValue(0f, initialVelocity) - secondValue, deltas.last(), .0001f)
+        assertFalse(fling.isRunning)
+        assertEquals(fling.remainingVelocity, completed.single(), 0f)
+    }
+
     @Test fun eachDrawnHostObservesIntegerMovementAndMeasureClampButNotFractionOnlyChanges() {
         val state = NativeVerticalScrollState().apply { measured(10, 100) }
         val visible = mutableListOf<Int>()

@@ -27,10 +27,9 @@ internal fun nativeDropdownFlingTarget(
 
 /**
  * A tiny native coast must not become a row-wide jump at many times the release speed.
- * Select one native startScroll at release on true. Use the configured settle duration
- * when positive, capped at Int.MAX_VALUE; otherwise use the public default-duration
- * startScroll overload. Do not read a hidden native duration or coast first and correct
- * afterward. This does not promise exact release-velocity continuity.
+ * Select one shared-spline settle clock at release on true, using configured positive
+ * settle duration or the dropdown default when zero. No coast followed by correction,
+ * and no promise of exact release-velocity continuity for this forced extension.
  */
 internal fun nativeDropdownFlingNeedsScroll(
     startPosition: Float,
@@ -46,8 +45,8 @@ internal fun nativeDropdownFlingNeedsScroll(
 /**
  * One immutable mapping per release, shared by every native animation sample.
  * The caller supplies a monotone, non-overscrolling native trajectory, preferably the full
- * untruncated fling spline. This retains its duration/profile with bounded distance scaling;
- * it does not claim exact release-velocity continuity. Interruptions belong to the caller.
+ * untruncated fling spline. The caller owns its clipping- and scale-aware clock;
+ * the fixed endpoint never changes. Interruptions belong to the caller.
  */
 internal class NativeDropdownFlingPath(
     private val startPosition: Float,
@@ -71,5 +70,12 @@ internal class NativeDropdownFlingPath(
         if (progress == 0.0) return startPosition
         if (progress == 1.0) return targetRow.toFloat()
         return (startPosition.toDouble() + rowDistance * progress).toFloat()
+    }
+
+    fun positionAtFraction(fraction: Float): Float {
+        require(fraction.isFinite())
+        if (rowDistance == 0.0 || fraction <= 0f) return startPosition
+        if (fraction >= 1f) return targetRow.toFloat()
+        return (startPosition.toDouble() + rowDistance * fraction).toFloat()
     }
 }

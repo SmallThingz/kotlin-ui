@@ -1,9 +1,9 @@
 # Permission dialog
 
-NativePermissionDialog is a single-presentation native window. Supply a NativeColorScheme,
+NativePermissionDialog is a single-presentation native window. Supply the window's resolved `ControlTheme`,
 requesting-app icon/name, concise request, optional retained scope View, localized action
-labels and callbacks. NativeUiAppearance supplies typography and action recipes; a contained
-NativePermissionDialogRecipe owns sizing. Authorization, caller identity validation,
+labels and callbacks. The theme's appearance supplies typography and action recipes.
+`NativePermissionDialogRecipe` owns sizing. Authorization, caller identity validation,
 scope choice, token lifetime and persistent storage belong to the consumer.
 
 The structure follows Shizuku's official permission prompt at
@@ -13,9 +13,11 @@ The structure follows Shizuku's official permission prompt at
 and [permission activity](https://github.com/RikkaApps/Shizuku/blob/b844bc491f1790c72328e1a8e5b2349f8978f0ea/manager/src/main/java/moe/shizuku/manager/authorization/RequestPermissionActivity.kt).
 It uses a centered request and vertically joined, equally toned Allow/Deny actions with
 56dp minimum height. A compact icon/name identity row and optional scope body are explicit
-consumer requirements. Colors come from the supplied native/Reverb scheme, not Shizuku
-resource copies. Both actions use primary/onPrimary, with the normal dialog background
-unchanged. Consumer-owned scope selections should use primary for their selected accent.
+consumer requirements. The panel uses the
+[shared modal fill](appearance-controls.md#shared-modal-surfaces) and outlines
+its rounded perimeter in the palette's border color. Both actions use
+`primary` and `onPrimary`. Consumer-owned scope selections should use
+`primary` for their selected accent.
 
 Actions enter busy state before invoking the consumer once. Clear busy only for a deliberate
 retry or terminal error. setAllowEnabled(false) survives busy transitions. Optional

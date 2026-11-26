@@ -3,7 +3,7 @@ package smallthingz.ui.reverb
 import smallthingz.ui.components.NativePopupMenu
 import smallthingz.ui.components.NativeMenuOrigin
 import smallthingz.ui.components.NativeMenuAction
-import smallthingz.ui.components.NativeColorScheme
+import smallthingz.ui.components.NativeMenuActionRole
 import smallthingz.ui.scroll.NativeVerticalScrollState
 
 import android.view.View
@@ -27,7 +27,7 @@ data class ReverbMenuAction(
 )
 
 class ReverbActionMenuHost(
-    private val theme: ReverbTheme,
+    private var theme: ReverbTheme,
     private val kind: ReverbActionMenuKind,
     private val frames: MonotonicFrameClock,
     private val scope: CoroutineScope,
@@ -45,10 +45,9 @@ class ReverbActionMenuHost(
     }
     private val entries = IdentityHashMap<Any, Entry>()
     private var closed = false
-    private var palette = theme.palette
-
-    fun bindPalette(value: NativeColorScheme) {
-        palette = value
+    fun bindTheme(theme: ReverbTheme) {
+        this.theme = theme
+        entries.values.mapNotNull { it.session }.forEach { it.window.bindTheme(theme.palette) }
     }
 
     fun show(identity: Any, anchor: View, actions: List<ReverbMenuAction>,
@@ -70,9 +69,9 @@ class ReverbActionMenuHost(
         if (prior != null) retire(entry, prior)
         lateinit var session: Session
         val window = NativePopupMenu(anchor, theme.density,
-            ReverbDesign.appearance.typography.buttonLabelStyle,
-            theme.fontResolver, palette.menuColors(), entry.scroll, frames, scope, ReverbMenuIcons,
-            recipe = ReverbDesign.appearance.modals.anchoredPanel,
+            theme.appearance.typography,
+            theme.fontResolver, theme.palette, entry.scroll, frames, scope, ReverbMenuIcons,
+            recipe = theme.appearance.modals.anchoredPanel,
             onDismissRequest = {
                 if (entries[identity] === entry && entry.session === session) {
                     session.onDismissRequest()
@@ -108,10 +107,12 @@ class ReverbActionMenuHost(
                      actions: List<ReverbMenuAction>) {
         val generation = ++session.actionGeneration
         session.window.bindActions(actions.map { action ->
-            val textColor = if (action.isDestructive) palette.error else palette.onSurface
-            val iconColor = if (!action.isDestructive && kind == ReverbActionMenuKind.INCIDENTS)
-                palette.onSurfaceVariant else textColor
-            NativeMenuAction(action.label, action.icon, textColor, iconColor, action.enabled, onClick = {
+            val role = when {
+                action.isDestructive -> NativeMenuActionRole.DESTRUCTIVE
+                kind == ReverbActionMenuKind.INCIDENTS -> NativeMenuActionRole.MUTED_ICON
+                else -> NativeMenuActionRole.NORMAL
+            }
+            NativeMenuAction(action.label, action.icon, role, action.enabled, onClick = {
                 if (action.enabled && !closed && entries[identity] === entry && entry.session === session &&
                     session.actionGeneration == generation && session.window.acceptAction()) {
                     // Acceptance owns this action even if a zero-duration exit already retired
@@ -119,7 +120,7 @@ class ReverbActionMenuHost(
                     action.onClick()
                 }
             })
-        }, palette.menuColors())
+        })
     }
 
     /** Source expanded=false keeps ScrollState/menuCreated until its row is actually disposed. */

@@ -28,7 +28,10 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
-import android.widget.OverScroller
+import smallthingz.ui.animation.SplineBasedFloatDecayAnimationSpec
+import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
+import smallthingz.ui.common.ControlTheme
+import smallthingz.ui.common.dropdownColors
 import smallthingz.ui.common.DropdownDismissPolicy
 import smallthingz.ui.common.DropdownSelectionPolicy
 import smallthingz.ui.interaction.view.RowIndication
@@ -41,6 +44,8 @@ import smallthingz.ui.util.closePreservingPrimaryFailure
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
+private const val DefaultDropdownSettleMillis = 210L
+
 /** Draft anchored choice wheel. Colors, text, joined geometry and input all belong to the library. */
 data class NativeAnchoredDropdownStyle(
     val cornerRadiusDp: Float = 16f,
@@ -48,7 +53,7 @@ data class NativeAnchoredDropdownStyle(
     val screenMarginDp: Float = 8f,
     val scrimOpacity: Float = .55f,
     val expandMillis: Long = 300,
-    val settleMillis: Long = 210,
+    val settleMillis: Long = DefaultDropdownSettleMillis,
     val collapseMillis: Long = 240,
 ) {
     init {
@@ -65,7 +70,7 @@ data class NativeAnchoredDropdownStyle(
  * option brings it into view. Tapping a fully visible option selects it and closes the wheel.
  * The caller owns values and must [close] this host with its screen lifetime.
  */
-class NativeAnchoredDropdown(
+class NativeAnchoredDropdown private constructor(
     private val context: Context,
     private val overlayHost: FrameLayout,
     private val appearance: NativeUiAppearance,
@@ -75,9 +80,26 @@ class NativeAnchoredDropdown(
     private val style: NativeAnchoredDropdownStyle = appearance.anchoredDropdown,
     private val palette: NativeDropdownColors = NativeDropdownColors(colors.field, colors.field, colors.muted, colors.ink, colors.border),
 ) : AutoCloseable {
+    /** Resolve popup paint from the owning window theme; style changes geometry/motion only. */
+    constructor(context: Context, overlayHost: FrameLayout, theme: ControlTheme,
+        style: NativeAnchoredDropdownStyle = theme.appearance.anchoredDropdown) :
+        this(context, overlayHost, theme.appearance, theme.colors, theme.density, theme.fontResolver, style)
+
+    companion object {
+        /** Common fields retain their established raised expanded-surface role. */
+        @JvmSynthetic
+        internal fun forCommonField(context: Context, overlayHost: FrameLayout, theme: ControlTheme): NativeAnchoredDropdown =
+            NativeAnchoredDropdown(context, overlayHost, theme.appearance, theme.colors, theme.density,
+                theme.fontResolver, palette = theme.dropdownColors())
+    }
+
     private var dismissCurrent: (() -> Unit)? = null
-    internal var noiseIntensity = 0f
-    internal var outlineWidthDp: Float? = null
+    @get:JvmSynthetic
+    @set:JvmSynthetic
+    internal var noiseIntensity = colors.surfacePreset?.foregroundGrain ?: 0f
+    @get:JvmSynthetic
+    @set:JvmSynthetic
+    internal var outlineWidthDp: Float? = colors.surfacePreset?.borderWidthDp
     private var sessionIdentity: Any? = null
     private val titleStyle = appearance.typography[NativeTypographyRole.BODY_SMALL]
     private val selectedStyle = appearance.typography[NativeTypographyRole.BODY_LARGE]
@@ -561,7 +583,8 @@ class NativeAnchoredDropdown(
             private val minimumFlingVelocity = configuration.scaledMinimumFlingVelocity
             private val maximumFlingVelocity = configuration.scaledMaximumFlingVelocity
             private var velocityTracker: VelocityTracker? = null
-            private var scroller: OverScroller? = null
+            private val flingDecay by lazy { SplineBasedFloatDecayAnimationSpec(density) }
+            private var flingTiming: NativeDropdownFlingTiming? = null
             private var flinging = false
             private var stopTap = false
             private var heldIndication: RowIndication? = null
@@ -570,7 +593,9 @@ class NativeAnchoredDropdown(
             private val previousCue = NativeDropdownOverflowCue(context, -1, density.density, palette.ink, ::stepCue)
             private val nextCue = NativeDropdownOverflowCue(context, 1, density.density, palette.ink, ::stepCue)
             private var motionGeneration = 0
-            private val flingFrame = Runnable { advanceFling() }
+            private val flingFrame = Runnable {
+                if (flinging) advanceFling(readCachedAnimatorDurationScale(context))
+            }
             private val revealTop get() = viewport?.revealTop(position, reveal) ?: anchorY.toFloat()
             private val revealBottom get() = viewport?.revealBottom(position, lastPosition, reveal) ?: (anchorY + rowHeight).toFloat()
             private var firstMounted = -1
@@ -608,8 +633,9 @@ class NativeAnchoredDropdown(
                 flinging = false
                 motionGeneration++
                 removeCallbacks(flingFrame)
-                // Keep the displayed position; abortAnimation would jump the scroller to its end.
-                scroller?.forceFinished(true)
+                // Cancel clock ownership without moving the displayed position.
+                flingTiming?.cancel()
+                flingTiming = null
                 flingPath = null
             }
 
@@ -627,7 +653,6 @@ class NativeAnchoredDropdown(
                 cancelMotion()
                 velocityTracker?.recycle()
                 velocityTracker = null
-                scroller = null
             }
 
             private fun flingOrSettle(velocity: Float) {
@@ -637,39 +662,39 @@ class NativeAnchoredDropdown(
                     settle(settled, browsed = false)
                     return
                 }
-                val motion = scroller ?: OverScroller(context).also { scroller = it }
-                val nativeVelocity = velocity.coerceIn(-maximumFlingVelocity.toFloat(), maximumFlingVelocity.toFloat()).roundToInt()
-                // A virtual unbounded spline retains its zero-speed tail even at a list boundary.
-                motion.fling(0, 0, 0, nativeVelocity, 0, 0, Int.MIN_VALUE, Int.MAX_VALUE)
-                val distance = motion.finalY
+                val nativeVelocity = velocity.coerceIn(-maximumFlingVelocity.toFloat(), maximumFlingVelocity.toFloat()).roundToInt().toFloat()
+                val predictedDistance = flingDecay.getTargetValue(0f, nativeVelocity)
+                if (!predictedDistance.isFinite()) return
+                val distance = predictedDistance.toInt()
                 val target = nativeDropdownFlingTarget(position, distance, rowHeight, lastPosition,
-                    nativeVelocity.toFloat()) ?: run { motion.forceFinished(true); return }
+                    nativeVelocity) ?: return
                 if (position == target.toFloat()) {
-                    motion.forceFinished(true)
                     settled = target
                     updatePositions()
                     return
                 }
-                if (nativeDropdownFlingNeedsScroll(position, target, distance, rowHeight)) {
-                    val duration = style.settleMillis.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
-                    val pixels = (abs(target.toDouble() - position.toDouble()) * rowHeight)
-                        .coerceIn(1.0, Int.MAX_VALUE.toDouble()).roundToInt()
-                    motion.forceFinished(true)
-                    if (duration > 0) motion.startScroll(0, 0, 0, pixels, duration)
-                    else motion.startScroll(0, 0, 0, pixels)
-                }
-                flingPath = NativeDropdownFlingPath(position, target, motion.startY, motion.finalY)
+                val fallbackMillis = (if (style.settleMillis > 0L) style.settleMillis else DefaultDropdownSettleMillis)
+                    .coerceAtMost(Int.MAX_VALUE.toLong())
+                val duration = nativeDropdownFlingDurationNanos(
+                    position, target, rowHeight, predictedDistance,
+                    flingDecay.getDurationNanos(0f, nativeVelocity), fallbackMillis * 1_000_000L,
+                    nativeDropdownFlingNeedsScroll(position, target, distance, rowHeight),
+                )
+                // Sample the whole shared Android spline; shortening its clock retains the tail.
+                flingPath = NativeDropdownFlingPath(position, target, 0, 1)
+                flingTiming = NativeDropdownFlingTiming(duration, System.nanoTime())
                 flinging = true
-                postOnAnimation(flingFrame)
+                // Positive-scale motion belongs to the next frame; release keeps its exact pixel.
+                val durationScale = readCachedAnimatorDurationScale(context)
+                if (durationScale == 0f) advanceFling(durationScale) else postOnAnimation(flingFrame)
             }
 
-            private fun advanceFling() {
+            private fun advanceFling(durationScale: Float) {
                 if (!flinging || disposed || closing) return
-                val motion = scroller ?: return
+                val timing = flingTiming ?: return
                 val path = flingPath ?: return
                 val generation = motionGeneration
-                motion.computeScrollOffset()
-                val next = path.positionAt(if (motion.isFinished) motion.finalY else motion.currY)
+                val next = path.positionAtFraction(timing.sample(System.nanoTime(), durationScale))
                 if (next != position) {
                     val previous = settled
                     position = next
@@ -680,7 +705,7 @@ class NativeAnchoredDropdown(
                 }
                 // Selection callbacks may close, settle, or establish a new touch/fling owner.
                 if (!flinging || disposed || closing || generation != motionGeneration) return
-                if (motion.isFinished) stopFling() else postOnAnimation(flingFrame)
+                if (timing.isFinished) stopFling() else postOnAnimation(flingFrame)
             }
 
             override fun onDetachedFromWindow() {

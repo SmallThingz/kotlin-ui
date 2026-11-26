@@ -10,11 +10,21 @@ import android.provider.Settings
 
 /** The numeric scale is public on ValueAnimator only from API 33. */
 fun readCachedAnimatorDurationScale(context: Context): Float {
-    if (!ValueAnimator.areAnimatorsEnabled()) return 0f
-    return normalizeAnimatorDurationScale(
-        if (Build.VERSION.SDK_INT >= 33) ValueAnimator.getDurationScale()
-        else LegacyAnimatorDurationScale.read(context),
-    )
+    // Initialize the legacy cache on an admission read even while animators are disabled.
+    // Enabling animations while the first frame is pending must only read memory on that frame.
+    if (Build.VERSION.SDK_INT >= 33) {
+        val scale = ValueAnimator.getDurationScale()
+        return if (ValueAnimator.areAnimatorsEnabled()) normalizeAnimatorDurationScale(scale) else 0f
+    }
+    val cached = LegacyAnimatorDurationScale.read(context)
+    return legacyFrameScale(cached, ValueAnimator.areAnimatorsEnabled())
+}
+
+// A view can receive the enable notification before the cache observer publishes the new scale.
+internal fun legacyFrameScale(cached: Float, enabled: Boolean): Float = when {
+    !enabled -> 0f
+    cached == 0f -> 1f
+    else -> cached
 }
 
 private fun normalizeAnimatorDurationScale(value: Float): Float =

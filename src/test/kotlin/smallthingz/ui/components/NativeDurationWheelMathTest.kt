@@ -8,6 +8,14 @@ import org.junit.Test
 
 class NativeDurationWheelMathTest {
     @Test
+    fun snapUsesSourceCubicEaseOut() {
+        assertEquals(0f, durationWheelSnapEasing(0f), 0f)
+        assertEquals(.578125f, durationWheelSnapEasing(.25f), 0f)
+        assertEquals(.875f, durationWheelSnapEasing(.5f), 0f)
+        assertEquals(1f, durationWheelSnapEasing(1f), 0f)
+    }
+
+    @Test
     fun splitAndCompose_preserveDurations() {
         val values = listOf(0, 1, 59, 60, 3_599, 3_600, 86_400, 172_815, Int.MAX_VALUE)
         values.forEach { seconds ->

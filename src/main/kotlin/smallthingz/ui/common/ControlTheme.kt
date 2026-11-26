@@ -18,6 +18,11 @@ class ControlTheme internal constructor(
     fun withColorScheme(colors: NativeColorScheme): ControlTheme =
         if (colors == this.colors) this else ControlTheme(appearance, colors, density, fontResolver)
 
+    /** Replace a window's text resources without changing its appearance or color scheme. */
+    fun withTypography(density: Density, fontResolver: FontFamily.Resolver): ControlTheme =
+        if (density === this.density && fontResolver === this.fontResolver) this
+        else ControlTheme(appearance, colors, density, fontResolver)
+
     companion object {
         fun resolve(context: Context, dark: Boolean): ControlTheme =
             resolve(context, dark, NativeUiAppearance.Default)

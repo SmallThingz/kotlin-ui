@@ -5,6 +5,7 @@ import android.view.View.MeasureSpec
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeSurface
 import smallthingz.ui.components.NativeSurfaceStyle
+import smallthingz.ui.components.modalEdgeWidthDp
 import smallthingz.ui.components.nativeTextStyle
 import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.reverb.ReverbDesign
@@ -24,7 +25,7 @@ enum class GalleryDialogWidthPolicy {
 }
 
 /** Gallery's centered content dialogs share the library's surfaces and typography. */
-class GalleryDialogSurface(context: Context, dark: Boolean) : NativeSurface(
+internal class GalleryDialogSurface(context: Context, dark: Boolean) : NativeSurface(
     context, surfaceStyle(ReverbDesign.appearance.resolveColorScheme(context, dark)),
 ) {
     init { bindTheme(dark) }
@@ -51,8 +52,8 @@ class GalleryDialogSurface(context: Context, dark: Boolean) : NativeSurface(
         ) = NativeSurfaceStyle(
             fillColor = modals.sheet.surfaceColor(palette),
             cornerRadiusDp = modals.sheet.radiusDp,
-            outlineColor = palette.surfacePreset?.borderColor,
-            outlineWidthDp = palette.surfacePreset?.borderWidthDp ?: 0f,
+            outlineColor = palette.border,
+            outlineWidthDp = palette.modalEdgeWidthDp(),
             noise = modals.sheet.grainSeed != null && grainIntensity > 0f,
             noiseSeed = modals.sheet.grainSeed ?: NoiseDrawable.SEED_BACKGROUND,
         )

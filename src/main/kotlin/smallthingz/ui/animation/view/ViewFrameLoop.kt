@@ -26,6 +26,8 @@ class ViewFrameLoop(
 
     fun request() {
         if (job?.isActive == true || !view.isAttachedToWindow || !running()) return
+        // Initialize the host scale provider before waiting for frame delivery.
+        durationScale
         val owner = ++generation
         lateinit var next: Job
         next = scope.launch(start = CoroutineStart.LAZY) {

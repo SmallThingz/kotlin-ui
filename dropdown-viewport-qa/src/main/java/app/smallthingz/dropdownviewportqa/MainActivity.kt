@@ -119,7 +119,8 @@ class MainActivity : Activity() {
             val scroll = ScrollView(this).apply { isFillViewport = true; addView(page) }
             content.addView(scroll, FrameLayout.LayoutParams(-1, -1))
         } else {
-            val popup = NativeAnchoredDropdown(this, root, appearance, palette, density, resolver)
+            val popup = NativeAnchoredDropdown(this, root, smallthingz.ui.common.ControlTheme.resolve(this, dark, appearance)
+                .withColorScheme(palette).withTypography(density, resolver))
             dropdown = popup
             val options = (0 until count).toList()
             fun optionLabel(value: Int) = "Choice ${value + 1} of $count"

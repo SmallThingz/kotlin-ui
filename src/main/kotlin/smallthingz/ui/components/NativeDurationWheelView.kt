@@ -10,6 +10,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import androidx.annotation.ColorInt
+import java.util.function.LongSupplier
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -18,6 +19,8 @@ import kotlin.math.min
 import kotlin.math.round
 import kotlin.math.sin
 import smallthingz.ui.animation.view.ViewColorTransition
+import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
+import smallthingz.ui.scroll.ScrollPlayTime
 
 /** Dimensions and projection for the native duration wheel. Current and maximum times are supplied separately. */
 data class NativeDurationWheelStyle(
@@ -70,11 +73,27 @@ internal fun rangeDurationWheelInputAllowed(
     interactionAlreadyActive: Boolean,
 ): Boolean = enabled || interactionAlreadyActive
 
+internal fun durationWheelSnapEasing(fraction: Float): Float {
+    val remaining = 1f - fraction
+    return 1f - remaining * remaining * remaining
+}
+
+internal fun interface DurationWheelScale {
+    fun read(): Float
+}
+
 /** Cylindrical hours/minutes/seconds picker with a wrapping step-profile column. */
-class NativeDurationWheelView(
+class NativeDurationWheelView internal constructor(
     context: Context,
-    initialStyle: NativeDurationWheelStyle = NativeDurationWheelStyle.Default,
+    initialStyle: NativeDurationWheelStyle,
+    private val durationScale: DurationWheelScale,
+    private val nanoTime: LongSupplier,
 ) : View(context) {
+    constructor(
+        context: Context,
+        initialStyle: NativeDurationWheelStyle = NativeDurationWheelStyle.Default,
+    ) : this(context, initialStyle, DurationWheelScale { readCachedAnimatorDurationScale(context) }, System::nanoTime)
+
     private class Wheel(var position: Double, var count: Int)
 
     private val density = resources.displayMetrics.density
@@ -155,7 +174,7 @@ class NativeDurationWheelView(
     private var animationWheelIndex = NO_WHEEL
     private var animationStart = 0.0
     private var animationTarget = 0.0
-    private var animationStartedNanos = 0L
+    private val animationPlayTime = ScrollPlayTime()
     private var animationDurationMs = style.snapMillis
     private var lastCommittedSeconds = 0
     private var accessibilityLabel = ""
@@ -166,22 +185,26 @@ class NativeDurationWheelView(
 
     private val animationFrame = object : Runnable {
         override fun run() {
-            val index = animationWheelIndex
-            if (index == NO_WHEEL) return
-            val elapsedMs = (System.nanoTime() - animationStartedNanos) / 1_000_000f
-            val t = (elapsedMs / animationDurationMs).coerceIn(0f, 1f)
-            val eased = 1f - (1f - t) * (1f - t) * (1f - t)
-            wheels[index].position = animationStart +
-                (animationTarget - animationStart) * eased.toDouble()
-            invalidate()
-            if (t < 1f) {
-                postOnAnimation(this)
-            } else {
-                wheels[index].position = animationTarget
-                animationWheelIndex = NO_WHEEL
-                finishInteraction(index)
-            }
+            if (advanceSnap(nanoTime.asLong)) postOnAnimation(this)
         }
+    }
+
+    internal fun advanceSnap(frameTimeNanos: Long): Boolean {
+        val index = animationWheelIndex
+        if (index == NO_WHEEL) return false
+        val playTime = animationPlayTime.advance(frameTimeNanos, durationScale.read())
+        val elapsedMs = playTime / 1_000_000f
+        if (playTime == Long.MAX_VALUE || elapsedMs >= animationDurationMs) {
+            wheels[index].position = animationTarget
+            stopAnimation()
+            finishInteraction(index)
+            return false
+        }
+        val eased = durationWheelSnapEasing(elapsedMs / animationDurationMs)
+        wheels[index].position = animationStart +
+            (animationTarget - animationStart) * eased.toDouble()
+        invalidate()
+        return true
     }
 
     init {
@@ -461,7 +484,8 @@ class NativeDurationWheelView(
     private fun animateTo(index: Int, target: Double) {
         stopAnimation()
         val start = wheels[index].position
-        if (abs(target - start) < 0.0001 || style.snapMillis == 0f) {
+        val scale = durationScale.read()
+        if (abs(target - start) < 0.0001 || style.snapMillis == 0f || scale == 0f) {
             wheels[index].position = target
             finishInteraction(index)
             return
@@ -469,7 +493,8 @@ class NativeDurationWheelView(
         animationWheelIndex = index
         animationStart = start
         animationTarget = target
-        animationStartedNanos = System.nanoTime()
+        animationPlayTime.reset()
+        animationPlayTime.advance(nanoTime.asLong, scale)
         animationDurationMs = style.snapMillis
         postOnAnimation(animationFrame)
     }

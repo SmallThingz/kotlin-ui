@@ -5,6 +5,8 @@
  */
 package smallthingz.ui.reverb
 
+import smallthingz.ui.animation.core.AnimationPlayTime
+
 import smallthingz.ui.animation.core.AnimationVector1D
 import smallthingz.ui.animation.core.AnimationVector2D
 import smallthingz.ui.animation.core.Spring
@@ -43,7 +45,10 @@ internal class ReverbIncidentItemAnimator(
         var moveStarted = false
     }
 
-    init { supportsChangeAnimations = false }
+    init {
+        durationScale()
+        supportsChangeAnimations = false
+    }
 
     override fun canReuseUpdatedViewHolder(viewHolder: RecyclerView.ViewHolder): Boolean = true
 
@@ -218,14 +223,13 @@ internal class ReverbIncidentItemAnimator(
         private val animation = TargetBasedAnimation(
             spring<Float>(stiffness = Spring.StiffnessMediumLow), Float.VectorConverter,
             initial, target, AnimationVector1D(initialVelocity))
-        private var start = Long.MIN_VALUE
+        private val clock = AnimationPlayTime()
         var velocity = initialVelocity
             private set
         var finished = false
             private set
         fun frame(now: Long, scale: Float): Float {
-            if (start == Long.MIN_VALUE) start = now
-            val play = if (scale == 0f) animation.durationNanos else ((now - start) / scale).toLong()
+            val play = clock.advance(now, scale, animation.durationNanos)
             velocity = animation.getVelocityVectorFromNanos(play).value
             finished = animation.isFinishedFromNanos(play)
             return animation.getValueFromNanos(play)
@@ -236,14 +240,13 @@ internal class ReverbIncidentItemAnimator(
         private val animation = TargetBasedAnimation(
             spring<IntOffset>(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset(1, 1)),
             IncidentOffsetConverter, initial, IntOffset.Zero, AnimationVector2D(initialVelocity.v1, initialVelocity.v2))
-        private var start = Long.MIN_VALUE
+        private val clock = AnimationPlayTime()
         var velocity = AnimationVector2D(initialVelocity.v1, initialVelocity.v2)
             private set
         var finished = false
             private set
         fun frame(now: Long, scale: Float): IntOffset {
-            if (start == Long.MIN_VALUE) start = now
-            val play = if (scale == 0f) animation.durationNanos else ((now - start) / scale).toLong()
+            val play = clock.advance(now, scale, animation.durationNanos)
             velocity = animation.getVelocityVectorFromNanos(play)
             finished = animation.isFinishedFromNanos(play)
             return animation.getValueFromNanos(play)

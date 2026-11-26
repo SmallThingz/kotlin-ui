@@ -4,11 +4,33 @@ import android.content.Context
 import android.view.View
 
 /** Domain labels/callbacks and icon identities belong to the caller. Rows retain positional identity. */
-data class NativeMenuAction<I>(val label: String, val icon: I, val textColor: Int, val iconColor: Int,
+enum class NativeMenuActionRole { NORMAL, MUTED_ICON, DESTRUCTIVE }
+
+data class NativeMenuAction<I>(
+    val label: String,
+    val icon: I,
+    val role: NativeMenuActionRole = NativeMenuActionRole.NORMAL,
+    val enabled: Boolean = true,
+    val onClick: () -> Unit,
+)
+
+internal fun <I> NativeMenuAction<I>.resolve(palette: NativeColorScheme): ResolvedMenuAction<I> {
+    val text = if (role == NativeMenuActionRole.DESTRUCTIVE) palette.error else palette.onSurface
+    val glyph = if (role == NativeMenuActionRole.MUTED_ICON) palette.onSurfaceVariant else text
+    return ResolvedMenuAction(label, icon, text, glyph, enabled, onClick)
+}
+
+internal data class ResolvedMenuAction<I>(val label: String, val icon: I, val textColor: Int, val iconColor: Int,
                               val enabled: Boolean = true, val onClick: () -> Unit)
 data class NativeMenuChoices<T>(val selected: T, val options: List<T>, val optionLabel: (T) -> String)
-data class NativeMenuColors(val raised: Int, val surfaceContainerHigh: Int, val ink: Int,
+internal data class NativeMenuColors(val raised: Int, val surfaceContainerHigh: Int, val ink: Int,
                             val muted: Int, val primary: Int, val grainIntensity: Float = 0f)
+
+internal fun NativeAnchoredMenuRecipe.colors(palette: NativeColorScheme): NativeMenuColors {
+    val fill = surfaceColor(palette)
+    return NativeMenuColors(fill, fill, palette.ink, palette.muted, palette.primary,
+        palette.surfacePreset?.foregroundGrain ?: 0f)
+}
 
 /** One retained icon view per row; bind must accept every icon produced by this renderer. */
 interface NativeMenuIcons<I> {

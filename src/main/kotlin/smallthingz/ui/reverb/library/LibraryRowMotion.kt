@@ -4,6 +4,8 @@
  */
 package smallthingz.ui.reverb.library
 
+import smallthingz.ui.animation.core.AnimationPlayTime
+
 import smallthingz.ui.animation.AnimatedValue
 import smallthingz.ui.animation.TransitionValue
 import smallthingz.ui.animation.VectorConverter
@@ -19,7 +21,6 @@ import smallthingz.ui.animation.core.tween
 import smallthingz.ui.graphics.Color
 import smallthingz.ui.graphics.toArgb
 import smallthingz.ui.unit.IntSize
-import kotlin.math.roundToLong
 
 
 // Color uses the shared UI duration; Reverb owns the alpha and content-size durations.
@@ -51,7 +52,7 @@ class LibraryExpansionMotion(initiallyVisible: Boolean) {
     private var fullSize: IntSize? = null
     private var size: TransitionValue<IntSize, AnimationVector2D>? = null
     private var fade: TransitionValue<Float, AnimationVector1D>? = null
-    private var startFrame: Long? = null
+    private val clock = AnimationPlayTime(roundToNearest = true)
     private var playTime = 0L
     private var stateUpdate = false
     var exitCompleted = false
@@ -111,13 +112,12 @@ class LibraryExpansionMotion(initiallyVisible: Boolean) {
     fun frame(time: Long, scale: Float) {
         if (!running) return
         require(scale >= 0f) { "negative scale factor" }
-        val start = startFrame ?: time.also { startFrame = it }
-        playTime = if (scale == 0f) time - start else ((time - start) / scale.toDouble()).roundToLong()
+        if (scale != 0f) playTime = clock.advance(time, scale)
         size?.frame(playTime, scale == 0f)
         fade?.frame(playTime, scale == 0f)
         if (!running) {
             current = target
-            startFrame = null
+            clock.reset()
             playTime = 0L
             if (target == Phase.PostExit) exitCompleted = true
         }
