@@ -9,6 +9,7 @@ import android.graphics.Outline
 import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.RippleDrawable
+import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -22,6 +23,8 @@ import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeChip
 import smallthingz.ui.components.NativeChoice
 import smallthingz.ui.components.NativeTabBar
+import smallthingz.ui.graphics.NoiseDrawable
+import smallthingz.ui.graphics.NoiseTexture
 import kotlin.math.roundToInt
 
 /** Detached geometry and direct callback checks: no Activity, real navigation or injected input. */
@@ -131,7 +134,18 @@ class GalleryNavigationBarIntegrationTest {
         }
     }
 
-    @Test fun selectedSurfaceRetainsBoundsNodesAndSettledContrastAcrossThemes() = main {
+    @Test fun selectedSurfaceRetainsBoundsNodesAndSettledContrastAcrossThemes() {
+        // As in GalleryVideoAudioToggleIntegrationTest: await shared grain off the UI thread.
+        NoiseTexture.prepare()
+        val deadline = SystemClock.elapsedRealtime() + 5_000L
+        while (NoiseTexture.shader(NoiseDrawable.SEED_BACKGROUND) == null && SystemClock.elapsedRealtime() < deadline) {
+            Thread.sleep(10)
+        }
+        checkNotNull(NoiseTexture.shader(NoiseDrawable.SEED_BACKGROUND)) { "Shared noise texture did not become ready" }
+        main { assertSelectedSurfacePaint() }
+    }
+
+    private fun assertSelectedSurfacePaint() {
         for (fontScale in listOf(1f, 2f))
             for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
                 withBar(fontScale, listOf("Photos", "Search", "Albums"), direction) { f ->
@@ -194,6 +208,28 @@ class GalleryNavigationBarIntegrationTest {
                                         surface.getPixel(chip.width / 2, chip.height - 2),
                                         complete.getPixel(chip.width / 2, chip.height - 2))
                                 } finally { complete.recycle() }
+                                if (id == selected) {
+                                    val focusableInTouchMode = chip.isFocusableInTouchMode
+                                    try {
+                                        chip.isFocusableInTouchMode = true
+                                        assertTrue(chip.requestFocus())
+                                        assertTrue(chip.isFocused)
+                                        val focused = renderNavigationChip(chip, palette.surface, backgroundOnly = true)
+                                        try {
+                                            val stroke = focused.getPixel(chip.width / 2, f.dp(1))
+                                            val fill = focused.getPixel(chip.width / 2, f.dp(8))
+                                            assertEquals("Focused selected outline retains default accent", palette.accent, stroke)
+                                            assertTrue("Focused selected outline contrasts with selected fill",
+                                                ColorUtils.calculateContrast(ColorUtils.compositeColors(stroke, fill), fill) >= 3.0)
+                                        } finally { focused.recycle() }
+                                        assertEquals(bounds.getValue(id), boundsIn(f.bar, chip))
+                                        assertTrue(chip.isChecked)
+                                        assertTrue("Focus must not navigate", f.requests.isEmpty())
+                                    } finally {
+                                        chip.clearFocus()
+                                        chip.isFocusableInTouchMode = focusableInTouchMode
+                                    }
+                                }
                             } finally { surface.recycle() }
                         }
                     }
