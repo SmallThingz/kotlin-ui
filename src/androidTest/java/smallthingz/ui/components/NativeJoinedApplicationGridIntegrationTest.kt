@@ -28,7 +28,7 @@ class NativeJoinedApplicationGridIntegrationTest {
         // Stable, distinct colors while retaining the real NativeChip stateful selection drawable.
         val palette = ReverbDesign.theme(context, true).palette.copy(
             primary = Color.BLUE, onSurface = Color.BLACK,
-            surfaceContainerLow = Color.WHITE, surfacePreset = null)
+            surfaceContainerHigh = Color.WHITE, surfacePreset = null)
         for (width in listOf(328, 388)) for (rtl in listOf(false, true)) {
             val grid = NativeJoinedApplicationGridLayout(context, palette, recipe)
             grid.columnCount = recipe.columns(context, width)
