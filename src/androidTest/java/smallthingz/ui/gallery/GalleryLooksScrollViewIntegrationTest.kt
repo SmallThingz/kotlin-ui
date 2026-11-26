@@ -97,6 +97,12 @@ class GalleryLooksScrollViewIntegrationTest {
         val scroll = GalleryLooksScrollView(context, palette) { panel.paintedTextSurface }
         val child = object : View(context) {
             private val paint = Paint().apply { color = palette.accent }
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+                // HorizontalScrollView supplies UNSPECIFIED width. Give this paint-only fixture
+                // a desired width, including subsequent LayoutParams resize probes.
+                setMeasuredDimension(resolveSize(layoutParams.width.coerceAtLeast(0), widthMeasureSpec), measuredHeight)
+            }
             override fun onDraw(canvas: Canvas) {
                 canvas.drawRect(0f, 0f, width.toFloat(), height + 100f, paint)
             }
@@ -109,6 +115,12 @@ class GalleryLooksScrollViewIntegrationTest {
             panel.measure(View.MeasureSpec.makeMeasureSpec(240, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(100, View.MeasureSpec.EXACTLY))
             panel.layout(0, 0, 240, 100)
+            assertEquals("Fixture viewport width", 240, scroll.width)
+            assertEquals("Fixture child measured width", child.layoutParams.width, child.measuredWidth)
+            assertEquals("Fixture child laid-out width", child.layoutParams.width, child.width)
+            val expectedOverflow = child.layoutParams.width > scroll.width - scroll.paddingLeft - scroll.paddingRight
+            assertEquals("Fixture must exercise the intended overflow/fit state", expectedOverflow,
+                scroll.canScrollHorizontally(-1) || scroll.canScrollHorizontally(1))
         }
         fun pixels(): IntArray {
             val bitmap = Bitmap.createBitmap(240, 100, Bitmap.Config.ARGB_8888)

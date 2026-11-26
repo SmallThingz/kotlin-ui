@@ -122,6 +122,12 @@ class NativeScrollIndicatorHorizontalScrollViewTest {
         }
         val child = object : View(context) {
             private val paint = Paint().apply { color = Color.MAGENTA }
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+                // HorizontalScrollView supplies UNSPECIFIED width. Give this paint-only fixture
+                // a desired width, including subsequent LayoutParams resize probes.
+                setMeasuredDimension(resolveSize(layoutParams.width.coerceAtLeast(0), widthMeasureSpec), measuredHeight)
+            }
             override fun onDraw(canvas: Canvas) {
                 // Deliberate bottom overpaint makes the clip test independent of natural padding.
                 canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat()+100f, paint)
@@ -137,6 +143,12 @@ class NativeScrollIndicatorHorizontalScrollViewTest {
             root.measure(View.MeasureSpec.makeMeasureSpec(120, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(80, View.MeasureSpec.EXACTLY))
             root.layout(0, 0, 120, 80)
+            assertEquals("Fixture viewport width", 120, scroll.width)
+            assertEquals("Fixture child measured width", child.layoutParams.width, child.measuredWidth)
+            assertEquals("Fixture child laid-out width", child.layoutParams.width, child.width)
+            val expectedOverflow = child.layoutParams.width > scroll.width - scroll.paddingLeft - scroll.paddingRight
+            assertEquals("Fixture must exercise the intended overflow/fit state", expectedOverflow,
+                scroll.canScrollHorizontally(-1) || scroll.canScrollHorizontally(1))
         }
         fun pixels(): IntArray {
             val bitmap = Bitmap.createBitmap(120, 80, Bitmap.Config.ARGB_8888)
