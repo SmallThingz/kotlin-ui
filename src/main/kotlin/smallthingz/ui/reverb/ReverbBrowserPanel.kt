@@ -65,11 +65,20 @@ open class ReverbBrowserPanelLayout(context: Context) : LinearLayout(context), N
 internal fun browserPanelToolbarAction(context: Context, theme: ReverbTheme, label: String,
     icon: ReverbIcon, onAction: () -> Unit) = ReverbBrowserPanelToolbarAction(context, theme, label, icon, onAction)
 
+/** Browser utilities keep48dp targets and allow the Settings action pair its natural96dp width. */
+internal fun browserPanelToolbar(context: Context, theme: ReverbTheme, navigation: View,
+    title: View, actions: View) = ReverbTitledTopBarLayout(context, theme.density.density, theme.palette,
+    navigation, title, actions, style = theme.appearance.toolbars).apply {
+    contentClipView.measureCompactActionsNaturally = true
+}
+
 /** Retained browser panel action with the same shared toolbar recipe and input gate. */
 internal class ReverbBrowserPanelToolbarAction(context: Context, theme: ReverbTheme, label: String,
     private val icon: ReverbIcon, private val onAction: () -> Unit,
-) : ReverbToolbarActionView(context, theme.density.density, theme.palette, { null }, label, rolePresent = true) {
+) : ReverbToolbarActionView(context, theme.density.density, theme.palette, { null }, label,
+    sharedSurface = true, rolePresent = true) {
     init {
+        bindStyle(theme.appearance.toolbars.action.copy(sizeDp = 48f, glyphDp = 22f))
         accessibilityAction.filterTouchesWhenObscured = true
         accessibilityAction.tooltipText = label
         bindTheme(theme)

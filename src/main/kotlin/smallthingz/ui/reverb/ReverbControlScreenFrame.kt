@@ -1,7 +1,9 @@
 package smallthingz.ui.reverb
 
 import android.content.Context
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Path
 import android.os.Build
 import android.view.View
 import android.view.Window
@@ -52,6 +54,7 @@ class ReverbControlScreenFrame(
     val isTransitionRunning: Boolean get() = transition.isRunning
     private val backdrop = appearance.backdrops.attachPage(this, theme.palette) { ReverbTextSurface.invalidate(this) }
     private val statusBarProtection = ReverbDesign.statusBarProtection(context)
+    private val windowSurface = Path()
 
     init {
         orientation = VERTICAL
@@ -71,6 +74,29 @@ class ReverbControlScreenFrame(
         content.addView(onboarding, FrameLayout.LayoutParams(-1, -1))
         addView(content, LayoutParams(-1, 0, 1f))
         addView(primaryActionDock, row())
+    }
+
+    // The retained page backdrop is opaque, but the Home dock gutters are window cutouts.
+    override fun isOpaque(): Boolean = false
+
+    override fun draw(canvas: Canvas) {
+        val dock = primaryActionDock
+        if (dock.visibility != VISIBLE || dock.width == 0 || dock.height == 0) {
+            super.draw(canvas)
+            return
+        }
+        windowSurface.rewind()
+        windowSurface.addRect(0f, 0f, width.toFloat(), dock.top.toFloat(), Path.Direction.CW)
+        dock.appendSurfacePath(windowSurface, dock.left.toFloat(), dock.top.toFloat())
+        val save = canvas.save()
+        try {
+            // Clip the background and foreground as well as children. Clipping only the dock
+            // exposes this frame's opaque backdrop instead of the compositor behind the window.
+            canvas.clipPath(windowSurface)
+            super.draw(canvas)
+        } finally {
+            canvas.restoreToCount(save)
+        }
     }
 
     fun applySafeInsets(insets: Insets) {

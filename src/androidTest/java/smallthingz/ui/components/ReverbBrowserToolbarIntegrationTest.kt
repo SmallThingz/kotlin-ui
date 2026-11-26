@@ -43,7 +43,7 @@ class ReverbBrowserToolbarIntegrationTest {
         assertNotNull("Toolbar grain must be ready for pixel assertions", NoiseTexture.shader(NoiseDrawable.SEED_TOP_BAR))
     }
 
-    @Test fun idleControlsPaintOnlyTheContinuousToolbarMaterial() = main {
+    @Test fun idleAddressHasOneRoundedSurfaceAndActionsKeepTheContinuousToolbarMaterial() = main {
         val context = fixedDensity(instrumentation.context)
         for (dark in listOf(false, true)) {
             val theme = ReverbDesign.theme(context, dark)
@@ -59,11 +59,21 @@ class ReverbBrowserToolbarIntegrationTest {
                 chrome.addressEditor.isCursorVisible = false
                 layout(chrome, 320)
                 val toolbar = toolbar(chrome)
+                val field = bounds(toolbar, chrome.addressEditor)
                 val actual = raster(toolbar)
                 val material = backgroundRaster(toolbar)
                 try {
-                    assertTrue("Idle browser controls must not add boxed surfaces (dark=$dark)",
-                        material.sameAs(actual))
+                    var addressPixels = 0
+                    for (y in 0 until actual.height) for (x in 0 until actual.width) {
+                        if (material.getPixel(x, y) != actual.getPixel(x, y)) {
+                            assertTrue("Only the address adds an idle surface (dark=$dark)", field.contains(x, y))
+                            addressPixels++
+                        }
+                    }
+                    assertTrue("Address must have a persistent silhouette (dark=$dark)", addressPixels > 0)
+                    assertEquals("Rounded address corners expose toolbar material",
+                        material.getPixel(field.left, field.top), actual.getPixel(field.left, field.top))
+                    assertEquals("The editor has no button elevation", 0f, chrome.addressEditor.elevation, 0f)
                     for (action in actions(chrome)) {
                         val glyph = checkNotNull(glyphs[action])
                         assertTrue("Browser glyph must stay compact", glyph.width() in 20..24)
@@ -115,43 +125,45 @@ class ReverbBrowserToolbarIntegrationTest {
         }
     }
 
-    @Test fun focusedAddressRuleStaysAtTheViewportWhenTheUrlScrollsAndRetiresOnBlur() = withWindow { chrome, sink, theme ->
+    @Test fun focusedAddressOutlineStaysAtTheViewportWhenTheUrlScrollsAndRetiresOnBlur() = withWindow { chrome, sink, theme ->
         val editor = chrome.addressEditor
         val density = editor.resources.displayMetrics.density
         editor.setText("https://example.test/" + "segment/".repeat(100))
         editor.isCursorVisible = false
-        assertTrue(editor.requestFocus())
         editor.setSelection(0)
         layout(chrome, (320 * density).roundToInt())
         val toolbar = toolbar(chrome)
-        val rect = bounds(toolbar, editor)
-        // A sample through the center of the focused 2dp baseline, below the text/selection.
-        val y = rect.bottom - (3 * density).roundToInt()
-        val start = rect.left + editor.paddingLeft + (2 * density).roundToInt()
-        val end = rect.right - editor.paddingRight - (2 * density).roundToInt()
-        assertTrue(start < end)
+        val field = bounds(toolbar, editor)
+        assertFalse(editor.hasFocus())
+        val beforeFocus = raster(toolbar)
+        assertTrue(editor.requestFocus())
+        // Sample the top and sides of the rounded focus outline, away from text and caret.
+        val inset = density.roundToInt().coerceAtLeast(1)
+        val samples = listOf(editor.width / 2 to inset, inset to editor.height / 2,
+            editor.width - 1 - inset to editor.height / 2)
         for (scroll in listOf(0, (120 * density).roundToInt())) {
             editor.scrollTo(scroll, 0)
+            // A scrolled child needs its parent's drawChild translation. Direct editor.draw()
+            // incorrectly shifts even its background and cannot qualify viewport-fixed paint.
             val frame = raster(toolbar)
             try {
                 assertEquals("The test must actually exercise horizontal scroll", scroll, editor.scrollX)
-                for (x in start until end) assertEquals("Focused rule must stay at viewport x=$x, scroll=$scroll",
-                    theme.palette.pageControls.accent, frame.getPixel(x, y))
+                for ((x, y) in samples) assertEquals("Focused outline must stay at viewport x=$x,y=$y,scroll=$scroll",
+                    theme.palette.pageControls.accent, frame.getPixel(field.left + x, field.top + y))
             } finally { frame.recycle() }
         }
         assertTrue(sink.requestFocus())
         assertFalse(editor.hasFocus())
         val blurred = raster(toolbar)
-        val material = backgroundRaster(toolbar)
         try {
-            for (x in start until end) assertEquals("Blur must retire the focus rule at x=$x",
-                material.getPixel(x, y), blurred.getPixel(x, y))
-        } finally { blurred.recycle(); material.recycle() }
+            for ((x, y) in samples) assertEquals("Blur retires the outline but retains the address surface at x=$x,y=$y",
+                beforeFocus.getPixel(field.left + x, field.top + y), blurred.getPixel(field.left + x, field.top + y))
+        } finally { blurred.recycle(); beforeFocus.recycle() }
     }
 
     @Test fun nativeCompositionHardwareEditingAndGoKeepTheHostsEditorContract() = withWindow { chrome, sink, _ ->
         val editor = chrome.addressEditor
-        val type = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        val type = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
         val focusEvents = mutableListOf<Boolean>()
         val submissions = mutableListOf<String>()
         // These settings/listeners belong to PhoneBrowserView, not to the shared skin.
@@ -178,7 +190,8 @@ class ReverbBrowserToolbarIntegrationTest {
         val info = EditorInfo()
         val connection = checkNotNull(editor.onCreateInputConnection(info))
         try {
-            assertEquals(type, info.inputType)
+            assertEquals("Native word selection keeps a plain-text editor", type, editor.inputType)
+            assertEquals("Only keyboard metadata uses URI variation", type or InputType.TYPE_TEXT_VARIATION_URI, info.inputType)
             assertEquals(EditorInfo.IME_ACTION_GO, info.imeOptions and EditorInfo.IME_MASK_ACTION)
             assertTrue(info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0)
             assertTrue(connection.setSelection(0, editor.length()))

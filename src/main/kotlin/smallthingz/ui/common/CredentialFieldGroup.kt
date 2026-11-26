@@ -9,6 +9,7 @@ import android.text.InputType
 import android.text.TextWatcher
 import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -203,6 +204,69 @@ class CredentialFieldGroup<ID : Enum<ID>>(
     }
     private val trailingRows = buttons.entries.groupBy { it.key.field }.mapValues { (_, entries) ->
         object : LinearLayout(context) {
+            private var touchTarget: ReverbStandardIconButtonView? = null
+            private var touchRetired = false
+
+            override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    val previous = touchTarget
+                    touchTarget = null
+                    touchRetired = false
+                    previous?.cancelInput()
+                    if (event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER) {
+                        // Each wrapper owns 48dp; keep its 40dp visual/ripple and 24dp glyph.
+                        // Ordinary child dispatch otherwise misses the wrapper's outer band
+                        // and the field's editor TouchDelegate receives the same gesture.
+                        touchTarget = entries.firstOrNull { (_, button) ->
+                            button.visibility == View.VISIBLE && event.x >= button.left &&
+                                event.x < button.right && event.y >= button.top && event.y < button.bottom
+                        }?.value
+                    }
+                }
+                val target = touchTarget ?: return super.dispatchTouchEvent(event)
+                try {
+                    val outsideRelease = event.actionMasked == MotionEvent.ACTION_UP &&
+                        (event.x < target.left || event.x >= target.right ||
+                            event.y < target.top || event.y >= target.bottom)
+                    if (!touchRetired && !outsideRelease && target.parent === this &&
+                        target.isShown && target.visual.isEnabled && hasWindowFocus()) {
+                        val forwarded = MotionEvent.obtain(event)
+                        try {
+                            forwarded.offsetLocation(-(target.left + target.visual.left).toFloat(),
+                                -(target.top + target.visual.top).toFloat())
+                            if (!target.visual.dispatchTouchEvent(forwarded)) {
+                                touchRetired = true
+                                target.cancelInput()
+                            }
+                        } finally { forwarded.recycle() }
+                    } else {
+                        touchRetired = true
+                        target.cancelInput()
+                    }
+                } catch (failure: Throwable) {
+                    // Keep consuming this stream after a failed transport, but never let a
+                    // later UP revive its controller press. Preserve the original failure.
+                    touchRetired = true
+                    try { target.cancelInput() } catch (cleanup: Throwable) {
+                        if (cleanup !== failure) failure.addSuppressed(cleanup)
+                    }
+                    throw failure
+                } finally {
+                    if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL)
+                        touchTarget = null
+                }
+                // A disabled or hidden action must not hand its already-owned gesture to
+                // the editor. The visual still enforces admission, obscuration and cancel.
+                return true
+            }
+
+            override fun onDetachedFromWindow() {
+                val target = touchTarget
+                touchTarget = null
+                touchRetired = true
+                try { target?.cancelInput() } finally { super.onDetachedFromWindow() }
+            }
+
             override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
                 super.onWindowFocusChanged(hasWindowFocus)
                 if (!hasWindowFocus) for ((_, button) in entries) button.cancelInput()

@@ -24,11 +24,12 @@ open class NativeBottomActionDock @JvmOverloads constructor(
     density: Density,
     val action: NativeMaterialButtonView,
     horizontalInsetDp: Int = NativeScreenSpacing.HORIZONTAL_DP,
+    minimumActionHeightDp: Int = 64,
 ) : ViewGroup(context) {
     private val densityScale = density.density
     private val horizontalInsetPx = (horizontalInsetDp.coerceAtLeast(0) * densityScale).roundToInt()
     val topCornerRadiusPx: Float = 28f * densityScale
-    val minimumActionHeightPx: Int = (64f * densityScale).roundToInt()
+    val minimumActionHeightPx: Int = (minimumActionHeightDp.coerceAtLeast(48) * densityScale).roundToInt()
     private var safeInsets = Insets.NONE
     val safeBottomInset: Int get() = safeInsets.bottom
     private val clip = Path()
@@ -82,6 +83,11 @@ open class NativeBottomActionDock @JvmOverloads constructor(
         clip.rewind()
         clip.addRoundRect(left.toFloat(), 0f, right.toFloat(), height.toFloat(),
             floatArrayOf(radius, radius, radius, radius, 0f, 0f, 0f, 0f), Path.Direction.CW)
+    }
+
+    /** Append the laid-out painted surface, including navigation fill, in the caller's coordinates. */
+    fun appendSurfacePath(target: Path, offsetX: Float, offsetY: Float) {
+        target.addPath(clip, offsetX, offsetY)
     }
 
     override fun draw(canvas: Canvas) {
