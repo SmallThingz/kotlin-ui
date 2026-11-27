@@ -9,7 +9,8 @@ class NativeFloatingDialogContent(
     val bindWindowAccessibility: (View) -> Unit,
     val dispose: () -> Unit,
 ) {
-    /** Optional paint below the caller's content and its input bounds. */
+    /** Optional paint outside the caller's content and its input bounds. */
+    internal var exteriorTopPaintSpace: (() -> Int)? = null
     internal var exteriorBottomPaintSpace: (() -> Int)? = null
 
     companion object {
@@ -24,6 +25,7 @@ class NativeFloatingDialogContent(
             dispose: () -> Unit,
         ): NativeFloatingDialogContent =
             NativeFloatingDialogContent(surface, surface, bindWindowAccessibility, dispose).apply {
+                exteriorTopPaintSpace = surface::exteriorTopPaintSpace
                 exteriorBottomPaintSpace = surface::exteriorBottomPaintSpace
             }
     }

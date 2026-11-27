@@ -223,6 +223,10 @@ class ReverbHomeBlobControl(
     override fun close() {
         if (closed) return
         closed = true
+        current = null
+        // Close can leave the renderer attached. Stop its frames before releasing the producer.
+        renderer.updateState(active = false, enabled = true, saving = false, visible = false,
+            style = environment.audioBlobStyle)
         setFocusVisible(false)
         click.detached()
         clickBinding = null

@@ -61,7 +61,8 @@ object NativeForeground {
 
     /** Rectangular app foregrounds without a content host can retain this shared drawable. */
     fun foregroundBackground(palette: ControlPalette, color: Int = palette.raised): NoiseDrawable =
-        NoiseDrawable(color).also { bindForegroundBackground(it, palette, color) }
+        NoiseDrawable(color, NoiseDrawable.SEED_BACKGROUND,
+            (palette.surfacePreset?.foregroundGrain ?: 0f) * (color ushr 24) / 255f)
 
     fun bindForegroundBackground(drawable: NoiseDrawable, palette: ControlPalette, color: Int = palette.raised) {
         drawable.setBackgroundColor(color)

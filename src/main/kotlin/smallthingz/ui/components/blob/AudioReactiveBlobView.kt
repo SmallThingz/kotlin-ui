@@ -243,6 +243,7 @@ class AudioReactiveBlobView(
         currentBands.fill(0f)
         lastAudioSignalNanos = 0L
         invalidate()
+        publishReadoutAppearance()
     }
 
     fun currentBaseRadiusFraction(): Float =

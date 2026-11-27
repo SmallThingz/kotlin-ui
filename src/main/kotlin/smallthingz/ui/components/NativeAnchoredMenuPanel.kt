@@ -223,7 +223,7 @@ internal open class NativeMenuSurface(
         color = initialFill
     }
     private var grainIntensity = 0f
-    private val grain = NoiseDrawable(initialFill).apply { setNoiseIntensity(0f) }
+    private val grain = NoiseDrawable(initialFill, NoiseDrawable.SEED_BACKGROUND, 0f)
     override val paintedTextSurface: Long get() = grain.paintedTextSurface
     private val fillMotion = ViewColorTransition(this, intArrayOf(initialFill), ::publishFill)
     private val clip = NativeMenuClip(context, radius)

@@ -253,17 +253,20 @@ class NativeSourceRecyclerView(context: Context) : RecyclerView(context) {
     override fun setLayoutManager(layout: LayoutManager?) {
         if (layoutManager !== layout) {
             coordinatedIndicatorLayout = null
+            indicatorNode?.reset()
             cancelPendingScrollIndicatorPlacement()
         }
         super.setLayoutManager(layout)
     }
 
     override fun setAdapter(adapter: Adapter<*>?) {
+        if (this.adapter !== adapter) indicatorNode?.reset()
         cancelPendingScrollIndicatorPlacement()
         super.setAdapter(adapter)
     }
 
     override fun swapAdapter(adapter: Adapter<*>?, removeAndRecycleExistingViews: Boolean) {
+        if (this.adapter !== adapter) indicatorNode?.reset()
         cancelPendingScrollIndicatorPlacement()
         super.swapAdapter(adapter, removeAndRecycleExistingViews)
     }

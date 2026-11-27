@@ -83,6 +83,13 @@ class NativeSegmentedControl private constructor(
         horizontalPaddingDp = style.choiceStyle.horizontalPaddingDp.coerceAtLeast(MIN_SEGMENT_HORIZONTAL_PADDING_DP),
         startPaddingDp = style.choiceStyle.startPaddingDp?.coerceAtLeast(MIN_SEGMENT_HORIZONTAL_PADDING_DP),
         endPaddingDp = style.choiceStyle.endPaddingDp?.coerceAtLeast(MIN_SEGMENT_HORIZONTAL_PADDING_DP),
+        // Ink intended for the accent fill uses the existing per-chip fallback without that fill.
+        selectedTextRole = style.choiceStyle.selectedTextRole.takeUnless {
+            !style.choiceStyle.selectedFill && it == NativeTextRole.ON_ACCENT
+        },
+        selectedIconRole = style.choiceStyle.selectedIconRole.takeUnless {
+            !style.choiceStyle.selectedFill && it == NativeTextRole.ON_ACCENT
+        },
     ),
         gapDp = 0f, activateOnFocusNavigation = false, singleRow = true,
         movingSelectionBackground = true)
@@ -96,7 +103,9 @@ class NativeSegmentedControl private constructor(
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         row.addView(choices)
-        choices.useUniformSelectionForeground({ this.presentation.paintedTextSurface }) { this.presentation.paintedSurfaceColor }
+        if (style.choiceStyle.selectedFill) {
+            choices.useUniformSelectionForeground({ this.presentation.paintedTextSurface }) { this.presentation.paintedSurfaceColor }
+        }
         this.presentation.setContent(row)
         addView(this.presentation.surface)
         choices.onSelectionRequest = { id -> acceptsNativeInput && onSelectionRequest?.invoke(id) == true }

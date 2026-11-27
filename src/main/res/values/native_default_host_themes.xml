@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <style name="NativeDefaultLightHostTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
         <item name="android:windowBackground">@color/native_default_light_background</item>
     </style>
     <style name="NativeDefaultAmoledHostTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
         <item name="android:windowBackground">@color/native_default_amoled_background</item>
     </style>
 </resources>

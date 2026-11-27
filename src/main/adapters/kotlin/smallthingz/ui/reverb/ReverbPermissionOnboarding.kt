@@ -195,7 +195,7 @@ open class ReverbPermissionOnboardingScreen(
     fun useExternalFooter() {
         if (externalFooter) return
         externalFooter = true
-        done.cancelInput()
+        done.close()
         removeView(footer)
         requestLayout()
     }
@@ -210,6 +210,7 @@ open class ReverbPermissionOnboardingScreen(
     fun bindPermissions(values: List<ReverbPermissionOnboardingState>, continueEnabled: Boolean) {
         permissions?.bind(values)
         notices?.bind(values)
+        if (externalFooter) return
         if (canContinue != continueEnabled) done.cancelInput()
         canContinue = continueEnabled
         done.bind(label, continueEnabled, theme.palette.buttonPalette)

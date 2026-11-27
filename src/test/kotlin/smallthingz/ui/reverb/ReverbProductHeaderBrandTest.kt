@@ -102,7 +102,9 @@ class ReverbProductHeaderBrandTest {
             shadowOf(Looper.getMainLooper()).idle()
             val dialog = checkNotNull(ShadowDialog.getLatestDialog())
             assertTrue(dialog.isShowing)
-            val about = nodes(checkNotNull(dialog.window).decorView)
+            val decor = checkNotNull(dialog.window).decorView
+            assertFalse(decor.isForceDarkAllowed)
+            val about = nodes(decor)
                 .filterIsInstance<ReverbIdentityMarkView>().single()
             val aboutImage = about.getChildAt(1) as ImageView
             assertFalse("Home outline must not leak into About", about.clipToOutline)

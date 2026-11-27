@@ -26,7 +26,7 @@ class NativePaletteWindowBackdropIntegrationTest {
         val style = NativeBackdropStyle(pageGrainSeed = null)
         assertEquals(textSurfaceRange(Color.BLACK, 0xff090909.toInt()),
             style.windowBackground(palette).paintedTextSurface)
-        assertEquals(textSurfaceRange(Color.WHITE), style.pageBackground(palette).paintedTextSurface)
+        assertEquals(textSurfaceRange(Color.BLACK), style.pageBackground(palette).paintedTextSurface)
         assertEquals(textSurfaceRange(Color.BLACK),
             style.copy(windowGrainSeed = null).windowBackground(palette).paintedTextSurface)
     }

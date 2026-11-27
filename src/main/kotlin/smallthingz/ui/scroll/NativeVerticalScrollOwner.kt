@@ -161,13 +161,13 @@ class NativeVerticalScrollOwner(
      */
     suspend fun doFlingAnimation(availablePhysicalY: Float): Float {
         var result = availablePhysicalY
-        isFlinging = true
-        try {
-            state.mutate(MutatePriority.Default) {
+        state.mutate(MutatePriority.Default) {
+            isFlinging = true
+            try {
                 result = -performDefaultFling(-availablePhysicalY)
+            } finally {
+                isFlinging = false
             }
-        } finally {
-            isFlinging = false
         }
         return result
     }

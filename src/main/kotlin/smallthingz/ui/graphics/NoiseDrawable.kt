@@ -18,15 +18,24 @@ import kotlin.math.roundToInt
  * lookup. Alpha/color-filter composition alone uses a saveLayer and a lazily allocated paint.
  * Disable platform force-dark on the owning View when exact supplied colors must be preserved.
  */
-class NoiseDrawable(
-    @ColorInt backgroundColor: Int? = null,
-    private var seed: Int? = SEED_BACKGROUND,
+class NoiseDrawable internal constructor(
+    @ColorInt backgroundColor: Int?,
+    private var seed: Int?,
+    initialIntensity: Float,
 ) : Drawable() {
+    // Preserve the public two-argument constructor and Kotlin default bridge.
+    constructor(@ColorInt backgroundColor: Int? = null, seed: Int? = SEED_BACKGROUND) :
+        this(backgroundColor, seed, 1f)
+
+    constructor() : this(null, SEED_BACKGROUND, 1f)
+
+    init { require(initialIntensity in 0f..1f) }
     private val backgroundPaint = Paint(PAINT_FLAGS)
     private val noisePaint = Paint(PAINT_FLAGS).apply {
-        // ShaderBrush.applyTo sets black, alpha=1, no color filter, and SrcOver blending.
+        // ShaderBrush paint with the configured grain coverage; no cache demand for a flat owner.
         color = Color.BLACK
-        shader = seed?.let(NoiseTexture::shader)
+        alpha = (initialIntensity * 255f).roundToInt()
+        shader = seed.takeIf { alpha != 0 }?.let(NoiseTexture::shader)
     }
     private var drawsBackground = backgroundColor != null
     private var drawableAlpha = 255
@@ -50,14 +59,15 @@ class NoiseDrawable(
     init {
         NoiseTexture.register(this)
         backgroundColor?.let { backgroundPaint.color = it }
-        if (seed != null) NoiseTexture.observe(this)
+        if (seed != null && noisePaint.alpha != 0) NoiseTexture.observe(this)
     }
 
     fun setGrainSeed(value: Int?) {
         if (seed == value) return
         seed = value
-        noisePaint.shader = value?.let(NoiseTexture::shader)
-        if (value != null && noisePaint.shader == null) NoiseTexture.observe(this)
+        val effectiveSeed = value.takeIf { noisePaint.alpha != 0 }
+        noisePaint.shader = effectiveSeed?.let(NoiseTexture::shader)
+        if (effectiveSeed != null && noisePaint.shader == null) NoiseTexture.observe(this)
         textSurfaceRange = if (drawsBackground) grainSurfaceRange(backgroundPaint.color) else 0L
         invalidateSelf()
     }
@@ -76,6 +86,8 @@ class NoiseDrawable(
         val alpha = (intensity * 255f).roundToInt()
         if (noisePaint.alpha == alpha) return
         noisePaint.alpha = alpha
+        // Retain the configured phase; positive intensity reacquires lazily in prepareGrain.
+        if (alpha == 0) noisePaint.shader = null
         textSurfaceRange = if (drawsBackground) grainSurfaceRange(backgroundPaint.color) else 0L
         invalidateSelf()
     }

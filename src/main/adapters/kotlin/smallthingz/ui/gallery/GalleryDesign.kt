@@ -27,13 +27,13 @@ object GalleryDesign {
 
     /** Media-led library pages keep the shared fill and drawable, without backdrop grain. */
     fun libraryBackground(palette: NativeColorScheme): NoiseDrawable =
-        appearance.backdrops.pageBackground(palette).also { bindLibraryBackground(it, palette) }
+        NoiseDrawable(palette.background, appearance.backdrops.pageGrainSeed, 0f)
 
     /** Rebind the same drawable without replacing its bounds, callback or route owner. */
     fun bindLibraryBackground(drawable: NoiseDrawable, palette: NativeColorScheme) {
         drawable.setBackgroundColor(palette.background)
-        drawable.setGrainSeed(appearance.backdrops.pageGrainSeed)
         drawable.setNoiseIntensity(0f)
+        drawable.setGrainSeed(appearance.backdrops.pageGrainSeed)
     }
 
     /** Secondary viewer browsing keeps the existing compact native target in every pose.

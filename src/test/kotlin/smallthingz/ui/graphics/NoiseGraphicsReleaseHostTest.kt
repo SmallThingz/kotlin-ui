@@ -11,6 +11,7 @@ import android.graphics.Paint
 import android.graphics.drawable.Drawable
 import android.os.Looper
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import org.junit.Assert.*
 import org.junit.Test
@@ -27,9 +28,16 @@ import smallthingz.ui.components.NativeCaptureControlSurface
 import smallthingz.ui.components.NativeCaptureControlsStyle
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeDecorativeIconView
+import smallthingz.ui.components.NativeModalWindowRuntime
+import smallthingz.ui.components.blob.NativeAudioBlobIcons
 import smallthingz.ui.input.phase.NativeViewPointerHitLayout
+import smallthingz.ui.reverb.ReverbEnvironment
 import smallthingz.ui.reverb.ReverbGlyphView
 import smallthingz.ui.reverb.ReverbIcon
+import smallthingz.ui.reverb.home.ReverbHomeControls
+import smallthingz.ui.reverb.home.createHomeBlobReadout
+import smallthingz.ui.text.font.createFontFamilyResolver
+import smallthingz.ui.unit.Density
 
 /** Real production holders and native graphics; no injected release callback or cache model. */
 @RunWith(RobolectricTestRunner::class)
@@ -254,6 +262,91 @@ class NoiseGraphicsReleaseHostTest {
             assertNotSame(hiddenMask, reattached)
             assertArrayEquals(pixelsBeforeDetach, render(view))
             assertSame(reattached, mask())
+        } finally {
+            controller.pause().stop().destroy()
+        }
+    }
+
+    @Test fun homeControlAndBlobMasksReleaseAllWarmVariantsOnHideAndDetach() {
+        val controller = Robolectric.buildActivity(Activity::class.java).setup().visible()
+        try {
+            val activity = controller.get()
+            val root = FrameLayout(activity)
+            activity.setContentView(root)
+            val parent = FrameLayout(activity)
+            root.addView(parent)
+            NativeModalWindowRuntime(activity).use { runtime ->
+                val environment = ReverbEnvironment(Density(1f), createFontFamilyResolver(activity),
+                    NativeColorScheme.fallback(false))
+                val controls = ReverbHomeControls(activity, environment, { root }, runtime.scope, 0, 1)
+                val readout = createHomeBlobReadout(activity, environment)
+                parent.addView(controls)
+                parent.addView(readout)
+                size(controls, 320, 160)
+                size(readout, 96, 72)
+
+                val controlContent = controls.getChildAt(0) as ViewGroup
+                assertEquals(6, controlContent.childCount)
+                val controlGlyphs = (0 until controlContent.childCount).map { index ->
+                    (controlContent.getChildAt(index) as ViewGroup).getChildAt(0)
+                }
+                val blobGlyph = readout.getChildAt(0)
+                val variants = field(readout, "icons") as NativeAudioBlobIcons
+                val blobDrawables = listOf(variants.ready, variants.active, variants.filled)
+                val drawables = controlGlyphs.map { field(it, "drawable") as Drawable } + blobDrawables
+                fun mask(drawable: Drawable) = field(drawable, "maskBitmap") as Bitmap?
+                fun masks() = drawables.map { checkNotNull(mask(it)) }
+                fun assertReleased(previous: List<Bitmap>) {
+                    for (drawable in drawables) {
+                        assertNull(mask(drawable))
+                        assertNull(field(drawable, "maskCanvas"))
+                    }
+                    assertTrue(previous.none { it.isRecycled })
+                }
+                fun renderPoses(): List<IntArray> = controlGlyphs.map(::render) + blobDrawables.indices.map { pose ->
+                    readout.bind(active = pose == 1, filled = pose == 2, primaryText = null,
+                        secondaryText = null, contentAlpha = 1f)
+                    assertSame(blobDrawables[pose], field(blobGlyph, "drawable"))
+                    render(blobGlyph)
+                }
+
+                assertTrue(controls.isAttachedToWindow && readout.isShown)
+                val reference = renderPoses()
+                assertTrue(reference.all { pixels -> pixels.any { Color.alpha(it) != 0 } })
+                val initial = masks()
+                val repeated = renderPoses()
+                reference.zip(repeated).forEach { (expected, actual) -> assertArrayEquals(expected, actual) }
+                initial.zip(masks()).forEach { (before, after) -> assertSame(before, after) }
+
+                parent.visibility = View.INVISIBLE
+                assertTrue(readout.isAttachedToWindow)
+                assertFalse(readout.isShown)
+                assertTrue(drawables.none { it.isVisible })
+                assertReleased(initial)
+
+                parent.visibility = View.VISIBLE
+                assertTrue(drawables.all { it.isVisible })
+                assertReleased(initial) // Showing only re-enables the retained drawables.
+                reference.zip(renderPoses()).forEach { (expected, actual) -> assertArrayEquals(expected, actual) }
+                val restored = masks()
+                initial.zip(restored).forEach { (before, after) -> assertNotSame(before, after) }
+
+                // Seed actual masks while hidden so detach must retire them even without a hide transition.
+                parent.visibility = View.INVISIBLE
+                assertReleased(restored)
+                renderPoses()
+                val beforeDetach = masks()
+                root.removeView(parent)
+                assertFalse(controls.isAttachedToWindow)
+                assertFalse(readout.isAttachedToWindow)
+                assertReleased(beforeDetach)
+
+                parent.visibility = View.VISIBLE
+                root.addView(parent)
+                assertTrue(drawables.all { it.isVisible })
+                assertReleased(beforeDetach)
+                reference.zip(renderPoses()).forEach { (expected, actual) -> assertArrayEquals(expected, actual) }
+            }
         } finally {
             controller.pause().stop().destroy()
         }

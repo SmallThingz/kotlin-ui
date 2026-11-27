@@ -201,7 +201,7 @@ class NativeTextSurfaceIntegrationTest {
         action.bindToolbarAction(1f, palette.copy(surfacePreset = null), true,
             NativeToolbarActionTone.NEUTRAL) { clicks += 10 }
         assertSame(surface, descendants(action).filterIsInstance<NativeGroupLayout>().single())
-        assertEquals(textSurfaceRange(0xff0a0a0a.toInt()), surface.paintedTextSurface)
+        assertEquals(textSurfaceRange(0xff0e0e0e.toInt()), surface.paintedTextSurface)
         assertTrue(leaf.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
         assertEquals(13, clicks)
         action.cancelInput()

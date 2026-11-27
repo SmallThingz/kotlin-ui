@@ -12,6 +12,7 @@ open class GalleryLibraryChromeLayout(context: Context) : ViewGroup(context) {
     private lateinit var heading: View
     private var actions: List<View> = emptyList()
     private var access: View? = null
+    private val accessForLayout get() = access?.takeIf { it.visibility != View.GONE }
     private var filterAction: View? = null
     private var brandedRoot = false
     private var rowHeight = 0
@@ -45,14 +46,21 @@ open class GalleryLibraryChromeLayout(context: Context) : ViewGroup(context) {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        bindMetrics()
+        if (::leading.isInitialized) bindMetrics()
         requestLayout()
     }
 
     override fun generateDefaultLayoutParams() = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val access = this.access
+        if (!::leading.isInitialized) {
+            setMeasuredDimension(
+                resolveSizeAndState(suggestedMinimumWidth, widthMeasureSpec, 0),
+                resolveSizeAndState(suggestedMinimumHeight, heightMeasureSpec, 0),
+            )
+            return
+        }
+        val access = accessForLayout
         val free = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
         val iconSpec = MeasureSpec.makeMeasureSpec(dp(48), MeasureSpec.EXACTLY)
         leading.measure(iconSpec, iconSpec)
@@ -100,6 +108,7 @@ open class GalleryLibraryChromeLayout(context: Context) : ViewGroup(context) {
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        if (!::leading.isInitialized) return
         val rtl = layoutDirection == LAYOUT_DIRECTION_RTL
         var cursor = if (rtl) width - paddingRight else paddingLeft
         fun place(view: View) {
@@ -121,7 +130,7 @@ open class GalleryLibraryChromeLayout(context: Context) : ViewGroup(context) {
             cursor = if (rtl) paddingLeft + actionWidth else width - paddingRight - actionWidth
         } else place(heading)
         actions.forEach(::place)
-        access?.let { view ->
+        accessForLayout?.let { view ->
             val actionInset = if (accessInline) actions.sumOf { it.measuredWidth } + dp(4) else 0
             val x = if (rtl) paddingLeft + actionInset else width - paddingRight - actionInset - view.measuredWidth
             val y = if (accessInline) paddingTop + (rowHeight - view.measuredHeight) / 2 else paddingTop + rowHeight + dp(4)

@@ -66,7 +66,9 @@ class NativePermissionDialogIntegrationTest {
         prompt.show()
         prompt to {
             val window = platform(prompt)
-            val handle = nodes(window.window!!.decorView).filterIsInstance<NativeSheetDragHandle>().single()
+            val decor = requireNotNull(window.window).decorView
+            if (Build.VERSION.SDK_INT >= 29) assertFalse(decor.isForceDarkAllowed)
+            val handle = nodes(decor).filterIsInstance<NativeSheetDragHandle>().single()
             val target = handle.parent as View
             assertTrue(target.isLaidOut)
             val position = IntArray(2)

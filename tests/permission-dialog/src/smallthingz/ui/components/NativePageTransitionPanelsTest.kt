@@ -211,6 +211,68 @@ class NativePageTransitionPanelsTest {
         assertSame(third, host.getChildAt(0))
     }
 
+    @Test fun reentrantCompletionKeepsTheNewerPanelAndReleasesItsShield() = withPanels { host, first, next, motion ->
+        val superseded = FrameLayout(host.context).apply { visibility = View.GONE }
+        val winner = FrameLayout(host.context).apply { visibility = View.GONE }
+        host.addView(superseded, FrameLayout.LayoutParams(-1, -1))
+        host.addView(winner, FrameLayout.LayoutParams(-1, -1))
+        next.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        next.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+        val exits = mutableListOf<String>()
+        lateinit var winningAnimator: ValueAnimator
+
+        motion.show(next, first, NativePageTransition.Direction.FORWARD) {
+            exits += "first"
+            motion.show(winner, next, NativePageTransition.Direction.FORWARD) { exits += "next" }
+            winningAnimator = animator(motion)
+        }
+        val retiredAnimator = animator(motion)
+        motion.show(superseded, next, NativePageTransition.Direction.FORWARD) { exits += "superseded" }
+
+        assertEquals(listOf("first"), exits)
+        assertSame(winningAnimator, animator(motion))
+        assertTrue(motion.owns(winner))
+        assertFalse(motion.owns(superseded))
+        assertEquals(5, host.childCount)
+        retiredAnimator.end()
+        assertSame(winningAnimator, animator(motion))
+        winningAnimator.end()
+        motion.close()
+
+        assertEquals(listOf("first", "next"), exits)
+        assertFalse(motion.isRunning)
+        assertEquals(4, host.childCount)
+        for (root in listOf(first, next, superseded, winner)) assertSame(host, root.parent)
+        assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_YES, next.importantForAccessibility)
+        assertEquals(ViewGroup.FOCUS_AFTER_DESCENDANTS, next.descendantFocusability)
+        assertEquals(View.VISIBLE, winner.visibility)
+        assertEquals(0f, winner.translationY, 0f)
+        assertEquals(View.GONE, next.visibility)
+        assertEquals(View.GONE, superseded.visibility)
+    }
+
+    @Test fun supersededPreviewDoesNotClaimTheReentrantPreview() = withPanels { host, first, next, motion ->
+        val superseded = FrameLayout(host.context).apply { visibility = View.GONE }
+        val winner = FrameLayout(host.context).apply { visibility = View.GONE }
+        host.addView(superseded, FrameLayout.LayoutParams(-1, -1))
+        host.addView(winner, FrameLayout.LayoutParams(-1, -1))
+        var completions = 0
+
+        motion.show(next, first, NativePageTransition.Direction.FORWARD) {
+            assertTrue(motion.preview(winner, next, NativePageTransition.Direction.FORWARD) { completions++ })
+        }
+        assertFalse(motion.preview(superseded, next, NativePageTransition.Direction.FORWARD) { completions++ })
+        assertTrue(motion.owns(winner))
+        assertEquals(5, host.childCount)
+
+        motion.cancel()
+        assertEquals(0, completions)
+        assertEquals(4, host.childCount)
+        assertEquals(View.VISIBLE, next.visibility)
+        assertEquals(View.GONE, winner.visibility)
+        assertEquals(View.GONE, superseded.visibility)
+    }
+
     @Test fun disabledReverseSettlesLatestDestinationWithoutObsoleteCleanup() = withPanels { host, first, next, motion ->
         var obsolete = 0
         var latest = 0

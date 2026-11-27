@@ -78,6 +78,34 @@ class AudioBlobReadoutContrastHostTest {
         assertTrue(failures.joinToString("\n"), failures.isEmpty())
     }
 
+    @Test fun clearingSettledSilencePublishesCompactReadoutSupportImmediately() = withSettledAnimations {
+        val gray = Color.rgb(120, 120, 120)
+        val fixture = Fixture(RuntimeEnvironment.getApplication(), Scene.DarkBackdrop, material = gray)
+        fixture.layoutHome(190, dimmed = false)
+        val renderer = fixture.audioView
+        val readoutListener = requireNotNull(renderer.onReadoutAppearanceChanged)
+        val appearances = mutableListOf<Triple<Boolean, Boolean, Boolean>>()
+        renderer.onReadoutAppearanceChanged = { darkInk, transitioning, support ->
+            appearances += Triple(darkInk, transitioning, support)
+            readoutListener(darkInk, transitioning, support)
+        }
+
+        renderer.submitFrame(0f, FloatArray(0), silenceSuppressed = true)
+        assertEquals(Triple(false, false, false), appearances.last())
+        val drainedReadout = fixture.paintReadoutOver(gray)
+        val drainedCallbackCount = appearances.size
+
+        renderer.clearFrame()
+        assertTrue(renderer.readoutNeedsSupport(darkInk = false))
+        assertEquals(drainedCallbackCount + 1, appearances.size)
+        assertEquals(Triple(false, false, true), appearances.last())
+        // Hold the underlay fixed so only the readout's newly published support can change pixels.
+        assertFalse(drainedReadout.contentEquals(fixture.paintReadoutOver(gray)))
+
+        renderer.clearFrame()
+        assertEquals(drainedCallbackCount + 1, appearances.size)
+    }
+
     private fun recordEdgeWitnesses(scope: String, fade: Int, outside: Int, failures: MutableList<String>) {
         if (fade == 0) failures += "$scope: no opaque ink in the viewport fade band (0.9 <= r < 1)"
         if (outside == 0) failures += "$scope: no opaque ink outside the viewport radius (r >= 1)"
@@ -88,11 +116,11 @@ class AudioBlobReadoutContrastHostTest {
         LightBackdrop(Color.WHITE, Color.rgb(20, 33, 56), true),
     }
 
-    private class Fixture(context: Context, private val scene: Scene) {
+    private class Fixture(context: Context, private val scene: Scene, material: Int = scene.material) {
         private val style = NativeAudioBlobAppearance.Default.resolve(NativeColorScheme.fallback(false)).copy(
-            primary = scene.material,
-            tertiary = scene.material,
-            resting = scene.material,
+            primary = material,
+            tertiary = material,
+            resting = material,
             readoutBackground = scene.backdrop,
         )
         private val readout = NativeAudioBlobReadout(
@@ -110,6 +138,13 @@ class AudioBlobReadoutContrastHostTest {
         // Keep the production renderer, sibling layout, and onReadoutAppearanceChanged callback.
         private val control = Control(context, readout, style)
         val alpha get() = control.alpha
+        val audioView get() = control.getChildAt(0) as AudioReactiveBlobView
+
+        fun paintReadoutOver(color: Int): IntArray = raster { canvas ->
+            canvas.drawColor(color)
+            canvas.translate((PADDING + readout.left).toFloat(), (PADDING + readout.top).toFloat())
+            readout.draw(canvas)
+        }
 
         fun layoutHome(homeHeight: Int, dimmed: Boolean) {
             val size = reverbHomeGeometry(360, homeHeight, 1f, NativeCaptureControlsStyle.Default).blobSize

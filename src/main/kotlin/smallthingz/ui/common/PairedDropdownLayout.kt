@@ -15,8 +15,6 @@ import android.content.Context
 import android.view.View
 import android.view.ViewGroup
 import smallthingz.ui.components.NativeDropdown
-import kotlin.math.max
-import kotlin.math.roundToInt
 
 private fun exactly(size: Int) = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY)
 
@@ -37,23 +35,23 @@ internal class PairedDropdownLayout(
         val width = MeasureSpec.getSize(widthSpec)
         val firstVisible = first.visibility != GONE
         val secondVisible = second.visibility != GONE
-        val count = (if (firstVisible) 1 else 0) + (if (secondVisible) 1 else 0)
-        if (count == 0) {
+        if (!firstVisible && !secondVisible) {
             setMeasuredDimension(resolveSize(width, widthSpec), resolveSize(0, heightSpec))
             return
         }
-        val unit = (width.toFloat() / count).roundToInt()
-        val targetHeight = max(if (firstVisible) first.intrinsicHeight(unit) else 0,
-            if (secondVisible) second.intrinsicHeight(unit) else 0)
-        val height = resolveSize(targetHeight, heightSpec)
-        var remainder = width - unit * count
-        repeat(2) { index ->
-            val child = if (index == 0) first else second
-            if (child.visibility == GONE) return@repeat
-            val correction = remainder.coerceIn(-1, 1)
-            remainder -= correction
-            child.measure(exactly(unit + correction), exactly(height))
+        val firstWidth = when {
+            !firstVisible -> 0
+            secondVisible -> width / 2
+            else -> width
         }
+        val secondWidth = width - firstWidth
+        val targetHeight = maxOf(
+            if (firstVisible) first.intrinsicHeight(firstWidth) else 0,
+            if (secondVisible) second.intrinsicHeight(secondWidth) else 0,
+        )
+        val height = resolveSize(targetHeight, heightSpec)
+        if (firstVisible) first.measure(exactly(firstWidth), exactly(height))
+        if (secondVisible) second.measure(exactly(secondWidth), exactly(height))
         setMeasuredDimension(resolveSize(width, widthSpec), height)
     }
 

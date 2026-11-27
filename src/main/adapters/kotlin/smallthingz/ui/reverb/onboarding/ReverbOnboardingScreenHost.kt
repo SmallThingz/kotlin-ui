@@ -12,26 +12,54 @@ import smallthingz.ui.reverb.ReverbScreenTransition
  */
 class ReverbOnboardingScreenHost(
     context: Context,
-    private val theme: ReverbTheme,
+    theme: ReverbTheme,
     val pageArea: ViewGroup,
-    pageCount: Int,
+    private val pageCount: Int,
     onBack: () -> Unit,
     onContinue: () -> Unit,
 ) : ViewGroup(context), AutoCloseable {
-    private val geometry = ReverbOnboardingScreenLayout(theme.density)
+    private var theme = theme
+    private var geometry = ReverbOnboardingScreenLayout(theme.density)
     private val transition = ReverbScreenTransition(pageArea)
     val isTransitionRunning: Boolean get() = transition.isRunning
     private var presentation: OnboardingFooterPresentation? = null
-    private val footer = OnboardingFooterView(context, theme.controlTheme, pageCount,
-        NativeButtonInputPolicy(inputRoot = { this }, revisionKey = { presentation?.page }))
-    private val actions = footer.connect(onBack, onContinue)
+    private var footer = createFooter(theme)
+    private var actions = footer.connect(onBack, onContinue)
+    private var closed = false
 
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         addView(pageArea)
-        footer.enableStandaloneAndroidAccessibility()
-        footer.filterTouchesWhenObscured = true
         addView(footer)
+    }
+
+    private fun createFooter(theme: ReverbTheme) =
+        OnboardingFooterView(context, theme.controlTheme, pageCount,
+            NativeButtonInputPolicy(inputRoot = { this }, revisionKey = { presentation?.page })).apply {
+            enableStandaloneAndroidAccessibility()
+            filterTouchesWhenObscured = true
+        }
+
+    internal fun reconfigureFooter(theme: ReverbTheme, onBack: () -> Unit, onContinue: () -> Unit): Boolean {
+        if (closed) return false
+        val previousActions = actions
+        if (this.theme === theme) {
+            actions = footer.connect(onBack, onContinue)
+            previousActions.close()
+        } else {
+            val replacement = createFooter(theme)
+            presentation?.let { replacement.bind(it, theme.palette) }
+            val replacementActions = replacement.connect(onBack, onContinue)
+            previousActions.close()
+            footer.close()
+            removeView(footer)
+            this.theme = theme
+            geometry = ReverbOnboardingScreenLayout(theme.density)
+            footer = replacement
+            actions = replacementActions
+            addView(footer)
+        }
+        return true
     }
 
     fun bind(value: OnboardingFooterPresentation) {
@@ -67,6 +95,8 @@ class ReverbOnboardingScreenHost(
     }
 
     override fun close() {
+        if (closed) return
+        closed = true
         transition.close()
         actions.close()
         footer.close()

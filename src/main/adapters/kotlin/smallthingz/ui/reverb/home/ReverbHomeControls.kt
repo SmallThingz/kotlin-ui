@@ -496,6 +496,18 @@ private class HomeGlyph(context: Context, private var environment: ReverbEnviron
         if (tint == value) return
         tint = value; drawable.setTint(value); invalidate()
     }
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        drawable.setVisible(isVisible, false)
+        invalidate()
+    }
+
+    override fun onDetachedFromWindow() {
+        drawable.setVisible(false, false)
+        invalidate()
+        super.onDetachedFromWindow()
+    }
+
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) { drawable.setBounds(0, 0, w, h) }
     override fun onRtlPropertiesChanged(direction: Int) {
         super.onRtlPropertiesChanged(direction); drawable.layoutDirection = direction; invalidate()

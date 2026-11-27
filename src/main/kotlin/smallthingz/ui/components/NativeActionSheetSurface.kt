@@ -121,9 +121,7 @@ internal class NativeSheetSurface(
         private val fill=Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
             color=env.palette.surfaceContainerLow
         }
-        private val grain = NoiseDrawable(fill.color, env.recipe.grainSeed).apply {
-            setNoiseIntensity(env.recipe.grainIntensity)
-        }
+        private val grain = NoiseDrawable(fill.color, env.recipe.grainSeed, env.recipe.grainIntensity)
         override val paintedTextSurface: Long get() = grain.paintedTextSurface
         private val shape=Path()
         private val shapeBounds = RectF()
@@ -147,8 +145,14 @@ internal class NativeSheetSurface(
                 env.palette.edgeWidthDp != next.palette.edgeWidthDp
             env=next;colorMotion.retarget(next.palette.surfaceContainerLow)
             if (grainChanged) {
-                grain.setGrainSeed(next.recipe.grainSeed)
-                grain.setNoiseIntensity(next.recipe.grainIntensity)
+                val intensity = next.recipe.grainIntensity
+                if (intensity == 0f) {
+                    grain.setNoiseIntensity(0f)
+                    grain.setGrainSeed(next.recipe.grainSeed)
+                } else {
+                    grain.setGrainSeed(next.recipe.grainSeed)
+                    grain.setNoiseIntensity(intensity)
+                }
                 NativeModalTextSurface.invalidate(this)
                 invalidate()
             }

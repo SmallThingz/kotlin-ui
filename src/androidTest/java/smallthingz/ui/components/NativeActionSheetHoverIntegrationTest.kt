@@ -5,6 +5,7 @@ import android.animation.ValueAnimator
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Rect
+import android.os.Build
 import android.view.ContextThemeWrapper
 import android.view.Window
 import android.view.WindowManager
@@ -17,6 +18,7 @@ import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.EditText
 import android.widget.FrameLayout
+import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.Insets
 import androidx.core.view.WindowInsetsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -47,24 +49,45 @@ class NativeActionSheetHoverIntegrationTest {
                     applyOverrideConfiguration(Configuration().apply { uiMode = night })
                 }
             }) { fixture ->
+                var result: Result<Unit>? = null
                 main {
-                    val window = requireNotNull(fixture.sheet.window)
-                    val context = window.decorView.context
-                    assertEquals(night, context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK)
-                    val attrs = context.obtainStyledAttributes(intArrayOf(android.R.attr.isLightTheme,
-                        android.R.attr.windowIsFloating, android.R.attr.windowBackground))
-                    try {
-                        assertTrue(attrs.hasValue(0))
-                        assertEquals(light, attrs.getBoolean(0, !light))
-                        assertFalse(attrs.getBoolean(1, true))
-                        assertEquals(android.R.color.transparent, attrs.getResourceId(2, 0))
-                    } finally {
-                        attrs.recycle()
+                    result = runCatching {
+                        val window = requireNotNull(fixture.sheet.window)
+                        val context = window.decorView.context
+                        assertEquals(night, context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK)
+                        if (Build.VERSION.SDK_INT >= 29) {
+                            assertFalse(window.decorView.isForceDarkAllowed)
+                            val theme = context.obtainStyledAttributes(intArrayOf(android.R.attr.isLightTheme))
+                            try {
+                                assertTrue(theme.hasValue(0))
+                                assertEquals(light, theme.getBoolean(0, !light))
+                            } finally {
+                                theme.recycle()
+                            }
+                        } else {
+                            // The platform dialog's text polarity is independent of the sheet paint palette.
+                            val theme = context.obtainStyledAttributes(intArrayOf(android.R.attr.textColorPrimary))
+                            try {
+                                val ink = requireNotNull(theme.getColorStateList(0)).defaultColor
+                                assertEquals(light, ColorUtils.calculateLuminance(ink) < .5)
+                            } finally {
+                                theme.recycle()
+                            }
+                        }
+                        val attrs = context.obtainStyledAttributes(intArrayOf(
+                            android.R.attr.windowBackground, android.R.attr.windowIsFloating))
+                        try {
+                            assertEquals(android.R.color.transparent, attrs.getResourceId(0, 0))
+                            assertFalse(attrs.getBoolean(1, true))
+                        } finally {
+                            attrs.recycle()
+                        }
+                        assertTrue(window.hasFeature(Window.FEATURE_NO_TITLE))
+                        assertEquals(WindowManager.LayoutParams.MATCH_PARENT, window.attributes.width)
+                        assertEquals(WindowManager.LayoutParams.MATCH_PARENT, window.attributes.height)
                     }
-                    assertTrue(window.hasFeature(Window.FEATURE_NO_TITLE))
-                    assertEquals(WindowManager.LayoutParams.MATCH_PARENT, window.attributes.width)
-                    assertEquals(WindowManager.LayoutParams.MATCH_PARENT, window.attributes.height)
                 }
+                checkNotNull(result).getOrThrow()
             }
         }
     }

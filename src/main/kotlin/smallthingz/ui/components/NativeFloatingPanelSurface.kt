@@ -37,9 +37,7 @@ open class NativeFloatingPanelSurface(
     private var dialogEdge = NativeDialogEdge.TOP
     private val clipped = NativeFloatingPanelClip(context)
     private var grainIntensity = palette.backgroundGrain
-    private val grain = NoiseDrawable(fill.color, recipe.grainSeed).apply {
-        setNoiseIntensity(grainIntensity)
-    }
+    private val grain = NoiseDrawable(fill.color, recipe.grainSeed, grainIntensity)
     override val paintedTextSurface: Long get() = grain.paintedTextSurface
     val clipHost: View get() = clipped
 
@@ -62,7 +60,7 @@ open class NativeFloatingPanelSurface(
     }
 
     fun bindSurface(density: Float, recipe: NativeFloatingPanelRecipe, palette: NativeColorScheme) {
-        val previousPaintSpace = exteriorBottomPaintSpace()
+        val previousPaintSpace = exteriorPaintSpace()
         val shapeChanged = this.density != density || this.recipe.cornerRadiusDp != recipe.cornerRadiusDp
         val nextGrainIntensity = palette.backgroundGrain
         val grainChanged = this.recipe.grainSeed != recipe.grainSeed || grainIntensity != nextGrainIntensity
@@ -73,12 +71,17 @@ open class NativeFloatingPanelSurface(
         this.recipe = recipe
         edgeColor = nextEdgeColor
         edgeWidthDp = nextEdgeWidthDp
-        if (previousPaintSpace != exteriorBottomPaintSpace()) requestLayout()
+        if (previousPaintSpace != exteriorPaintSpace()) requestLayout()
         fillMotion.retarget(recipe.surfaceColor(palette))
         if (grainChanged) {
             grainIntensity = nextGrainIntensity
-            grain.setGrainSeed(recipe.grainSeed)
-            grain.setNoiseIntensity(grainIntensity)
+            if (grainIntensity == 0f) {
+                grain.setNoiseIntensity(0f)
+                grain.setGrainSeed(recipe.grainSeed)
+            } else {
+                grain.setGrainSeed(recipe.grainSeed)
+                grain.setNoiseIntensity(grainIntensity)
+            }
             NativeModalTextSurface.invalidate(this)
             invalidate()
         }
@@ -105,8 +108,14 @@ open class NativeFloatingPanelSurface(
         if (width > 0 && height > 0) rebuildShape()
     }
 
+    internal fun exteriorTopPaintSpace(): Int =
+        if (dialogEdge == NativeDialogEdge.BOTTOM) exteriorPaintSpace() else 0
+
     internal fun exteriorBottomPaintSpace(): Int =
-        if (dialogEdge != NativeDialogEdge.TOP || edgeColor ushr 24 == 0 ||
+        if (dialogEdge == NativeDialogEdge.TOP) exteriorPaintSpace() else 0
+
+    private fun exteriorPaintSpace(): Int =
+        if (edgeColor ushr 24 == 0 ||
             !edgeWidthDp.isFinite() || edgeWidthDp <= 0f || !density.isFinite() || density <= 0f) 0
         else ceil(edgeWidthDp * density).toInt()
 

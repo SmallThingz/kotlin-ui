@@ -426,16 +426,18 @@ class NativeDurationWheelView internal constructor(
             }
             MotionEvent.ACTION_POINTER_UP -> {
                 if (event.getPointerId(event.actionIndex) == pointerId) {
-                    if (activeWheelIndex != NO_WHEEL) snapActiveWheel()
-                    pointerId = MotionEvent.INVALID_POINTER_ID
-                    parent?.requestDisallowInterceptTouchEvent(false)
+                    if (event.flags and MotionEvent.FLAG_CANCELED != 0) {
+                        cancelTouchInteraction()
+                    } else {
+                        if (activeWheelIndex != NO_WHEEL) snapActiveWheel()
+                        pointerId = MotionEvent.INVALID_POINTER_ID
+                        parent?.requestDisallowInterceptTouchEvent(false)
+                    }
                 }
                 return true
             }
             MotionEvent.ACTION_CANCEL -> {
-                if (activeWheelIndex != NO_WHEEL) snapActiveWheel()
-                pointerId = MotionEvent.INVALID_POINTER_ID
-                parent?.requestDisallowInterceptTouchEvent(false)
+                cancelTouchInteraction()
                 return true
             }
         }
@@ -451,6 +453,8 @@ class NativeDurationWheelView internal constructor(
             if (index == NO_WHEEL) return false
             val delta = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
             if (delta == 0f) return false
+            // A held touch owns the wheel until its terminal event.
+            if (activeWheelIndex != NO_WHEEL) return true
             stopAnimation()
             onInteractionStart?.invoke()
             wheels[index].position += if (delta > 0f) -1.0 else 1.0
@@ -479,6 +483,26 @@ class NativeDurationWheelView internal constructor(
         activeWheelIndex = NO_WHEEL
         if (index == NO_WHEEL) return
         animateTo(index, round(wheels[index].position))
+    }
+
+    private fun cancelTouchInteraction() {
+        val wasActive = activeWheelIndex != NO_WHEEL
+        activeWheelIndex = NO_WHEEL
+        pointerId = MotionEvent.INVALID_POINTER_ID
+        try {
+            parent?.requestDisallowInterceptTouchEvent(false)
+            // Without an active pointer, an earlier UP may already own the snap.
+            if (!wasActive) return
+            stopAnimation()
+            profileWheel.position = profileIndex.toDouble()
+            val displaySeconds = rangeDurationWheelDisplaySeconds(
+                currentDurationSecondsExact, maximumDurationSecondsExact,
+            )
+            lastCommittedSeconds = displaySeconds
+            rebuildForDisplaySeconds(displaySeconds)
+        } finally {
+            if (wasActive) onInteractionEnd?.invoke()
+        }
     }
 
     private fun animateTo(index: Int, target: Double) {

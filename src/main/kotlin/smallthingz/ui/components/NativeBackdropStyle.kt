@@ -12,9 +12,8 @@ data class NativeBackdropStyle(
     val windowGrainSeed: Int? = NoiseDrawable.SEED_BACKGROUND,
     val panelScrimAlpha: Float = .32f,
 ) {
-    fun pageBackground(palette: NativeColorScheme) = NoiseDrawable(palette.background, pageGrainSeed).apply {
-        setNoiseIntensity(palette.backgroundGrain)
-    }
+    fun pageBackground(palette: NativeColorScheme) =
+        NoiseDrawable(palette.background, pageGrainSeed, palette.backgroundGrain)
 
     fun panelScrimColor(palette: NativeColorScheme): Int = srgbColorWithAlpha(palette.scrim, panelScrimAlpha)
 
@@ -27,13 +26,13 @@ data class NativeBackdropStyle(
 
     /** Window handoff using the app's already-resolved palette, including its grain policy. */
     fun windowBackground(palette: NativeColorScheme): NoiseDrawable =
-        NoiseDrawable(palette.background, windowGrainSeed).also { bindWindowBackground(it, palette) }
+        NoiseDrawable(palette.background, windowGrainSeed, palette.backgroundGrain)
 
     /** Repaint a retained window drawable without replacing its bounds or callback. */
     fun bindWindowBackground(drawable: NoiseDrawable, palette: NativeColorScheme) {
         drawable.setBackgroundColor(palette.background)
-        drawable.setGrainSeed(windowGrainSeed)
         drawable.setNoiseIntensity(palette.backgroundGrain)
+        drawable.setGrainSeed(windowGrainSeed)
     }
 
     /** Framework-theme fallback for callers without an app-resolved palette. */
@@ -60,7 +59,7 @@ open class NativeBackdropBinding(
     constructor(view: View, grainSeed: Int?, initialColor: Int, onPaintChanged: () -> Unit) :
         this(view, grainSeed, initialColor, 1f, onPaintChanged)
 
-    private val drawable = NoiseDrawable(initialColor, grainSeed).apply { setNoiseIntensity(initialGrainIntensity) }
+    private val drawable = NoiseDrawable(initialColor, grainSeed, initialGrainIntensity)
     private var grainIntensity = initialGrainIntensity
     private var published = initialColor
     private val motion: ViewColorTransition = ViewColorTransition(view, intArrayOf(initialColor), ::publish)

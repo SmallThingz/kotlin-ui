@@ -216,7 +216,7 @@ class NativeAnchoredDropdown private constructor(
                     return true
                 }
                 if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN || event.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && event.hasNoModifiers()) {
                         confirmationKey = KeyEvent.KEYCODE_UNKNOWN
                         if (selectionPolicy == DropdownSelectionPolicy.EXPLICIT) requestFocus()
                         settle(settled + if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1)
@@ -743,8 +743,9 @@ class NativeAnchoredDropdown private constructor(
                 val above = !closing && reveal > 0f && geometry?.overflowsAbove(position) == true
                 val below = !closing && reveal > 0f && geometry?.overflowsBelow(position, lastPosition) == true
                 val inset = resolvedOutlineStroke() / 2f
-                previousCue.place(width, top + inset, bottom - inset, above && below, above)
-                nextCue.place(width, top + inset, bottom - inset, above && below, below)
+                val slotCenter = anchorY + rowHeight / 2f
+                previousCue.place(width, top + inset, bottom - inset, slotCenter, rowHeight, above && below, above)
+                nextCue.place(width, top + inset, bottom - inset, slotCenter, rowHeight, above && below, below)
                 invalidate()
             }
             private fun updateMountedRows(first: Int, last: Int) {

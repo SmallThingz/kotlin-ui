@@ -49,6 +49,7 @@ class NativeDropdownFeedbackIntegrationTest {
     private fun scenario(dark: Boolean = false, initial: Int = 20, count: Int = 80,
         policy: DropdownSelectionPolicy = DropdownSelectionPolicy.EXPLICIT,
         dismiss: DropdownDismissPolicy? = null, settleMillis: Long = 0, collapseMillis: Long = 0,
+        rowDp: Int = 64, hostRows: Int = 4, anchorGravity: Int = Gravity.CENTER,
         block: (Fixture) -> Unit) {
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -70,10 +71,10 @@ class NativeDropdownFeedbackIntegrationTest {
                 }
                 fixture = Fixture(activity, host, group, control, content, deliveries)
                 val density = activity.resources.displayMetrics.density
-                val row = (64 * density).roundToInt()
-                host.addView(control.view, FrameLayout.LayoutParams((280 * density).roundToInt(), row, Gravity.CENTER))
+                val row = (rowDp * density).roundToInt()
+                host.addView(control.view, FrameLayout.LayoutParams((280 * density).roundToInt(), row, anchorGravity))
                 activity.setContentView(FrameLayout(activity).apply {
-                    addView(host, FrameLayout.LayoutParams(-1, row * 4, Gravity.CENTER))
+                    addView(host, FrameLayout.LayoutParams(-1, row * hostRows, Gravity.CENTER))
                 })
             }
             val f = checkNotNull(fixture)
@@ -476,6 +477,115 @@ class NativeDropdownFeedbackIntegrationTest {
             }
         }
     }
+
+    @Test fun edgeAnchoredOptionCenterActivatesWhileOverflowArrowStillSteps() {
+        for (atTop in listOf(true, false)) for (policy in DropdownSelectionPolicy.values()) {
+            val initial = if (atTop) 1 else 2
+            val step = if (atTop) -1 else 1
+            scenario(initial = initial, count = 4, policy = policy, rowDp = 72, hostRows = 3,
+                anchorGravity = Gravity.CENTER_HORIZONTAL or (if (atTop) Gravity.TOP else Gravity.BOTTOM)) { f ->
+                main {
+                    val s = session(f)
+                    val anchor = field(s, "anchorY") as Int
+                    val safeTop = field(s, "safeTop") as Int
+                    val safeBottom = field(s, "safeBottom") as Int
+                    assertEquals(3 * f.control.view.height, safeBottom - safeTop)
+                    assertEquals(if (atTop) safeTop else safeBottom - f.control.view.height, anchor)
+                    assertEquals(f.control.view.width, f.wheel.width)
+                    assertEquals(initial.toFloat(), position(f), 0f)
+                    assertEquals(1f, field(s, "reveal") as Float, 0f)
+                    val cue = children(f.wheel).filterIsInstance<NativeDropdownOverflowCue>()
+                        .single { it.visibility == View.VISIBLE }
+                    assertCue(f, cue)
+                    assertFalse("Cue cannot own the anchored option center",
+                        cue.contains(f.wheel.width / 2f, slotY(f)))
+                    val row = slotRow(f)
+                    val down = SystemClock.uptimeMillis()
+                    val x = f.wheel.x + f.wheel.width / 2f
+                    val y = f.wheel.y + slotY(f)
+                    touch(f.pane, MotionEvent.ACTION_DOWN, down, x, y)
+                    assertTrue("Mounted overlay must route center DOWN to option feedback", pressed(row))
+                    assertFalse(cue.isPressed)
+                    touch(f.pane, MotionEvent.ACTION_UP, down, x, y)
+                    assertTrue("Unchanged selected option must not deliver its neighbor", f.deliveries.isEmpty())
+                }
+                await("Anchored option center tap must close") { !f.group.isExpanded }
+                main {
+                    assertTrue(f.deliveries.isEmpty())
+                    f.group.open(f.control, f.content)
+                    f.opened()
+                }
+                frames(f.host, 2)
+                main {
+                    val cue = children(f.wheel).filterIsInstance<NativeDropdownOverflowCue>()
+                        .single { it.visibility == View.VISIBLE }
+                    assertCue(f, cue)
+                    val node = cue.createAccessibilityNodeInfo()
+                    try {
+                        assertTrue(node.isClickable && node.isEnabled)
+                        assertTrue(node.actionList.contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK))
+                    } finally { node.recycle() }
+                    val down = SystemClock.uptimeMillis()
+                    val x = f.wheel.x + cue.x + cue.width / 2f
+                    val y = f.wheel.y + cue.y + cue.height / 2f
+                    touch(f.pane, MotionEvent.ACTION_DOWN, down, x, y)
+                    assertTrue("Remaining arrow target must retain its press", cue.isPressed)
+                    touch(f.pane, MotionEvent.ACTION_UP, down, x, y)
+                }
+                await("Arrow must step exactly one row and remain open") {
+                    f.group.isExpanded && position(f) == (initial + step).toFloat() &&
+                        (policy != DropdownSelectionPolicy.PROGRESSIVE || f.deliveries == listOf(initial + step))
+                }
+                main {
+                    assertEquals((initial + step).toFloat(), position(f), 0f)
+                    assertTrue(f.group.isExpanded)
+                    assertEquals(if (policy == DropdownSelectionPolicy.PROGRESSIVE) listOf(initial + step)
+                        else emptyList<Int>(), f.deliveries)
+                }
+            }
+        }
+    }
+
+    @Test fun modifiedArrowKeepsProgressiveCandidateWhilePlainArrowPublishesOnce() =
+        scenario(initial = 1, count = 3, policy = DropdownSelectionPolicy.PROGRESSIVE, settleMillis = 80) { f ->
+            lateinit var focused: View
+            fun arrow(metaState: Int) {
+                val now = SystemClock.uptimeMillis()
+                for (action in listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
+                    val key = KeyEvent(now, now, action, KeyEvent.KEYCODE_DPAD_DOWN, 0, metaState)
+                    assertTrue("Window must route the arrow to the active modal", f.activity.dispatchKeyEvent(key))
+                }
+            }
+            main {
+                assertTrue(f.activity.hasWindowFocus())
+                assertTrue(f.pane.hasFocus())
+                focused = checkNotNull(f.activity.currentFocus)
+                assertEquals(1f, position(f), 0f)
+                arrow(KeyEvent.META_CTRL_ON)
+                assertEquals("Modified arrow cannot queue a different row", 1, field(session(f), "settled"))
+                assertSame(focused, f.activity.currentFocus)
+                assertTrue(f.deliveries.isEmpty())
+            }
+            // Observe beyond the configured settle period as well as the immediate target.
+            val deadline = SystemClock.uptimeMillis() + 250
+            while (SystemClock.uptimeMillis() < deadline) frames(f.host, 1)
+            main {
+                assertEquals(1f, position(f), 0f)
+                assertTrue(f.deliveries.isEmpty())
+                assertTrue(f.group.isExpanded)
+                assertSame(focused, f.activity.currentFocus)
+                arrow(0)
+            }
+            await("Plain arrow did not publish exactly one progressive option") {
+                position(f) == 2f && f.deliveries == listOf(2)
+            }
+            frames(f.host, 2)
+            main {
+                assertEquals(listOf(2), f.deliveries)
+                assertTrue(f.group.isExpanded)
+                assertTrue(f.pane.hasFocus())
+            }
+        }
 
     @Test fun quantizedNativeFlingStaysMonotoneThroughItsFinalFrameAndRetirement() {
         for (direction in listOf(-1, 1)) scenario(initial = 40, count = 100, settleMillis = 160) { f ->

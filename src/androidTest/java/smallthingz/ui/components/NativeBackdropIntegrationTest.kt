@@ -33,7 +33,7 @@ class NativeBackdropIntegrationTest {
             val dark = ReverbDesign.appearance.colorScheme.resolve(true, sdk, context::getColor)
             assertEquals(0xff000000.toInt(), dark.background)
             assertEquals(0xff000000.toInt(), dark.surface)
-            assertEquals(0xff0a0a0a.toInt(), dark.field)
+            assertEquals(0xff0e0e0e.toInt(), dark.field)
             assertEquals(0xff0e0e0e.toInt(), dark.raised)
             assertEquals(0xff262626.toInt(), dark.border)
             assertEquals(NativeDarkSurfacePreset.Amoled, dark.surfacePreset)

@@ -132,6 +132,7 @@ object NativePageTransition {
             val release: (settle: Boolean) -> Unit,
         )
         private var active: Run? = null
+        private var prepareGeneration = 0L
         private var closed = false
         private var previewing = false
         private var previewProgress = 0f
@@ -164,14 +165,13 @@ object NativePageTransition {
             container.addOnLayoutChangeListener(resize)
         }
 
-        fun show(incoming: View, outgoing: View, direction: Direction, onFinished: () -> Unit = {}) =
+        fun show(incoming: View, outgoing: View, direction: Direction, onFinished: () -> Unit = {}) {
             prepare(incoming, outgoing, direction, preview = false, onFinished)
+        }
 
         /** A predictive reverse owns the same retained pair; only commit delivers onFinished. */
-        fun preview(incoming: View, outgoing: View, direction: Direction, onFinished: () -> Unit = {}): Boolean {
+        fun preview(incoming: View, outgoing: View, direction: Direction, onFinished: () -> Unit = {}): Boolean =
             prepare(incoming, outgoing, direction, preview = true, onFinished)
-            return active != null && previewing
-        }
 
         fun seekPreview(progress: Float) {
             val run = active ?: return
@@ -206,14 +206,17 @@ object NativePageTransition {
         private fun prepare(incoming: View, outgoing: View, direction: Direction,
                             preview: Boolean, onFinished: () -> Unit,
                             durationMillis: Long = DURATION_MILLIS,
-                            cancelReturnOffset: Float? = null) {
+                            cancelReturnOffset: Float? = null): Boolean {
             require(incoming !== outgoing && incoming.parent === container && outgoing.parent === container)
+            val generation = ++prepareGeneration
             val previous = active
             val reverse = previous != null && previous.direction != direction &&
                 previous.incoming === outgoing && previous.outgoing === incoming
             val presented = if (reverse) previous!!.moving.offset else null
             // Restore old interaction ownership without settling or delivering obsolete exit cleanup.
             if (reverse) release(settle = false) else cancel()
+            // Settling the prior route can synchronously start a newer route in onFinished.
+            if (generation != prepareGeneration) return false
             require(incoming.parent === container && outgoing.parent === container)
             val moving = if (direction == Direction.FORWARD) incoming else outgoing
             val baseline = if (reverse) previous!!.baseline else moving.offset
@@ -232,7 +235,7 @@ object NativePageTransition {
                     incoming.visibility = View.GONE
                     outgoing.visibility = View.VISIBLE
                 }
-                return
+                return false
             }
             val oldAccessibility = outgoing.importantForAccessibility
             val oldFocusability = (outgoing as? ViewGroup)?.descendantFocusability
@@ -268,6 +271,7 @@ object NativePageTransition {
             }
             position(checkNotNull(active), start)
             if (!preview) animate(durationMillis, cancelReturnOffset)
+            return preview && generation == prepareGeneration && active != null && previewing
         }
 
         private fun position(run: Run, value: Float) {

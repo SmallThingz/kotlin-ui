@@ -85,6 +85,7 @@ class ReverbControlScreenFrame(
     /** Opt in to the complete shared footer. Rebinding replaces presentation, not page state. */
     fun configureOnboardingFooter(theme: ReverbTheme, onBack: () -> Unit, onContinue: () -> Unit) {
         val previous = onboardingHost
+        if (previous?.reconfigureFooter(theme, onBack, onContinue) == true) return
         val page = previous?.pageArea ?: FrameLayout(context).apply {
             val initial = checkNotNull(pendingOnboarding)
             (initial.parent as ViewGroup).removeView(initial)
@@ -107,6 +108,7 @@ class ReverbControlScreenFrame(
     fun bindOnboardingFooter(value: OnboardingFooterPresentation?) {
         val host = onboardingHost ?: return
         onboardingPresentation = value
+        if (value == null && host.visibility == VISIBLE) host.cancelPendingInputEvents()
         val destination: ViewGroup = if (value != null) host.pageArea else content
         if (controls.parent !== destination) {
             (controls.parent as ViewGroup).removeView(controls)

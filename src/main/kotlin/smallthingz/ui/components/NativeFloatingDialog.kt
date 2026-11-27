@@ -115,6 +115,7 @@ class NativeFloatingDialog(
     private val root = FloatingWindowRoot(
         context, requireNotNull(window), content, statusBarProtection, entryEdge,
         host = anchor.rootView.takeIf { entryEdge != null },
+        exteriorTopPaintSpace = contentOwner.exteriorTopPaintSpace,
         exteriorBottomPaintSpace = contentOwner.exteriorBottomPaintSpace,
     ) {
         visibilityMotion.setHeight(content.measuredHeight)
@@ -194,7 +195,7 @@ class NativeFloatingDialog(
         contentOwner.bindWindowAccessibility(root)
         root.elevation = shadowDp * density
         root.outlineProvider = NativeWindowShadowOutline
-        if (Build.VERSION.SDK_INT >= 29) root.isForceDarkAllowed = false
+        if (Build.VERSION.SDK_INT >= 29) window.decorView.isForceDarkAllowed = false
         (window.decorView as? ViewGroup)?.disableClippingUntil(root)
         setContentView(root)
         statusBarProtection?.applyWindowAppearance(window)
@@ -355,9 +356,11 @@ private class FloatingWindowRoot(
     private val statusBarProtection: NativeStatusBarProtection?,
     private val entryEdge: NativeDialogEdge?,
     private val host: View?,
+    private val exteriorTopPaintSpace: (() -> Int)?,
     private val exteriorBottomPaintSpace: (() -> Int)?,
     private val onContentMeasured: () -> Unit,
 ) : ViewGroup(context) {
+    private var topPaintSpace = 0
     private var bottomPaintSpace = 0
 
     init {
@@ -392,9 +395,10 @@ private class FloatingWindowRoot(
         val targetHeight = if (heightMode == MeasureSpec.AT_MOST &&
             dialogWindow.attributes.height == LayoutParams.WRAP_CONTENT) height + 1 else height
         val horizontalPadding = paddingLeft + paddingRight
-        bottomPaintSpace = (exteriorBottomPaintSpace?.invoke() ?: 0).coerceAtMost(
-            if (heightMode == MeasureSpec.UNSPECIFIED) Int.MAX_VALUE else height)
-        val verticalPadding = paddingTop + paddingBottom + bottomPaintSpace
+        val paintSpaceLimit = if (heightMode == MeasureSpec.UNSPECIFIED) Int.MAX_VALUE else height
+        topPaintSpace = (exteriorTopPaintSpace?.invoke() ?: 0).coerceIn(0, paintSpaceLimit)
+        bottomPaintSpace = (exteriorBottomPaintSpace?.invoke() ?: 0).coerceIn(0, paintSpaceLimit - topPaintSpace)
+        val verticalPadding = paddingTop + paddingBottom + topPaintSpace + bottomPaintSpace
         val hostWidth = host?.width ?: 0
         val hostHeight = host?.height ?: 0
         val childWidth = if (widthMode == MeasureSpec.UNSPECIFIED && hostWidth <= 0) widthMeasureSpec
@@ -433,9 +437,10 @@ private class FloatingWindowRoot(
         if (content.visibility == GONE) return
         val l = paddingLeft + (width - content.measuredWidth - paddingLeft - paddingRight) / 2
         val t = when (entryEdge) {
-            NativeDialogEdge.TOP -> paddingTop
+            NativeDialogEdge.TOP -> paddingTop + topPaintSpace
             NativeDialogEdge.BOTTOM -> height - paddingBottom - bottomPaintSpace - content.measuredHeight
-            null -> paddingTop + (height - content.measuredHeight - paddingTop - paddingBottom - bottomPaintSpace) / 2
+            null -> paddingTop + topPaintSpace +
+                (height - content.measuredHeight - paddingTop - paddingBottom - topPaintSpace - bottomPaintSpace) / 2
         }
         content.layout(l, t, l + content.measuredWidth, t + content.measuredHeight)
     }
@@ -450,7 +455,7 @@ private class FloatingWindowRoot(
         if (!event.x.isFinite() || !event.y.isFinite() || content.visibility == GONE) return false
         val l = left + content.left; val t = top + content.top
         val bottom = t + content.height
-        val insideY = if (bottomPaintSpace > 0) event.y >= t && event.y < bottom
+        val insideY = if (topPaintSpace > 0 || bottomPaintSpace > 0) event.y >= t && event.y < bottom
             else event.y.roundToInt() in t..bottom
         return event.x.roundToInt() in l..(l + content.width) && insideY
     }

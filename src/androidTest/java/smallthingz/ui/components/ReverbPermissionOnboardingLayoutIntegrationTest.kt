@@ -5,10 +5,14 @@ import android.content.res.Configuration
 import android.graphics.Rect
 import android.view.View
 import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.ScrollView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -16,6 +20,7 @@ import smallthingz.ui.reverb.ReverbDesign
 import smallthingz.ui.reverb.ReverbPermissionOnboardingKind
 import smallthingz.ui.reverb.ReverbPermissionOnboardingScreen
 import smallthingz.ui.reverb.ReverbPermissionOnboardingState
+import smallthingz.ui.reverb.ReverbTheme
 import smallthingz.ui.text.view.ParagraphView
 import kotlin.math.roundToInt
 
@@ -107,6 +112,59 @@ class ReverbPermissionOnboardingLayoutIntegrationTest {
         assertWithinPage(screen, page, body.getChildAt(1))
     }
 
+    @Test fun externalFooterRetiresInternalActionWhileRowsKeepUpdating() = main {
+        val context = configuredContext(fontScale = 1f)
+        val theme = ReverbDesign.theme(context, dark = true)
+        val screen = screen(context, theme)
+        val initial = states()
+        screen.bindPermissions(initial, continueEnabled = true)
+        val page = screen.getChildAt(0) as ScrollView
+        val body = page.getChildAt(0) as ViewGroup
+        val permissions = (body.getChildAt(2) as NativeGroupLayout).pointerContent
+        val notification = permissions.getChildAt(0) as NativePermissionRow
+        val internalFooter = screen.getChildAt(1) as ViewGroup
+        val internalAction = (internalFooter.getChildAt(0) as NativeButtonTouchTarget).button
+        assertTrue(internalAction.isEnabled)
+        assertTrue(internalAction.sampledContainerGrainIntensity > 0f)
+
+        val external = NativeMaterialButtonView(context, theme.appearance.buttons.footerContinue,
+            theme.density, theme.fontResolver) { error("Measurement must not complete onboarding") }
+        val host = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(screen, LinearLayout.LayoutParams(-1, 0, 1f))
+            addView(external, LinearLayout.LayoutParams(-1, dp(context, 48)))
+        }
+        try {
+            screen.useExternalFooter()
+            screen.useExternalFooter()
+            assertNull(internalFooter.parent)
+            assertFalse(internalAction.isEnabled)
+            assertFalse(internalAction.isFocusable)
+
+            // The palette overload sets grain before checking whether the button is closed.
+            // Clearing grain exposes an attempted bind even with unchanged data and readiness.
+            internalAction.setSurfacePreset(null)
+            val granted = initial.first().copy(allowed = true, status = "On", canRequest = false)
+            for (ready in listOf(true, true, false, true)) {
+                val values = if (ready) listOf(granted) + initial.drop(1) else initial
+                external.bind("Host Continue", ready, theme.palette.buttonPalette)
+                screen.bindPermissions(values, continueEnabled = ready)
+                assertEquals(0f, internalAction.sampledContainerGrainIntensity, 0f)
+                assertSame(notification, permissions.getChildAt(0))
+                assertEquals(!ready, notification.canRequestNow)
+                assertSame(host, external.parent)
+                assertEquals(ready, external.isEnabled)
+                assertEquals("Host Continue", external.label.getText())
+            }
+            measure(host, 1220, 1830)
+            assertEquals(1, screen.childCount)
+            assertEquals(screen.height, page.height)
+            assertTrue(external.height > 0)
+        } finally {
+            external.close()
+        }
+    }
+
     private fun assertWithinPage(screen: ViewGroup, page: ScrollView, child: View) {
         assertTrue("Content must be measured", child.width > 0 && child.height > 0)
         assertEquals(View.VISIBLE, child.visibility)
@@ -133,11 +191,11 @@ class ReverbPermissionOnboardingLayoutIntegrationTest {
         if (view is ViewGroup) for (index in 0 until view.childCount) yieldAll(descendants(view.getChildAt(index)))
     }
 
-    private fun screen(context: Context) = ReverbPermissionOnboardingScreen(
-        context, ReverbDesign.theme(context, dark = false), "Permissions", "Continue", "Unavailable",
-        onRequest = { error("Measurement must not request a permission") },
-        onContinue = { error("Measurement must not complete onboarding") },
-    )
+    private fun screen(context: Context, theme: ReverbTheme = ReverbDesign.theme(context, dark = false)) =
+        ReverbPermissionOnboardingScreen(context, theme, "Permissions", "Continue", "Unavailable",
+            onRequest = { error("Measurement must not request a permission") },
+            onContinue = { error("Measurement must not complete onboarding") },
+        )
 
     private fun states() = listOf(
         ReverbPermissionOnboardingKind.NOTIFICATIONS to "Notifications",
@@ -163,5 +221,11 @@ class ReverbPermissionOnboardingLayoutIntegrationTest {
 
     private fun dp(context: Context, value: Int) = (value * context.resources.displayMetrics.density).roundToInt()
     private fun exact(size: Int) = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY)
-    private fun main(action: () -> Unit) = InstrumentationRegistry.getInstrumentation().runOnMainSync(action)
+    private fun main(action: () -> Unit) {
+        var failure: Throwable? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            failure = runCatching(action).exceptionOrNull()
+        }
+        failure?.let { throw it }
+    }
 }

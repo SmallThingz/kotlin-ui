@@ -32,8 +32,9 @@ internal class NativeDropdownOverflowCue(
     }
 
     /** Use inward clip edges. The wheel also applies its rounded path to pointer admission. */
-    fun place(width: Int, top: Float, bottom: Float, bothVisible: Boolean, visible: Boolean) {
-        val available = bounds.update(width, top, bottom, bothVisible, visible)
+    fun place(width: Int, top: Float, bottom: Float, slotCenter: Float, slotHeight: Int,
+        bothVisible: Boolean, visible: Boolean) {
+        val available = bounds.update(width, top, bottom, slotCenter, slotHeight, bothVisible, visible)
         if (available) {
             val targetWidth = bounds.right - bounds.left
             val targetHeight = bounds.bottom - bounds.top
@@ -126,9 +127,11 @@ internal class NativeDropdownOverflowCueBounds(private val direction: Int, priva
         private set
     private var placed = false
 
-    fun update(width: Int, clipTop: Float, clipBottom: Float, bothVisible: Boolean, visible: Boolean): Boolean {
+    fun update(width: Int, clipTop: Float, clipBottom: Float, slotCenter: Float, slotHeight: Int,
+        bothVisible: Boolean, visible: Boolean): Boolean {
         placed = false
-        if (!visible || width <= 0 || !clipTop.isFinite() || !clipBottom.isFinite()) return false
+        if (!visible || width <= 0 || slotHeight <= 0 || !slotCenter.isFinite() ||
+            !clipTop.isFinite() || !clipBottom.isFinite()) return false
         val first = ceil(clipTop).toInt().coerceAtLeast(0)
         val end = floor(clipBottom).toInt()
         if (end <= first) return false
@@ -136,8 +139,13 @@ internal class NativeDropdownOverflowCueBounds(private val direction: Int, priva
         // Keep the middle third free when both cues contend with a short option viewport.
         // A single cue grows to its normal target as soon as one full target remains free.
         val edge = if (bothVisible) available / 3 else maxOf(available / 3, available - targetPx)
-        val height = minOf(edge, targetPx)
-        if (height == 0) return false
+        // The fixed slot need not be centered in the reveal (e.g. an anchor at a safe edge).
+        // Reserve its middle third as an unambiguous option lane, even with only one cue.
+        val slotHalfLane = slotHeight / 6f
+        val beforeLane = floor(slotCenter - slotHalfLane).toInt() - first
+        val afterLane = end - ceil(slotCenter + slotHalfLane).toInt()
+        val height = minOf(edge, targetPx, if (direction < 0) beforeLane else afterLane)
+        if (height <= 0) return false
         val targetWidth = minOf(width, targetPx)
         left = (width - targetWidth) / 2
         right = left + targetWidth

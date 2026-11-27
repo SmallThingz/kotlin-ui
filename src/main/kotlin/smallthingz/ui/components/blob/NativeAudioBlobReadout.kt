@@ -19,6 +19,7 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import smallthingz.ui.components.CachedPathIconDrawable
 import smallthingz.ui.text.font.FontFamily
 import smallthingz.ui.text.view.ParagraphView
 import smallthingz.ui.unit.Density
@@ -42,7 +43,7 @@ class NativeAudioBlobReadout(
     private var filled = false
     private var primaryText: String? = null
     private var secondaryText: String? = null
-    private val icon = AudioBlobIcon(context, icons.ready)
+    private val icon = AudioBlobIcon(context, icons)
     private val primary = ParagraphView(context, style.primaryTextStyle, textDensity, fontResolver, style.focusInk)
     private val secondary = ParagraphView(context, style.secondaryTextStyle, textDensity, fontResolver, style.focusInk)
     private val darken = PorterDuffXfermode(PorterDuff.Mode.DARKEN)
@@ -407,8 +408,8 @@ class NativeAudioBlobReadout(
     }
 }
 
-private class AudioBlobIcon(context: Context, initialDrawable: Drawable) : View(context) {
-    private var drawable = initialDrawable
+private class AudioBlobIcon(context: Context, private val icons: NativeAudioBlobIcons) : View(context) {
+    private var drawable = icons.ready
     private var boundIcon: Drawable? = null
     private var boundTint = 0
     init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES }
@@ -424,6 +425,24 @@ private class AudioBlobIcon(context: Context, initialDrawable: Drawable) : View(
         if (contentDescription != description) contentDescription = description
         if (appearanceChanged) invalidate()
     }
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        updateCachedIconVisibility(isVisible)
+    }
+
+    override fun onDetachedFromWindow() {
+        updateCachedIconVisibility(false)
+        super.onDetachedFromWindow()
+    }
+
+    private fun updateCachedIconVisibility(visible: Boolean) {
+        // An inactive variant may still own the mask from its last visible pose.
+        (icons.ready as? CachedPathIconDrawable)?.setVisible(visible, false)
+        (icons.active as? CachedPathIconDrawable)?.setVisible(visible, false)
+        (icons.filled as? CachedPathIconDrawable)?.setVisible(visible, false)
+        invalidate()
+    }
+
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
         drawable.setBounds(0, 0, w, h)
     }

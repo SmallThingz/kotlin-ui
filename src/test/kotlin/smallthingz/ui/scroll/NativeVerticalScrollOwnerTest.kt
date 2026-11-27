@@ -213,6 +213,40 @@ class NativeVerticalScrollOwnerTest {
         assertFalse(fixture.state.isScrollInProgress)
     }
 
+    @Test fun overlappingFlingsKeepTheSuccessorsFlagUntilItsMutationRetires() = boundedTest {
+        val fixture = Fixture()
+        val first = launch(start = CoroutineStart.UNDISPATCHED) {
+            fixture.owner.onScrollStopped(-1000f)
+        }
+        // Consume the incumbent's request before cancellation, so the next request
+        // can only establish actual admission of the successor.
+        fixture.frames.awaitRequest()
+        assertTrue(fixture.owner.isFlinging)
+        assertTrue(fixture.state.isScrollInProgress)
+
+        val second = launch(start = CoroutineStart.UNDISPATCHED) {
+            fixture.owner.onScrollStopped(-1000f)
+        }
+        first.join()
+        fixture.frames.awaitRequest()
+        assertTrue(first.isCancelled)
+        assertTrue(second.isActive)
+        assertTrue(fixture.owner.isFlinging)
+        assertTrue(fixture.state.isScrollInProgress)
+        assertTrue(fixture.postVelocities.isEmpty())
+
+        fixture.frames.deliver(0L)
+        fixture.frames.frame(16_666_667L)
+        assertTrue(fixture.state.value > 0)
+        assertTrue(fixture.owner.isFlinging)
+        assertTrue(fixture.state.isScrollInProgress)
+
+        second.cancelAndJoin()
+        assertFalse(fixture.owner.isFlinging)
+        assertFalse(fixture.state.isScrollInProgress)
+        assertTrue(fixture.postVelocities.isEmpty())
+    }
+
     @Test fun equalPriorityHostsOfTheSameRetainedPageRetireTheOldMutation() = boundedTest {
         val first = Fixture()
         val second = Fixture(first.state)
@@ -399,11 +433,17 @@ class NativeVerticalScrollOwnerTest {
             delivered++
             return onFrame(time)
         }
-        suspend fun frame(time: Long, beforeDelivery: () -> Unit = {}) {
+        suspend fun awaitRequest() {
             requests.receive()
-            beforeDelivery()
+        }
+        suspend fun deliver(time: Long) {
             times.send(time)
             yield()
+        }
+        suspend fun frame(time: Long, beforeDelivery: () -> Unit = {}) {
+            awaitRequest()
+            beforeDelivery()
+            deliver(time)
         }
     }
 }

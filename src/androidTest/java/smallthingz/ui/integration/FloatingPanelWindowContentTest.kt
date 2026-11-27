@@ -18,6 +18,7 @@ import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeBackdropStyle
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeDarkSurfacePreset
+import smallthingz.ui.components.NativeDialogEdge
 import smallthingz.ui.components.NativeFloatingDialog
 import smallthingz.ui.components.NativeFloatingDialogContent
 import smallthingz.ui.components.NativeFloatingPanelRecipe
@@ -27,7 +28,14 @@ import smallthingz.ui.components.NativeUiAppearance
 /** Consumer-side public API through the real wrap-content window root, without showing a window. */
 @RunWith(AndroidJUnit4::class)
 class FloatingPanelWindowContentTest {
-    @Test fun publicPanelAdapterReservesPaintOutsideContentAndInputAndTracksRebinds() {
+    @Test fun publicPanelAdapterReservesPaintOutsideContentAndInputAndTracksRebinds() =
+        checkPanelPaintSpace(entryEdge = null)
+
+    @Test fun bottomPanelAdapterReservesUpperPaintOutsideContentAndInputAndTracksRebinds() =
+        checkPanelPaintSpace(entryEdge = NativeDialogEdge.BOTTOM)
+
+    private fun checkPanelPaintSpace(entryEdge: NativeDialogEdge?) {
+        val bottomEntry = entryEdge == NativeDialogEdge.BOTTOM
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         var result: Result<Unit>? = null
         instrumentation.runOnMainSync { result = runCatching {
@@ -48,7 +56,7 @@ class FloatingPanelWindowContentTest {
             var disposals = 0
             var dismissals = 0
             val dialog = NativeFloatingDialog(View(context), 1.5f, { dismissals++ },
-                statusBarProtection = null, shadowDp = recipe.shadowDp) { panelContext, _, _ ->
+                statusBarProtection = null, shadowDp = recipe.shadowDp, entryEdge = entryEdge) { panelContext, _, _ ->
                 surface = TestPanel(panelContext, recipe, palette)
                 NativeFloatingDialogContent.forPanel(surface, bindWindowAccessibility = {
                     root = it as ViewGroup
@@ -59,14 +67,16 @@ class FloatingPanelWindowContentTest {
                 }
             }
             try {
-                assertEquals(Gravity.TOP, requireNotNull(dialog.window).attributes.gravity)
+                assertEquals(if (bottomEntry) Gravity.BOTTOM else Gravity.TOP,
+                    requireNotNull(dialog.window).attributes.gravity)
                 assertEquals(ViewGroup.LayoutParams.WRAP_CONTENT, requireNotNull(dialog.window).attributes.height)
                 assertEquals(1, accessibilityBindings)
                 measure(root)
                 assertEquals(104, root.height) // ceil(2.25dp * 1.5), outside the 100px content.
                 assertEquals(100, surface.height)
                 assertEquals(100, surface.viewport.height)
-                assertEquals(0, surface.top)
+                assertEquals(if (bottomEntry) 4 else 0, surface.top)
+                assertEquals(0, surface.paddingTop)
                 assertEquals(0, surface.paddingBottom)
                 assertFalse(root.clipChildren)
 
@@ -77,12 +87,19 @@ class FloatingPanelWindowContentTest {
                 try {
                     root.draw(Canvas(bitmap))
                     assertEquals("Straight exterior lip survives the window boundary", palette.border,
-                        bitmap.getPixel(root.width / 2, surface.bottom + 1))
-                    assertTrue("Rounded shoulder remains visible below content",
-                        bitmap.getPixel(30, surface.bottom) ushr 24 > 0)
+                        bitmap.getPixel(root.width / 2, if (bottomEntry) surface.top - 2 else surface.bottom + 1))
+                    assertTrue("Rounded shoulder remains visible outside content",
+                        bitmap.getPixel(30, if (bottomEntry) surface.top - 1 else surface.bottom) ushr 24 > 0)
                 } finally { bitmap.recycle() }
 
-                assertFalse("Exterior band must not dispatch to the panel", touch(root, 101f))
+                assertFalse("Exterior band must not dispatch to the panel",
+                    touch(root, if (bottomEntry) surface.top - .5f else surface.bottom + 1f))
+                // Window outside-hit classification must not round the upper paint band into content.
+                val insideContent = root.javaClass.getDeclaredMethod("isInsideContent", MotionEvent::class.java)
+                    .apply { isAccessible = true }
+                val exterior = MotionEvent.obtain(0, 0, MotionEvent.ACTION_DOWN, 160f,
+                    if (bottomEntry) surface.top - .25f else surface.bottom + .25f, 0)
+                try { assertFalse(insideContent.invoke(root, exterior) as Boolean) } finally { exterior.recycle() }
                 assertEquals(0, surface.viewportTouches)
                 assertTrue(touch(root, 40f))
                 assertEquals(1, surface.viewportTouches)
@@ -92,10 +109,12 @@ class FloatingPanelWindowContentTest {
                 assertTrue(root.isLayoutRequested)
                 measure(root)
                 assertEquals(100, root.height)
+                assertEquals(0, surface.top)
                 surface.bindSurface(2f, recipe, palette)
                 assertTrue(root.isLayoutRequested)
                 measure(root)
                 assertEquals(105, root.height)
+                assertEquals(if (bottomEntry) 5 else 0, surface.top)
                 assertEquals(100, surface.height)
                 assertEquals(100, surface.viewport.height)
                 assertEquals(1, accessibilityBindings)

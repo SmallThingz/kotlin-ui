@@ -8,9 +8,12 @@ import android.graphics.Rect
 import android.os.SystemClock
 import android.text.Spanned
 import android.view.ContextThemeWrapper
+import android.view.InputDevice
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.graphics.Insets
@@ -32,6 +35,9 @@ import smallthingz.ui.components.NativeMaterialButtonView
 import smallthingz.ui.components.NativeMenuAccessibilityTestActivity
 import smallthingz.ui.controls.textSurfaceForeground
 import smallthingz.ui.graphics.NoiseDrawable
+import smallthingz.ui.reverb.onboarding.OnboardingFooterPresentation
+import smallthingz.ui.reverb.onboarding.OnboardingFooterView
+import smallthingz.ui.reverb.onboarding.ReverbOnboardingScreenHost
 import smallthingz.ui.reverb.settings.ReverbRetentionMode
 import smallthingz.ui.reverb.settings.ReverbRetentionSection
 import smallthingz.ui.text.view.ParagraphView
@@ -89,6 +95,135 @@ class ReverbControlScreenIntegrationTest {
             assertEquals(1, f.actions)
             assertEquals(0, f.edits)
         }
+    }
+
+    @Test fun reopeningSameOptionalPageRetiresHeldContinuePress() = withFixture { f ->
+        main {
+            var continued = 0
+            val presentation = optionalFooterPresentation()
+            f.frame.configureOnboardingFooter(f.environment.theme, {}, { continued++ })
+            f.frame.bindOnboardingFooter(presentation)
+            f.relayout()
+            val button = continueButton(f)
+            val bounds = Rect(0, 0, button.width, button.height)
+            f.frame.offsetDescendantRectToMyCoords(button, bounds)
+
+            val held = SystemClock.uptimeMillis()
+            assertTrue(dispatchFooterTouch(f.frame, bounds, held, MotionEvent.ACTION_DOWN))
+            f.frame.bindOnboardingFooter(null)
+            assertFalse(button.isShown)
+            f.frame.bindOnboardingFooter(presentation)
+            f.relayout()
+            assertSame(button, continueButton(f))
+            assertTrue(button.isShown)
+            dispatchFooterTouch(f.frame, bounds, held, MotionEvent.ACTION_UP)
+            assertEquals("An earlier visit's press cannot continue this visit", 0, continued)
+
+            val fresh = SystemClock.uptimeMillis()
+            assertTrue(dispatchFooterTouch(f.frame, bounds, fresh, MotionEvent.ACTION_DOWN))
+            dispatchFooterTouch(f.frame, bounds, fresh, MotionEvent.ACTION_UP)
+            assertEquals(1, continued)
+
+            val enabled = checkNotNull(button.createAccessibilityNodeInfo())
+            assertEquals("android.widget.Button", enabled.className.toString())
+            assertEquals(presentation.continueLabel, enabled.contentDescription.toString())
+            assertTrue(enabled.isVisibleToUser && enabled.isEnabled)
+            assertTrue(enabled.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK })
+
+            f.frame.bindOnboardingFooter(presentation.copy(continueEnabled = false))
+            val disabled = checkNotNull(button.createAccessibilityNodeInfo())
+            assertFalse(disabled.isEnabled)
+            assertFalse(disabled.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK })
+            assertFalse(button.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+            assertEquals(1, continued)
+        }
+    }
+
+    @Test fun optionalFooterReconfigurationRetainsFocusedPageAndUpdatesActionOwner() = withFixture { f ->
+        main {
+            var original = 0
+            var replacement = 0
+            var afterThemeChange = 0
+            f.frame.configureOnboardingFooter(f.environment.theme, {}, { original++ })
+            f.frame.bindOnboardingFooter(optionalFooterPresentation())
+            val competitor = EditText(f.context).apply {
+                showSoftInputOnFocus = false
+                setText("Another focus target")
+            }
+            f.frame.controlsContent.addView(competitor)
+            f.relayout()
+
+            val host = f.frame.content.descendants.filterIsInstance<ReverbOnboardingScreenHost>().single()
+            val page = host.pageArea
+            var detaches = 0
+            val listener = object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(view: View) = Unit
+                override fun onViewDetachedFromWindow(view: View) { detaches++ }
+            }
+            page.addOnAttachStateChangeListener(listener)
+            try {
+                val editor = (f.first.view as ViewGroup).descendants.filterIsInstance<NativeLabeledTextField>().single().editor
+                val editable = checkNotNull(editor.text)
+                assertTrue(competitor.isAttachedToWindow && competitor.isFocusable)
+                assertTrue(editor.requestFocus())
+                editor.setSelection(2, 5)
+                val button = continueButton(f)
+
+                fun assertRetainedEditor() {
+                    assertEquals(0, detaches)
+                    assertSame(host, page.parent)
+                    assertTrue(page.isAttachedToWindow)
+                    assertSame(editor, f.frame.findFocus())
+                    assertSame(editable, editor.text)
+                    assertEquals(2, editor.selectionStart)
+                    assertEquals(5, editor.selectionEnd)
+                }
+
+                f.frame.configureOnboardingFooter(f.environment.theme, {}, { replacement++ })
+                f.relayout()
+                assertRetainedEditor()
+                assertSame(button, continueButton(f))
+                assertTrue(button.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                assertEquals(0, original)
+                assertEquals(1, replacement)
+
+                f.frame.configureOnboardingFooter(ReverbEnvironment(f.context, true).theme, {}, { afterThemeChange++ })
+                f.relayout()
+                assertRetainedEditor()
+                val themedButton = continueButton(f)
+                assertNotSame(button, themedButton)
+                assertFalse(button.isAttachedToWindow)
+                assertFalse(button.performClick())
+                assertTrue(themedButton.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                assertEquals(0, original)
+                assertEquals(1, replacement)
+                assertEquals(1, afterThemeChange)
+            } finally {
+                page.removeOnAttachStateChangeListener(listener)
+            }
+        }
+    }
+
+    private fun optionalFooterPresentation() = OnboardingFooterPresentation(
+        page = 0, backLabel = "Back", continueLabel = "Continue setup",
+        backEnabled = false, continueEnabled = true,
+    )
+
+    private fun continueButton(f: Fixture): NativeMaterialButtonView =
+        f.frame.content.descendants.filterIsInstance<OnboardingFooterView>().single()
+            .descendants.filterIsInstance<NativeMaterialButtonView>().single { it.label.getText().toString() == "Continue setup" }
+
+    private fun dispatchFooterTouch(frame: View, bounds: Rect, downTime: Long, action: Int): Boolean {
+        val pointer = MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_FINGER }
+        val coordinates = MotionEvent.PointerCoords().apply {
+            x = bounds.exactCenterX()
+            y = bounds.exactCenterY()
+            pressure = 1f
+            size = 1f
+        }
+        val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, 1,
+            arrayOf(pointer), arrayOf(coordinates), 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
+        return try { frame.dispatchTouchEvent(event) } finally { event.recycle() }
     }
 
     @Test fun frameExposesNoPersistentStatusSlotOrCompatibilityApi() {
@@ -261,7 +396,17 @@ class ReverbControlScreenIntegrationTest {
                 View.MeasureSpec.makeMeasureSpec(dp(heightDp), View.MeasureSpec.EXACTLY))
             frame.layout(0, 0, frame.measuredWidth, frame.measuredHeight)
         }
-        fun close() { first.close(); second.close(); primary.close() }
+        fun relayout() {
+            frame.measure(View.MeasureSpec.makeMeasureSpec(frame.width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(frame.height, View.MeasureSpec.EXACTLY))
+            frame.layout(0, 0, frame.measuredWidth, frame.measuredHeight)
+        }
+        fun close() {
+            frame.closeOnboardingFooter()
+            first.close()
+            second.close()
+            primary.close()
+        }
     }
 
     private fun withFixture(fontScale: Float = 1f, dark: Boolean = false, block: (Fixture) -> Unit) {

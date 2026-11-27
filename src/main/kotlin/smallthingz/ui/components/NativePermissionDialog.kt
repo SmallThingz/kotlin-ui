@@ -340,6 +340,7 @@ private class NativePermissionWindow(
         })
         dialog.setTitle(summary)
         dialog.setContentView(surface)
+        if (Build.VERSION.SDK_INT >= 29) window.decorView.isForceDarkAllowed = false
         // A stray outside tap should not discard a permission request during multi-window transitions.
         dialog.setCanceledOnTouchOutside(false)
         window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))

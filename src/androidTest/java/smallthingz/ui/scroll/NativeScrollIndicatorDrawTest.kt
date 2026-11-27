@@ -304,6 +304,88 @@ class NativeScrollIndicatorDrawTest {
         }
     }
 
+    @Test fun replacingAdapterOrLayoutManagerRetiresHeldThumbAndPendingPlacement() {
+        val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
+            NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        var host: LinearLayout? = null
+        withRetiringTestActivity(activity, root = { host }) {
+            val laidOut = CountDownLatch(1)
+            lateinit var list: NativeSourceRecyclerView
+            fun manager() = object : LinearLayoutManager(list.context) {
+                override fun onLayoutChildren(recycler: RecyclerView.Recycler, state: RecyclerView.State) {
+                    if (!state.isPreLayout) list.applyPendingScrollIndicatorPlacement(this, state.itemCount)
+                    super.onLayoutChildren(recycler, state)
+                }
+            }
+            main {
+                val root = LinearLayout(activity).also { host = it }
+                list = recycler(activity, 160, View.LAYOUT_DIRECTION_LTR)
+                list.layoutManager = manager()
+                list.adapter = Rows(1_000)
+                list.setBackgroundColor(Color.WHITE)
+                root.addView(list, LinearLayout.LayoutParams(120, 96))
+                list.doOnLayout { laidOut.countDown() }
+                activity.setContentView(root)
+            }
+            assertTrue(laidOut.await(5, TimeUnit.SECONDS))
+            main {
+                assertTrue(list.isAttachedToWindow && list.isShown)
+                list.bindScrollIndicator(style, Color.RED)
+                val node = list.scrollIndicatorPointerNode
+                fun pointer(y: Float, previousY: Float, pressed: Boolean, previouslyPressed: Boolean): Boolean {
+                    val position = Offset(117f, y)
+                    val change = NativeDragPointerChange(0L, SystemClock.uptimeMillis(),
+                        position, Offset(117f, previousY), pressed, previouslyPressed, PointerType.Touch, position)
+                    node.dispatch(NativeDragPointerEvent(listOf(change), Offset.Zero), NativePointerPass.INITIAL)
+                    return change.consumed
+                }
+
+                for (replacement in listOf("adapter", "swapAdapter", "layoutManager")) {
+                    (list.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(0, 0)
+                    layout(list, 120, 96)
+                    revealAtTop(list)
+                    assertThumb(list, Rect(116, 0, 118, 24))
+                    assertTrue(pointer(12f, 12f, pressed = true, previouslyPressed = false))
+                    assertTrue(pointer(48f, 12f, pressed = true, previouslyPressed = true))
+                    assertTrue(list.isScrollIndicatorDragging)
+                    assertTrue(list.hasPendingScrollIndicatorPlacement)
+
+                    when (replacement) {
+                        "adapter" -> list.adapter = Rows(600)
+                        "swapAdapter" -> list.swapAdapter(Rows(800), true)
+                        "layoutManager" -> list.layoutManager = manager()
+                    }
+                    assertFalse("$replacement retained pointer ownership", list.isScrollIndicatorDragging)
+                    assertFalse(list.hasPendingScrollIndicatorPlacement)
+                    val currentManager = list.layoutManager as LinearLayoutManager
+                    currentManager.scrollToPositionWithOffset(0, 0)
+                    layout(list, 120, 96)
+                    assertEquals(0, currentManager.findFirstVisibleItemPosition())
+                    val intendedOffset = list.computeVerticalScrollOffset()
+
+                    assertFalse(pointer(120f, 48f, pressed = true, previouslyPressed = true))
+                    assertFalse(pointer(120f, 120f, pressed = false, previouslyPressed = true))
+                    assertFalse(list.isScrollIndicatorDragging)
+                    assertFalse(list.hasPendingScrollIndicatorPlacement)
+                    layout(list, 120, 96)
+                    assertEquals("$replacement accepted a stale seek",
+                        intendedOffset, list.computeVerticalScrollOffset())
+
+                    revealAtTop(list)
+                    assertThumb(list, Rect(116, 0, 118, 24))
+                    assertTrue(pointer(12f, 12f, pressed = true, previouslyPressed = false))
+                    assertTrue(pointer(120f, 12f, pressed = true, previouslyPressed = true))
+                    assertTrue(pointer(120f, 120f, pressed = false, previouslyPressed = true))
+                    assertFalse(list.isScrollIndicatorDragging)
+                    assertTrue(list.hasPendingScrollIndicatorPlacement)
+                    layout(list, 120, 96)
+                    assertFalse(list.hasPendingScrollIndicatorPlacement)
+                    assertFalse(list.canScrollVertically(1))
+                }
+            }
+        }
+    }
+
     @SdkSuppress(minSdkVersion = 28, maxSdkVersion = 28)
     @Test fun pieRetiresTheFadeWakeOnVisibilityAndPresentationLoss() {
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,

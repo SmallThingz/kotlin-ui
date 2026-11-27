@@ -67,8 +67,15 @@ import kotlin.math.roundToInt
 
 private fun sheetWindowContext(anchor: Context): Context {
     val light = TypedValue()
-    val isLight = anchor.theme.resolveAttribute(android.R.attr.isLightTheme, light, true) &&
-        light.type == TypedValue.TYPE_INT_BOOLEAN && light.data != 0
+    val isLight = if (Build.VERSION.SDK_INT >= 29) {
+        anchor.theme.resolveAttribute(android.R.attr.isLightTheme, light, true) &&
+            light.type == TypedValue.TYPE_INT_BOOLEAN && light.data != 0
+    } else {
+        // API 28 exposes the themed background color, but not the public light-theme flag.
+        anchor.theme.resolveAttribute(android.R.attr.colorBackground, light, true) &&
+            light.type in TypedValue.TYPE_FIRST_COLOR_INT..TypedValue.TYPE_LAST_COLOR_INT &&
+            Color.alpha(light.data) == 255 && ComposeColor(light.data).luminance() > .5f
+    }
     val theme = if (isLight) smallthingz.ui.R.style.NativeSheetLightWindowTheme
         else smallthingz.ui.R.style.NativeSheetWindowTheme
     return ContextThemeWrapper(anchor, theme)
@@ -229,7 +236,7 @@ class NativeActionSheet internal constructor(
         root.layoutDirection=anchor.layoutDirection
         root.elevation=style.recipe.shadowDp*style.textDensity.density
         root.outlineProvider = NativeWindowShadowOutline
-        if(Build.VERSION.SDK_INT>=29)root.isForceDarkAllowed=false
+        if (Build.VERSION.SDK_INT >= 29) actual.decorView.isForceDarkAllowed = false
         updateWindowParameters()
         updateWindowColors()
         pointer.bind(root,surface,scrim,handle,appContent,dragNode)
