@@ -42,7 +42,7 @@ object GalleryDesign {
     val libraryActionButtonStyle = NativeMaterialButtonStyle(
         horizontalPaddingDp = 0, verticalPaddingDp = 0,
         minimumWidthDp = 48, minimumHeightDp = 48,
-        iconSizeDp = appearance.toolbars.action.glyphDp.toInt(),
+        iconSizeDp = 20,
         radiusDp = appearance.toolbars.action.radiusDp, showLabel = false,
     )
     /** Secondary library tools retain the existing labelled 48dp targets. */
