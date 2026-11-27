@@ -1,6 +1,7 @@
 package smallthingz.ui.reverb
 
 import android.app.Activity
+import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.view.View
 import android.widget.FrameLayout
@@ -67,6 +68,8 @@ class OnboardingFooterAdapterTest {
             for (width in listOf(272, 180)) for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
                 footer.layoutDirection = direction
                 measure(footer, width)
+                assertEquals("Host must resolve the requested direction before geometry assertions",
+                    direction, footer.layoutDirection)
                 val density = footer.resources.displayMetrics.density
                 val gap = (recipe.actionGapDp * density).roundToInt()
                 assertEquals(recipe.actionsTopPx(density), back.top)
@@ -114,18 +117,30 @@ class OnboardingFooterAdapterTest {
     private fun withFooter(fontScale: Float, action: (OnboardingFooterView, ReverbPalette) -> Unit) {
         val controller = Robolectric.buildActivity(Activity::class.java).setup().visible().windowFocusChanged(true)
         val activity = controller.get()
-        val context = activity.createConfigurationContext(Configuration(activity.resources.configuration).apply {
-            this.fontScale = fontScale
-        })
-        val theme = ControlTheme.resolve(context, false)
-        val palette = NativeUiAppearance.Default.resolveColorScheme(context, false)
-        val footer = OnboardingFooterView(context, theme, pageCount = 2)
-        val root = FrameLayout(activity)
-        root.addView(footer)
-        activity.setContentView(root)
-        controller.windowFocusChanged(true)
-        try { action(footer, palette) }
-        finally { footer.close(); controller.pause().stop().destroy() }
+        val applicationInfo = activity.applicationInfo
+        val previousFlags = applicationInfo.flags
+        // Match the existing horizontal-panel fixture: the library host manifest does not opt in.
+        applicationInfo.flags = previousFlags or ApplicationInfo.FLAG_SUPPORTS_RTL
+        var ownedFooter: OnboardingFooterView? = null
+        try {
+            val context = activity.createConfigurationContext(Configuration(activity.resources.configuration).apply {
+                this.fontScale = fontScale
+            })
+            val theme = ControlTheme.resolve(context, false)
+            val palette = NativeUiAppearance.Default.resolveColorScheme(context, false)
+            val footer = OnboardingFooterView(context, theme, pageCount = 2).also { ownedFooter = it }
+            val root = FrameLayout(activity)
+            root.addView(footer)
+            activity.setContentView(root)
+            controller.windowFocusChanged(true)
+            action(footer, palette)
+        } finally {
+            try { ownedFooter?.close() } finally {
+                try { controller.pause().stop().destroy() } finally {
+                    applicationInfo.flags = previousFlags
+                }
+            }
+        }
     }
 
     private fun measure(view: View, width: Int) {
