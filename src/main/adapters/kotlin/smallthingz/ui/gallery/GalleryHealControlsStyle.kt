@@ -1,10 +1,13 @@
 package smallthingz.ui.gallery
 
 import android.content.Context
+import android.graphics.Path
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
+import smallthingz.ui.components.CachedPathIconDrawable
+import smallthingz.ui.components.NativePathIconMask
 import smallthingz.ui.components.NativeButtonPalette
 import smallthingz.ui.components.NativeChoiceStyle
 import smallthingz.ui.components.NativeMaterialButtonStyle
@@ -52,6 +55,22 @@ object GalleryHealControlsStyle {
     val selectionIconAction = NativeMaterialButtonStyle(horizontalPaddingDp = 0,
         verticalPaddingDp = 0, minimumWidthDp = 48, minimumHeightDp = 48,
         iconSizeDp = 24, showLabel = false)
+
+    // Gallery's position target uses the common cached 24px path renderer, not an app-local view.
+    // Symmetric in RTL; each button owns its drawable while the immutable mask is shared.
+    private val spotPositionMask by lazy {
+        NativePathIconMask(Path().apply {
+            addCircle(12f, 12f, 6f, Path.Direction.CW)
+            addCircle(12f, 12f, 1f, Path.Direction.CW)
+            moveTo(12f, 2f); lineTo(12f, 7f)
+            moveTo(12f, 17f); lineTo(12f, 22f)
+            moveTo(2f, 12f); lineTo(7f, 12f)
+            moveTo(17f, 12f); lineTo(22f, 12f)
+        }, strokeWidth = 2f)
+    }
+
+    fun spotPositionIcon(density: Float, tint: Int) =
+        CachedPathIconDrawable({ spotPositionMask }, density, tint)
 
     /** Selection commands share the native text-button disabled state without replacing the view. */
     fun paintSelectionAction(button: Button, palette: ControlPalette) {
