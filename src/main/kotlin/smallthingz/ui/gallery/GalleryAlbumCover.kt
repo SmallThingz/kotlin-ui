@@ -38,7 +38,7 @@ class GalleryAlbumCover(context: Context, colors: NativeColorScheme, private val
 
     val image = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
     val placeholder = ImageView(context)
-    val title = NativeText(context, colors.pageControls, GalleryDesign.textStyle(NativeTypographyRole.TITLE_MEDIUM)).apply {
+    val title = NativeText(context, colors.pageControls, GalleryDesign.textStyle(NativeTypographyRole.BODY_LARGE)).apply {
         maxLines = 2; ellipsize = TextUtils.TruncateAt.END
     }
     val count = NativeText(context, colors.pageControls, GalleryDesign.textStyle(NativeTypographyRole.LABEL_SMALL)).apply {

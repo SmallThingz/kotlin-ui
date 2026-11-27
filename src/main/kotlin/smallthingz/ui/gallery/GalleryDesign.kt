@@ -9,6 +9,7 @@ import smallthingz.ui.components.NativeMaterialButtonStyle
 import smallthingz.ui.components.nativeTextStyle
 import smallthingz.ui.components.srgbColorWithAlpha
 import smallthingz.ui.controls.ControlPalette
+import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.reverb.ReverbDesign
 import smallthingz.ui.reverb.reverbActionSheetStyle
 import smallthingz.ui.text.NativeTypography
@@ -19,6 +20,17 @@ import smallthingz.ui.text.NativeTypographyRole
 /** Gallery uses the shared appearance; product marks and content remain Gallery-owned. */
 object GalleryDesign {
     val appearance = ReverbDesign.appearance
+
+    /** Library pages follow the shared page fill, grain seed and intensity. */
+    fun libraryBackground(palette: NativeColorScheme): NoiseDrawable =
+        appearance.backdrops.pageBackground(palette)
+
+    /** Rebind the same drawable without replacing its bounds, callback or route owner. */
+    fun bindLibraryBackground(drawable: NoiseDrawable, palette: NativeColorScheme) {
+        drawable.setBackgroundColor(palette.background)
+        drawable.setGrainSeed(appearance.backdrops.pageGrainSeed)
+        drawable.setNoiseIntensity(palette.backgroundGrain)
+    }
 
     /** Secondary viewer browsing keeps the existing compact native target in every pose.
      * This metric does not opt the primary action row into icon-only presentation.
