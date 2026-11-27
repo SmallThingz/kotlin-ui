@@ -84,7 +84,7 @@ The standalone build pins Gradle 9.7.1, Android Gradle Plugin 9.4.0, and Kotlin
 
 ## Documentation
 
-- [Anchored dropdowns](docs/anchored-dropdown-draft.md) for interaction and integration.
+- [Anchored dropdowns](docs/anchored-dropdown.md) for interaction and integration.
 - [Reference guide](docs/reference-guide.md) for component ownership, menus,
   dialogs, phase input, scrolling, animation, and API migration.
 - [Settings and browser controls](docs/appearance-controls.md),
