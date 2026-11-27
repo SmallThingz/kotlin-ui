@@ -41,8 +41,18 @@ class AudioBlobReadoutContrastHostTest {
         val failures = mutableListOf<String>()
         for (scene in Scene.entries) {
             val fixture = Fixture(RuntimeEnvironment.getApplication(), scene)
-            fixture.layoutHome(360, dimmed = false)
+            fixture.layoutHome(COVERED_HOME_HEIGHT, dimmed = false)
+            val normalFootprint = fixture.projectedFootprintRatio()
+            assertTrue("${scene.name} normal readout must fit stable material coverage: $normalFootprint",
+                normalFootprint in 0f..STABLE_SETTLED_COVERAGE)
             val normal = fixture.sample(expectedDarkInk = !scene.backdropUsesDarkInk, failures)
+
+            fixture.layoutHome(INTERMEDIATE_HOME_HEIGHT, dimmed = false)
+            assertEquals(216, fixture.audioView.width)
+            val intermediateFootprint = fixture.projectedFootprintRatio()
+            assertTrue("${scene.name} intermediate readout must use page ink: $intermediateFootprint",
+                intermediateFootprint > STABLE_SETTLED_COVERAGE)
+            val intermediate = fixture.sample(expectedDarkInk = scene.backdropUsesDarkInk, failures)
 
             fixture.layoutHome(190, dimmed = false)
             val shortest = fixture.sample(expectedDarkInk = scene.backdropUsesDarkInk, failures)
@@ -52,7 +62,13 @@ class AudioBlobReadoutContrastHostTest {
             recordEdgeWitnesses("${scene.name} undimmed", shortest.fadePixels + short.fadePixels,
                 shortest.outsidePixels + short.outsidePixels, failures)
 
-            fixture.layoutHome(360, dimmed = false)
+            fixture.layoutHome(INTERMEDIATE_HOME_HEIGHT, dimmed = false)
+            val intermediateGrown = fixture.sample(expectedDarkInk = scene.backdropUsesDarkInk, failures)
+            if (!intermediate.pixels.contentEquals(intermediateGrown.pixels)) {
+                failures += "${scene.name}: growing to the intermediate size changed the per-pixel output"
+            }
+
+            fixture.layoutHome(COVERED_HOME_HEIGHT, dimmed = false)
             val grown = fixture.sample(expectedDarkInk = !scene.backdropUsesDarkInk, failures)
             if (!normal.pixels.contentEquals(grown.pixels)) {
                 failures += "${scene.name}: growing did not restore the original per-pixel output"
@@ -258,6 +274,12 @@ class AudioBlobReadoutContrastHostTest {
             control.present(dimmed)
         }
 
+        fun projectedFootprintRatio(): Float =
+            AudioReactiveBlobView::class.java.getDeclaredField("readoutRadiusPixels").let {
+                it.isAccessible = true
+                it.getFloat(audioView) / minOf(audioView.width, audioView.height)
+            }
+
         fun primaryFits(): Boolean {
             val primary = readout.getChildAt(1) as ParagraphView
             val line = requireNotNull(primary.createOriginalSemanticsParagraph())
@@ -397,7 +419,10 @@ class AudioBlobReadoutContrastHostTest {
     private companion object {
         const val PRIMARY = "7:57"
         const val MIN_CONTRAST = 4.5
-        const val IMAGE_SIZE = 272
+        const val COVERED_HOME_HEIGHT = 430
+        const val INTERMEDIATE_HOME_HEIGHT = 360
+        const val STABLE_SETTLED_COVERAGE = .33f - .079f - .012f
+        const val IMAGE_SIZE = 336
         const val PADDING = 24
         val CHILDREN = listOf("icon", "time label", "size label")
 

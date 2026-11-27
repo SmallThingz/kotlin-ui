@@ -56,8 +56,12 @@ class AudioReactiveBlobView(
     private var materialPaused = 0
     private var readoutRadiusPixels = 0f
     private var readoutMaterialCorrection = 0
+    private var darkeningCorrection = 0
+    private var darkeningFilter: LightingColorFilter? = null
+    private var lighteningCorrection = 0
+    private var lighteningFilter: LightingColorFilter? = null
     private var readoutBackground = 0
-    private var readoutPrefersBackdropInk = false
+    private var readoutUsesBackdropInkWhenUncovered = false
     private var readoutLayerOpacity = 1f
     private var readoutBackdropUsesDarkInk = false
     private var readoutAgslMin = 0f
@@ -68,13 +72,13 @@ class AudioReactiveBlobView(
     fun updateReadoutGeometry(radiusPixels: Float, background: Int, agslMin: Float = 0f, agslMax: Float = 1f,
         fallbackMin: Float = 0f, fallbackMax: Float = 1f) {
         updateReadoutGeometry(radiusPixels, background, agslMin, agslMax, fallbackMin, fallbackMax,
-            prefersBackdropInk = false, layerOpacity = 1f)
+            useBackdropInkWhenUncovered = false, layerOpacity = 1f)
     }
 
     internal fun updateReadoutGeometry(radiusPixels: Float, background: Int, agslMin: Float, agslMax: Float,
-        fallbackMin: Float, fallbackMax: Float, prefersBackdropInk: Boolean, layerOpacity: Float) {
+        fallbackMin: Float, fallbackMax: Float, useBackdropInkWhenUncovered: Boolean, layerOpacity: Float) {
         if (readoutRadiusPixels == radiusPixels && readoutBackground == background &&
-            readoutPrefersBackdropInk == prefersBackdropInk && readoutLayerOpacity == layerOpacity &&
+            readoutUsesBackdropInkWhenUncovered == useBackdropInkWhenUncovered && readoutLayerOpacity == layerOpacity &&
             readoutAgslMin == agslMin && readoutAgslMax == agslMax &&
             readoutFallbackMin == fallbackMin && readoutFallbackMax == fallbackMax) return
         readoutRadiusPixels = radiusPixels
@@ -83,7 +87,7 @@ class AudioReactiveBlobView(
             readoutBackdropUsesDarkInk = audioBlobMaterialLuminance(background) >= .179
             readoutBackground = background
         }
-        readoutPrefersBackdropInk = prefersBackdropInk
+        readoutUsesBackdropInkWhenUncovered = useBackdropInkWhenUncovered
         readoutLayerOpacity = layerOpacity
         readoutAgslMin = agslMin
         readoutAgslMax = agslMax
@@ -95,26 +99,53 @@ class AudioReactiveBlobView(
     internal fun setReadoutMaterialCorrection(correction: Int) {
         if (readoutMaterialCorrection == correction) return
         readoutMaterialCorrection = correction
-        // LightingColorFilter changes only RGB. Each renderer retains its own alpha and shape.
-        val amount = kotlin.math.abs(correction) * 0x010101
-        val filter = if (amount == 0) null else LightingColorFilter(
-            0x00ffffff - amount, if (correction > 0) amount else 0,
-        )
+        // Correct pigment without painting outside the renderer. Retain the last filter
+        // of each polarity so a coverage change during audio motion can reuse it.
+        val filter = when {
+            correction < 0 -> {
+                if (darkeningCorrection != correction) {
+                    darkeningCorrection = correction
+                    darkeningFilter = LightingColorFilter(0x00ffffff + correction * 0x010101, 0)
+                }
+                darkeningFilter
+            }
+            correction > 0 -> {
+                if (lighteningCorrection != correction) {
+                    lighteningCorrection = correction
+                    val amount = correction * 0x010101
+                    lighteningFilter = LightingColorFilter(0x00ffffff - amount, amount)
+                }
+                lighteningFilter
+            }
+            else -> null
+        }
         renderer.setReadoutColorFilter(filter)
         invalidate()
     }
 
     fun readoutNeedsSupport(darkInk: Boolean): Boolean {
         val size = minOf(width, height).toFloat()
+        return readoutNeedsSupport(darkInk, size, materialCoversReadout(size))
+    }
+
+    private fun materialCoversReadout(size: Float): Boolean {
+        if (size <= 0f || readoutRadiusPixels <= 0f) return false
+        if (renderer is FallbackRenderer && materialPaused ushr 24 != 255 &&
+            audioBlobColorLife(currentLife, currentPresence) < 1f
+        ) return false
+        // Full bands can fold inward by .096 * smoothstep(activity), while activity
+        // grows the base by .018 * activity. The net inward loss peaks at .078288;
+        // scaling .079 by life and presence stays conservative because base growth
+        // scales by life alone. Use that envelope and keep the antialiasing margin.
+        val inwardLoss = .079f * currentLife * currentPresence
+        return readoutRadiusPixels / size <= baseRadiusFraction(activity = 0f) - inwardLoss - .012f
+    }
+
+    private fun readoutNeedsSupport(darkInk: Boolean, size: Float, covered: Boolean): Boolean {
         if (size <= 0f || readoutRadiusPixels <= 0f) return true
         val radius = readoutRadiusPixels / size
-        val base = currentBaseRadiusFraction()
-        val low = currentBands[0] * .34f + currentBands[1] * .30f + currentBands[2] * .21f + currentBands[3] * .15f
-        val high = currentBands[4] * .34f + currentBands[5] * .30f + currentBands[6] * .21f + currentBands[7] * .15f
-        val energy = currentMotionEnergy()
-        val fold = energy * (.043f + .035f * low + .018f * high)
-        val minimumBody = base - fold
-        val covered = radius <= minimumBody - .012f
+        // The quiet base gives an upper bound on radial drain without following raw audio.
+        val base = baseRadiusFraction(activity = 0f)
         val fallback = renderer is FallbackRenderer
         return audioBlobInkNeedsSupport(materialPrimary, materialTertiary, materialPaused,
             currentLife, currentPresence, currentSilence, fallback, darkInk,
@@ -157,14 +188,17 @@ class AudioReactiveBlobView(
     fun readoutUsesDarkInk(): Boolean = resolveReadoutInkAndSupport() and 1 != 0
 
     private fun resolveReadoutInkAndSupport(): Int {
-        var darkInk = if (readoutPrefersBackdropInk) {
+        val size = minOf(width, height).toFloat()
+        val covered = materialCoversReadout(size)
+        val prefersBackdropInk = readoutUsesBackdropInkWhenUncovered && !covered
+        var darkInk = if (prefersBackdropInk) {
             readoutBackdropUsesDarkInk
         } else {
             audioBlobUsesDarkInk(materialPrimary, materialTertiary, materialPaused, currentLife,
                 currentPresence, currentSilence, renderer is FallbackRenderer)
         }
-        var supportNeeded = readoutNeedsSupport(darkInk)
-        if (!readoutPrefersBackdropInk && supportNeeded && !readoutNeedsSupport(!darkInk)) {
+        var supportNeeded = readoutNeedsSupport(darkInk, size, covered)
+        if (!prefersBackdropInk && supportNeeded && !readoutNeedsSupport(!darkInk, size, covered)) {
             darkInk = !darkInk
             supportNeeded = false
         }
@@ -177,7 +211,7 @@ class AudioReactiveBlobView(
         val geometryTransition = currentPresence != targetPresence || currentLife != targetLife
         if (geometryTransition) materialTransitionOwnsPalette = true
         // A palette tail may extend an owned capture transition, but idle theme changes
-        // must not create a new readout support field around the small resting body.
+        // must not apply a new readout correction to the small resting body.
         val transitioning = geometryTransition ||
             (materialTransitionOwnsPalette && paletteMotion?.isInterpolating == true)
         if (!transitioning) materialTransitionOwnsPalette = false
@@ -260,8 +294,10 @@ class AudioReactiveBlobView(
         publishReadoutAppearance()
     }
 
-    fun currentBaseRadiusFraction(): Float =
-        0.095f + currentLife * (0.235f + currentActivity.coerceIn(0f, 1f) * 0.018f)
+    fun currentBaseRadiusFraction(): Float = baseRadiusFraction(currentActivity.coerceIn(0f, 1f))
+
+    private fun baseRadiusFraction(activity: Float): Float =
+        0.095f + currentLife * (0.235f + activity * 0.018f)
 
     fun updateState(
         active: Boolean,

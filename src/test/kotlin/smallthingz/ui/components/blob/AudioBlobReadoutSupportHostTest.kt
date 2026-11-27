@@ -6,17 +6,18 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LightingColorFilter
+import android.graphics.Paint
 import android.view.View
 import kotlin.math.roundToInt
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
-import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import smallthingz.ui.components.NativeCaptureControlsStyle
@@ -31,9 +32,9 @@ import smallthingz.ui.unit.Density
 @Config(application = Application::class, sdk = [35], qualifiers = "en-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class AudioBlobReadoutSupportHostTest {
-    @Test fun compactReadoutItselfPaintsNoFieldInEitherCaptureState() {
+    @Test fun readoutItselfPaintsNoFieldAtAnySampledHeightOrCaptureState() {
         val fixture = Fixture(RuntimeEnvironment.getApplication())
-        for (homeHeight in listOf(190, 215)) {
+        for (homeHeight in listOf(190, 215, 316, 420)) {
             val blobSize = reverbHomeGeometry(360, homeHeight, 1f, NativeCaptureControlsStyle.Default).blobSize
             // Also exercise rounded centering and a renderer whose width and height differ.
             fixture.layout(blobSize + 9, blobSize)
@@ -47,43 +48,31 @@ class AudioBlobReadoutSupportHostTest {
         }
     }
 
-    @Test fun supportDropsOnEmptyLayoutAndRecoversAfterResize() {
-        val fixture = Fixture(RuntimeEnvironment.getApplication())
-        val background = Color.rgb(32, 32, 32)
-        fun render(support: Boolean) = fixture.render(background, darkInk = true, transitioning = false, support = support)
-        fixture.layout(200, 200)
-        val normal = render(true)
-        assertTrue(!normal.contentEquals(render(false)))
-        fixture.layout(56, 56)
-        assertArrayEquals(render(false), render(true))
-        fixture.layout(1, 1)
-        assertArrayEquals(render(false), render(true))
-        fixture.layout(0, 0)
-        assertArrayEquals(render(false), render(true))
-        fixture.layout(200, 200)
-        assertArrayEquals(normal, render(true))
-    }
-
-    @Test fun compactModeChangesInvalidateReadoutWithoutAnAppearanceCallback() {
+    @Test fun rendererCorrectionRecoversAfterEmptyLayout() {
         val fixture = Fixture(RuntimeEnvironment.getApplication(), materialBackdrop = Color.WHITE)
         fixture.layout(200, 200)
-        // This material needs support for dark ink in both modes, so appearance stays unchanged.
+        fixture.presentActiveMaterial(0xff757575.toInt())
+        val corrected = fixture.appliedCorrection()
+        assertTrue("Dark ink needs a lightening filter", corrected.second > 0)
+        for (size in listOf(56, 1, 0)) fixture.layout(size, size)
+        assertNull("An empty layout has no material correction", fixture.installedCorrection())
+        fixture.layout(200, 200)
+        assertEquals(corrected, fixture.appliedCorrection())
+    }
+
+    @Test fun resizeKeepsCorrectionOnTheRendererWithUnchangedReadoutBounds() {
+        val fixture = Fixture(RuntimeEnvironment.getApplication(), materialBackdrop = Color.WHITE)
+        fixture.layout(200, 200)
         fixture.presentActiveMaterial(0xff757575.toInt())
         assertEquals(Triple(true, false, true), fixture.lastAppearance)
-        val appearanceCallbacks = fixture.appearanceCallbacks
-        val readout = shadowOf(fixture.readout)
+        val corrected = fixture.appliedCorrection()
+        val readoutOnly = fixture.paintPixels(Color.BLACK)
 
-        readout.clearWasInvalidated()
-        fixture.resizeMaterialAroundReadout(80)
-        assertTrue("Entering compact mode must discard the recorded field", readout.wasInvalidated())
-
-        readout.clearWasInvalidated()
-        fixture.resizeMaterialAroundReadout(82)
-        assertFalse("Resizing within compact mode must not redraw the readout", readout.wasInvalidated())
-
-        fixture.resizeMaterialAroundReadout(200)
-        assertTrue("Leaving compact mode must record the field again", readout.wasInvalidated())
-        assertEquals(appearanceCallbacks, fixture.appearanceCallbacks)
+        for (size in listOf(80, 82, 200)) {
+            fixture.resizeMaterialAroundReadout(size)
+            assertArrayEquals("The unchanged readout must paint only its glyphs", readoutOnly, fixture.paintPixels(Color.BLACK))
+            assertEquals(corrected, fixture.appliedCorrection())
+        }
     }
 
     @Test fun compactOpacityChangedWhileRendererIsEmptyKeepsAppearanceDeduplicated() {
@@ -100,20 +89,24 @@ class AudioBlobReadoutSupportHostTest {
         assertEquals("Only paint inputs change across the empty layout", priorCallbacks, fixture.appearanceCallbacks)
     }
 
-    @Test fun compactDimmedReadoutChecksContrastAfterLayerCompositingBeforeAdmittingSupport() {
-        val fixture = Fixture(RuntimeEnvironment.getApplication())
-        fixture.layout(56, 56)
-        fixture.presentActiveMaterial(0xff6d6d6d.toInt())
-        assertEquals(Triple(false, false, false), fixture.lastAppearance)
-        val opaque = fixture.paintPixels(Color.WHITE)
+    @Test fun dimmedReadoutChecksContrastAfterLayerCompositingAtBothSizes() {
+        for (size in listOf(56, 200)) {
+            val fixture = Fixture(RuntimeEnvironment.getApplication())
+            fixture.layout(size, size)
+            fixture.presentActiveMaterial(0xff6d6d6d.toInt())
+            assertEquals(Triple(false, false, false), fixture.lastAppearance)
+            val opaque = fixture.paintPixels(Color.WHITE)
 
-        fixture.layout(56, 56, opacity = .56f)
-        assertEquals(Triple(false, false, true), fixture.lastAppearance)
-        assertArrayEquals("The admitted correction belongs to the material, not the readout",
-            opaque, fixture.paintPixels(Color.WHITE))
-        fixture.layout(56, 56)
-        assertEquals(Triple(false, false, false), fixture.lastAppearance)
-        assertArrayEquals(opaque, fixture.paintPixels(Color.WHITE))
+            fixture.layout(size, size, opacity = .56f)
+            assertEquals(Triple(false, false, true), fixture.lastAppearance)
+            assertArrayEquals("The admitted correction belongs to the material",
+                opaque, fixture.paintPixels(Color.WHITE))
+            assertEquals("White ink needs a darkening filter", 0, fixture.appliedCorrection().second)
+            fixture.layout(size, size)
+            assertEquals(Triple(false, false, false), fixture.lastAppearance)
+            assertNull("Restoring full layer opacity clears the correction", fixture.installedCorrection())
+            assertArrayEquals(opaque, fixture.paintPixels(Color.WHITE))
+        }
 
         val safe = Fixture(RuntimeEnvironment.getApplication())
         safe.layout(56, 56)
@@ -122,6 +115,7 @@ class AudioBlobReadoutSupportHostTest {
         val safeOpaque = safe.paintPixels(Color.WHITE)
         safe.layout(56, 56, opacity = .56f)
         assertEquals(Triple(false, false, false), safe.lastAppearance)
+        assertNull("Already readable material needs no filter", safe.installedCorrection())
         assertArrayEquals("Already readable material must leave support off", safeOpaque, safe.paintPixels(Color.WHITE))
     }
 
@@ -132,7 +126,7 @@ class AudioBlobReadoutSupportHostTest {
             private set
         var lastAppearance: Triple<Boolean, Boolean, Boolean>? = null
             private set
-        val readout = NativeAudioBlobReadout(
+        private val readout = NativeAudioBlobReadout(
             context,
             NativeAudioBlobIcons(
                 ReverbIconDrawable(ReverbIcon.Check, 1f, Color.WHITE),
@@ -180,6 +174,34 @@ class AudioBlobReadoutSupportHostTest {
             // labels are drawn identically in the reference, so only support changes these pixels.
             readout.setMaterialAppearance(darkInk, transitioning, support)
             return paintPixels(background)
+        }
+
+        fun appliedCorrection(): Pair<Int, Int> {
+            val corrected = checkNotNull(installedCorrection()) { "Contrast support must install a material filter" }
+            assertTrue("The installed filter must change RGB", corrected != (0x00ffffff to 0))
+            try {
+                readout.setContentOpacity(0f)
+                assertNull("Hiding the glyphs clears the renderer's filter", installedCorrection())
+            } finally {
+                readout.setContentOpacity(1f)
+            }
+            assertEquals("Restoring glyph opacity restores the same correction", corrected, installedCorrection())
+            return corrected
+        }
+
+        fun installedCorrection(): Pair<Int, Int>? {
+            // Inspect the real paint without drawing a RuntimeShader into a software bitmap.
+            val backend = AudioReactiveBlobView::class.java.getDeclaredField("renderer").let {
+                it.isAccessible = true
+                it.get(renderer)
+            }
+            val paint = backend.javaClass.getDeclaredField("paint").let {
+                it.isAccessible = true
+                it.get(backend) as Paint
+            }
+            val filter = paint.colorFilter ?: return null
+            check(filter is LightingColorFilter)
+            return filter.colorMultiply to filter.colorAdd
         }
 
         fun paintPixels(background: Int): IntArray {
