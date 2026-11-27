@@ -227,6 +227,35 @@ class ReverbLauncherCircularOutlineIntegrationTest {
         assertEquals(0, aboutCalls)
     }
 
+    @Test fun injectorHomeRecipeKeepsTheSharedRingAndLauncherGeometryInBothThemes() = main {
+        for (dpi in listOf(160, 213, 320)) for (dark in listOf(false, true)) {
+            val context = fixtureContext(dpi, transparentBrand = false) { ColorDrawable(ART) }
+            val theme = ReverbDesign.theme(context, dark)
+            val expected = ReverbProductTopBar(context, theme)
+            expected.bind(theme, ReverbProductIdentity.Launcher(FIXTURE_ICON), "About", {}, null,
+                ReverbHeaderAction("Settings", {}), circularLauncherOutline = true)
+            val actual = smallthingz.ui.injector.InjectProductTopBar(context, theme)
+            smallthingz.ui.injector.InjectDesign.bindHomeToolbar(actual, theme, FIXTURE_ICON,
+                "About", {}, null, smallthingz.ui.injector.InjectHeaderAction("Settings", {}))
+            layoutWidth(expected, 480)
+            layoutWidth(actual, 480)
+            val expectedMark = visibleDescendants(expected).filterIsInstance<ReverbIdentityMarkView>().single()
+            val actualMark = visibleDescendants(actual).filterIsInstance<ReverbIdentityMarkView>().single()
+            assertEquals(expected.measuredHeight, actual.measuredHeight)
+            assertEquals(expectedMark.width, actualMark.width)
+            assertEquals(expectedMark.height, actualMark.height)
+            withBitmap(software(expectedMark)) { reference ->
+                withBitmap(software(actualMark)) { rendered ->
+                    assertTrue("Shared header ring/artwork: dpi=$dpi dark=$dark", reference.sameAs(rendered))
+                }
+            }
+            val image = launcherImage(actual)
+            assertNull(image.imageTintList)
+            assertNull(image.colorFilter)
+            assertEquals(ART, (image.drawable as ColorDrawable).color)
+        }
+    }
+
     @Test fun attachedPublicProductHeaderInvokesAboutWithAndWithoutTheOutline() {
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

@@ -2,6 +2,8 @@ package smallthingz.ui.inject
 
 import android.content.Context
 import android.view.View
+import androidx.annotation.DrawableRes
+import smallthingz.ui.components.NativeTopBarInsets
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeScreenSpacing
 import smallthingz.ui.reverb.ReverbDesign
@@ -15,6 +17,16 @@ import smallthingz.ui.unit.Density
 object InjectDesign {
     val appearance get() = ReverbDesign.appearance
     val spacing get() = NativeScreenSpacing
+    val floatingWindowRecipe get() = appearance.floatingWindowRecipe
+    val headerIconOutline get() = ReverbDesign.headerIconOutline
+
+    /** Preserve launcher artwork and About identity; only the home header receives the thin ring. */
+    fun bindHomeToolbar(topBar: InjectProductTopBar, theme: InjectTheme,
+        @DrawableRes launcherIcon: Int, aboutLabel: String, onAbout: () -> Unit,
+        incidents: InjectHeaderAction?, settings: InjectHeaderAction,
+        insets: NativeTopBarInsets = NativeTopBarInsets(0, 0, 0),
+    ) = topBar.bind(theme, smallthingz.ui.reverb.ReverbProductIdentity.Launcher(launcherIcon), aboutLabel, onAbout,
+        incidents, settings, insets, circularLauncherOutline = true)
 
     fun theme(context: Context, dark: Boolean) = ReverbDesign.theme(context, dark)
 
@@ -40,3 +52,8 @@ typealias InjectProductIdentity = smallthingz.ui.reverb.ReverbProductIdentity
 typealias InjectProductTopBar = smallthingz.ui.reverb.ReverbProductTopBar
 typealias InjectHeaderAction = smallthingz.ui.reverb.ReverbHeaderAction
 typealias InjectHeaderCount = smallthingz.ui.reverb.ReverbHeaderCount
+
+typealias InjectIcon = smallthingz.ui.reverb.ReverbIcon
+typealias InjectSheetButton = smallthingz.ui.reverb.ReverbSheetButton
+typealias InjectSheetActions = smallthingz.ui.reverb.ReverbSheetActions
+typealias InjectTitledTopBarLayout = smallthingz.ui.reverb.ReverbTitledTopBarLayout

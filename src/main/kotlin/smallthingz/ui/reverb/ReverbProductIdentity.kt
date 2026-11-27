@@ -10,7 +10,6 @@ import android.widget.ImageView
 import androidx.annotation.DrawableRes
 import smallthingz.ui.components.MarkPlateOutline
 import smallthingz.ui.components.NativeColorScheme
-import smallthingz.ui.components.NativeDarkSurfacePreset
 import smallthingz.ui.components.NativeRoundedClipLayout
 
 /** Product artwork supported by the shared toolbar and About panel. */
@@ -83,7 +82,7 @@ internal class ReverbIdentityMarkView(context: Context) : NativeRoundedClipLayou
         setRoundedClippingEnabled(enabled)
         if (enabled) {
             if (launcherOutline == null) {
-                val preset = NativeDarkSurfacePreset.Amoled
+                val preset = ReverbDesign.headerIconOutline
                 launcherOutline = MarkPlateOutline(preset.borderColor, preset.borderWidthDp)
                 updateLauncherOutline()
                 invalidate()

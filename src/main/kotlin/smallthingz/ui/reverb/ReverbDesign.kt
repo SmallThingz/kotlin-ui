@@ -3,6 +3,7 @@ package smallthingz.ui.reverb
 import android.content.Context
 import androidx.annotation.MainThread
 import smallthingz.ui.common.ControlTheme
+import smallthingz.ui.components.NativeDarkSurfacePreset
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.components.NativeUiAppearance
@@ -14,6 +15,9 @@ import smallthingz.ui.unit.Density
 
 /** Reverb's visual defaults. Semantic Reverb components resolve these recipes internally. */
 object ReverbDesign {
+    /** Fixed brand/launcher ring, independent of a window's forced light or dark theme. */
+    val headerIconOutline get() = NativeDarkSurfacePreset.Amoled
+
     val appearance: NativeUiAppearance = NativeUiAppearance.Default.copy(
         toolbars = NativeUiAppearance.Default.toolbars.copy(compactHeightDp = 58f),
     )
