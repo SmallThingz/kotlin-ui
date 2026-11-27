@@ -4,6 +4,7 @@ import android.animation.ValueAnimator
 import android.app.Activity
 import android.os.Looper
 import android.view.View
+import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import org.junit.Assert.*
@@ -34,7 +35,7 @@ class NativePageTransitionPanelsTest {
     private fun animator(motion: NativePageTransition.Panels): ValueAnimator =
         ReflectionHelpers.getField(motion, "animator")
 
-    private fun withPanels(block: (FrameLayout, FrameLayout, FrameLayout, NativePageTransition.Panels) -> Unit) {
+    private fun withPanels(edge: Int = Gravity.BOTTOM, pager: Boolean = false, block: (FrameLayout, FrameLayout, FrameLayout, NativePageTransition.Panels) -> Unit) {
         val controller = Robolectric.buildActivity(Activity::class.java).setup().visible()
         val host = FrameLayout(controller.get())
         val first = FrameLayout(controller.get())
@@ -44,7 +45,7 @@ class NativePageTransitionPanelsTest {
         val previousScale = ValueAnimator.getDurationScale()
         val setScale = ValueAnimator::class.java.getDeclaredMethod("setDurationScale", Float::class.javaPrimitiveType)
             .apply { isAccessible = true }
-        val motion = NativePageTransition.Panels(host)
+        val motion = NativePageTransition.Panels(host, edge, pager = pager)
         try {
             controller.get().setContentView(host)
             // Manual child layout alone does not deliver the paused window's pending traversal.
@@ -322,4 +323,125 @@ class NativePageTransitionPanelsTest {
             shadowOf(Looper.getMainLooper()).idle()
         }
     }
+    @Test fun predictiveCancelReversesThePresentedPoseWithoutCommittingBack() = withPanels { host, first, next, motion ->
+        motion.show(next, first, NativePageTransition.Direction.FORWARD)
+        animator(motion).end()
+        var finished = 0
+        assertTrue(motion.preview(first, next, NativePageTransition.Direction.BACK) { finished++ })
+        motion.seekPreview(.4f)
+        assertEquals(240f, next.translationY, .001f)
+        motion.show(next, first, NativePageTransition.Direction.FORWARD)
+        assertEquals(240f, next.translationY, .001f)
+        animator(motion).end()
+        assertEquals(0, finished)
+        assertEquals(View.VISIBLE, next.visibility)
+        assertEquals(View.GONE, first.visibility)
+        assertEquals(2, host.childCount)
+    }
+
+    @Test fun predictiveCommitContinuesFromReleaseAndStopDeliversOnce() = withPanels { host, first, next, motion ->
+        motion.show(next, first, NativePageTransition.Direction.FORWARD)
+        animator(motion).end()
+        var finished = 0
+        assertTrue(motion.preview(first, next, NativePageTransition.Direction.BACK) { finished++ })
+        motion.seekPreview(.6f)
+        motion.commitPreview()
+        assertEquals(360f, next.translationY, .001f)
+        motion.cancel(); motion.cancel()
+        assertEquals(1, finished)
+        assertEquals(View.VISIBLE, first.visibility)
+        assertEquals(2, host.childCount)
+    }
+
+    @Test fun previewDetachRestoresOutgoingAndNeverCommitsNavigation() = withPanels { host, first, next, motion ->
+        var finished = 0
+        assertTrue(motion.preview(next, first, NativePageTransition.Direction.FORWARD) { finished++ })
+        motion.seekPreview(.7f)
+        (host.parent as ViewGroup).removeView(host)
+        assertEquals(0, finished)
+        assertEquals(View.VISIBLE, first.visibility)
+        assertEquals(View.GONE, next.visibility)
+        assertFalse(motion.isRunning)
+        assertEquals(2, host.childCount)
+    }
+
+    @Test fun disabledPreviewDoesNotNavigateUntilCommitted() = withPanels { host, first, next, motion ->
+        val setScale = ValueAnimator::class.java.getDeclaredMethod("setDurationScale", Float::class.javaPrimitiveType)
+            .apply { isAccessible = true }
+        var finished = 0
+        setScale.invoke(null, 0f)
+        assertTrue(motion.preview(next, first, NativePageTransition.Direction.FORWARD) { finished++ })
+        val pose = next.translationY
+        motion.seekPreview(.8f)
+        assertEquals(pose, next.translationY, 0f)
+        motion.cancel()
+        assertEquals(0, finished)
+        assertEquals(View.VISIBLE, first.visibility)
+        assertTrue(motion.preview(next, first, NativePageTransition.Direction.FORWARD) { finished++ })
+        motion.commitPreview()
+        assertEquals(1, finished)
+        assertFalse(motion.isRunning)
+        assertEquals(2, host.childCount)
+    }
+
+    @Test fun endPanelUsesLogicalEndInRtlAndSharesTheReverseProgress() = withPanels(Gravity.END) { host, first, next, motion ->
+        host.layoutDirection = View.LAYOUT_DIRECTION_RTL
+        motion.show(next, first, NativePageTransition.Direction.FORWARD)
+        assertEquals(-360f, next.translationX, 0f)
+        assertEquals(0f, next.translationY, 0f)
+        animator(motion).end()
+        assertTrue(motion.preview(first, next, NativePageTransition.Direction.BACK))
+        motion.seekPreview(.5f)
+        assertEquals(-180f, next.translationX, .001f)
+        motion.cancel()
+        assertEquals(0f, next.translationX, 0f)
+        assertEquals(View.VISIBLE, next.visibility)
+    }
+
+    @Test fun topFallbackMovesIncomingDownThenReversesUp() = withPanels(Gravity.TOP) { _, first, next, motion ->
+        motion.show(next, first, NativePageTransition.Direction.FORWARD)
+        assertEquals(-600f, next.translationY, 0f)
+        animator(motion).end()
+        assertTrue(motion.preview(first, next, NativePageTransition.Direction.BACK))
+        motion.seekPreview(.5f)
+        assertEquals(-300f, next.translationY, .001f)
+        motion.commitPreview()
+        animator(motion).end()
+        assertEquals(View.VISIBLE, first.visibility)
+    }
+
+    @Test fun rejectedWindowPreviewReturnsFalseWithoutACompletionOwner() = withPanels { host, first, next, motion ->
+        val attachInfo: Any = ReflectionHelpers.getField(host, "mAttachInfo")
+        var finished = 0
+        try {
+            ReflectionHelpers.setField(attachInfo, "mWindowVisibility", View.GONE)
+            assertFalse(motion.preview(next, first, NativePageTransition.Direction.FORWARD) { finished++ })
+            motion.commitPreview()
+            assertEquals(0, finished)
+            assertFalse(motion.isRunning)
+        } finally { ReflectionHelpers.setField(attachInfo, "mWindowVisibility", View.VISIBLE) }
+        assertTrue(motion.preview(next, first, NativePageTransition.Direction.FORWARD) { finished++ })
+        motion.commitPreview()
+        animator(motion).end()
+        assertEquals(1, finished)
+    }
+
+    @Test fun pagerNextMovesBothBodiesAndDisabledReverseRestoresBothBaselines() =
+        withPanels(Gravity.END, pager = true) { _, first, next, motion ->
+            motion.show(next, first, NativePageTransition.Direction.FORWARD)
+            assertEquals(360f, next.translationX, 0f)
+            assertEquals(0f, first.translationX, 0f)
+            animator(motion).currentPlayTime = 110L
+            assertTrue(first.translationX < 0f)
+            assertEquals(360f, next.translationX - first.translationX, .001f)
+            val setScale = ValueAnimator::class.java.getDeclaredMethod("setDurationScale", Float::class.javaPrimitiveType)
+                .apply { isAccessible = true }
+            setScale.invoke(null, 0f)
+            motion.show(first, next, NativePageTransition.Direction.BACK)
+            assertEquals(0f, first.translationX, 0f)
+            assertEquals(0f, next.translationX, 0f)
+            assertEquals(View.VISIBLE, first.visibility)
+            assertEquals(View.GONE, next.visibility)
+        }
+
 }
