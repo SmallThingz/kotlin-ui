@@ -1,8 +1,6 @@
 package smallthingz.ui.gallery
 
 import android.content.Context
-import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
@@ -15,6 +13,7 @@ import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeSurface
 import smallthingz.ui.components.NativeSurfaceStyle
 import smallthingz.ui.components.NativeText
+import smallthingz.ui.components.NativeTextRole
 import smallthingz.ui.controls.ControlStyle
 import smallthingz.ui.input.DEFAULT_MINIMUM_TOUCH_TARGET_DP
 import smallthingz.ui.text.NativeTypographyRole
@@ -22,13 +21,14 @@ import kotlin.math.roundToInt
 
 /**
  * Retained album presentation. The caller owns images, placeholder drawable, identity and actions.
- * The complete measured caption sits on protected ink coverage; only the area above it fades out.
+ * Caption ink belongs to the themed card surface, never to the caller's image.
+ * A measured caption gets priority over the preferred card height, without hiding a title line.
  */
 class GalleryAlbumCover(context: Context, colors: NativeColorScheme, private val heightBudget: () -> Int?) :
     NativeSurface(context, NativeSurfaceStyle(colors.surfaceContainerHigh)) {
-    /** Prefer a 16:9 cover in a readable single-column grid. A compact height budget
-     * still takes precedence; the natural landscape height retains both title lines
-     * and grows to fit the measured caption and minimum touch target. */
+    /** Prefer a 16:9 total card in a readable single-column grid. A compact height budget
+     * takes precedence. Both are soft preferences: the measured caption plus a recognizable
+     * cover can grow the row. RecyclerView matches rows to their tallest natural measurement. */
     var singleColumnLandscape: Boolean = false
         set(value) {
             if (field == value) return
@@ -41,33 +41,21 @@ class GalleryAlbumCover(context: Context, colors: NativeColorScheme, private val
     val title = NativeText(context, colors.pageControls, GalleryDesign.textStyle(NativeTypographyRole.BODY_LARGE)).apply {
         maxLines = 2; ellipsize = TextUtils.TruncateAt.END
     }
-    val count = NativeText(context, colors.pageControls, GalleryDesign.textStyle(NativeTypographyRole.LABEL_SMALL)).apply {
+    val count = NativeText(context, colors.pageControls, GalleryDesign.textStyle(NativeTypographyRole.LABEL_SMALL), NativeTextRole.MUTED).apply {
         maxLines = 1; ellipsize = TextUtils.TruncateAt.END
-    }
-    // At the lightest point, even a white image becomes #575757. The 80%-white count
-    // composites to approximately #dddddd there (>5:1); title ink has still more contrast.
-    // These drawables are retained, with no image sampling or draw-time allocation.
-    private val captionShade = View(context).apply {
-        background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(0xa8000000.toInt(), 0xc2000000.toInt()))
-    }
-    private val shade = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL
-        addView(View(context).apply {
-            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(Color.TRANSPARENT, 0xa8000000.toInt()))
-        }, LinearLayout.LayoutParams(-1, 0, 1f))
-        addView(captionShade, LinearLayout.LayoutParams(-1, 0))
     }
     private val minimumTargetHeight = dp(DEFAULT_MINIMUM_TOUCH_TARGET_DP)
     private val caption = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
-        setPaddingRelative(dp(12), dp(12), dp(12), dp(12))
-        title.setTextColor(Color.WHITE)
-        count.setTextColor(0xccffffff.toInt())
+        val inset = dp(GalleryDesign.appearance.detailCards.compactPaddingDp)
+        setPaddingRelative(inset, inset, inset, inset)
         addView(title, LinearLayout.LayoutParams(-1, -2))
-        addView(count, LinearLayout.LayoutParams(-1, -2))
+        addView(count, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(GalleryDesign.appearance.detailCards.bodyGapDp)
+        })
     }
+    private var restoreCaption = false
+    private var imageHeight = 0
 
     init {
         descendantFocusability = FOCUS_BLOCK_DESCENDANTS
@@ -81,7 +69,6 @@ class GalleryAlbumCover(context: Context, colors: NativeColorScheme, private val
         }
         addView(image, FrameLayout.LayoutParams(-1, -1))
         addView(placeholder, FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER))
-        addView(shade, FrameLayout.LayoutParams(-1, 0, Gravity.BOTTOM))
         addView(caption, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
         for (index in 0 until childCount) getChildAt(index).importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         paint(colors)
@@ -90,11 +77,15 @@ class GalleryAlbumCover(context: Context, colors: NativeColorScheme, private val
     fun paint(colors: NativeColorScheme) {
         applyStyle(NativeSurfaceStyle(colors.surfaceContainerHigh,
             rippleColor = (colors.primary and 0x00ffffff) or (40 shl 24), focusOutlineColor = colors.primary))
-        placeholder.imageTintList = ControlStyle(context, colors.pageControls).foregroundStates(colors.onSurfaceVariant)
+        // Reuse native text role/state/motion ownership; no hardcoded white or image sampling.
+        val captionColors = colors.pageControls.copy(surface = colors.surfaceContainerHigh)
+        title.applyPalette(captionColors)
+        count.applyPalette(captionColors)
+        placeholder.imageTintList = ControlStyle(context, captionColors).foregroundStates(colors.onSurfaceVariant)
     }
 
     fun readableRestoredOffset(offset: Int): Int {
-        if (height <= 0 || height >= width || offset > -height) return offset
+        if (!restoreCaption || height <= 0 || offset > -height) return offset
         val visible = maxOf(minimumTargetHeight, caption.measuredHeight).coerceAtMost(height)
         return visible - height
     }
@@ -103,38 +94,34 @@ class GalleryAlbumCover(context: Context, colors: NativeColorScheme, private val
         val side = MeasureSpec.getSize(widthMeasureSpec)
         val width = MeasureSpec.makeMeasureSpec(side, MeasureSpec.EXACTLY)
         val budget = heightBudget()
-        // GridLayoutManager can remeasure a row to match its tallest cover.
-        val landscape = singleColumnLandscape && budget == null
-        val matchedRow = (budget != null || landscape) &&
-            MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY
-        val desired = when {
-            matchedRow -> MeasureSpec.getSize(heightMeasureSpec)
-            landscape -> (side * 9f / 16f).roundToInt()
-            else -> minOf(side, budget ?: side)
-        }
-        val titleLines = if (!landscape && desired < side) 1 else 2
-        if (title.maxLines != titleLines) title.maxLines = titleLines
+        restoreCaption = budget != null || singleColumnLandscape
+        // Measure both title lines and the count/location before allocating any media height.
+        // A short viewport never switches the name to one line or shrinks its typography.
         caption.measure(width, MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-        var coverHeight = desired
-        if (!matchedRow) {
-            val minimum = maxOf(minimumTargetHeight, caption.measuredHeight)
-            if (landscape) coverHeight = maxOf(desired, minimum)
-            else if (desired < side && desired < minimum) coverHeight = side
+        val preferred = when {
+            budget != null -> minOf(side, budget.coerceAtLeast(0))
+            singleColumnLandscape -> (side * 9f / 16f).roundToInt()
+            else -> side
         }
-        val bandHeight = caption.measuredHeight.coerceAtMost(coverHeight)
-        val shadeHeight = maxOf(coverHeight / 2, bandHeight + dp(24)).coerceAtMost(coverHeight)
-        // Mutate cached geometry only when it changes, invalidating the nested measure cache
-        // without posting another pass. A compact cover may have no space for the upper fade.
-        if (captionShade.layoutParams.height != bandHeight) {
-            captionShade.layoutParams.height = bandHeight
-            captionShade.forceLayout()
-            shade.forceLayout()
-        }
-        if (shade.layoutParams.height != shadeHeight) {
-            shade.layoutParams.height = shadeHeight
-            shade.forceLayout()
-        }
-        super.onMeasure(width, MeasureSpec.makeMeasureSpec(coverHeight, MeasureSpec.EXACTLY))
+        val minimum = maxOf(minimumTargetHeight, caption.measuredHeight + minimumTargetHeight)
+        val resolved = resolveSizeAndState(maxOf(preferred, minimum), heightMeasureSpec, 0)
+        val height = resolved and MEASURED_SIZE_MASK
+        // A matched grid row is authoritative; an externally undersized EXACTLY constraint
+        // is reported as too small, not silently advertised as readable or expanded past it.
+        setMeasuredDimension(side, resolved or if (height < minimum) MEASURED_STATE_TOO_SMALL else 0)
+        imageHeight = (height - caption.measuredHeight).coerceAtLeast(0)
+        image.measure(width, MeasureSpec.makeMeasureSpec(imageHeight, MeasureSpec.EXACTLY))
+        val placeholderSize = minOf(dp(28), side, imageHeight)
+        placeholder.measure(MeasureSpec.makeMeasureSpec(placeholderSize, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(placeholderSize, MeasureSpec.EXACTLY))
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        image.layout(0, 0, width, imageHeight)
+        val x = (width - placeholder.measuredWidth) / 2
+        val y = (imageHeight - placeholder.measuredHeight) / 2
+        placeholder.layout(x, y, x + placeholder.measuredWidth, y + placeholder.measuredHeight)
+        caption.layout(0, imageHeight, width, imageHeight + caption.measuredHeight)
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).roundToInt()
