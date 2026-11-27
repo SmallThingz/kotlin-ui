@@ -64,6 +64,18 @@ class ReverbGlyphView(
         glyph.layoutDirection=layoutDirection
         setTintImmediately(color)
     }
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        glyph.setVisible(isVisible, false)
+        invalidate() // Rerecord retained display lists after the private glyph drops its mask.
+    }
+
+    override fun onDetachedFromWindow() {
+        glyph.setVisible(false, false)
+        invalidate()
+        super.onDetachedFromWindow()
+    }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) { glyph.setBounds(0, 0, w, h) }
     override fun onRtlPropertiesChanged(layoutDirection: Int) {
         super.onRtlPropertiesChanged(layoutDirection)
