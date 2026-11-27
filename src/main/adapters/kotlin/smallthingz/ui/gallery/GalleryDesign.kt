@@ -6,6 +6,8 @@ import android.graphics.drawable.RotateDrawable
 import smallthingz.ui.components.NativeChoiceColor
 import smallthingz.ui.components.NativeTextRole
 import smallthingz.ui.components.NativeColorScheme
+import smallthingz.ui.components.NativeDarkSurfacePreset
+import smallthingz.ui.components.NativeGrainPreset
 import smallthingz.ui.components.NativeTextStyle
 import smallthingz.ui.components.NativeMaterialButtonStyle
 import smallthingz.ui.components.nativeTextStyle
@@ -94,11 +96,18 @@ object GalleryDesign {
     }
     val settingsGroup = appearance.groupSurfaces.settingsGroup
 
-    /** Keep the shared modal treatment; Settings has no separate bottom action row. */
-    fun settingsSheetStyle(density: Density, resolver: FontFamily.Resolver, colors: NativeColorScheme) =
-        reverbActionSheetStyle(ReverbDesign.windowTheme(density, resolver, colors)).let {
+    /** Gallery settings sheets share the flat library backdrop and common modal geometry. */
+    fun settingsSheetStyle(density: Density, resolver: FontFamily.Resolver, colors: NativeColorScheme): smallthingz.ui.components.NativeActionSheetStyle {
+        val surface = when (val current = colors.surfacePreset) {
+            is NativeDarkSurfacePreset -> current.copy(backgroundGrain = 0f)
+            is NativeGrainPreset -> current.copy(backgroundGrain = 0f)
+            null -> NativeGrainPreset(backgroundGrain = 0f, foregroundGrain = 0f)
+        }
+        val sheetColors = colors.copy(surfacePreset = surface)
+        return reverbActionSheetStyle(ReverbDesign.windowTheme(density, resolver, sheetColors)).let {
             it.copy(recipe = it.recipe.copy(actionsGapDp = 0f))
         }
+    }
 
     fun palette(context: Context, dark: Boolean): NativeColorScheme =
         appearance.resolveColorScheme(context, dark)
