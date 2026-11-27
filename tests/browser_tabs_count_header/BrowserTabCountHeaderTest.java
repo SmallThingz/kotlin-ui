@@ -7,6 +7,10 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Rect;
+import android.graphics.RectF;
+import android.graphics.Paint;
+import androidx.core.view.ViewCompat;
+import smallthingz.ui.components.NativeGroupLayout;
 import android.view.ContextThemeWrapper;
 import android.view.View;
 import android.view.ViewGroup;
@@ -145,6 +149,86 @@ public class BrowserTabCountHeaderTest {
                     panel.draw(new Canvas(image)); save(image, "compact-header-320-light.png");
                 }
             } finally { panel.close(); }
+        }
+    }
+
+    @Test public void retainedTabCloseSlotTracksThemeDensityWithoutShrinkingOrOverlappingSelect() {
+        Context context = new ContextThemeWrapper(RuntimeEnvironment.getApplication(), android.R.style.Theme_Material_Light_NoActionBar);
+        for (int direction : new int[] {View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL}) {
+            ReverbBrowserPanelTabs<String> panel = new ReverbBrowserPanelTabs<>(context, ReverbDesign.INSTANCE.theme(context, true), "Tabs", "Back", "New tab");
+            panel.setLayoutDirection(direction);
+            panel.setOnTabAction((key, action) -> Unit.INSTANCE);
+            panel.bindTabs("1 tab", java.util.Collections.singletonList(
+                new ReverbBrowserPanelTab<>("a", "Retained title", null, null, null, true, "Current", "Close retained", true)));
+            try {
+                NativeStandardIconButtonView retainedClose = descendants(panel, NativeStandardIconButtonView.class).get(0);
+                for (int density : new int[] {160, 320, 120, 421, 160}) {
+                    Configuration config = new Configuration(context.getResources().getConfiguration());
+                    config.densityDpi = density;
+                    ReverbTheme next = ReverbDesign.INSTANCE.theme(context.createConfigurationContext(config), true);
+                    panel.bindTheme(next); layout(panel, 900, 900);
+                    NativeStandardIconButtonView close = descendants(panel, NativeStandardIconButtonView.class).get(0);
+                    ReverbBrowserPanelSettingRow row = descendants(panel, ReverbBrowserPanelSettingRow.class).get(0);
+                    assertSame("Keyed close is retained on theme rebind", retainedClose, close);
+                    int target = Math.round(48f*next.getDensity().getDensity());
+                    assertEquals("Actual close width refreshes, not only icon density", target, close.getWidth());
+                    assertEquals(target, close.getHeight()); assertEquals(target, close.getVisual().getWidth());
+                    assertEquals(target, close.getVisual().getHeight());
+                    Rect closeBounds = relative(panel, close), rowBounds = relative(panel, row);
+                    assertFalse("Close target never overlaps SELECT", Rect.intersects(closeBounds, rowBounds));
+                    assertEquals("Title reservation follows actual close slot", direction == View.LAYOUT_DIRECTION_RTL ? closeBounds.right : rowBounds.right,
+                        direction == View.LAYOUT_DIRECTION_RTL ? rowBounds.left : closeBounds.left);
+                    Rect preview = panel.tabPreviewBounds("a"); assertNotNull(preview);
+                    assertTrue("Target remains above preview", closeBounds.bottom <= preview.top);
+                }
+            } finally { panel.close(); }
+        }
+    }
+
+    @Test public void selectedTabPaintsUsualGroupBorderAfterSelectionAndThemeRebind() {
+        Context context = new ContextThemeWrapper(RuntimeEnvironment.getApplication(), android.R.style.Theme_Material_Light_NoActionBar);
+        ReverbTheme first = ReverbDesign.INSTANCE.theme(context, true);
+        ReverbBrowserPanelTabs<String> panel = new ReverbBrowserPanelTabs<>(context, first, "Tabs", "Back", "New tab");
+        panel.setOnTabAction((key, action) -> Unit.INSTANCE);
+        try {
+            for (boolean dark : new boolean[] {true, false}) {
+                ReverbTheme theme = ReverbDesign.INSTANCE.theme(context, dark);
+                panel.bindTheme(theme);
+                for (boolean selected : new boolean[] {false, true, false, true}) {
+                    panel.bindTabs("1 tab", java.util.Collections.singletonList(
+                        new ReverbBrowserPanelTab<>("a", "Same tab", null, null, null, selected, "Current tab", "Close tab", true)));
+                    layout(panel, 320, 360);
+                    assertUsualBorder(panel, theme);
+                    ReverbBrowserPanelSettingRow row = descendants(panel, ReverbBrowserPanelSettingRow.class).get(0);
+                    assertEquals(selected ? "Current tab" : null, ViewCompat.getStateDescription(row));
+                }
+                // Selection remains true: exercise bindTheme's paint route independently of bindTabs.
+                ReverbTheme rebound = ReverbDesign.INSTANCE.theme(context, !dark);
+                panel.bindTheme(rebound); layout(panel, 320, 360); assertUsualBorder(panel, rebound);
+            }
+        } finally { panel.close(); }
+    }
+
+    private static void assertUsualBorder(ReverbBrowserPanelTabs<String> panel, ReverbTheme theme) {
+        ReverbBrowserPanelSettingRow row = descendants(panel, ReverbBrowserPanelSettingRow.class).get(0);
+        android.view.ViewParent parent = row.getParent();
+        while (!(parent instanceof NativeGroupLayout)) { assertNotNull(parent); parent = parent.getParent(); }
+        NativeGroupLayout surface = (NativeGroupLayout) parent;
+        Bitmap bitmap = Bitmap.createBitmap(surface.getWidth(), surface.getHeight(), Bitmap.Config.ARGB_8888);
+        try {
+            BorderCanvas canvas = new BorderCanvas(bitmap); surface.draw(canvas);
+            assertNotNull("Observe actual outer border draw, not a duplicated color helper", canvas.lastStroke);
+            int expected = ReverbDesign.INSTANCE.getAppearance().getGroupSurfaces().getSettingsChoices().borderColor(theme.getPalette());
+            assertEquals("Current and inactive tabs use ordinary dim group outline", expected, canvas.lastStroke.intValue());
+        } finally { bitmap.recycle(); }
+    }
+
+    private static final class BorderCanvas extends Canvas {
+        Integer lastStroke;
+        BorderCanvas(Bitmap bitmap) { super(bitmap); }
+        @Override public void drawRoundRect(RectF rect, float rx, float ry, Paint paint) {
+            if (paint.getStyle() == Paint.Style.STROKE) lastStroke = paint.getColor();
+            super.drawRoundRect(rect, rx, ry, paint);
         }
     }
 
