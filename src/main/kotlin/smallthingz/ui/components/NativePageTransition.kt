@@ -3,6 +3,10 @@ package smallthingz.ui.components
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
+import android.content.Context
+import android.os.SystemClock
+import android.view.MotionEvent
+import smallthingz.ui.common.NativeSurfaceInputAdmission
 import android.transition.Slide
 import android.transition.Transition
 import android.transition.TransitionManager
@@ -18,6 +22,45 @@ import android.widget.FrameLayout
 object NativePageTransition {
     private const val DURATION_MILLIS = 220L
     private fun panelInterpolator() = PathInterpolator(.4f, 0f, .2f, 1f)
+
+    /**
+     * Complete window-content input owner, including toolbars outside a page's animation viewport.
+     * Token leases gate View dispatch and the existing native surface-admission contract. System
+     * Back remains with the Activity dispatcher; this owner never intercepts Back/key events.
+     */
+    class InputRoot(context: Context) : FrameLayout(context), NativeSurfaceInputAdmission {
+        private val blocks = mutableSetOf<Any>()
+        override fun admitsSurfaceInput(descendant: View): Boolean = blocks.isEmpty()
+        override fun dispatchTouchEvent(event: MotionEvent): Boolean =
+            if (blocks.isNotEmpty()) true else super.dispatchTouchEvent(event)
+        override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
+            if (blocks.isNotEmpty()) true else super.dispatchGenericMotionEvent(event)
+
+        private fun block(): AutoCloseable {
+            if (blocks.isEmpty()) {
+                // Retire a press admitted before the gesture acquired this root, including a
+                // queued native/Android click. No new touch can interleave on the UI thread.
+                val now = SystemClock.uptimeMillis()
+                val cancel = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
+                try { super.dispatchTouchEvent(cancel) } finally { cancel.recycle() }
+                cancelPendingInputEvents()
+            }
+            val token = Any()
+            blocks += token
+            return AutoCloseable { blocks.remove(token) }
+        }
+
+        companion object {
+            fun blockFrom(view: View): AutoCloseable? {
+                var ancestor: View? = view
+                while (ancestor != null) {
+                    if (ancestor is InputRoot) return ancestor.block()
+                    ancestor = ancestor.parent as? View
+                }
+                return null
+            }
+        }
+    }
 
     /** A child panel enters over its stationary predecessor; Back lowers that same foreground. */
     enum class Direction { FORWARD, BACK }
@@ -73,6 +116,12 @@ object NativePageTransition {
         private var previewing = false
         val isRunning: Boolean get() = active != null
         fun isOutgoing(view: View): Boolean = active?.outgoing === view
+
+        /** Model rebinding must not hide either root while presentation owns the retained pair. */
+        fun owns(view: View): Boolean = active?.let { it.incoming === view || it.outgoing === view } == true
+        fun bindIdleVisibility(view: View, visible: Boolean) {
+            if (!owns(view)) view.visibility = if (visible) View.VISIBLE else View.GONE
+        }
 
         /** A caller may reuse this still-owned root after verifying its destination's route key. */
         fun reversalTarget(outgoing: View, direction: Direction): View? = active?.takeIf {
