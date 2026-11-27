@@ -66,6 +66,8 @@ class NativeAudioBlobReadout(
     private var supportViewportCenterY = 0f
     private var supportViewportRadius = -1f // No renderer geometry supplied yet.
     private var readoutPrefersBackdropInk = false
+    private var materialBackdrop = Color.BLACK
+    private var materialLayerOpacity = 1f
     private var radialReadoutShader: Shader? = null
     private var boundedReadoutShader: Shader? = null
     private var readoutLayoutRevision = 0
@@ -113,14 +115,21 @@ class NativeAudioBlobReadout(
         materialTransitioning = transitioning
         materialNeedsSupport = needsSupport
         readoutPaint.xfermode = if (darkInk) lighten else darken
-        val support = audioBlobReadoutSupport(darkInk, transitioning)
+        updateSupportPaint()
+        if (contentBound) bindContent()
+    }
+
+    private fun updateSupportPaint() {
+        val base = audioBlobReadoutSupport(materialUsesDarkInk, materialTransitioning)
+        val support = if (readoutPrefersBackdropInk && materialLayerOpacity < 1f) {
+            audioBlobSupportInLayer(base, materialUsesDarkInk, materialBackdrop, materialLayerOpacity)
+        } else base
         if (readoutSupportColor != support) {
             readoutSupportColor = support
             rebuildReadoutShader()
         } else {
             readoutPaint.shader = if (materialTransitioning) radialReadoutShader else boundedReadoutShader
         }
-        if (contentBound) bindContent()
     }
 
     fun bind(active: Boolean, filled: Boolean, primaryText: String?, secondaryText: String?, contentAlpha: Float) {
@@ -196,12 +205,22 @@ class NativeAudioBlobReadout(
     fun readoutFootprintRadius(): Float = readoutCoreRadius + abs(readoutCenterY - height * .5f)
 
     fun updateMaterialGeometry(renderer: AudioReactiveBlobView, background: Int) {
+        updateMaterialGeometry(renderer, background, opacity = 1f)
+    }
+
+    internal fun updateMaterialGeometry(renderer: AudioReactiveBlobView, background: Int, opacity: Float) {
+        val previousInkPreference = readoutPrefersBackdropInk
+        val paintInputsChanged = materialBackdrop != background || materialLayerOpacity != opacity
+        materialBackdrop = background
+        materialLayerOpacity = opacity
         val canvasWidth = renderer.width
         val canvasHeight = renderer.height
         val viewportChanged = updateSupportViewport(renderer.left - left + canvasWidth * .5f,
             renderer.top - top + canvasHeight * .5f, minOf(canvasWidth, canvasHeight) * .495f)
         if (readoutLayoutRevision == 0 || width <= 0 || height <= 0 || canvasWidth <= 0 || canvasHeight <= 0) {
             renderer.updateReadoutGeometry(0f, background)
+            // Appearance callbacks may be deduplicated when the renderer regains a size.
+            if (paintInputsChanged) updateSupportPaint()
             return
         }
         if (viewportChanged || projectedLayoutRevision != readoutLayoutRevision ||
@@ -240,7 +259,9 @@ class NativeAudioBlobReadout(
             projectedHeight = canvasHeight
         }
         renderer.updateReadoutGeometry(readoutFootprintRadius(), background,
-            agslGradientMin, agslGradientMax, fallbackGradientMin, fallbackGradientMax, readoutPrefersBackdropInk)
+            agslGradientMin, agslGradientMax, fallbackGradientMin, fallbackGradientMax, readoutPrefersBackdropInk,
+            layerOpacity = if (readoutPrefersBackdropInk) opacity else 1f)
+        if (paintInputsChanged || previousInkPreference != readoutPrefersBackdropInk) updateSupportPaint()
     }
 
     private fun updateReadoutGeometry() {

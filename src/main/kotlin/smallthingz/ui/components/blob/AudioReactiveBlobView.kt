@@ -56,6 +56,7 @@ class AudioReactiveBlobView(
     private var readoutRadiusPixels = 0f
     private var readoutBackground = 0
     private var readoutPrefersBackdropInk = false
+    private var readoutLayerOpacity = 1f
     private var readoutBackdropUsesDarkInk = false
     private var readoutAgslMin = 0f
     private var readoutAgslMax = 1f
@@ -65,13 +66,13 @@ class AudioReactiveBlobView(
     fun updateReadoutGeometry(radiusPixels: Float, background: Int, agslMin: Float = 0f, agslMax: Float = 1f,
         fallbackMin: Float = 0f, fallbackMax: Float = 1f) {
         updateReadoutGeometry(radiusPixels, background, agslMin, agslMax, fallbackMin, fallbackMax,
-            prefersBackdropInk = false)
+            prefersBackdropInk = false, layerOpacity = 1f)
     }
 
     internal fun updateReadoutGeometry(radiusPixels: Float, background: Int, agslMin: Float, agslMax: Float,
-        fallbackMin: Float, fallbackMax: Float, prefersBackdropInk: Boolean) {
+        fallbackMin: Float, fallbackMax: Float, prefersBackdropInk: Boolean, layerOpacity: Float) {
         if (readoutRadiusPixels == radiusPixels && readoutBackground == background &&
-            readoutPrefersBackdropInk == prefersBackdropInk &&
+            readoutPrefersBackdropInk == prefersBackdropInk && readoutLayerOpacity == layerOpacity &&
             readoutAgslMin == agslMin && readoutAgslMax == agslMax &&
             readoutFallbackMin == fallbackMin && readoutFallbackMax == fallbackMax) return
         readoutRadiusPixels = radiusPixels
@@ -81,6 +82,7 @@ class AudioReactiveBlobView(
             readoutBackground = background
         }
         readoutPrefersBackdropInk = prefersBackdropInk
+        readoutLayerOpacity = layerOpacity
         readoutAgslMin = agslMin
         readoutAgslMax = agslMax
         readoutFallbackMin = fallbackMin
@@ -104,7 +106,8 @@ class AudioReactiveBlobView(
             currentLife, currentPresence, currentSilence, fallback, darkInk,
             (radius / base).coerceIn(0f, 1f),
             covered, readoutBackground, if (fallback) readoutFallbackMin else readoutAgslMin,
-            if (fallback) readoutFallbackMax else readoutAgslMax)
+            if (fallback) readoutFallbackMax else readoutAgslMax,
+            layerOpacity = readoutLayerOpacity)
     }
     // Only the submitted signal supplies current suppression.
     private val targetSilence: Float

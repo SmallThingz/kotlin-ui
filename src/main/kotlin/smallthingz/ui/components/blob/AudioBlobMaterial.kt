@@ -16,6 +16,27 @@ internal fun audioBlobReadoutSupport(darkInk: Boolean, transitioning: Boolean): 
     else -> AUDIO_BLOB_READOUT_SUPPORT
 }
 
+/** Closest neutral correction that still protects compact ink after group opacity. */
+internal fun audioBlobSupportInLayer(support: Int, darkInk: Boolean, backdrop: Int, opacity: Float): Int {
+    val ink = if (darkInk) 0xff000000.toInt() else AUDIO_BLOB_READOUT_INK
+    val inkLuminance = audioBlobMaterialLuminance(blobBlend(backdrop, ink, opacity))
+    fun neutral(shade: Int): Int = 0xff000000.toInt() or (shade * 0x010101)
+    fun meetsContrast(shade: Int): Boolean {
+        val underlay = audioBlobMaterialLuminance(blobBlend(backdrop, neutral(shade), opacity))
+        val contrast = if (darkInk) (underlay + .05) / (inkLuminance + .05)
+            else (inkLuminance + .05) / (underlay + .05)
+        return contrast >= 4.6 // Leave room for compositing and raster rounding.
+    }
+    var insufficient = support and 255
+    if (meetsContrast(insufficient)) return support
+    var strongest = if (darkInk) 255 else 0
+    while (kotlin.math.abs(insufficient - strongest) > 1) {
+        val middle = (insufficient + strongest) / 2
+        if (meetsContrast(middle)) strongest = middle else insufficient = middle
+    }
+    return neutral(strongest)
+}
+
 private val transitionSupportLuminance = audioBlobMaterialLuminance(AUDIO_BLOB_TRANSITION_SUPPORT)
 private val rasterDarkInkLuminance = audioBlobMaterialLuminance(0xff010101.toInt())
 private val rasterLightInkLuminance = audioBlobMaterialLuminance(0xfffefefe.toInt())
@@ -37,7 +58,7 @@ private fun blobMaterialSample(active: Int, paused: Int, life: Float, presence: 
 internal fun audioBlobInkNeedsSupport(primary: Int, tertiary: Int, paused: Int, life: Float, presence: Float,
     silence: Float, fallback: Boolean, darkInk: Boolean, radiusFraction: Float,
     covered: Boolean, background: Int,
-    gradientMin: Float = 0f, gradientMax: Float = 1f): Boolean {
+    gradientMin: Float = 0f, gradientMax: Float = 1f, layerOpacity: Float = 1f): Boolean {
     // During fallback startup the muted active palette can be brighter than the partially mixed
     // body. Bound both radial endpoints for either ink polarity instead of assuming drain darkens.
     val first = blobBlend(primary, tertiary, gradientMin)
@@ -54,14 +75,20 @@ internal fun audioBlobInkNeedsSupport(primary: Int, tertiary: Int, paused: Int, 
         return if (covered) material else minOf(material, background ushr shift and 255)
     }
     val bound = -0x1000000 or (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
+    // The compact dimmed readout and its material are composited together over the backdrop.
+    val inkLuminance = if (layerOpacity < 1f) {
+        val ink = if (darkInk) 0xff010101.toInt() else 0xfffefefe.toInt()
+        audioBlobMaterialLuminance(blobBlend(background, ink, layerOpacity))
+    } else if (darkInk) rasterDarkInkLuminance else rasterLightInkLuminance
     fun safe(color: Int): Boolean {
+        val underlay = if (layerOpacity < 1f) blobBlend(background, color, layerOpacity) else color
         // Paint alpha truncation and intermediate channel rounding can move the raster two codes
         // beyond the scalar sample; fully covered glyph samples can be one code off their ink.
-        fun rasterChannel(shift: Int) = ((color ushr shift and 255) + if (darkInk) -2 else 2).coerceIn(0, 255)
+        fun rasterChannel(shift: Int) = ((underlay ushr shift and 255) + if (darkInk) -2 else 2).coerceIn(0, 255)
         val raster = -0x1000000 or (rasterChannel(16) shl 16) or (rasterChannel(8) shl 8) or rasterChannel(0)
         val luminance = audioBlobMaterialLuminance(raster)
-        return if (darkInk) (luminance + .05) / (rasterDarkInkLuminance + .05) >= 4.5
-            else (rasterLightInkLuminance + .05) / (luminance + .05) >= 4.5
+        return if (darkInk) (luminance + .05) / (inkLuminance + .05) >= 4.5
+            else (inkLuminance + .05) / (luminance + .05) >= 4.5
     }
     return !safe(bound) || (!covered && !safe(background))
 }

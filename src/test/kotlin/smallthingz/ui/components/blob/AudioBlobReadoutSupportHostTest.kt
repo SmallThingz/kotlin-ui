@@ -11,6 +11,7 @@ import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -94,8 +95,61 @@ class AudioBlobReadoutSupportHostTest {
         assertArrayEquals(normal, render(true))
     }
 
+    @Test fun compactSupportUsesOpacityChangedWhileRendererIsEmptyWithoutAnAppearanceCallback() {
+        val fixture = Fixture(RuntimeEnvironment.getApplication())
+        fixture.layout(56, 56)
+        // The midpoint selects white even without compact geometry, while the bright endpoint
+        // requires support. The appearance callback can stay deduplicated across both resizes.
+        fixture.presentActiveMaterial(Color.BLACK, 0xffe0e0e0.toInt())
+        assertEquals(Triple(false, false, true), fixture.lastAppearance)
+        val opaqueSupport = fixture.paintPixels(Color.WHITE)
+
+        fixture.layout(56, 56, opacity = .56f)
+        val directlyDimmedSupport = fixture.paintPixels(Color.WHITE)
+        assertTrue("This geometry must adjust support for group opacity",
+            !opaqueSupport.contentEquals(directlyDimmedSupport))
+        fixture.layout(56, 56)
+        assertArrayEquals(opaqueSupport, fixture.paintPixels(Color.WHITE))
+
+        val priorCallbacks = fixture.appearanceCallbacks
+        fixture.layout(0, 0)
+        fixture.layout(0, 0, opacity = .56f)
+        fixture.layout(56, 56, opacity = .56f)
+        assertEquals("Only paint inputs change across the empty layout", priorCallbacks, fixture.appearanceCallbacks)
+        assertArrayEquals(directlyDimmedSupport, fixture.paintPixels(Color.WHITE))
+    }
+
+    @Test fun compactDimmedReadoutChecksContrastAfterLayerCompositingBeforeAdmittingSupport() {
+        val fixture = Fixture(RuntimeEnvironment.getApplication())
+        fixture.layout(56, 56)
+        fixture.presentActiveMaterial(0xff6d6d6d.toInt())
+        assertEquals(Triple(false, false, false), fixture.lastAppearance)
+        val opaque = fixture.paintPixels(Color.WHITE)
+
+        fixture.layout(56, 56, opacity = .56f)
+        assertEquals(Triple(false, false, true), fixture.lastAppearance)
+        assertTrue("Dimming must admit support for the gray material", !opaque.contentEquals(fixture.paintPixels(Color.WHITE)))
+        fixture.layout(56, 56)
+        assertEquals(Triple(false, false, false), fixture.lastAppearance)
+        assertArrayEquals(opaque, fixture.paintPixels(Color.WHITE))
+
+        val safe = Fixture(RuntimeEnvironment.getApplication())
+        safe.layout(56, 56)
+        safe.presentActiveMaterial(0xff202020.toInt())
+        assertEquals(Triple(false, false, false), safe.lastAppearance)
+        val safeOpaque = safe.paintPixels(Color.WHITE)
+        safe.layout(56, 56, opacity = .56f)
+        assertEquals(Triple(false, false, false), safe.lastAppearance)
+        assertArrayEquals("Already readable material must leave support off", safeOpaque, safe.paintPixels(Color.WHITE))
+    }
+
     private class Fixture(context: Context) {
         private val renderer = AudioReactiveBlobView(context) { 0f }
+        private val style = NativeAudioBlobAppearance.Default.resolve(NativeColorScheme.fallback(false))
+        var appearanceCallbacks = 0
+            private set
+        var lastAppearance: Triple<Boolean, Boolean, Boolean>? = null
+            private set
         private val readout = NativeAudioBlobReadout(
             context,
             NativeAudioBlobIcons(
@@ -104,21 +158,31 @@ class AudioBlobReadoutSupportHostTest {
                 ReverbIconDrawable(ReverbIcon.Capture, 1f, Color.WHITE),
             ),
             NativeAudioBlobDescriptions("Full", "Pause", "Capture"),
-            NativeAudioBlobAppearance.Default.resolve(NativeColorScheme.fallback(false)),
+            style,
             Density(1f),
             createFontFamilyResolver(context),
         ).apply { bind(active = true, filled = false, primaryText = "42 MiB", secondaryText = "9:59", contentAlpha = 1f) }
         val centerX get() = renderer.left + renderer.width * .5f
         val centerY get() = renderer.top + renderer.height * .5f
 
-        fun layout(width: Int, height: Int) {
+        fun presentActiveMaterial(primary: Int, tertiary: Int = primary) {
+            renderer.onReadoutAppearanceChanged = { darkInk, transitioning, support ->
+                appearanceCallbacks++
+                lastAppearance = Triple(darkInk, transitioning, support)
+                readout.setMaterialAppearance(darkInk, transitioning, support)
+            }
+            renderer.updateState(active = true, enabled = true, saving = false, visible = true,
+                style = style.copy(primary = primary, tertiary = tertiary, resting = Color.BLACK))
+        }
+
+        fun layout(width: Int, height: Int, opacity: Float = 1f) {
             renderer.measure(spec(width, View.MeasureSpec.EXACTLY), spec(height, View.MeasureSpec.EXACTLY))
             renderer.layout(3, 5, 3 + width, 5 + height)
             readout.measure(spec(width, View.MeasureSpec.AT_MOST), spec(height, View.MeasureSpec.AT_MOST))
             val left = renderer.left + ((width - readout.measuredWidth) * .5f).roundToInt()
             val top = renderer.top + ((height - readout.measuredHeight) * .5f).roundToInt()
             readout.layout(left, top, left + readout.measuredWidth, top + readout.measuredHeight)
-            readout.updateMaterialGeometry(renderer, Color.BLACK)
+            readout.updateMaterialGeometry(renderer, Color.BLACK, opacity)
         }
 
         fun inReadoutRegion(x: Float, y: Float, childIndex: Int): Boolean {
@@ -132,6 +196,10 @@ class AudioBlobReadoutSupportHostTest {
             // Isolate the real support paint against a color that needs correction. The icon and
             // labels are drawn identically in the reference, so only support changes these pixels.
             readout.setMaterialAppearance(darkInk, transitioning, support)
+            return paintPixels(background)
+        }
+
+        fun paintPixels(background: Int): IntArray {
             val bitmap = Bitmap.createBitmap(IMAGE_SIZE, IMAGE_SIZE, Bitmap.Config.ARGB_8888)
             try {
                 val canvas = Canvas(bitmap)

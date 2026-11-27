@@ -39,8 +39,9 @@ open class NativeAudioBlobControlView(
     }
 
     protected fun updateBlobDecoration(dimmed: Boolean) {
-        overlay.updateMaterialGeometry(renderer, style.readoutBackground)
-        alpha = if (dimmed) .56f else 1f
+        val opacity = if (dimmed) .56f else 1f
+        overlay.updateMaterialGeometry(renderer, style.readoutBackground, opacity)
+        alpha = opacity
     }
 
     protected fun applyBlobTransform(pressScale: Float, depthScale: Float, degrees: Float, pivotFractionX: Float) {
@@ -88,6 +89,6 @@ open class NativeAudioBlobControlView(
         val x = ((width - overlay.measuredWidth) / 2f).roundToInt()
         val y = ((height - overlay.measuredHeight) / 2f).roundToInt()
         overlay.layout(x, y, x + overlay.measuredWidth, y + overlay.measuredHeight)
-        overlay.updateMaterialGeometry(renderer, style.readoutBackground)
+        overlay.updateMaterialGeometry(renderer, style.readoutBackground, alpha)
     }
 }
