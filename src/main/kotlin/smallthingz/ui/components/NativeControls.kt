@@ -163,8 +163,13 @@ internal inline fun ControlPalette.roleColor(role: NativeTextRole): Int = when (
     NativeTextRole.ON_ACCENT -> onAccent
 }
 
-/** A retained native text node with shared typography and palette handling. */
-open class NativeText private constructor(
+/**
+ * A retained native text node with shared typography and palette handling.
+ *
+ * Subclasses that install their own initial text colors before attachment can pass
+ * `initializeOwnInk = false`. Later role and palette changes use the usual color transitions.
+ */
+open class NativeText protected constructor(
     context: Context,
     palette: ControlPalette,
     style: NativeTextStyle,
