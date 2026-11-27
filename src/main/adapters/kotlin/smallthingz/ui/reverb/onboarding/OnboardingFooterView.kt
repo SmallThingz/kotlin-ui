@@ -2,6 +2,7 @@ package smallthingz.ui.reverb.onboarding
 
 import smallthingz.ui.reverb.ReverbEnvironment
 import smallthingz.ui.reverb.ReverbPalette
+import smallthingz.ui.common.ControlTheme
 import smallthingz.ui.components.NativeButtonInputPolicy
 import smallthingz.ui.components.NativeMaterialButtonView
 import smallthingz.ui.text.view.NativePlainTextViewGeometry
@@ -37,6 +38,16 @@ data class OnboardingFooterState(
     }
 }
 
+/** Product copy and action admission only; navigation and permission state stay with the host. */
+data class OnboardingFooterPresentation(
+    val page: Int,
+    val backLabel: String,
+    val continueLabel: String,
+    val backEnabled: Boolean,
+    val continueEnabled: Boolean,
+    val emphasized: Boolean = true,
+)
+
 private data class FooterActions(val back: () -> Unit, val continueOrFinish: () -> Unit)
 
 /**
@@ -46,9 +57,14 @@ private data class FooterActions(val back: () -> Unit, val continueOrFinish: () 
  */
 class OnboardingFooterView(
     context: Context,
-    environment: ReverbEnvironment,
-    inputRoot: () -> View?,
-) : ViewGroup(context) {
+    theme: ControlTheme,
+    private val pageCount: Int,
+    inputPolicy: NativeButtonInputPolicy = NativeButtonInputPolicy.Default,
+) : ViewGroup(context), AutoCloseable {
+    /** Preserve Reverb's existing three-page/source-input adapter and public constructor. */
+    constructor(context: Context, environment: ReverbEnvironment, inputRoot: () -> View?) :
+        this(context, environment.theme.controlTheme, 3, NativeButtonInputPolicy(inputRoot))
+
     fun clipsAccessibilityTextAt(view: View): Boolean =
         back.clipsAccessibilityTextAt(view) || next.clipsAccessibilityTextAt(view)
 
@@ -65,9 +81,11 @@ class OnboardingFooterView(
         return AutoCloseable { closeNativeFooterAccessibility(first, second) }
     }
 
-    private val recipe = environment.appearance.onboardingFooter
-    private val indicator = recipe.createIndicator(this, 3)
-    private var state = OnboardingFooterState(0, 0, ready = false, finishing = false)
+    private val recipe = theme.appearance.onboardingFooter
+    private val indicator = recipe.createIndicator(this, pageCount)
+    private var presentation: OnboardingFooterPresentation? = null
+    private var reverbState: OnboardingFooterState? = null
+    private var closed = false
     private var palette: ReverbPalette? = null
     private var boundConfiguration: Configuration? = null
     private var actions: FooterActions? = null
@@ -75,13 +93,12 @@ class OnboardingFooterView(
     private var backWidth = 0
     private var continueWidth = 0
     private var stackedButtons = false
-    private val inputPolicy = NativeButtonInputPolicy(inputRoot)
-    private val back = NativeMaterialButtonView(context, environment.appearance.buttons.footerBack,
-        environment.textDensity, environment.sharedFontResolver, inputPolicy) {
+    private val back = NativeMaterialButtonView(context, theme.appearance.buttons.footerBack,
+        theme.density, theme.fontResolver, inputPolicy) {
         actions?.back?.invoke()
     }
-    private val next = NativeMaterialButtonView(context, environment.appearance.buttons.footerContinue,
-        environment.textDensity, environment.sharedFontResolver, inputPolicy) {
+    private val next = NativeMaterialButtonView(context, theme.appearance.buttons.footerContinue,
+        theme.density, theme.fontResolver, inputPolicy) {
         actions?.continueOrFinish?.invoke()
     }
 
@@ -101,6 +118,7 @@ class OnboardingFooterView(
      * These are the original host lambdas: this footer never computes navigation or submits Finish.
      */
     fun connect(onBack: () -> Unit, onContinueOrFinish: () -> Unit): Closeable {
+        check(!closed)
         cancelInput()
         val connected = FooterActions(onBack, onContinueOrFinish)
         actions = connected
@@ -116,34 +134,39 @@ class OnboardingFooterView(
         bind(value.page, value.footerPage, value.ready, value.finishing, colors)
 
     fun bind(page: Int, footerPage: Int, ready: Boolean, finishing: Boolean, colors: ReverbPalette) {
-        // Pager frames keep these values unchanged. Callbacks read the current actions directly;
-        // typography and attachment own their updates independently. Copy configuration so a
-        // resource/locale change still refreshes labels when state and palette remain identical.
-        val configuration = resources.configuration
-        val old = state
-        if (old.page == page && old.footerPage == footerPage && old.ready == ready &&
-            old.finishing == finishing && palette === colors && boundConfiguration == configuration) return
-        if (boundConfiguration != configuration) boundConfiguration = Configuration(configuration)
+        // Preserve the released pager-frame fast path, including locale/configuration refresh.
+        val old = reverbState
+        if (!closed && old != null && old.page == page && old.footerPage == footerPage && old.ready == ready &&
+            old.finishing == finishing && palette === colors && boundConfiguration == resources.configuration) return
         val value = OnboardingFooterState(page, footerPage, ready, finishing)
-        state = value
+        bind(OnboardingFooterPresentation(
+            page = value.page,
+            backLabel = context.getString(R.string.onboarding_back),
+            continueLabel = context.getString(if (value.footerPage < 2) R.string.onboarding_continue
+                else R.string.onboarding_get_started),
+            backEnabled = !value.finishing && value.page > 0,
+            continueEnabled = !value.finishing,
+            emphasized = value.ready,
+        ), colors)
+        reverbState = value
+    }
+
+    /** Bind any product's fixed page count without importing its pager or permission environment. */
+    fun bind(value: OnboardingFooterPresentation, colors: ReverbPalette) {
+        check(!closed)
+        require(value.page in 0 until pageCount)
+        reverbState = null
+        val configuration = resources.configuration
+        val old = presentation
+        if (old == value && palette === colors && boundConfiguration == configuration) return
+        if (boundConfiguration != configuration) boundConfiguration = Configuration(configuration)
+        presentation = value
         palette = colors
         indicator.bind(value.page, colors)
-        back.bind(
-            context.getString(R.string.onboarding_back),
-            enabled = !value.finishing && value.page > 0,
-            palette = colors.buttonPalette,
-        )
-        next.bind(
-            context.getString(when {
-                value.footerPage < 2 -> R.string.onboarding_continue
-                else -> R.string.onboarding_get_started
-            }),
-            enabled = !value.finishing,
-            palette = colors.buttonPalette,
-            emphasized = value.ready,
-        )
-        // The selected indicator width changes immediately.
-        if (old.page != value.page) requestLayout()
+        back.bind(value.backLabel, enabled = value.backEnabled, palette = colors.buttonPalette)
+        next.bind(value.continueLabel, enabled = value.continueEnabled,
+            palette = colors.buttonPalette, emphasized = value.emphasized)
+        if (old?.page != value.page) requestLayout()
         invalidate()
     }
 
@@ -220,6 +243,13 @@ class OnboardingFooterView(
     override fun onDetachedFromWindow() {
         cancelInput()
         super.onDetachedFromWindow()
+    }
+
+    override fun close() {
+        if (closed) return
+        closed = true
+        actions = null
+        closeNativeFooterAccessibility(back, next)
     }
 
     private fun cancelInput() {
