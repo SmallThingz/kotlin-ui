@@ -22,6 +22,7 @@ import smallthingz.ui.reverb.ReverbTitledTopBarLayout
 import smallthingz.ui.text.NativeTypographyRole
 import smallthingz.ui.text.TextStyle
 import smallthingz.ui.text.view.ParagraphView
+import smallthingz.ui.util.closePreservingPrimaryFailure
 
 class InjectActionButton(val view: NativeButtonTouchTarget) : AutoCloseable {
     override fun close() = view.button.close()
@@ -63,15 +64,28 @@ open class InjectAppearance(private val context: Context, val theme: InjectTheme
     fun confirmationActions(cancelText: String, confirmText: String,
         onCancel: () -> Unit, confirmIcon: MaterialRoundedIcon? = null,
         destructive: Boolean = false, onConfirm: () -> Unit): InjectDialogActions {
-        fun action(text: String, recipe: NativeButtonRecipe, glyph: MaterialRoundedIcon?, run: () -> Unit) =
-            NativeMaterialButtonView(context, recipe, density, fonts, onClick = run).apply {
+        // Retain each completed constructor before icon/text binding can fail. Ownership moves
+        // to the caller only when the joined layout has also finished construction and returns.
+        val owned = arrayOfNulls<NativeMaterialButtonView>(2)
+        fun action(index: Int, text: String, recipe: NativeButtonRecipe,
+            glyph: MaterialRoundedIcon?, run: () -> Unit) =
+            NativeMaterialButtonView(context, recipe, density, fonts, onClick = run).also {
+                owned[index] = it
+            }.apply {
                 setLeadingIcon(glyph?.let { icon(it) })
                 bind(text, enabled = true, palette = scheme.buttonPalette)
             }
-        val back = action(cancelText, defaults.buttons.text, MaterialRoundedIcon.Close, onCancel)
-        val recipe = if (destructive) defaults.buttons.destructive else defaults.buttons.filled
-        val accept = action(confirmText, recipe, confirmIcon, onConfirm)
-        return InjectDialogActions(back, accept, scheme)
+        try {
+            val back = action(0, cancelText, defaults.buttons.text, MaterialRoundedIcon.Close, onCancel)
+            val recipe = if (destructive) defaults.buttons.destructive else defaults.buttons.filled
+            val accept = action(1, confirmText, recipe, confirmIcon, onConfirm)
+            return InjectDialogActions(back, accept, scheme)
+        } catch (failure: Throwable) {
+            for (index in owned.lastIndex downTo 0) {
+                closePreservingPrimaryFailure(failure) { owned[index]?.close() }
+            }
+            throw failure
+        }
     }
 
     fun footerButton(text: String, icon: MaterialRoundedIcon? = null, onClick: () -> Unit): InjectActionButton =
