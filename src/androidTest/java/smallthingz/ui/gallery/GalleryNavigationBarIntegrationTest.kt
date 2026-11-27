@@ -649,26 +649,22 @@ class GalleryNavigationBarIntegrationTest {
                 val selected = f.ids[1]
 
                 for (palette in listOf(light, dark, light)) {
-                    // Exercise restoration of the shared page seed as well as fill and opacity updates.
+                    // The retained Gallery canvas stays flat even when the shared palette requests grain.
                     if (palette === dark) backdrop.setGrainSeed(null)
                     GalleryDesign.bindLibraryBackground(backdrop, palette)
                     f.bar.bind(selected, palette.pageControls)
                     assertSame(backdrop, page.background)
                     assertSame(page, backdrop.callback)
                     assertEquals(originalBounds, backdrop.bounds)
-                    val expected = GalleryDesign.appearance.backdrops.pageBackground(palette)
-                    assertEquals(expected.paintedTextSurface, backdrop.paintedTextSurface)
                     val flat = textSurfaceRange(palette.background)
-                    if (palette === dark) assertNotEquals(flat, backdrop.paintedTextSurface)
-                    else assertEquals(flat, backdrop.paintedTextSurface)
+                    assertEquals(flat, GalleryDesign.libraryBackground(palette).paintedTextSurface)
+                    assertEquals(flat, backdrop.paintedTextSurface)
                     f.chips.forEach { (id, chip) ->
                         assertSame(nodes.getValue(id), chip)
                         assertEquals(id == selected, chip.isChecked)
                     }
-                    if (palette === light) {
-                        page.draw(canvas)
-                        assertEquals(light.background, pixel.getPixel(0, 0))
-                    }
+                    page.draw(canvas)
+                    assertEquals(palette.background, pixel.getPixel(0, 0))
                     assertTrue(f.requests.isEmpty())
                 }
             } finally {

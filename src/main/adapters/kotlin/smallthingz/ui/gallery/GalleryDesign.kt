@@ -23,15 +23,15 @@ import smallthingz.ui.text.NativeTypographyRole
 object GalleryDesign {
     val appearance = ReverbDesign.appearance
 
-    /** Library pages follow the shared page fill, grain seed and intensity. */
+    /** Media-led library pages keep the shared fill and drawable, without backdrop grain. */
     fun libraryBackground(palette: NativeColorScheme): NoiseDrawable =
-        appearance.backdrops.pageBackground(palette)
+        appearance.backdrops.pageBackground(palette).also { bindLibraryBackground(it, palette) }
 
     /** Rebind the same drawable without replacing its bounds, callback or route owner. */
     fun bindLibraryBackground(drawable: NoiseDrawable, palette: NativeColorScheme) {
         drawable.setBackgroundColor(palette.background)
         drawable.setGrainSeed(appearance.backdrops.pageGrainSeed)
-        drawable.setNoiseIntensity(palette.backgroundGrain)
+        drawable.setNoiseIntensity(0f)
     }
 
     /** Secondary viewer browsing keeps the existing compact native target in every pose.

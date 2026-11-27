@@ -46,8 +46,10 @@ class GalleryAlbumCover(context: Context, colors: NativeColorScheme, private val
     private val minimumTargetHeight = dp(DEFAULT_MINIMUM_TOUCH_TARGET_DP)
     private val caption = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
-        val inset = dp(GalleryDesign.appearance.detailCards.compactPaddingDp)
-        setPaddingRelative(inset, inset, inset, inset)
+        val recipe = GalleryDesign.appearance.detailCards
+        val horizontalInset = dp(recipe.compactPaddingDp)
+        val verticalInset = dp(recipe.compactGapDp)
+        setPaddingRelative(horizontalInset, verticalInset, horizontalInset, verticalInset)
         addView(title, LinearLayout.LayoutParams(-1, -2))
         addView(count, LinearLayout.LayoutParams(-1, -2).apply {
             topMargin = dp(GalleryDesign.appearance.detailCards.bodyGapDp)
