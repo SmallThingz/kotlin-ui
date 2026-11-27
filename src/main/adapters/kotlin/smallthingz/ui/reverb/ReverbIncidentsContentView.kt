@@ -107,6 +107,7 @@ class ReverbIncidentsContentView(
     }
     private val adapter = IncidentsAdapter(context, appearance.card, texts, menus, actions, rowAuthority, inputRoot, ::selectErrorOccurrences)
     private var accessibilityMembershipChanged: () -> Unit = {}
+    private var listAccessibility: ReverbIncidentListAccessibility? = null
     private var panelProgress = 1f
     private var safeInsets = Insets.NONE
     private val policyDurationTick = Runnable { updatePolicyDuration() }
@@ -135,8 +136,8 @@ class ReverbIncidentsContentView(
         isHorizontalScrollBarEnabled = false
         bindScrollIndicator(initialTheme.appearance.scrollIndicator, initialTheme.palette.muted)
         addOnChildAttachStateChangeListener(object : RecyclerView.OnChildAttachStateChangeListener {
-            override fun onChildViewAttachedToWindow(view: View) = accessibilityMembershipChanged()
-            override fun onChildViewDetachedFromWindow(view: View) = accessibilityMembershipChanged()
+            override fun onChildViewAttachedToWindow(view: View) = refreshAccessibilityMembership()
+            override fun onChildViewDetachedFromWindow(view: View) = refreshAccessibilityMembership(view)
         })
         addItemDecoration(object : RecyclerView.ItemDecoration() {
             override fun getItemOffsets(outRect: Rect, view: View, parent: RecyclerView, state: RecyclerView.State) {
@@ -179,6 +180,36 @@ class ReverbIncidentsContentView(
     fun bindHeaderAccessibility(cursor: PlainTextAccessibilityWindowScope, geometry: NativePlainTextViewGeometry,
                                 sourceNode: (View) -> NativeSourceAccessibilityNode): AutoCloseable =
         header.bindAccessibility(cursor, geometry, sourceNode)
+
+    /** Explicit list-only ownership; callers keep their existing window cursor and header lease. */
+    fun bindListAccessibility(cursor: PlainTextAccessibilityWindowScope, geometry: NativePlainTextViewGeometry,
+                              sourceNode: (View) -> NativeSourceAccessibilityNode): AutoCloseable {
+        check(!selectionObservationClosed) { "Disposed incidents cannot regain accessibility ownership" }
+        val previous = listAccessibility
+        listAccessibility = null
+        previous?.close()
+        val owner = ReverbIncidentListAccessibility(list, cursor, geometry, sourceNode)
+        listAccessibility = owner
+        try { owner.refresh() } catch (failure: Throwable) {
+            if (listAccessibility === owner) listAccessibility = null
+            try { owner.close() } catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
+            throw failure
+        }
+        return AutoCloseable {
+            if (listAccessibility === owner) listAccessibility = null
+            owner.close()
+        }
+    }
+
+    private fun refreshAccessibilityMembership(retiring: View? = null) {
+        val owner = listAccessibility
+        try { owner?.refresh(retiring) } catch (failure: Throwable) {
+            if (listAccessibility === owner) listAccessibility = null
+            try { owner?.close() } catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
+            throw failure
+        }
+        accessibilityMembershipChanged()
+    }
 
     fun observeAccessibilityMembership(changed: () -> Unit) { accessibilityMembershipChanged = changed }
     fun bindSourceAccessibility(sourceNode: ((View) -> NativeSourceAccessibilityNode)?) {
@@ -248,7 +279,7 @@ class ReverbIncidentsContentView(
             empty.bind(state)
         }
         requestLayout()
-        accessibilityMembershipChanged()
+        refreshAccessibilityMembership()
         updatePolicyDuration()
     }
 
@@ -440,6 +471,11 @@ class ReverbIncidentsContentView(
         selectionObservationClosed = true
         selectionModeObserver = null
         var failure = smallthingz.ui.util.closePreservingPrimaryFailure(null, ::dismissClear)
+        failure = smallthingz.ui.util.closePreservingPrimaryFailure(failure) {
+            val owner = listAccessibility
+            listAccessibility = null
+            owner?.close()
+        }
         failure = smallthingz.ui.util.closePreservingPrimaryFailure(failure) {
             removeCallbacks(policyDurationTick)
             bindSourceAccessibility(null)
