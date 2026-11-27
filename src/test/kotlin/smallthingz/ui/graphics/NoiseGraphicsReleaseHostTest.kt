@@ -28,6 +28,8 @@ import smallthingz.ui.components.NativeCaptureControlsStyle
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeDecorativeIconView
 import smallthingz.ui.input.phase.NativeViewPointerHitLayout
+import smallthingz.ui.reverb.ReverbGlyphView
+import smallthingz.ui.reverb.ReverbIcon
 
 /** Real production holders and native graphics; no injected release callback or cache model. */
 @RunWith(RobolectricTestRunner::class)
@@ -171,6 +173,87 @@ class NoiseGraphicsReleaseHostTest {
             assertTrue(glyph.isVisible)
             assertArrayEquals(before, render(view))
             assertEquals(3, rasterizations)
+        } finally {
+            controller.pause().stop().destroy()
+        }
+    }
+
+    @Test fun reverbGlyphReleasesOnAncestorHideAndDetachAndLazilyRestoresExactTint() {
+        val controller = Robolectric.buildActivity(Activity::class.java).setup().visible()
+        try {
+            val activity = controller.get()
+            val root = FrameLayout(activity)
+            activity.setContentView(root)
+            val parent = FrameLayout(activity)
+            root.addView(parent)
+            val tint = Color.rgb(27, 112, 147)
+            val view = ReverbGlyphView(activity, ReverbIcon.Add, tint)
+            parent.addView(view, FrameLayout.LayoutParams(48, 40))
+            size(view, 48, 40)
+            assertTrue(view.isAttachedToWindow && view.isShown)
+
+            val glyph = field(view, "glyph") as CachedPathIconDrawable
+            fun mask() = field(glyph, "maskBitmap") as Bitmap?
+            fun assertNoMask() {
+                assertNull(mask())
+                assertNull(field(glyph, "maskCanvas"))
+            }
+
+            assertNoMask()
+            val pixelsBeforeHide = render(view)
+            assertTrue("The actual glyph paints the requested opaque tint", tint in pixelsBeforeHide)
+            assertTrue("The glyph leaves a transparent margin", pixelsBeforeHide.any { Color.alpha(it) == 0 })
+            val original = checkNotNull(mask())
+            assertNotNull(field(glyph, "maskCanvas"))
+
+            parent.visibility = View.INVISIBLE
+            assertEquals(View.VISIBLE, view.visibility)
+            assertTrue(view.isAttachedToWindow)
+            assertFalse(view.isShown)
+            assertFalse(glyph.isVisible)
+            assertNoMask()
+            assertFalse(original.isRecycled)
+
+            parent.visibility = View.VISIBLE
+            assertTrue(view.isShown && glyph.isVisible)
+            assertNoMask()
+            assertArrayEquals(pixelsBeforeHide, render(view))
+            val restored = checkNotNull(mask())
+            assertNotSame(original, restored)
+
+            val newTint = Color.rgb(181, 73, 44)
+            view.setTintImmediately(newTint)
+            val pixelsBeforeDetach = render(view)
+            assertTrue("A retained glyph paints the updated tint", newTint in pixelsBeforeDetach)
+            assertFalse(tint in pixelsBeforeDetach)
+            assertSame("Tint-only redraws reuse the private mask", restored, mask())
+
+            // Direct drawing is allowed while hidden. Seed a mask while the view
+            // is already hidden so detach must release it without a visible-to-hidden transition.
+            parent.visibility = View.INVISIBLE
+            assertFalse(view.isShown)
+            assertFalse(glyph.isVisible)
+            assertNoMask()
+            assertFalse(restored.isRecycled)
+            assertArrayEquals(pixelsBeforeDetach, render(view))
+            val hiddenMask = checkNotNull(mask())
+
+            parent.removeView(view)
+            assertFalse(view.isAttachedToWindow)
+            assertFalse(glyph.isVisible)
+            assertNoMask()
+            assertFalse(hiddenMask.isRecycled)
+
+            parent.visibility = View.VISIBLE
+            parent.addView(view, FrameLayout.LayoutParams(48, 40))
+            size(view, 48, 40)
+            assertTrue(view.isAttachedToWindow && view.isShown && glyph.isVisible)
+            assertNoMask()
+            assertArrayEquals(pixelsBeforeDetach, render(view))
+            val reattached = checkNotNull(mask())
+            assertNotSame(hiddenMask, reattached)
+            assertArrayEquals(pixelsBeforeDetach, render(view))
+            assertSame(reattached, mask())
         } finally {
             controller.pause().stop().destroy()
         }
