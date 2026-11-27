@@ -4,7 +4,6 @@ import android.content.Context
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
-import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -61,18 +60,14 @@ class GalleryAlbumCover(context: Context, colors: NativeColorScheme, private val
         descendantFocusability = FOCUS_BLOCK_DESCENDANTS
         defaultFocusHighlightEnabled = false
         isFocusable = true
-        accessibilityDelegate = object : View.AccessibilityDelegate() {
-            override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
-                super.onInitializeAccessibilityNodeInfo(host, info)
-                info.className = Button::class.java.name
-            }
-        }
         addView(image, FrameLayout.LayoutParams(-1, -1))
         addView(placeholder, FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER))
         addView(caption, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
         for (index in 0 until childCount) getChildAt(index).importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         paint(colors)
     }
+
+    override fun getAccessibilityClassName(): CharSequence = Button::class.java.name
 
     fun paint(colors: NativeColorScheme) {
         applyStyle(NativeSurfaceStyle(colors.surfaceContainerHigh,

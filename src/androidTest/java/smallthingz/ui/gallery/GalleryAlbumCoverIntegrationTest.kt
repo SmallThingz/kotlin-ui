@@ -79,7 +79,7 @@ class GalleryAlbumCoverIntegrationTest {
             }
     }
 
-    @Test fun compactMatchedRowsAndRestorationRetainNodesAndCaptionGeometry() = main {
+    @Test fun compactMatchedRowsAndRestorationRetainNodesAndCaptionGeometry() = withAttachedQueryHost { host ->
         for (font in listOf(1f, 2f)) for (rtl in listOf(false, true)) {
             val f = Fixture(font, 240, dark = true, rtl = rtl)
             val image = f.cover.image
@@ -172,12 +172,19 @@ class GalleryAlbumCoverIntegrationTest {
                 assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS,
                     f.cover.getChildAt(index).importantForAccessibility)
             }
-            val node = f.cover.createAccessibilityNodeInfo()
+            // The platform populates description and clickability only for attached Views.
+            host.addView(f.cover, FrameLayout.LayoutParams(f.cover.measuredWidth, f.cover.measuredHeight))
             try {
-                assertEquals(Button::class.java.name, node.className.toString())
-                assertEquals("Owned album Suffix 37, 12 items, local", node.contentDescription.toString())
-                assertTrue(node.isClickable)
-            } finally { @Suppress("DEPRECATION") node.recycle() }
+                check(f.cover.isAttachedToWindow)
+                val node = f.cover.createAccessibilityNodeInfo()
+                try {
+                    assertEquals(Button::class.java.name, node.className.toString())
+                    assertEquals("Owned album Suffix 37, 12 items, local", node.contentDescription.toString())
+                    assertTrue(node.isClickable)
+                } finally { @Suppress("DEPRECATION") node.recycle() }
+            } finally {
+                host.removeView(f.cover)
+            }
             val height = f.cover.height
             f.layout(320)
             assertEquals(height, f.cover.height)
@@ -379,6 +386,21 @@ class GalleryAlbumCoverIntegrationTest {
         }
     }
 
+    private fun withAttachedQueryHost(block: (FrameLayout) -> Unit) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
+            NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        var root: FrameLayout? = null
+        withRetiringTestActivity(activity, root = { root }) {
+            main {
+                root = FrameLayout(activity)
+                activity.setContentView(checkNotNull(root))
+            }
+            instrumentation.waitForIdleSync()
+            main { block(checkNotNull(root)) }
+        }
+    }
+
     private class Fixture(font: Float, density: Int, dark: Boolean, rtl: Boolean) {
         private val base = InstrumentationRegistry.getInstrumentation().targetContext
         val context: Context = base.createConfigurationContext(Configuration(base.resources.configuration).apply {
@@ -442,5 +464,9 @@ class GalleryAlbumCoverIntegrationTest {
         }
     }
 
-    private fun main(block: () -> Unit) = InstrumentationRegistry.getInstrumentation().runOnMainSync(block)
+    private fun main(block: () -> Unit) {
+        var result: Result<Unit>? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { result = runCatching(block) }
+        checkNotNull(result).getOrThrow()
+    }
 }
