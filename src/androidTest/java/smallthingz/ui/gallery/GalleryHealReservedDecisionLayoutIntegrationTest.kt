@@ -43,6 +43,22 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
                     val natural = f.bounds(f.decisions)
                     val comparison = f.bounds(f.before)
                     val guidance = f.bounds(f.guidance)
+                    f.assertDecisionSlots()
+                    val applySlot = f.apply.parent as View
+                    assertTrue("Short Apply uses less than its reserved half-row", f.apply.width < applySlot.width)
+                    val cancelBounds = f.bounds(f.discard)
+                    val applyBounds = f.bounds(f.apply)
+                    // Working keeps the same slots and row height without exposing Apply.
+                    f.apply.visibility = View.INVISIBLE
+                    f.apply.isEnabled = false
+                    f.ready(false)
+                    assertEquals(natural, f.bounds(f.decisions))
+                    assertEquals(cancelBounds, f.bounds(f.discard))
+                    assertEquals(applyBounds, f.bounds(f.apply))
+                    assertFalse(f.apply.isShown || f.apply.isEnabled)
+                    f.apply.visibility = View.VISIBLE
+                    f.apply.isEnabled = true
+                    f.ready(false)
                     val retained = listOf(f.before, f.discard, f.apply)
                     assertTrue("The fixture must contain real spare space", natural.bottom < reserved - f.panel.paddingBottom)
                     assertTrue(f.discard.requestFocus())
@@ -51,6 +67,7 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
                         assertEquals(reserved, f.panel.measuredHeight)
                         assertEquals("Canvas budget proxy cannot change", canvasBudget, f.dp(1000) - f.scroll.measuredHeight)
                         f.assertAnchoredGroup(comparison, natural, reserved)
+                        f.assertDecisionSlots()
                         // Repeated Ready layouts must not accumulate displacement or stretch rows.
                         f.ready(true)
                         f.assertAnchoredGroup(comparison, natural, reserved)
@@ -62,7 +79,7 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
                         assertEquals(guidance.width(), f.guidance.width)
                         assertEquals(guidance.height(), f.guidance.height)
                         assertSame(retained[1], f.decisions.getChildAt(0))
-                        assertSame(retained[2], f.decisions.getChildAt(1))
+                        assertSame(retained[2], (f.decisions.getChildAt(1) as FrameLayout).getChildAt(0))
                         assertEquals(0, f.clicks)
                         f.selecting()
                         assertEquals(guidance, f.bounds(f.guidance))
@@ -134,17 +151,23 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
                     assertEquals(narrow, f.bounds(f.decisions))
                     assertEquals(narrowComparison, f.bounds(f.before))
                     assertEquals(narrowGuidance, f.bounds(f.guidance))
+                    f.assertDecisionSlots()
                     assertTrue(f.discard.height >= f.dp(48) && f.apply.height >= f.dp(48))
                     for (button in listOf(f.discard, f.apply)) {
                         assertTrue(button.width >= f.dp(48))
                         val text = checkNotNull(button.layout)
                         assertTrue(text.height <= button.height - button.compoundPaddingTop - button.compoundPaddingBottom)
-                        repeat(text.lineCount) { assertEquals(0, text.getEllipsisCount(it)) }
+                        assertEquals(button.text.length, text.getLineEnd(text.lineCount - 1))
+                        repeat(text.lineCount) {
+                            assertEquals(0, text.getEllipsisCount(it))
+                            assertTrue(text.getLineLeft(it) >= -1f && text.getLineRight(it) <= text.width + 1f)
+                        }
                     }
                     assertTrue(f.bounds(f.before).bottom <= narrow.top)
                     assertFalse(Rect.intersects(f.bounds(f.discard), f.bounds(f.apply)))
                     assertEquals(0, f.clicks)
                     f.discard.performClick(); assertEquals(1, f.clicks)
+                    f.apply.performClick(); assertEquals(2, f.clicks)
                 } finally { f.panel.clearFocus(); f.scroll.removeAllViews() }
             }
         }
@@ -188,7 +211,7 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
                 f.assertAnchoredGroup(comparison, natural, reserved)
                 assertSame(retained[0], f.group.getChildAt(0))
                 assertSame(retained[1], f.decisions.getChildAt(0))
-                assertSame(retained[2], f.decisions.getChildAt(1))
+                assertSame(retained[2], (f.decisions.getChildAt(1) as FrameLayout).getChildAt(0))
             } finally { f.panel.clearFocus(); f.scroll.removeAllViews() }
         }
 
@@ -223,11 +246,7 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
         val discard = button("Discard preview")
         val apply = button("Apply")
         val details = button("Details").apply { visibility = View.GONE }
-        val decisions = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            addView(discard, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(4) })
-            addView(apply, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(4) })
-        }
+        val decisions = GalleryHealDecisionRow(context, discard, apply)
         val group = GalleryHealDecisionGroup(context, before, decisions)
         val guidance = TextView(context).apply {
             text = "Check the preview before applying."
@@ -274,6 +293,25 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
         fun ready(anchor: Boolean) {
             selection.visibility = View.GONE; group.visibility = View.VISIBLE; panel.anchorReadyDecision = anchor
             layout()
+        }
+        fun assertDecisionSlots() {
+            val cancelBounds = bounds(discard)
+            val applyBounds = bounds(apply)
+            val slot = bounds(apply.parent as View)
+            assertTrue("Apply stays inside its reserved slot", slot.contains(applyBounds))
+            assertTrue("Both slots retain the original equal allocation",
+                kotlin.math.abs(cancelBounds.width() - slot.width()) <= 1)
+            assertFalse("Cancel/Discard can never overlap Apply", Rect.intersects(cancelBounds, slot))
+            if (decisions.layoutDirection == View.LAYOUT_DIRECTION_RTL) {
+                assertEquals("Apply aligns to logical end", slot.left, applyBounds.left)
+                assertTrue(slot.right <= cancelBounds.left)
+            } else {
+                assertEquals("Apply aligns to logical end", slot.right, applyBounds.right)
+                assertTrue(cancelBounds.right <= slot.left)
+            }
+            for (button in listOf(discard, apply)) {
+                assertTrue(button.width >= dp(48) && button.height >= dp(48))
+            }
         }
         fun assertAnchoredGroup(comparison: Rect, decision: Rect, reserved: Int) {
             val delta = reserved - panel.paddingBottom - decision.bottom
