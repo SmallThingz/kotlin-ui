@@ -442,5 +442,9 @@ class GalleryAlbumCoverIntegrationTest {
         }
     }
 
-    private fun main(block: () -> Unit) = InstrumentationRegistry.getInstrumentation().runOnMainSync(block)
+    private fun main(block: () -> Unit) {
+        var result: Result<Unit>? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { result = runCatching(block) }
+        checkNotNull(result).getOrThrow()
+    }
 }
