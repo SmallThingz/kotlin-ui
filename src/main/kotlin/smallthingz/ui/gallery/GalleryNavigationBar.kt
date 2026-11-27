@@ -8,6 +8,7 @@ import smallthingz.ui.components.ChoiceArrangement
 import smallthingz.ui.components.NativeChoice
 import smallthingz.ui.components.NativeChoiceStyle
 import smallthingz.ui.components.NativeTabBar
+import smallthingz.ui.components.NativeStackedIconSurfacePadding
 import smallthingz.ui.components.NativeTextRole
 import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.text.NativeTypographyRole
@@ -28,14 +29,14 @@ class GalleryNavigationBar(
         verticalPaddingDp = 6f,
         outlined = false,
         selectedFill = true,
-        // Compact selection surface; target padding and complete labels stay independent.
-        contentSurfacePaddingDp = 8f,
+        // Paint only around the icon; keep complete labels and full native focus/ripple targets.
+        stackedIconSurfacePadding = NativeStackedIconSurfacePadding(16f, 4f),
         iconAbove = true,
         iconSizeDp = 24f,
         iconGapDp = 4f,
         textStyle = GalleryDesign.textStyle(NativeTypographyRole.LABEL_MEDIUM),
         normalTextRole = NativeTextRole.MUTED,
-        selectedTextRole = null, // Shared contrast-aware ink for the selected surface.
+        selectedTextRole = NativeTextRole.CONTENT, // The label stays on the page, outside the fill.
         normalIconRole = NativeTextRole.MUTED,
         selectedIconRole = null,
         indicatorHeightDp = 0f,

@@ -13,6 +13,7 @@ import android.graphics.drawable.RippleDrawable
 import android.graphics.drawable.DrawableWrapper
 import android.os.SystemClock
 import android.view.View
+import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
@@ -25,6 +26,9 @@ import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeChip
 import smallthingz.ui.components.NativeChoice
 import smallthingz.ui.components.NativeChoiceStyle
+import smallthingz.ui.components.NativeStackedIconSurfacePadding
+import smallthingz.ui.components.NativeTextRole
+import smallthingz.ui.components.NativeChoiceColor
 import smallthingz.ui.components.NativeTabBar
 import smallthingz.ui.components.NativeSegmentedChoice
 import smallthingz.ui.components.ChoiceArrangement
@@ -195,7 +199,8 @@ class GalleryNavigationBarIntegrationTest {
                             assertTrue(text.height <= chip.height - chip.compoundPaddingTop - chip.compoundPaddingBottom)
                             val surface = renderNavigationChip(chip, palette.surface, backgroundOnly = true)
                             try {
-                                val middle = surface.getPixel(chip.width / 2, chip.height / 2)
+                                val iconY = chip.paddingTop + chip.compoundDrawablesRelative[1].bounds.height() / 2
+                                val middle = surface.getPixel(chip.width / 2, iconY)
                                 if (id == selected) {
                                     assertNotEquals("Selection needs a container behind its content", palette.surface, middle)
                                     if (!withGrain) {
@@ -227,29 +232,33 @@ class GalleryNavigationBarIntegrationTest {
                                     chip.background.getOutline(outline)
                                     val painted = Rect()
                                     assertTrue(outline.getRect(painted))
-                                    assertTrue("Short content must not paint the entire200dp target", painted.left > 0)
-                                    assertTrue(painted.right < chip.width)
-                                    assertEquals("Only horizontal paint bounds change", 0, painted.top)
-                                    assertEquals(chip.height, painted.bottom)
-                                    assertTrue(kotlin.math.abs(painted.left - (chip.width - painted.right)) <= 1)
-                                    assertEquals("Empty target margin retains the footer", palette.surface,
-                                        surface.getPixel(painted.left / 2, chip.height / 2))
-                                    assertTrue("Complete centered label fits the surface",
-                                        text.getLineWidth(0) <= painted.width())
+                                    assertEquals("Focus/outline retains the full native target",
+                                        Rect(0, 0, chip.width, chip.height), painted)
+                                    assertEquals("Icon capsule leaves target margins on the page", palette.surface,
+                                        surface.getPixel(f.dp(1), iconY))
+                                    assertEquals("Label band is outside selected fill", palette.surface,
+                                        surface.getPixel(chip.width / 2, chip.compoundPaddingTop))
+                                    // At the flat central section the fill is exactly 56dp wide.
+                                    val paintedXs = (0 until chip.width).filter {
+                                        surface.getPixel(it, iconY) != palette.surface
+                                    }
+                                    assertEquals(f.dp(56), paintedXs.size)
+                                    assertEquals((chip.width - f.dp(56)) / 2, paintedXs.first())
                                     assertEquals("Existing16dp recipe radius", f.dp(16).toFloat(), outline.radius, .01f)
                                 } else assertEquals("Unselected cell has no filled container", palette.surface, middle)
                                 val iconInk = checkNotNull(chip.compoundDrawableTintList)
                                     .getColorForState(chip.drawableState, Color.TRANSPARENT)
                                 // Sample the actual painted surface, with its configured theme grain.
                                 // Background-only drawing avoids accidentally sampling a text glyph.
-                                for (y in listOf(f.dp(8), chip.height / 2, chip.height - f.dp(8))) {
+                                for (y in chip.compoundPaddingTop until chip.height - chip.paddingBottom) {
                                     val background = surface.getPixel(chip.width / 2, y)
-                                    val textInk = ColorUtils.compositeColors(chip.currentTextColor, background)
-                                    val displayedIcon = ColorUtils.compositeColors(iconInk, background)
-                                    assertTrue("Settled label contrast dark=$dark selected=${id == selected}",
-                                        ColorUtils.calculateContrast(textInk, background) >= 4.5)
-                                    assertTrue("Settled icon contrast dark=$dark selected=${id == selected}",
-                                        ColorUtils.calculateContrast(displayedIcon, background) >= 3.0)
+                                    assertTrue("Label contrast on page dark=$dark selected=${id == selected}",
+                                        ColorUtils.calculateContrast(ColorUtils.compositeColors(chip.currentTextColor, background), background) >= 4.5)
+                                }
+                                for (y in chip.paddingTop until chip.paddingTop + chip.compoundDrawablesRelative[1].bounds.height()) {
+                                    val background = surface.getPixel(chip.width / 2, y)
+                                    assertTrue("Icon contrast on fill dark=$dark selected=${id == selected}",
+                                        ColorUtils.calculateContrast(ColorUtils.compositeColors(iconInk, background), background) >= 3.0)
                                 }
                                 val complete = renderNavigationChip(chip, palette.surface, backgroundOnly = false)
                                 try {
@@ -291,7 +300,16 @@ class GalleryNavigationBarIntegrationTest {
             for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
                 withBar(fontScale, listOf("Photos", "Search", "Albums"), direction) { f ->
                     f.layout(600)
-                    val chip = f.chips.getValue(f.ids.first())
+                    // Keep exercising the legacy narrowing wrapper; Gallery now opts into
+                    // fill-only geometry and must not need that wrapper at all.
+                    val chip = NativeChip(f.context, GalleryDesign.palette(f.context, dark = false).pageControls,
+                        NativeChoiceStyle(iconAbove = true, contentSurfacePaddingDp = 8f)).apply {
+                        layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                        setIcons(ColorDrawable(Color.WHITE))
+                        bind("Search", checked = true)
+                        measure(exact(f.dp(200)), unspecified())
+                        layout(0, 0, measuredWidth, measuredHeight)
+                    }
                     val background = chip.background as DrawableWrapper
                     val delegate = checkNotNull(background.drawable)
                     val cell = Rect(0, 0, chip.width, chip.height)
@@ -351,7 +369,7 @@ class GalleryNavigationBarIntegrationTest {
                         }
                         assertEquals(0, outlineDepth)
                         assertTrue("Outline refresh cannot navigate", f.requests.isEmpty())
-                    } finally { background.callback = owner }
+                    } finally { background.callback = owner; chip.close() }
                 }
             }
     }
@@ -452,6 +470,132 @@ class GalleryNavigationBarIntegrationTest {
                     }
                 } finally { group.close() }
             }
+        }
+    }
+
+    @Test fun stackedIconFillKeepsLayoutAndResetsUnsupportedGeometry() = main {
+        for (fontScale in listOf(1f, 2f)) for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
+            withBar(fontScale, listOf("Photos", "Search", "Albums"), direction) { f ->
+                val palette = GalleryDesign.navigationPalette(GalleryDesign.palette(f.context, dark = true).pageControls).copy(surfacePreset = null)
+                val base = NativeChoiceStyle(iconAbove = true, iconSizeDp = 24f, iconGapDp = 4f,
+                    minHeightDp = 64f, verticalPaddingDp = 6f, outlined = false, animateSelection = false)
+                val original = NativeChip(f.context, palette, base)
+                val fitted = NativeChip(f.context, palette,
+                    base.copy(stackedIconSurfacePadding = NativeStackedIconSurfacePadding(16f, 4f)))
+                try {
+                    val background = fitted.background
+                    for ((label, width) in listOf("Search" to 200, "Shared photographs and videos" to 80, "Search" to 200)) {
+                        for (chip in listOf(original, fitted)) {
+                            chip.layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                            chip.layoutDirection = direction
+                            chip.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                            chip.maxLines = Int.MAX_VALUE
+                            chip.ellipsize = null
+                            chip.setIcons(ColorDrawable(Color.WHITE))
+                            chip.bind(label, checked = true)
+                            chip.measure(exact(f.dp(width)), unspecified())
+                            chip.layout(0, 0, chip.measuredWidth, chip.measuredHeight)
+                        }
+                        assertSame(background, fitted.background)
+                        assertTrue(background is RippleDrawable)
+                        assertEquals(original.width, fitted.width)
+                        assertEquals(original.height, fitted.height)
+                        assertEquals(original.baseline, fitted.baseline)
+                        assertEquals(original.layout.lineCount, fitted.layout.lineCount)
+                        assertEquals(label.length, fitted.layout.getLineEnd(fitted.layout.lineCount - 1))
+                        if (width == 80) assertTrue(fitted.layout.lineCount > 1)
+                        for (line in 0 until original.layout.lineCount) {
+                            assertEquals(original.layout.getLineStart(line), fitted.layout.getLineStart(line))
+                            assertEquals(original.layout.getLineEnd(line), fitted.layout.getLineEnd(line))
+                        }
+                        assertEquals(surfaceBounds(original), surfaceBounds(fitted))
+                        val painted = renderNavigationChip(fitted, palette.surface, true)
+                        try {
+                            assertNotEquals(palette.surface, painted.getPixel(fitted.width / 2, f.dp(18)))
+                            assertEquals(palette.surface, painted.getPixel(fitted.width / 2, fitted.compoundPaddingTop))
+                        } finally { painted.recycle() }
+                        // Gravity can be a redraw-only change in TextView. No intervening
+                        // measure/layout: the old capsule must already have been cleared.
+                        fitted.gravity = Gravity.CENTER
+                        val recentered = renderNavigationChip(fitted, palette.surface, true)
+                        try {
+                            assertNotEquals(palette.surface, recentered.getPixel(fitted.width / 2, fitted.height / 2))
+                        } finally { recentered.recycle() }
+                        fitted.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                        // Missing top icon must clear the old cached rectangle, not retain a
+                        // floating pill at its former coordinates. Restore on the next iteration.
+                        fitted.setIcons(null)
+                        fitted.measure(exact(f.dp(width)), unspecified())
+                        fitted.layout(0, 0, fitted.measuredWidth, fitted.measuredHeight)
+                        val fallback = renderNavigationChip(fitted, palette.surface, true)
+                        try {
+                            assertNotEquals(palette.surface, fallback.getPixel(fitted.width / 2, fitted.height / 2))
+                        } finally { fallback.recycle() }
+                    }
+                } finally { original.close(); fitted.close() }
+            }
+        }
+    }
+
+    @Test fun outsideLabelContrastDoesNotDependOnIconOpacityOrOverrideDisabledInk() = main {
+        withBar(1f, listOf("Photos", "Search", "Albums"), View.LAYOUT_DIRECTION_LTR) { f ->
+            val palette = GalleryDesign.palette(f.context, dark = false).pageControls.copy(
+                surface = Color.WHITE, content = Color.BLACK, selection = Color.BLACK,
+                onAccent = Color.WHITE, muted = 0x80ffffff.toInt(), surfacePreset = null)
+            val chip = NativeChip(f.context, palette, NativeChoiceStyle(iconAbove = true,
+                iconSizeDp = 24f, iconGapDp = 4f, verticalPaddingDp = 6f, animateSelection = false,
+                stackedIconSurfacePadding = NativeStackedIconSurfacePadding(16f, 4f),
+                selectedTextRole = NativeTextRole.ON_ACCENT, selectedIconRole = NativeTextRole.MUTED,
+                disabledSelectedContent = NativeChoiceColor(NativeTextRole.ON_ACCENT)))
+            try {
+                chip.layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                chip.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                chip.setIcons(ColorDrawable(Color.WHITE))
+                chip.bind("Search", checked = true)
+                chip.measure(exact(f.dp(200)), unspecified())
+                chip.layout(0, 0, chip.measuredWidth, chip.measuredHeight)
+                assertTrue(ColorUtils.calculateContrast(chip.currentTextColor, Color.WHITE) >= 4.5)
+                assertEquals(palette.muted, checkNotNull(chip.compoundDrawableTintList).defaultColor)
+                chip.bind("Search", checked = true, enabled = false)
+                assertEquals("Opaque disabled override keeps the prior disabled policy", Color.WHITE, chip.currentTextColor)
+            } finally { chip.close() }
+        }
+    }
+
+    @Test fun movingStackedIconFillUsesSameRectangleWithoutSecondFill() = main {
+        withBar(2f, listOf("Photos", "Search", "Albums"), View.LAYOUT_DIRECTION_RTL) { f ->
+            val page = GalleryDesign.palette(f.context, dark = true).pageControls.copy(surfacePreset = null)
+            val palette = GalleryDesign.navigationPalette(page)
+            val style = NativeChoiceStyle(iconAbove = true, iconSizeDp = 24f, iconGapDp = 4f,
+                verticalPaddingDp = 6f, outlined = false,
+                stackedIconSurfacePadding = NativeStackedIconSurfacePadding(16f, 4f))
+            val group = NativeSegmentedChoice(f.context, palette, style, gapDp = 0f,
+                arrangement = ChoiceArrangement.EqualWidth, fixedColumns = 2, fillRowHeight = true,
+                movingSelectionBackground = true)
+            try {
+                val choices = listOf("one", "two").map { NativeChoice(it, "Search", ColorDrawable(Color.TRANSPARENT)) }
+                for (selected in listOf("one", "two", "one")) {
+                    group.bind(choices, selected)
+                    for (id in listOf("one", "two")) checkNotNull(group.choiceView(id)).gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                    group.measure(exact(f.dp(400)), unspecified())
+                    group.layout(0, 0, group.measuredWidth, group.measuredHeight)
+                    val chip = checkNotNull(group.choiceView(selected))
+                    val bitmap = Bitmap.createBitmap(group.width, group.height, Bitmap.Config.ARGB_8888)
+                    try {
+                        val canvas = Canvas(bitmap)
+                        canvas.drawColor(page.surface)
+                        // Transparent icons keep both children drawing while exposing any
+                        // accidental second selected layer beneath their icon band.
+                        group.draw(canvas)
+                        assertEquals(quietSelectionComposite(page.selection, page.surface),
+                            bitmap.getPixel(chip.left + chip.width / 2, chip.top + f.dp(18)))
+                        assertEquals(page.surface,
+                            bitmap.getPixel(chip.left + f.dp(1), chip.top + f.dp(18)))
+                        assertEquals(page.surface,
+                            bitmap.getPixel(chip.left + chip.width / 2, chip.bottom - 1))
+                    } finally { bitmap.recycle() }
+                }
+            } finally { group.close() }
         }
     }
 

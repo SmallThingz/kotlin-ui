@@ -46,6 +46,14 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+/** Paint padding around a centered top compound icon; never changes the label or touch target. */
+data class NativeStackedIconSurfacePadding(val horizontalDp: Float, val verticalDp: Float) {
+    init {
+        require(horizontalDp.isFinite() && horizontalDp >= 0f)
+        require(verticalDp.isFinite() && verticalDp >= 0f)
+    }
+}
+
 /** Geometry is explicit so a consumer can retain its established design. */
 data class NativeChoiceStyle(
     val radiusDp: Float = 12f,
@@ -93,6 +101,8 @@ data class NativeChoiceStyle(
      * Null keeps the cell surface. Wrapped, styled or unsupported content keeps it too.
      */
     val contentSurfacePaddingDp: Float? = null,
+    /** Fill/grain only. Unsupported icon geometry retains the established whole-cell surface. */
+    val stackedIconSurfacePadding: NativeStackedIconSurfacePadding? = null,
 ) {
     init {
         require(floatArrayOf(radiusDp, minHeightDp, textSizeSp, horizontalPaddingDp,
@@ -103,6 +113,7 @@ data class NativeChoiceStyle(
         require(startPaddingDp == null || startPaddingDp.isFinite() && startPaddingDp >= 0f)
         require(endPaddingDp == null || endPaddingDp.isFinite() && endPaddingDp >= 0f)
         require(contentSurfacePaddingDp == null || contentSurfacePaddingDp.isFinite() && contentSurfacePaddingDp >= 0f)
+        require(contentSurfacePaddingDp == null || stackedIconSurfacePadding == null)
     }
 }
 
@@ -264,7 +275,8 @@ class NativeChip private constructor(
     internal var measuredContentHeight: Int = 0
         private set
     internal fun hasUniformSelectionContent(): Boolean {
-        if (!uniformSelectionEligible) return false
+        // A stacked icon and an outside label need separate foreground contexts.
+        if (!uniformSelectionEligible || choiceStyle.stackedIconSurfacePadding != null) return false
         val currentLayout = layout
         // Do not invoke caller transformations to probe them. TextView may build the display
         // layout during drawing, so an unavailable transformed layout retains the old renderer.
@@ -340,6 +352,9 @@ class NativeChip private constructor(
     private var typography: ChoiceTypography? = null
     private var visualInsetPx = 0
     private var contentSurfaceInsetPx = 0
+    private val iconFillRect = if (style.stackedIconSurfacePadding != null) RectF() else null
+    private var iconFillResolved = false
+    internal val selectedIconFillBounds: RectF? get() = iconFillRect?.takeIf { iconFillResolved }
     internal val selectedFillInset: Int get() = visualInsetPx
     internal val selectedFillHorizontalInset: Int
         get() = if (uniformSelectionForeground == null) contentSurfaceInsetPx else 0
@@ -623,11 +638,69 @@ class NativeChip private constructor(
             max(0, (measuredHeight - max(dp(minimum), contentHeight)) / 2)
         if (visualInsetPx != inset) { visualInsetPx = inset; invalidate() }
         updateContentSurfaceInset(measuredWidth)
+        updateIconFillBounds(measuredWidth, measuredHeight)
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
         updateContentSurfaceInset(width)
+        updateIconFillBounds(width, height)
+    }
+
+    override fun setGravity(gravity: Int) {
+        val changed = this.gravity != gravity
+        super.setGravity(gravity)
+        if (changed) refreshIconFillAfterPropertyChange()
+    }
+
+    override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
+        super.onScrollChanged(l, t, oldl, oldt)
+        refreshIconFillAfterPropertyChange()
+    }
+
+    private fun refreshIconFillAfterPropertyChange() {
+        // TextView invokes these during construction as well as after layout.
+        if (!ready || choiceStyle.stackedIconSurfacePadding == null) return
+        updateIconFillBounds(width, height)
+        // Reconcile the parent-owned moving rectangle too; no redraw-only stale cache.
+        requestLayout()
+    }
+
+    private fun updateIconFillBounds(cellWidth: Int, cellHeight: Int) {
+        val padding = choiceStyle.stackedIconSurfacePadding ?: return
+        val rect = checkNotNull(iconFillRect)
+        val icon = activeIcon()
+        val textLayout = layout
+        val drawables = compoundDrawablesRelative
+        // Use only TextView's unshifted, centered top-drawable path. Keep layout and icon
+        // bounds untouched, including wrapped labels. All unsupported cases reset the fill.
+        val supported = choiceStyle.iconAbove && choiceStyle.visualMinHeightDp == null &&
+            !stretchTopIconToWidth && trailingIcon == null && !text.isNullOrEmpty() &&
+            transformationMethod == null && !hasSelectionPaintSpans(text) &&
+            paddingLeft == paddingRight && scrollX == 0 && scrollY == 0 &&
+            (gravity and Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.CENTER_HORIZONTAL &&
+            (gravity and Gravity.VERTICAL_GRAVITY_MASK) == Gravity.TOP &&
+            textLayout != null && textLayout.alignment == Layout.Alignment.ALIGN_CENTER &&
+            !hasSelectionPaintSpans(textLayout.text) &&
+            (0 until textLayout.lineCount).all { textLayout.getEllipsisCount(it) == 0 } &&
+            textLayout.height <= cellHeight - compoundPaddingTop - compoundPaddingBottom &&
+            icon != null && drawables[1] === icon && drawables[0] == null &&
+            drawables[2] == null && drawables[3] == null &&
+            icon.bounds.left == 0 && icon.bounds.top == 0 &&
+            icon.bounds.width() == dp(choiceStyle.iconSizeDp) &&
+            icon.bounds.height() == dp(choiceStyle.iconSizeDp) && icon.bounds.width() > 0
+        iconFillResolved = false
+        if (supported) {
+            val drawable = checkNotNull(icon)
+            val x = paddingLeft + (cellWidth - paddingLeft - paddingRight - drawable.bounds.width()) / 2
+            rect.set(x - padding.horizontalDp * density, paddingTop - padding.verticalDp * density,
+                x + drawable.bounds.width() + padding.horizontalDp * density,
+                paddingTop + drawable.bounds.height() + padding.verticalDp * density)
+            iconFillResolved = rect.left >= 0f && rect.top >= 0f && rect.right <= cellWidth &&
+                rect.bottom <= cellHeight && rect.bottom <= compoundPaddingTop &&
+                rect.width() > 0f && rect.height() > 0f
+        }
+        selectionAnimation?.setFillBounds(selectedIconFillBounds)
     }
 
     private fun updateContentSurfaceInset(cellWidth: Int) {
@@ -825,6 +898,7 @@ class NativeChip private constructor(
         retained.setSurfacePreset(currentPalette.surfacePreset)
         retained.bind(fill,stroke,text,ripple,choiceStyle.radiusDp*density,density,icons,accent,currentPalette.surface)
         retained.paintFill = !parentDrawsSelectedFill
+        retained.setFillBounds(selectedIconFillBounds)
         val visual = visualBackground ?: (when {
             choiceStyle.contentSurfacePaddingDp != null -> ChoiceVisualBackground(
                 retained.background, horizontalInset = { selectedFillHorizontalInset }) { visualInsetPx }
@@ -1297,7 +1371,10 @@ open class NativeSegmentedChoice(
         if (child.isLaidOut) {
             val inset = child.selectedFillInset.toFloat()
             val horizontal = child.selectedFillHorizontalInset.toFloat()
-            indicator.retarget(child.left + horizontal, child.top + inset, child.right - horizontal, child.bottom - inset)
+            val icon = child.selectedIconFillBounds
+            if (icon != null) indicator.retarget(child.left + icon.left, child.top + icon.top,
+                child.left + icon.right, child.top + icon.bottom)
+            else indicator.retarget(child.left + horizontal, child.top + inset, child.right - horizontal, child.bottom - inset)
         }
     }
 
