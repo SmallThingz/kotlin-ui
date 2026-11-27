@@ -18,7 +18,7 @@ import smallthingz.ui.components.NativeRangeSlider
 import smallthingz.ui.components.NativeSlider
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], qualifiers = "w360dp-h640dp-mdpi")
+@Config(application = InjectCompositeHostApplication::class, sdk = [35], qualifiers = "w360dp-h640dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class InjectLabeledSliderLayoutTest {
     @Test fun bindingReadoutKeepsSliderFocusAndDoesNotPublishAnEdit() = withActivity { activity ->
@@ -55,10 +55,19 @@ class InjectLabeledSliderLayoutTest {
                 layoutDirection = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
                 bindReadout("100%")
             }
+            // Resolve inherited direction in the same RTL-capable, attached host as the app.
+            // Do not force the production header/readout direction to make this assertion pass.
+            activity.setContentView(content)
+            assertTrue(content.isAttachedToWindow)
             layout(content)
             val header = content.getChildAt(0) as LinearLayout
             val title = header.getChildAt(0)
             val readout = header.getChildAt(1) as NativeBadge
+            val direction = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+            assertEquals("Requested direction resolves on the outer layout", direction, content.layoutDirection)
+            assertEquals("Header inherits the host direction", direction, header.layoutDirection)
+            assertEquals("Readout inherits the header direction", direction, readout.layoutDirection)
+            assertEquals("Slider retains inherited direction", direction, slider.layoutDirection)
             assertEquals(14, content.paddingStart)
             assertEquals(10, content.paddingTop)
             assertSame(slider, content.getChildAt(1))

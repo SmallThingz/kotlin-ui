@@ -24,7 +24,7 @@ import smallthingz.ui.components.applicationGrid
 
 /** Attached host coverage for the actual extracted tile, not a hand-built copy of its children. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], qualifiers = "w360dp-h640dp-mdpi")
+@Config(application = InjectCompositeHostApplication::class, sdk = [35], qualifiers = "w360dp-h640dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class InjectApplicationChoiceTileTest {
     @Test fun selectionExplanationAndPendingShareOneActionWithoutOptimisticMutation() = withTile { tile, root ->
@@ -40,7 +40,7 @@ class InjectApplicationChoiceTileTest {
         tile.bindChoice("Mail", "Mail, example.mail", selected = true, stateDescription = "Blocked")
         tile.bindIcon(ColorDrawable(Color.BLUE))
         layout(root)
-        assertTrue(choice.requestFocus())
+        focusForKeyboard(choice)
         assertTrue(choice.performClick())
         assertTrue(choice.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
         assertEquals(2, selections)
@@ -95,7 +95,7 @@ class InjectApplicationChoiceTileTest {
         tile.bindChoice("Mail", "Mail", selected = false)
         layout(root)
         val choice = tile.getChildAt(0) as NativeChip
-        assertTrue(choice.requestFocus())
+        focusForKeyboard(choice)
         choice.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER))
         choice.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER))
         assertEquals(1, callbacks)
@@ -138,15 +138,21 @@ class InjectApplicationChoiceTileTest {
                     }
                 }
                 try {
+                    activity.setContentView(grid)
+                    assertTrue(grid.isAttachedToWindow)
                     grid.measure(exact(360), exact(recipe.heightPx(context) * 2))
                     grid.layout(0, 0, grid.measuredWidth, grid.measuredHeight)
+                    val direction = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+                    assertEquals("Grid resolves the requested host direction", direction, grid.layoutDirection)
                     assertEquals(4, grid.columnCount)
                     val firstRow = tiles.take(4).sortedBy { it.left }
                     assertEquals(0, firstRow.first().left)
                     assertEquals(360, firstRow.last().right)
                     firstRow.zipWithNext().forEach { (left, right) -> assertEquals(left.right, right.left) }
                     for (tile in tiles) {
+                        assertEquals("Tile inherits grid direction", direction, tile.layoutDirection)
                         val choice = tile.getChildAt(0) as NativeChip
+                        assertEquals("Label inherits tile direction", direction, choice.layoutDirection)
                         val icon = tile.getChildAt(1)
                         val marker = tile.getChildAt(2)
                         assertEquals(90, tile.width)
@@ -164,6 +170,18 @@ class InjectApplicationChoiceTileTest {
                 } finally { tiles.forEach { it.close() } }
             }
         } finally { controller.pause().stop().destroy() }
+    }
+
+    private fun focusForKeyboard(choice: View) {
+        assertTrue("Keyboard target must be attached", choice.isAttachedToWindow)
+        assertTrue("Keyboard target must have a focused window", choice.hasWindowFocus())
+        assertTrue("Binding must publish a focusable choice", choice.isFocusable)
+        // NativeChip is intentionally not focusable in touch mode. Enter keyboard mode like
+        // the attached toolbar tests, without modifying the production control's focus flags.
+        assertTrue("Fixture can leave touch mode and focus the choice", choice.requestFocusFromTouch())
+        assertFalse("Keyboard fixture is outside touch mode", choice.isInTouchMode)
+        assertTrue(choice.requestFocus())
+        assertSame("Focus belongs to the actual choice", choice, choice.rootView.findFocus())
     }
 
     private fun withTile(block: (InjectApplicationChoiceTile, FrameLayout) -> Unit) {
