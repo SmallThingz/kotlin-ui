@@ -10,6 +10,7 @@ import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeToolbarBackground
 import smallthingz.ui.components.NativeToolbarStyle
 import smallthingz.ui.components.NativeTopBarInsets
+import smallthingz.ui.text.view.ParagraphView
 
 /** A centered title between the same compact action slots used by the brand toolbar. */
 open class ReverbTitledTopBarLayout(
@@ -46,6 +47,7 @@ open class ReverbTitledTopBarLayout(
         clipChildren = false
         clipToPadding = false
         if (Build.VERSION.SDK_INT >= 29) isForceDarkAllowed = false
+        (title as? ParagraphView)?.useSingleLineEllipsisForDefaultLayout()
         addView(contentClipView)
     }
 

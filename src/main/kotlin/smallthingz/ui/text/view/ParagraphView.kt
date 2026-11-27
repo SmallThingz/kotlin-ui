@@ -348,6 +348,12 @@ class ParagraphView(
         updateOriginalCache()
     }
 
+    internal fun useSingleLineEllipsisForDefaultLayout() {
+        if (softWrap && maximumLines == Int.MAX_VALUE && overflow == TextOverflow.Clip) {
+            setTextLayout(maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         // The source retains original/substitution caches across detach. Measurement checks font
