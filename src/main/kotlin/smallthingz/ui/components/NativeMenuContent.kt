@@ -27,6 +27,7 @@ import android.graphics.Outline
 import android.graphics.Path
 import android.graphics.Rect
 import android.os.Build
+import android.os.Bundle
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -117,6 +118,7 @@ internal class NativeMenuColumn<I>(
     private val interestedParent: (MotionEvent) -> Boolean,
 ) : ViewGroup(context), AutoCloseable {
     val rows = ArrayList<NativeMenuRowView<I>>()
+    var rowInputAllowed: (() -> Boolean)? = null
     init { clipChildren = false; clipToPadding = false }
 
     fun <T> bind(content: NativeMenuChoices<T>, palette: NativeMenuColors, select: (T) -> Unit) {
@@ -209,6 +211,8 @@ internal class NativeMenuRowView<I>(
     private var closed = false
     private var supportingText: ParagraphView? = null
     private var customContent = false
+    private val ownerAdmitsInput: Boolean
+        get() = (parent as? NativeMenuColumn<*>)?.rowInputAllowed?.invoke() != false
 
     init {
         clipChildren = false
@@ -389,7 +393,7 @@ internal class NativeMenuRowView<I>(
         }
     }
     override fun performClick(): Boolean {
-        if (closed || !isEnabled) return false
+        if (closed || !isEnabled || !ownerAdmitsInput) return false
         val currentAction = action ?: return false
         super.performClick()
         currentAction()
@@ -416,8 +420,18 @@ internal class NativeMenuRowView<I>(
     }
     override fun onDetachedFromWindow() { input.detached(); super.onDetachedFromWindow() }
     override fun onCancelPendingInputEvents() { super.onCancelPendingInputEvents(); input.cancel() }
+    override fun performAccessibilityAction(action: Int, args: Bundle?): Boolean {
+        if (action == AccessibilityNodeInfo.ACTION_CLICK && !ownerAdmitsInput) return false
+        return super.performAccessibilityAction(action, args)
+    }
+
     override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
         super.onInitializeAccessibilityNodeInfo(info)
+        if (!ownerAdmitsInput) {
+            info.isEnabled = false
+            info.isClickable = false
+            info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK)
+        }
         val state = actionCheck
         info.className = when {
             state == null -> View::class.java.name

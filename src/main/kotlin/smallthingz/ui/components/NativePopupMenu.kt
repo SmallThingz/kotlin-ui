@@ -15,6 +15,8 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.WindowManager
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityManager
 import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
 import androidx.annotation.RequiresApi
@@ -160,6 +162,7 @@ class NativePopupMenu<I> private constructor(
     }
 
     init {
+        menu.column.rowInputAllowed = { acceptsInput }
         input.bindRoot(this)
         id = android.R.id.content
         setViewTreeLifecycleOwner(anchor.findViewTreeLifecycleOwner())
@@ -194,6 +197,7 @@ class NativePopupMenu<I> private constructor(
 
     fun expanded(expanded: Boolean) {
         if (closed) return
+        val reopeningDismissed = expanded && inputState == InputState.DISMISSED
         if (expanded && !acceptsInput) {
             // Explicit readmission is a new input lifetime, even while the old exit is painted.
             val releaseWasRequested = inputState == InputState.ACTION_ACCEPTED
@@ -218,7 +222,12 @@ class NativePopupMenu<I> private constructor(
         animationLayer.retargetMotion(expanded)
         // Ordinary dismissal keeps the window flags and exit paint while retiring held input.
         if (dismissing) cancelHeldInput(generation)
-        if (!closed && inputGeneration == generation && !animationLayer.motionShouldExist) onTerminal()
+        if (closed || inputGeneration != generation) return
+        if (!animationLayer.motionShouldExist) {
+            onTerminal()
+        } else if (dismissing || reopeningDismissed) {
+            notifyRowAdmissionChanged()
+        }
     }
 
     /**
@@ -258,6 +267,16 @@ class NativePopupMenu<I> private constructor(
             throw failure
         }
         return true
+    }
+
+    @Suppress("DEPRECATION")
+    private fun notifyRowAdmissionChanged() {
+        if (!isAttachedToWindow || context.getSystemService(AccessibilityManager::class.java)?.isEnabled != true) return
+        menu.column.sendAccessibilityEventUnchecked(
+            AccessibilityEvent.obtain(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED).apply {
+                contentChangeTypes = AccessibilityEvent.CONTENT_CHANGE_TYPE_SUBTREE
+            },
+        )
     }
 
     private fun cancelHeldInput(generation: Long) {
