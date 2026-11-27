@@ -90,7 +90,7 @@ object NativePageTransition {
      * Reverb Main's Library is the model: (1-progress)*height above stationary Home, tween(220).
      * Reversing the same live pair rebases the foreground's presented translation. Its superseded
      * onFinished callback is retired: that callback must not remove the now-incoming root.
-     * Explicit cancellation, unrelated replacement and detach commit ordinary navigation. An
+     * Explicit cancellation, unrelated replacement, resize and detach commit ordinary navigation. An
      * uncommitted predictive preview instead restores its outgoing route without delivering Back.
      * The caller owns gesture events and calls seekPreview/commitPreview or reverses show().
      */
@@ -149,8 +149,17 @@ object NativePageTransition {
             override fun onViewAttachedToWindow(view: View) = Unit
             override fun onViewDetachedFromWindow(view: View) = cancel()
         }
+        private val resize = View.OnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
+            // Ordinary endpoints belong to the old extent. Settle before another frame mixes
+            // them with the new distance; uncommitted previews retain their gesture owner.
+            if (active != null && !previewing && oldR > oldL && oldB > oldT &&
+                (r - l != oldR - oldL || b - t != oldB - oldT)) cancel()
+        }
 
-        init { container.addOnAttachStateChangeListener(attach) }
+        init {
+            container.addOnAttachStateChangeListener(attach)
+            container.addOnLayoutChangeListener(resize)
+        }
 
         fun show(incoming: View, outgoing: View, direction: Direction, onFinished: () -> Unit = {}) =
             prepare(incoming, outgoing, direction, preview = false, onFinished)
@@ -315,6 +324,7 @@ object NativePageTransition {
             closed = true
             cancel()
             container.removeOnAttachStateChangeListener(attach)
+            container.removeOnLayoutChangeListener(resize)
         }
     }
 
