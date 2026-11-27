@@ -7,6 +7,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import smallthingz.ui.components.NativeButtonPalette
 import smallthingz.ui.components.NativeChoiceStyle
+import smallthingz.ui.components.NativeMaterialButtonStyle
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeTextRole
 import smallthingz.ui.components.NativeUiAppearance
@@ -41,6 +42,11 @@ object GalleryHealControlsStyle {
 
     val comparisonChoice = preparationChoice.copy(outlined = true, unselectedOutlined = true, selectedFill = true,
         normalTextRole = NativeTextRole.CONTENT, selectedTextRole = null)
+
+    /** Icon-only selection commands keep a complete accessible name and 48dp target. */
+    val selectionIconAction = NativeMaterialButtonStyle(horizontalPaddingDp = 0,
+        verticalPaddingDp = 0, minimumWidthDp = 48, minimumHeightDp = 48,
+        iconSizeDp = 24, showLabel = false)
 
     /** Selection commands share the native text-button disabled state without replacing the view. */
     fun paintSelectionAction(button: Button, palette: ControlPalette) {
