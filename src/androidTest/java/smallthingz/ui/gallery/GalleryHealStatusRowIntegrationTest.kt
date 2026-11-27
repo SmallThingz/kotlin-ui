@@ -81,8 +81,8 @@ class GalleryHealStatusRowIntegrationTest {
                     assertTrue("No exposed candidate before measurement", updates.isEmpty())
                     f.layout(width)
                     val selected = f.status.text.toString()
-                    assertTrue(selected in listOf(full, short, guidance))
-                    assertEquals(if (selected == guidance) emptyList<String>() else listOf(selected), updates)
+                    assertTrue(selected in listOf(full, short, ""))
+                    assertEquals(listOf(selected), updates)
                     assertEquals(full, f.status.contentDescription)
                     assertEquals(baseline, f.row.height)
                     assertEquals(2, f.row.childCount)
@@ -98,6 +98,22 @@ class GalleryHealStatusRowIntegrationTest {
                     f.row.bind(guidance); f.layout(width)
                     assertEquals(guidance, f.status.text.toString()); assertNull(f.status.contentDescription)
                     assertEquals(baseline, f.row.height)
+                    // Force the no-fit branch independently of language/font metrics.
+                    for (compact in listOf("Cancelled", "Discarded")) {
+                        f.row.bind("."); f.layout(width)
+                        val oneLineBudget = f.row.height
+                        val fullCompletion = "Preview $compact. Selection kept."
+                        f.row.bind(".", completion = GalleryHealStatusRow.Completion(fullCompletion, compact))
+                        f.layout(width)
+                        assertTrue(f.status.text.toString() in listOf(fullCompletion, compact, ""))
+                        assertEquals(fullCompletion, f.status.contentDescription)
+                        assertEquals(oneLineBudget, f.row.height)
+                        f.row.bind(".", completion = GalleryHealStatusRow.Completion("Long\ncompletion", "Still\ntwo lines"))
+                        f.layout(width)
+                        assertEquals("", f.status.text.toString())
+                        assertEquals("Long\ncompletion", f.status.contentDescription)
+                        assertEquals(oneLineBudget, f.row.height)
+                    }
                 }
             }
         }

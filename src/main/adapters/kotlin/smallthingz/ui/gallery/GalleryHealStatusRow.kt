@@ -8,7 +8,7 @@ import smallthingz.ui.components.NativeText
 /** Retains the existing status and alternate widgets. App supplies localized owner-confirmed copy.
  * Measurement is confined to a detached inaccessible probe with the same typography as the labels.
  * Normal Preparing/Ready alternate reservation remains unchanged. Completion never enlarges the
- * ordinary guidance budget: full -> short -> guidance fallback, with full semantics retained.
+ * ordinary guidance budget: full -> short -> empty ink, with full completion semantics retained.
  */
 class GalleryHealStatusRow(
     context: Context,
@@ -74,7 +74,7 @@ class GalleryHealStatusRow(
             val chosen = when {
                 measured(completion.full) <= budget -> completion.full
                 measured(completion.short) <= budget -> completion.short
-                else -> current.guidance
+                else -> "" // Never revive tutorial ink; the full completion remains the accessible description.
             }
             publish(chosen, completion.full)
         }

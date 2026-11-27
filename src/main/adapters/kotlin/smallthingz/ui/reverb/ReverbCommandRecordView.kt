@@ -1,6 +1,7 @@
 package smallthingz.ui.reverb
 
 import android.content.Context
+import android.graphics.text.LineBreaker
 import android.os.Bundle
 import android.text.Layout
 import android.text.TextUtils
@@ -117,7 +118,7 @@ open class ReverbCommandRecordView(
     private fun text(role: NativeTextRole = NativeTextRole.CONTENT,
                      typography: NativeTypographyRole = NativeTypographyRole.BODY_MEDIUM) =
         NativeText(context, palette, appearance.typography.nativeTextStyle(typography), role).apply {
-            breakStrategy = Layout.BREAK_STRATEGY_SIMPLE
+            breakStrategy = LineBreaker.BREAK_STRATEGY_SIMPLE
             hyphenationFrequency = Layout.HYPHENATION_FREQUENCY_NONE
         }
 
