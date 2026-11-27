@@ -21,7 +21,7 @@ class GalleryNavigationBar(
     selectedId: String,
     onSelectionRequest: (String) -> Boolean,
 ) : FrameLayout(context) {
-    private val tabs = NativeTabBar(context, palette, NativeChoiceStyle(
+    private val tabs = NativeTabBar(context, GalleryDesign.navigationPalette(palette), NativeChoiceStyle(
         radiusDp = 16f,
         minHeightDp = 64f,
         horizontalPaddingDp = 4f,
@@ -74,7 +74,7 @@ class GalleryNavigationBar(
 
     fun bind(selectedId: String, palette: ControlPalette) {
         setBackgroundColor(palette.surface)
-        tabs.applyPalette(palette)
+        tabs.applyPalette(GalleryDesign.navigationPalette(palette))
         tabs.bind(destinations, selectedId)
         destinations.forEach { destination -> tabs.choiceView(destination.id)?.apply {
             // Larger text may grow the one navigation row; no ellipsis or hidden destination.

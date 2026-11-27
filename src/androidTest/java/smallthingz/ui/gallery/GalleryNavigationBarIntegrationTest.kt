@@ -168,8 +168,12 @@ class GalleryNavigationBarIntegrationTest {
                     // Detached ViewColorTransition.retarget snaps to its target. No sleep,
                     // animator-scale override or mid-transition color assumption is needed.
                     assertFalse(f.bar.isAttachedToWindow)
-                    for (dark in listOf(false, true, false)) for (selected in f.ids) {
-                        val palette = GalleryDesign.palette(f.context, dark).pageControls
+                    for (dark in listOf(false, true, false)) for (selected in f.ids)
+                        for (withGrain in listOf(true, false)) {
+                        val pagePalette = GalleryDesign.palette(f.context, dark).pageControls
+                        // Keep real-theme grain contrast coverage. The no-grain companion
+                        // isolates the actual alpha composite without a pixel tolerance.
+                        val palette = if (withGrain) pagePalette else pagePalette.copy(surfacePreset = null)
                         f.bar.bind(selected, palette)
                         f.layout(600)
                         assertEquals(barSize, f.bar.width to f.bar.height)
@@ -194,6 +198,30 @@ class GalleryNavigationBarIntegrationTest {
                                 val middle = surface.getPixel(chip.width / 2, chip.height / 2)
                                 if (id == selected) {
                                     assertNotEquals("Selection needs a container behind its content", palette.surface, middle)
+                                    if (!withGrain) {
+                                        val expectedFill = quietSelectionComposite(palette.selection, palette.surface)
+                                        assertEquals("One quieter selection layer over the unchanged footer",
+                                            expectedFill, middle)
+                                        // Rebind the ORIGINAL page palette, not the derived selection palette.
+                                        // The rendered surface and retained nodes must not drift or rebuild.
+                                        f.bar.bind(selected, palette)
+                                        f.layout(600)
+                                        val rebound = renderNavigationChip(chip, palette.surface, backgroundOnly = true)
+                                        try {
+                                            assertTrue("Same original palette yields byte-identical settled paint",
+                                                surface.sameAs(rebound))
+                                        } finally { rebound.recycle() }
+                                        assertEquals(barSize, f.bar.width to f.bar.height)
+                                        for ((retainedId, retainedChip) in f.chips) {
+                                            assertSame(nodes.getValue(retainedId), retainedChip)
+                                            assertSame(parents.getValue(retainedId), retainedChip.parent)
+                                            assertEquals(ids.getValue(retainedId), retainedChip.id)
+                                            assertSame(backgrounds.getValue(retainedId), retainedChip.background)
+                                            assertSame(ripples.getValue(retainedId), retainedRipple(retainedChip))
+                                            assertEquals(bounds.getValue(retainedId), boundsIn(f.bar, retainedChip))
+                                        }
+                                        assertTrue("Repeated palette binding cannot navigate", f.requests.isEmpty())
+                                    }
                                     assertEquals("Rounded corner keeps the footer underlay", palette.surface, surface.getPixel(0, 0))
                                     val outline = Outline()
                                     chip.background.getOutline(outline)
@@ -388,7 +416,8 @@ class GalleryNavigationBarIntegrationTest {
     private fun assertMovingSurfaceUsesTheSameContentBounds() {
         for (direction in listOf(View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL)) {
             withBar(2f, listOf("Photos", "Search", "Albums"), direction) { f ->
-                val palette = GalleryDesign.palette(f.context, dark = true).pageControls
+                val pagePalette = GalleryDesign.palette(f.context, dark = true).pageControls.copy(surfacePreset = null)
+                val palette = GalleryDesign.navigationPalette(pagePalette)
                 val style = NativeChoiceStyle(iconAbove = true, verticalPaddingDp = 8f,
                     contentSurfacePaddingDp = NativeChoiceStyle().horizontalPaddingDp)
                 val group = NativeSegmentedChoice(f.context, palette, style, gapDp = 0f,
@@ -416,13 +445,25 @@ class GalleryNavigationBarIntegrationTest {
                             // may leave a second container outside the shared measured surface.
                             assertEquals(palette.surface,
                                 bitmap.getPixel(chip.left + painted.left / 2, chip.top + f.dp(4)))
-                            assertNotEquals(palette.surface,
+                            assertEquals("Moving parent paints exactly one translucent layer, not a second child fill",
+                                quietSelectionComposite(pagePalette.selection, pagePalette.surface),
                                 bitmap.getPixel(chip.left + chip.width / 2, chip.top + f.dp(4)))
                         } finally { bitmap.recycle() }
                     }
                 } finally { group.close() }
             }
         }
+    }
+
+    /** Independent single-layer Android composite; avoid a channel-rounding approximation. */
+    private fun quietSelectionComposite(selection: Int, underlay: Int): Int {
+        val pixel = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        return try {
+            val canvas = Canvas(pixel)
+            canvas.drawColor(underlay)
+            canvas.drawColor(ColorUtils.setAlphaComponent(selection, 143))
+            pixel.getPixel(0, 0)
+        } finally { pixel.recycle() }
     }
 
     private fun surfaceBounds(chip: NativeChip): Rect {

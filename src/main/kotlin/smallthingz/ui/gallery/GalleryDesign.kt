@@ -7,6 +7,8 @@ import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeTextStyle
 import smallthingz.ui.components.NativeMaterialButtonStyle
 import smallthingz.ui.components.nativeTextStyle
+import smallthingz.ui.components.srgbColorWithAlpha
+import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.reverb.ReverbDesign
 import smallthingz.ui.reverb.reverbActionSheetStyle
 import smallthingz.ui.text.NativeTypography
@@ -22,6 +24,12 @@ object GalleryDesign {
      * This metric does not opt the primary action row into icon-only presentation.
      */
     val viewerFilmstripHeightDp = appearance.toolbars.action.minimumTargetDp.coerceAtLeast(48f)
+
+    /** Quieter destination paint, derived from the incoming page palette on every bind.
+     * Replace selection alpha (143/255); keep shared ink, focus and all target geometry.
+     */
+    fun navigationPalette(palette: ControlPalette): ControlPalette =
+        palette.copy(selection = srgbColorWithAlpha(palette.selection, .56f))
 
     val actionTextStyle = appearance.typography[NativeTypographyRole.LABEL_LARGE]
     val libraryHeadingTextStyle = appearance.typography[NativeTypographyRole.TITLE_MEDIUM]
