@@ -46,14 +46,14 @@ class ZfmBrowserHeaderLayout(
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val available = (width - 2 * dp(style.compactEdgeInsetDp)).coerceAtLeast(0)
         val target = exact(dp(max(style.action.sizeDp, style.action.minimumTargetDp)))
-        navigation.measure(atMost(available), target)
-        actions.measure(atMost((available - navigation.measuredWidth).coerceAtLeast(0)), target)
-        val inlineWidth = (available - navigation.measuredWidth - actions.measuredWidth -
-            2 * dp(style.centeredPaddingDp)).coerceAtLeast(0)
+        if (navigation.occupiesSlot) navigation.measure(atMost(available), target)
+        if (actions.occupiesSlot) actions.measure(atMost((available - navigation.slotWidth).coerceAtLeast(0)), target)
+        val inlineWidth = (available - navigation.slotWidth - actions.slotWidth -
+            navigation.locationGap - actions.locationGap).coerceAtLeast(0)
         stacked = inlineWidth < location.minimumReadableWidth
         val locationWidth = if (stacked) available else inlineWidth
         location.measure(atMost(locationWidth), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-        actionRowHeight = max(style.compactHeightPx(density), max(navigation.measuredHeight, actions.measuredHeight))
+        actionRowHeight = max(style.compactHeightPx(density), max(navigation.slotHeight, actions.slotHeight))
         logicalHeight = if (stacked) actionRowHeight + location.measuredHeight
             else max(actionRowHeight, location.measuredHeight)
         setMeasuredDimension(width, resolveSize(logicalHeight, heightMeasureSpec))
@@ -62,24 +62,31 @@ class ZfmBrowserHeaderLayout(
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         val rtl = layoutDirection == LAYOUT_DIRECTION_RTL
         val edge = dp(style.compactEdgeInsetDp)
-        val gap = dp(style.centeredPaddingDp)
-        val navWidth = navigation.measuredWidth + edge
-        val actionWidth = actions.measuredWidth + edge
-        val titleWidth = location.measuredWidth + 2 * gap
+        val leadingGap = navigation.locationGap
+        val trailingGap = actions.locationGap
+        val titleWidth = location.measuredWidth + leadingGap + trailingGap
         val inline = centeredTopBarPlacement(width, logicalHeight,
-            navWidth, navigation.measuredHeight, titleWidth, location.measuredHeight,
-            actionWidth, actions.measuredHeight, density, rtl, style.centeredTitleStartDp)
-        val navX = if (rtl) width - edge - navigation.measuredWidth else edge
-        val actionX = if (rtl) edge else width - edge - actions.measuredWidth
-        val navY = compactToolbarActionTop(actionRowHeight, navigation.measuredHeight)
-        val actionY = compactToolbarActionTop(actionRowHeight, actions.measuredHeight)
-        navigation.layout(navX, navY, navX + navigation.measuredWidth, navY + navigation.measuredHeight)
-        actions.layout(actionX, actionY, actionX + actions.measuredWidth, actionY + actions.measuredHeight)
+            navigation.slotWidth + edge, navigation.slotHeight, titleWidth, location.measuredHeight,
+            actions.slotWidth + edge, actions.slotHeight, density, rtl, style.centeredTitleStartDp)
+        layoutEdgeAction(navigation, edge, alignRight = rtl)
+        layoutEdgeAction(actions, edge, alignRight = !rtl)
         val titleX = if (stacked) {
             if (rtl) width - edge - location.measuredWidth else edge
-        } else inline.titleX + gap
+        } else inline.titleX + if (rtl) trailingGap else leadingGap
         val titleY = if (stacked) actionRowHeight else inline.titleY
         location.layout(titleX, titleY, titleX + location.measuredWidth, titleY + location.measuredHeight)
+    }
+
+    private val View.occupiesSlot get() = visibility != GONE
+    private val View.slotWidth get() = if (occupiesSlot) measuredWidth else 0
+    private val View.slotHeight get() = if (occupiesSlot) measuredHeight else 0
+    private val View.locationGap get() = if (occupiesSlot) dp(style.centeredPaddingDp) else 0
+
+    private fun layoutEdgeAction(view: View, edge: Int, alignRight: Boolean) {
+        if (!view.occupiesSlot) return
+        val x = if (alignRight) width - edge - view.measuredWidth else edge
+        val y = compactToolbarActionTop(actionRowHeight, view.measuredHeight)
+        view.layout(x, y, x + view.measuredWidth, y + view.measuredHeight)
     }
 
     override fun onRtlPropertiesChanged(layoutDirection: Int) {

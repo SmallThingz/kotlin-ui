@@ -103,6 +103,14 @@ class ZfmHomeCategoryGrid(context: Context) : GridLayout(context) {
         columns = 0
         requestLayout()
     }
+    override fun onViewAdded(child: View) {
+        super.onViewAdded(child)
+        children = -1
+    }
+    override fun onViewRemoved(child: View) {
+        super.onViewRemoved(child)
+        children = -1
+    }
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val available = View.MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight
         val minimum = (168f * resources.displayMetrics.density *
