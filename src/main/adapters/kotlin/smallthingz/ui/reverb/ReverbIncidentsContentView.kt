@@ -192,7 +192,7 @@ class ReverbIncidentsContentView(
         listAccessibility = owner
         try { owner.refresh() } catch (failure: Throwable) {
             if (listAccessibility === owner) listAccessibility = null
-            try { owner.close() } catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
+            smallthingz.ui.util.closePreservingPrimaryFailure(failure, owner::close)
             throw failure
         }
         return AutoCloseable {
@@ -205,7 +205,7 @@ class ReverbIncidentsContentView(
         val owner = listAccessibility
         try { owner?.refresh(retiring) } catch (failure: Throwable) {
             if (listAccessibility === owner) listAccessibility = null
-            try { owner?.close() } catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
+            smallthingz.ui.util.closePreservingPrimaryFailure(failure) { owner?.close() }
             throw failure
         }
         accessibilityMembershipChanged()

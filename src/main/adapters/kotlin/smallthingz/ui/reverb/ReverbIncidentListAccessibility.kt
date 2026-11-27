@@ -7,6 +7,7 @@ import smallthingz.ui.text.view.NativePlainTextViewGeometry
 import smallthingz.ui.text.view.NativeSourceAccessibilityNode
 import smallthingz.ui.text.view.ParagraphView
 import smallthingz.ui.text.view.PlainTextAccessibilityWindowScope
+import smallthingz.ui.util.closePreservingPrimaryFailure
 import java.util.IdentityHashMap
 
 /** Owns bindings on existing list Views, never a copied semantic tree or a native fallback. */
@@ -30,13 +31,25 @@ internal class ReverbIncidentListAccessibility(
         visit(root)
         leases.keys.filter { !present.containsKey(it) }.forEach { leases.remove(it)?.close() }
         for (view in present.keys) {
-            if (view is ParagraphView) view.isScreenReaderFocusable = !hasMergingAncestor(view)
             if (!leases.containsKey(view)) leases[view] = when (view) {
-                is ParagraphView -> view.bindPlainTextAccessibility(cursor, geometry, { sourceNode(view) }) { exposed(view) }
+                is ParagraphView -> bindParagraph(view)
                 is NativeMergedRowAccessibilityHost -> view.mergedRowAccessibility.bindSourceGeometry(
                     geometry, sourceNode) { exposed(view) }
                 else -> error("Unexpected incident accessibility binding")
             }
+            // Enroll the original value before changing it, including when refresh later fails.
+            if (view is ParagraphView) view.isScreenReaderFocusable = !hasMergingAncestor(view)
+        }
+    }
+
+    private fun bindParagraph(view: ParagraphView): AutoCloseable {
+        val originalReaderFocusable = view.isScreenReaderFocusable
+        val binding = view.bindPlainTextAccessibility(cursor, geometry, { sourceNode(view) }) { exposed(view) }
+        return AutoCloseable {
+            val failure = closePreservingPrimaryFailure(null, binding::close)
+            closePreservingPrimaryFailure(failure) {
+                view.isScreenReaderFocusable = originalReaderFocusable
+            }?.let { throw it }
         }
     }
 
@@ -67,7 +80,7 @@ internal class ReverbIncidentListAccessibility(
         val owned = leases.values.toList()
         leases.clear()
         var failure: Throwable? = null
-        for (lease in owned) failure = smallthingz.ui.util.closePreservingPrimaryFailure(failure, lease::close)
+        for (lease in owned) failure = closePreservingPrimaryFailure(failure, lease::close)
         failure?.let { throw it }
     }
 }
