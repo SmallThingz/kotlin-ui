@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="native_default_light_background">#F3EDF4</color>
+    <!-- Shared default light paint. Runtime surfaces and platform windows use these same tokens. -->
+    <color name="native_default_light_page">#F6F6F6</color>
+    <color name="native_default_light_foreground">#FCFCFC</color>
+    <color name="native_default_light_popup">#FFFFFF</color>
+    <color name="native_default_light_background">@color/native_default_light_page</color>
 </resources>

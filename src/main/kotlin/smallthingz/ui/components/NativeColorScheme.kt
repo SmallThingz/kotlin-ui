@@ -91,6 +91,8 @@ data class NativeColorScheme(
     internal val surfacePreset: NativeSurfacePreset? = null,
     /** Optional acknowledged-status ink. Null follows the current theme's semantic default. */
     val acknowledgedStatusTintOverride: Int? = null,
+    /** Optional resolved popup paint; part of palette value/copy equality, null retains the generic lift. */
+    internal val popupFillOverride: Int? = null,
 ) {
     val buttonPalette = NativeButtonPalette(accent = primary, onAccent = onPrimary, content = onSurface,
         muted = onSurfaceVariant, quietSurface = foregroundFill, tonalSurface = secondaryContainer,
@@ -109,7 +111,7 @@ data class NativeColorScheme(
     internal val foregroundGrain: Float get() = surfacePreset?.foregroundGrain ?: 0f
 
     // Context menus and an off-page recording tab share the same popup material.
-    internal val popupFill: Int = run {
+    internal val popupFill: Int = popupFillOverride ?: run {
         val foreground = Color(foregroundFill)
         val amoled = (surfacePreset as? NativeDarkSurfacePreset)?.style == NativeDarkSurfaces.AMOLED
         val neutral = if (amoled || foreground.luminance() < .5f) Color.White else Color.Black
