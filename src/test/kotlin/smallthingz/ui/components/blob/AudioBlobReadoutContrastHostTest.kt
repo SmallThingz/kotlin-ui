@@ -11,6 +11,7 @@ import android.view.View
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.roundToInt
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -78,6 +79,24 @@ class AudioBlobReadoutContrastHostTest {
         assertTrue(failures.joinToString("\n"), failures.isEmpty())
     }
 
+    @Test fun dimmedMaterialCorrectionPreservesAlphaAndRecoversAfterEmptyLayout() = withSettledAnimations {
+        val fixture = Fixture(RuntimeEnvironment.getApplication(), Scene.DarkBackdrop,
+            material = Color.BLACK, tertiary = 0xffe0e0e0.toInt())
+        fixture.layoutHome(190, dimmed = false)
+        val opaque = fixture.material()
+        fixture.layoutHome(190, dimmed = true)
+        assertEquals(Triple(false, false, true), fixture.lastAppearance)
+        val directlyDimmed = fixture.material()
+        assertFalse("The outer layer's opacity must change the correction", opaque.contentEquals(directlyDimmed))
+        fixture.assertMaterialOnlySupport()
+
+        fixture.layoutBlob(0, dimmed = false)
+        fixture.layoutBlob(0, dimmed = true)
+        fixture.layoutHome(190, dimmed = true)
+        assertArrayEquals("Apply the latest correction when a zero-size material grows",
+            directlyDimmed, fixture.material())
+    }
+
     @Test fun clearingSettledSilencePublishesCompactReadoutSupportImmediately() = withSettledAnimations {
         val gray = Color.rgb(120, 120, 120)
         val fixture = Fixture(RuntimeEnvironment.getApplication(), Scene.DarkBackdrop, material = gray)
@@ -92,15 +111,15 @@ class AudioBlobReadoutContrastHostTest {
 
         renderer.submitFrame(0f, FloatArray(0), silenceSuppressed = true)
         assertEquals(Triple(false, false, false), appearances.last())
-        val drainedReadout = fixture.paintReadoutOver(gray)
         val drainedCallbackCount = appearances.size
 
         renderer.clearFrame()
         assertTrue(renderer.readoutNeedsSupport(darkInk = false))
         assertEquals(drainedCallbackCount + 1, appearances.size)
         assertEquals(Triple(false, false, true), appearances.last())
-        // Hold the underlay fixed so only the readout's newly published support can change pixels.
-        assertFalse(drainedReadout.contentEquals(fixture.paintReadoutOver(gray)))
+        // The recorded palette is gray again after clearing silence. Its actual material must
+        // immediately be protected against the white ink, independently of glyph paint.
+        assertTrue(Color.red(fixture.material()[fixture.centerPixel]) < Color.red(gray))
 
         renderer.clearFrame()
         assertEquals(drainedCallbackCount + 1, appearances.size)
@@ -116,10 +135,15 @@ class AudioBlobReadoutContrastHostTest {
         LightBackdrop(Color.WHITE, Color.rgb(20, 33, 56), true),
     }
 
-    private class Fixture(context: Context, private val scene: Scene, material: Int = scene.material) {
+    private class Fixture(
+        context: Context,
+        private val scene: Scene,
+        material: Int = scene.material,
+        tertiary: Int = material,
+    ) {
         private val style = NativeAudioBlobAppearance.Default.resolve(NativeColorScheme.fallback(false)).copy(
             primary = material,
-            tertiary = material,
+            tertiary = tertiary,
             resting = material,
             readoutBackground = scene.backdrop,
         )
@@ -139,15 +163,95 @@ class AudioBlobReadoutContrastHostTest {
         private val control = Control(context, readout, style)
         val alpha get() = control.alpha
         val audioView get() = control.getChildAt(0) as AudioReactiveBlobView
+        val centerPixel get() = (PADDING + control.height / 2) * IMAGE_SIZE + PADDING + control.width / 2
+        var lastAppearance: Triple<Boolean, Boolean, Boolean>? = null
+            private set
 
-        fun paintReadoutOver(color: Int): IntArray = raster { canvas ->
-            canvas.drawColor(color)
-            canvas.translate((PADDING + readout.left).toFloat(), (PADDING + readout.top).toFloat())
-            readout.draw(canvas)
+        init {
+            val listener = requireNotNull(audioView.onReadoutAppearanceChanged)
+            audioView.onReadoutAppearanceChanged = { darkInk, transitioning, support ->
+                lastAppearance = Triple(darkInk, transitioning, support)
+                listener(darkInk, transitioning, support)
+            }
+        }
+
+        fun material(): IntArray = raster { canvas ->
+            canvas.translate(PADDING.toFloat(), PADDING.toFloat())
+            audioView.draw(canvas)
+        }
+
+        fun assertMaterialOnlySupport() {
+            val corrected = material()
+            val withoutGlyphs = scene(showInk = false)
+            val uncorrected = try {
+                // The measured fixture is unattached, so use the synchronous readout opacity path.
+                readout.setContentOpacity(0f)
+                material()
+            } finally {
+                readout.setContentOpacity(1f)
+            }
+            var visibleCorrection = false
+            var witnessesInsideViewport = 0
+            var changedAlphaPixels = 0
+            var maximumAlphaDelta = 0
+            var maximumDeltaIndex = -1
+            var zeroCoverageChanges = 0
+            var firstZeroCoverageChange = -1
+            var backdropChanges = 0
+            var firstBackdropChange = -1
+            var firstSaturationChange: String? = null
+            val edgeSamples = mutableListOf<String>()
+            for (index in corrected.indices) {
+                val expectedAlpha = Color.alpha(uncorrected[index])
+                val actualAlpha = Color.alpha(corrected[index])
+                if (expectedAlpha == 255 && actualAlpha == 255 && corrected[index] != uncorrected[index]) {
+                    visibleCorrection = true
+                }
+                val delta = abs(actualAlpha - expectedAlpha)
+                if (delta != 0) {
+                    changedAlphaPixels++
+                    if (delta > maximumAlphaDelta) {
+                        maximumAlphaDelta = delta
+                        maximumDeltaIndex = index
+                    }
+                    if (edgeSamples.size < 8) {
+                        edgeSamples += "(${index % IMAGE_SIZE},${index / IMAGE_SIZE}) $expectedAlpha->$actualAlpha"
+                    }
+                    if (firstSaturationChange == null && (expectedAlpha == 255 || actualAlpha == 255)) {
+                        firstSaturationChange =
+                            "(${index % IMAGE_SIZE},${index / IMAGE_SIZE}) $expectedAlpha->$actualAlpha"
+                    }
+                }
+                if ((expectedAlpha == 0) != (actualAlpha == 0)) {
+                    if (zeroCoverageChanges == 0) firstZeroCoverageChange = index
+                    zeroCoverageChanges++
+                }
+                if (expectedAlpha != 0) continue
+                if (radiusFraction(index) < .9) witnessesInsideViewport++
+                if (withoutGlyphs[index] != scene.backdrop) {
+                    if (backdropChanges == 0) firstBackdropChange = index
+                    backdropChanges++
+                }
+            }
+            val diagnostics = "Material alpha maxDelta=$maximumAlphaDelta at index $maximumDeltaIndex, " +
+                "changedPixels=$changedAlphaPixels, zeroCoverageChanges=$zeroCoverageChanges " +
+                "(first index $firstZeroCoverageChange), edgeSamples=$edgeSamples, " +
+                "firstSaturationChange=$firstSaturationChange"
+            println(diagnostics)
+            assertTrue("The fixture must need a visible material correction", visibleCorrection)
+            assertEquals(diagnostics, 0, zeroCoverageChanges)
+            // Filtered and unfiltered Skia paints can round edge opacity by one 8-bit code,
+            // including at the upper saturation endpoint. Zero coverage must match exactly.
+            assertTrue(diagnostics, maximumAlphaDelta <= 1)
+            assertEquals("Backdrop changed outside material (first index $firstBackdropChange)", 0, backdropChanges)
+            assertTrue("Use blank pixels inside the old support radius", witnessesInsideViewport > 0)
         }
 
         fun layoutHome(homeHeight: Int, dimmed: Boolean) {
-            val size = reverbHomeGeometry(360, homeHeight, 1f, NativeCaptureControlsStyle.Default).blobSize
+            layoutBlob(reverbHomeGeometry(360, homeHeight, 1f, NativeCaptureControlsStyle.Default).blobSize, dimmed)
+        }
+
+        fun layoutBlob(size: Int, dimmed: Boolean) {
             val spec = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY)
             control.measure(spec, spec)
             control.layout(0, 0, size, size)

@@ -4,6 +4,7 @@ package smallthingz.ui.components.blob
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.LightingColorFilter
 import android.graphics.ComposeShader
 import android.graphics.LinearGradient
 import android.graphics.Paint
@@ -54,6 +55,7 @@ class AudioReactiveBlobView(
     private var materialTertiary = 0
     private var materialPaused = 0
     private var readoutRadiusPixels = 0f
+    private var readoutMaterialCorrection = 0
     private var readoutBackground = 0
     private var readoutPrefersBackdropInk = false
     private var readoutLayerOpacity = 1f
@@ -88,6 +90,18 @@ class AudioReactiveBlobView(
         readoutFallbackMin = fallbackMin
         readoutFallbackMax = fallbackMax
         publishReadoutAppearance()
+    }
+
+    internal fun setReadoutMaterialCorrection(correction: Int) {
+        if (readoutMaterialCorrection == correction) return
+        readoutMaterialCorrection = correction
+        // LightingColorFilter changes only RGB. Each renderer retains its own alpha and shape.
+        val amount = kotlin.math.abs(correction) * 0x010101
+        val filter = if (amount == 0) null else LightingColorFilter(
+            0x00ffffff - amount, if (correction > 0) amount else 0,
+        )
+        renderer.setReadoutColorFilter(filter)
+        invalidate()
     }
 
     fun readoutNeedsSupport(darkInk: Boolean): Boolean {
@@ -493,6 +507,7 @@ class AudioReactiveBlobView(
         val idleFrameDelayMillis: Long
         fun resize(width: Int, height: Int)
         fun setPalette(primary: Int, tertiary: Int, paused: Int): Boolean
+        fun setReadoutColorFilter(filter: LightingColorFilter?)
         fun draw(
             canvas: Canvas,
             width: Int,
@@ -523,6 +538,10 @@ class AudioReactiveBlobView(
 
         override fun resize(width: Int, height: Int) {
             shader.setFloatUniform("resolution", width.toFloat(), height.toFloat())
+        }
+
+        override fun setReadoutColorFilter(filter: LightingColorFilter?) {
+            paint.colorFilter = filter
         }
 
         override fun setPalette(primary: Int, tertiary: Int, paused: Int): Boolean {
@@ -609,6 +628,12 @@ class AudioReactiveBlobView(
 
         override fun resize(width: Int, height: Int) {
             gradientState = -1
+        }
+
+        override fun setReadoutColorFilter(filter: LightingColorFilter?) {
+            paint.colorFilter = filter
+            pausedPaint.colorFilter = filter
+            silencePaint.colorFilter = filter
         }
 
         override fun setPalette(primary: Int, tertiary: Int, paused: Int): Boolean {
