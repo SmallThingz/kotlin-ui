@@ -42,6 +42,7 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
                     f.ready(false)
                     val natural = f.bounds(f.decisions)
                     val comparison = f.bounds(f.before)
+                    val guidance = f.bounds(f.guidance)
                     val retained = listOf(f.before, f.discard, f.apply)
                     assertTrue("The fixture must contain real spare space", natural.bottom < reserved - f.panel.paddingBottom)
                     assertTrue(f.discard.requestFocus())
@@ -55,17 +56,36 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
                         f.assertAnchoredGroup(comparison, natural, reserved)
                         assertSame("Placement must not choose Apply", f.discard, f.panel.findFocus())
                         assertSame(retained[0], f.group.getChildAt(0))
+                        assertSame(f.guidance, f.panel.reservedReadyGuidance)
+                        assertEquals("Guidance text is never rebound by placement", "Check the preview before applying.", f.guidance.text.toString())
+                        assertEquals(View.ACCESSIBILITY_LIVE_REGION_POLITE, f.guidance.accessibilityLiveRegion)
+                        assertEquals(guidance.width(), f.guidance.width)
+                        assertEquals(guidance.height(), f.guidance.height)
                         assertSame(retained[1], f.decisions.getChildAt(0))
                         assertSame(retained[2], f.decisions.getChildAt(1))
                         assertEquals(0, f.clicks)
                         f.selecting()
+                        assertEquals(guidance, f.bounds(f.guidance))
                         assertEquals(View.GONE, f.group.visibility)
                         assertEquals(reserved, f.panel.measuredHeight)
                         f.ready(false) // Same retained rows, natural Preparing placement.
                         assertEquals("Natural placement restored", natural, f.bounds(f.decisions))
                         assertEquals(comparison, f.bounds(f.before))
+                        assertEquals(guidance, f.bounds(f.guidance))
                         assertTrue(f.discard.requestFocus())
                     }
+                    // An intervening warning must not be crossed, even when the decision
+                    // group itself still fits and uses its unchanged bottom anchor.
+                    f.warning.visibility = View.VISIBLE
+                    f.ready(false)
+                    val warningComparison = f.bounds(f.before)
+                    val warningDecision = f.bounds(f.decisions)
+                    f.ready(true)
+                    assertEquals(guidance, f.bounds(f.guidance))
+                    assertTrue(f.bounds(f.guidance).bottom <= f.bounds(f.warning).top)
+                    val warningDelta = reserved - f.panel.paddingBottom - warningDecision.bottom
+                    assertEquals(Rect(warningComparison).apply { offset(0, warningDelta) }, f.bounds(f.before))
+                    f.warning.visibility = View.GONE
                     // Force a layout at a nonzero scroll offset to validate framework frames.
                     // This does not prove or require scroll-only re-anchoring.
                     f.panel.clearFocus() // Coordinate cases must not trigger focus-driven scrolling.
@@ -87,15 +107,18 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
                     assertTrue(f.scroll.scrollY + f.scroll.paddingTop > f.body.top + f.panel.top)
                     assertEquals(natural, f.bounds(f.decisions))
                     assertEquals(comparison, f.bounds(f.before))
+                    assertEquals(guidance, f.bounds(f.guidance))
                     // A short viewport also refuses anchoring, independently of scroll position.
                     f.scroll.scrollTo(0, 0); f.viewportHeight = f.dp(180); f.ready(true)
                     assertTrue(f.panel.height > f.scroll.height - f.scroll.paddingTop - f.scroll.paddingBottom)
                     assertEquals(natural, f.bounds(f.decisions))
                     assertEquals(comparison, f.bounds(f.before))
+                    assertEquals(guidance, f.bounds(f.guidance))
                     // Details after the decision group retains normal document flow.
                     f.viewportHeight = f.dp(600); f.details.visibility = View.VISIBLE; f.ready(true)
                     assertEquals(natural, f.bounds(f.decisions))
                     assertEquals(comparison, f.bounds(f.before))
+                    assertEquals(guidance, f.bounds(f.guidance))
                     assertTrue(f.bounds(f.details).top >= f.bounds(f.decisions).bottom)
                     // Real wrapped labels, narrow font1/font2: no compression to force fitting.
                     f.details.visibility = View.GONE
@@ -104,11 +127,13 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
                     f.apply.text = "Apply this preview to the photo"
                     f.ready(false); val narrow = f.bounds(f.decisions)
                     val narrowComparison = f.bounds(f.before)
+                    val narrowGuidance = f.bounds(f.guidance)
                     val naturalHeight = f.panel.measuredHeight
                     f.ready(true)
                     assertEquals(naturalHeight, f.panel.measuredHeight)
                     assertEquals(narrow, f.bounds(f.decisions))
                     assertEquals(narrowComparison, f.bounds(f.before))
+                    assertEquals(narrowGuidance, f.bounds(f.guidance))
                     assertTrue(f.discard.height >= f.dp(48) && f.apply.height >= f.dp(48))
                     for (button in listOf(f.discard, f.apply)) {
                         assertTrue(button.width >= f.dp(48))
@@ -204,15 +229,22 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
             addView(apply, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(4) })
         }
         val group = GalleryHealDecisionGroup(context, before, decisions)
+        val guidance = TextView(context).apply {
+            text = "Check the preview before applying."
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
+        val warning = TextView(context).apply { text = "Cleanup required"; visibility = View.GONE }
         val selection = View(context)
         val panel = ReservedPanel(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(7), dp(9), dp(11), dp(13))
-            addView(TextView(context).apply { text = "Check the preview before applying." }, LinearLayout.LayoutParams(-1, -2))
+            addView(guidance, LinearLayout.LayoutParams(-1, -2))
             addView(selection, LinearLayout.LayoutParams(-1, dp(320)))
+            addView(warning, LinearLayout.LayoutParams(-1, -2))
             addView(group, LinearLayout.LayoutParams(-1, -2))
             addView(details, LinearLayout.LayoutParams(-1, -2))
             reservedDecisionGroup = group
+            reservedReadyGuidance = guidance
         }
         val body = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -253,6 +285,9 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
             assertEquals("No stretched container or internal spacer", group.measuredHeight, group.height)
             assertEquals("Natural row spacing is retained", decision.top - comparison.bottom,
                 bounds(decisions).top - bounds(before).bottom)
+            assertEquals("Guidance belongs immediately above comparison, without moving its slots",
+                dp(6), bounds(before).top - bounds(guidance).bottom)
+            assertTrue(panel.indexOfChild(guidance) < panel.indexOfChild(group))
             assertEquals(reserved, panel.measuredHeight)
         }
         fun bounds(view: View) = Rect(0, 0, view.width, view.height).also {
