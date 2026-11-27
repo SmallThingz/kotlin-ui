@@ -343,7 +343,7 @@ class NativeAnchoredDropdown private constructor(
             if (disposed) return
             root.layoutDirection = anchor.layoutDirection
             root.filterTouchesWhenObscured = anchor.filterTouchesWhenObscured
-            root.isFocusableInTouchMode = true
+            root.configureNativeFocusParking()
             root.addView(scrim, FrameLayout.LayoutParams(-1, -1))
             root.addView(wheel)
             scrim.isFocusable = false

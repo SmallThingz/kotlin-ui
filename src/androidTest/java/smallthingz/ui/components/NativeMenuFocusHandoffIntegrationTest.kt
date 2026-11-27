@@ -92,6 +92,9 @@ class NativeMenuFocusHandoffIntegrationTest {
             val oldBack = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK)
             instrumentation.runOnMainSync {
                 assertEquals(0, (menu.layoutParams as WindowManager.LayoutParams).flags and retiredFlags)
+                assertTrue(menu.isFocusableInTouchMode)
+                assertFalse("Popup focus owner must not tint its content", menu.defaultFocusHighlightEnabled)
+                assertEquals(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS, menu.descendantFocusability)
                 assertTrue(menu.dispatchKeyEvent(oldBack))
                 assertFalse(editor.hasWindowFocus())
             }

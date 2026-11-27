@@ -221,6 +221,9 @@ class NativeDropdownFeedbackIntegrationTest {
             main { browse(f, 1) }
             await("Explicit browse did not complete") { position(f) == 21f }
             main {
+                assertTrue(f.pane.isFocusableInTouchMode)
+                assertFalse("Explicit-selection focus owner has no full-modal highlight",
+                    f.pane.defaultFocusHighlightEnabled)
                 val now = SystemClock.uptimeMillis()
                 f.pane.dispatchKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK, 0))
                 f.pane.dispatchKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK, 0,
@@ -589,6 +592,9 @@ class NativeDropdownFeedbackIntegrationTest {
             main {
                 assertTrue(f.activity.hasWindowFocus())
                 assertTrue(f.pane.hasFocus())
+                assertTrue(f.pane.isFocusableInTouchMode)
+                assertFalse("Structural modal focus must not overlay its wheel and scrim",
+                    f.pane.defaultFocusHighlightEnabled)
                 focused = checkNotNull(f.activity.currentFocus)
                 assertEquals(1f, position(f), 0f)
                 arrow(KeyEvent.META_CTRL_ON)

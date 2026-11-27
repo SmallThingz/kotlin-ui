@@ -70,6 +70,9 @@ class NativePopupMenuDismissalHostTest {
                         panel.advanceMotion(6_000_000_000L, visible = true, durationScale = 1f)
                         assertTrue(row.isAttachedToWindow && row.width > 0 && row.height > 0)
                         assertEquals(1f, panel.alpha, 0f)
+                        assertTrue(menu.isFocusableInTouchMode)
+                        assertFalse("Popup focus parking must not tint the entire panel",
+                            menu.defaultFocusHighlightEnabled)
                         assertRowAdmission(row, admitted = true)
                         assertFalse(disabled.performClick())
 
@@ -98,6 +101,9 @@ class NativePopupMenuDismissalHostTest {
                         menu.expanded(true)
                         panel.advanceMotion(12_016_000_000L, visible = true, durationScale = 1f)
                         assertEquals(1f, panel.alpha, 0f)
+                        assertTrue(menu.isFocusableInTouchMode)
+                        assertFalse("Popup focus parking must not tint the entire panel",
+                            menu.defaultFocusHighlightEnabled)
                         assertRowAdmission(row, admitted = true)
                         assertFalse(disabled.createAccessibilityNodeInfo().isEnabled)
                         assertFalse(disabled.performClick())

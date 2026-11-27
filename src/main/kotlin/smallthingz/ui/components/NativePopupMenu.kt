@@ -171,8 +171,7 @@ class NativePopupMenu<I> private constructor(
         isSaveEnabled = false // The screen owner saves each retained ScrollState exactly once.
         clipChildren = false
         clipToPadding = false
-        isFocusable = true
-        isFocusableInTouchMode = true
+        configureNativeFocusParking()
         // Compose enters an eligible menu item in keyboard mode; touch mode keeps root focus.
         descendantFocusability = FOCUS_AFTER_DESCENDANTS
         super.setLayoutDirection(anchor.layoutDirection)
