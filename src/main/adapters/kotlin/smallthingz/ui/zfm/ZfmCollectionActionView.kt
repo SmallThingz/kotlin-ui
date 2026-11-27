@@ -19,7 +19,7 @@ class ZfmCollectionActionView(
     glyph: Drawable,
     private val onAction: () -> Unit,
 ) : ReverbToolbarActionView(context, theme.density.density, theme.colors, inputRoot,
-    label, rolePresent = true) {
+    label, selectionWrapper = true, rolePresent = true) {
     init {
         glyph.mutate().let {
             it.setTint(sampledIconTint)
