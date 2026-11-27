@@ -1,8 +1,11 @@
 package smallthingz.ui.reverb.home
 
 import smallthingz.ui.components.NativeCaptureControlsStyle
+import smallthingz.ui.components.captureActionTargetWidth
 import kotlin.math.min
 import kotlin.math.roundToInt
+
+private const val HOME_ACTION_COUNT = 4
 
 /** CaptureScreen.MainCaptureContent and BufferBlobPage: all edge rounding stays independent. */
 data class ReverbHomeGeometry(
@@ -31,6 +34,11 @@ fun reverbHomeGeometry(
     val blobArea = (height - clusterHeight - bottom).coerceAtLeast(0)
     // BoxWithConstraints reports px/density; Dp arithmetic then roundToPx mirrors the source.
     val blobDp = min(min(bodyWidth / density * .90f, blobArea / density * .94f), 372f)
-    return ReverbHomeGeometry(side, bodyWidth, blobArea, dp(blobDp),
-        min(captureControls.preferredWidthPx(density), bodyWidth), clusterHeight, bottom)
+    // Only the cluster can reclaim the side insets when its action targets need more room.
+    val actionTarget = captureActionTargetWidth(density, dp(captureControls.actionSizeDp.toFloat()))
+    val actionSpacing = dp(captureControls.actionSpacingDp.toFloat())
+    val minimumActionRowWidth = HOME_ACTION_COUNT * actionTarget + (HOME_ACTION_COUNT + 1) * actionSpacing
+    val clusterWidth = min(captureControls.preferredWidthPx(density),
+        maxOf(bodyWidth, min(width, minimumActionRowWidth)))
+    return ReverbHomeGeometry(side, bodyWidth, blobArea, dp(blobDp), clusterWidth, clusterHeight, bottom)
 }

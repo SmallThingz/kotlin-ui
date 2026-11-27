@@ -24,6 +24,7 @@ import android.view.ViewOutlineProvider
 import androidx.annotation.VisibleForTesting
 import smallthingz.ui.geometry.Offset
 import smallthingz.ui.geometry.Size
+import smallthingz.ui.input.DEFAULT_MINIMUM_TOUCH_TARGET_DP
 import smallthingz.ui.input.phase.NativeNestedPointerRoot
 import smallthingz.ui.input.phase.NativeViewPhasePointerNode
 import smallthingz.ui.input.phase.NativeViewPointerHitLayout
@@ -184,21 +185,43 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
         val height = resolveSize(metrics.preferredHeight, h)
         setMeasuredDimension(width, height)
         content.measure(exact(width), exact(height))
-        measureRow(selectors, min(metrics.selectorWidth, width), min(metrics.selectorHeight, height),
-            metrics.selectorSpacing, metrics.segmentWidth, MeasureSpec.AT_MOST)
-        measureRow(actions, min(metrics.preferredWidth, width), min(metrics.actionHeight, height),
-            metrics.actionSpacing, metrics.actionSize, MeasureSpec.EXACTLY)
+        val selectorWidth = min(metrics.selectorWidth, width)
+        measureRow(selectors, selectorWidth, min(metrics.selectorHeight, height),
+            metrics.selectorSpacing, metrics.segmentWidth, MeasureSpec.AT_MOST,
+            minimumChildWidth = if (selectorWidth < metrics.selectorWidth) metrics.segmentWidth else 0)
+        val actionWidth = min(metrics.preferredWidth, width)
+        measureRow(actions, actionWidth, min(metrics.actionHeight, height),
+            metrics.actionSpacing, metrics.actionSize, MeasureSpec.EXACTLY,
+            horizontalSpacing = actionHorizontalSpacing(actionWidth), minimumChildWidth = actionTargetWidth())
     }
 
-    private fun measureRow(views: List<View>, width: Int, height: Int, spacing: Int, childWidth: Int, heightMode: Int) {
-        var remaining = (width - spacing * 2).coerceAtLeast(0)
+    private fun actionTargetWidth() = captureActionTargetWidth(density, metrics.actionSize)
+
+    private fun actionHorizontalSpacing(width: Int): Int {
+        val spaceAfterTargets = (width - actionTargetWidth() * actions.size).coerceAtLeast(0)
+        return min(metrics.actionSpacing, spaceAfterTargets / (actions.size + 1))
+    }
+
+    private fun measureRow(
+        views: List<View>, width: Int, height: Int, spacing: Int, childWidth: Int, heightMode: Int,
+        horizontalSpacing: Int = spacing, minimumChildWidth: Int = 0,
+    ) {
+        if (views.isEmpty()) return
+        var remaining = (width - horizontalSpacing * (views.size + 1)).coerceAtLeast(0)
+        val share = remaining / views.size
+        val extra = remaining % views.size
         val innerHeight = (height - spacing * 2).coerceAtLeast(0)
         val childHeight = if (heightMode == MeasureSpec.EXACTLY) min(childWidth, innerHeight) else innerHeight
         val heightSpec = MeasureSpec.makeMeasureSpec(childHeight, heightMode)
         for (index in views.indices) {
-            val child = views[index]
-            child.measure(exact(min(childWidth, remaining)), heightSpec)
-            remaining = (remaining - child.measuredWidth - spacing).coerceAtLeast(0)
+            val reserved = minimumChildWidth * (views.lastIndex - index)
+            val allocated = if (share < minimumChildWidth) {
+                share + if (index < extra) 1 else 0
+            } else {
+                min(childWidth, remaining - reserved)
+            }
+            views[index].measure(exact(allocated), heightSpec)
+            remaining -= allocated
         }
     }
 
@@ -207,21 +230,25 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
         layoutRow(selectors, min(metrics.selectorWidth, width), 0, min(metrics.selectorHeight, height),
             metrics.selectorSpacing)
         val actionHeight = min(metrics.actionHeight, height)
-        layoutRow(actions, min(metrics.preferredWidth, width), height - actionHeight, actionHeight,
-            metrics.actionSpacing)
+        val actionWidth = min(metrics.preferredWidth, width)
+        layoutRow(actions, actionWidth, height - actionHeight, actionHeight,
+            metrics.actionSpacing, horizontalSpacing = actionHorizontalSpacing(actionWidth))
     }
 
-    private fun layoutRow(views: List<View>, rowWidth: Int, rowTop: Int, rowHeight: Int, spacing: Int) {
+    private fun layoutRow(
+        views: List<View>, rowWidth: Int, rowTop: Int, rowHeight: Int, spacing: Int,
+        horizontalSpacing: Int = spacing,
+    ) {
         val rowLeft = ((width - rowWidth) / 2f).roundToInt()
         val innerHeight = (rowHeight - spacing * 2).coerceAtLeast(0)
         val rtl = layoutDirection == LAYOUT_DIRECTION_RTL
-        var start = spacing
+        var start = horizontalSpacing
         for (index in views.indices) {
             val child = views[index]
             val x = rowLeft + if (rtl) rowWidth - start - child.measuredWidth else start
             val y = rowTop + spacing + ((innerHeight - child.measuredHeight) / 2f).roundToInt()
             child.layout(x, y, x + child.measuredWidth, y + child.measuredHeight)
-            start += child.measuredWidth + spacing
+            start += child.measuredWidth + horizontalSpacing
         }
     }
 
@@ -379,6 +406,9 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
         val CLEAR_MASK = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
     }
 }
+
+internal fun captureActionTargetWidth(density: Float, preferredWidth: Int): Int =
+    min(preferredWidth, ceil(DEFAULT_MINIMUM_TOUCH_TARGET_DP * density).toInt())
 
 /** Literal captureControlUnionShape path, evaluated in the actual constrained surface size. */
 private fun captureControlUnionPath(width: Float, height: Float, style: NativeCaptureControlsStyle, destination: Path) {

@@ -355,28 +355,43 @@ class HomeBufferSegment(context: Context, currentEnvironment: ReverbEnvironment,
         frames.cancel()
         super.onDetachedFromWindow()
     }
+    private var measuredHorizontalPadding = 0
+    private var measuredGlyphGap = 0
+
     private fun dp(value: Int) = (value * currentEnvironment.textDensity.density).roundToInt()
     override fun onMeasure(w: Int, h: Int) {
         val width = MeasureSpec.getSize(w)
         val maxHeight = MeasureSpec.getSize(h)
-        val innerWidth = (width - dp(style.horizontalPaddingDp) * 2).coerceAtLeast(0)
+        val glyphSize = dp(style.glyphSizeDp)
+        val preferredGap = dp(style.glyphGapDp)
+        val preferredPadding = dp(style.horizontalPaddingDp)
+        val compact = width < style.preferredWidthPx(currentEnvironment.textDensity.density)
+        // Keep the label's viewport ahead of decoration only when the tab is constrained.
+        val decoration = if (compact) (width - label.maxIntrinsicTextWidth()).coerceAtLeast(0) else width
+        measuredHorizontalPadding = if (compact) {
+            min(preferredPadding, ((decoration - glyphSize - preferredGap) / 2).coerceAtLeast(0))
+        } else {
+            preferredPadding
+        }
+        val innerWidth = (width - measuredHorizontalPadding * 2).coerceAtLeast(0)
         val innerHeight = (maxHeight - dp(style.verticalPaddingDp) * 2).coerceAtLeast(0)
-        glyph.measure(MeasureSpec.makeMeasureSpec(min(dp(style.glyphSizeDp), innerWidth), MeasureSpec.EXACTLY),
-            MeasureSpec.makeMeasureSpec(min(dp(style.glyphSizeDp), innerHeight), MeasureSpec.EXACTLY))
-        val gap = min(dp(style.glyphGapDp), (innerWidth - glyph.measuredWidth).coerceAtLeast(0))
+        val glyphSpace = (decoration - measuredHorizontalPadding * 2).coerceAtLeast(0)
+        glyph.measure(MeasureSpec.makeMeasureSpec(min(glyphSize, glyphSpace), MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(min(glyphSize, innerHeight), MeasureSpec.EXACTLY))
+        measuredGlyphGap = min(preferredGap, (glyphSpace - glyph.measuredWidth).coerceAtLeast(0))
         // Preferred vertical padding must yield to enlarged text before its viewport is clipped.
-        label.measure(MeasureSpec.makeMeasureSpec((innerWidth - glyph.measuredWidth - gap).coerceAtLeast(0),
+        label.measure(MeasureSpec.makeMeasureSpec((innerWidth - glyph.measuredWidth - measuredGlyphGap).coerceAtLeast(0),
             MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(maxHeight, MeasureSpec.AT_MOST))
         setMeasuredDimension(width, resolveSize(max(glyph.measuredHeight, label.measuredHeight) + dp(style.verticalPaddingDp) * 2, h))
         mergedRowAccessibility.roleView.measure(MeasureSpec.makeMeasureSpec(measuredWidth, MeasureSpec.EXACTLY),
             MeasureSpec.makeMeasureSpec(measuredHeight, MeasureSpec.EXACTLY))
     }
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        val inner = (width - dp(style.horizontalPaddingDp) * 2).coerceAtLeast(0)
-        val gap = min(dp(style.glyphGapDp), (inner - glyph.measuredWidth).coerceAtLeast(0))
+        val inner = (width - measuredHorizontalPadding * 2).coerceAtLeast(0)
+        val gap = measuredGlyphGap
         val used = glyph.measuredWidth + gap + label.measuredWidth
         fun place(child: View, beforeChildSize: Int) {
-            val x = dp(style.horizontalPaddingDp) + nativeCenteredRowChildOffset(inner, used, beforeChildSize)
+            val x = measuredHorizontalPadding + nativeCenteredRowChildOffset(inner, used, beforeChildSize)
             val y = ((height - child.measuredHeight) / 2f).roundToInt()
             child.layout(x, y, x + child.measuredWidth, y + child.measuredHeight)
         }

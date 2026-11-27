@@ -222,7 +222,7 @@ class ReverbHomeBodyView<S : Any, M : Any> internal constructor(
             val bottom = geometry.blobAreaHeight - dp(12).coerceAtMost(geometry.blobAreaHeight)
             message.layout(left, bottom - message.measuredHeight, left + message.measuredWidth, bottom)
         }
-        val clusterLeft = geometry.side + ((geometry.bodyWidth - controls.measuredWidth) / 2f).roundToInt()
+        val clusterLeft = ((width - controls.measuredWidth) / 2f).roundToInt()
         controls.layout(clusterLeft, geometry.blobAreaHeight,
             clusterLeft + controls.measuredWidth, geometry.blobAreaHeight + controls.measuredHeight)
         bodyBounds.set(geometry.side.toFloat(), 0f,
