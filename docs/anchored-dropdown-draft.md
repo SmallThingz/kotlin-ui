@@ -1,6 +1,6 @@
 # Anchored dropdown
 
-`NativeAnchoredDropdown.createField` creates the existing `NativeDropdown` with the library's appearance, typography, icons and color scheme. `NativeDropdownPair` and `NativeGroupLayout` produce Reverb's audio-option group: Channels, paired Sample format / Sample rate, paired Audio source / Input device. The example application has no custom control painting.
+`NativeAnchoredDropdown.createField` creates the existing `NativeDropdown` with the library's appearance, typography, icons and color scheme. `NativeDropdownPair` and `NativeGroupLayout` produce Reverb's audio-option group: Channels, paired Sample format / Sample rate, paired Audio source / Input device.
 
 ## Interaction contract
 
@@ -12,7 +12,7 @@
 - Tapping the current slot closes. Tapping another visible row commits that choice and slides it into the slot while collapsing. A new tap during collapse reverses it instead of being swallowed.
 - An outside tap, Back, or the accessibility dismiss action closes the wheel and commits a changed choice by default. `DropdownDismissPolicy.CANCEL` closes without delivering a pending choice. Escape and lifecycle closure also discard pending choices. Values already delivered to the owner remain in place.
 - Top and bottom corner radii blend continuously between the group's joined shape and the expanded outline as an endpoint reaches the slot.
-- ValueAnimator follows the platform animator duration scale, including disabled animations. Audio/recording is not involved in the demo.
+- ValueAnimator follows the platform animator duration scale, including disabled animations.
 - The owner closes the popup on screen stop/disposal. An anchor that detaches, moves or changes size retires the old popup. Selection callbacks may replace the host safely.
 
 ## Integration
@@ -25,8 +25,13 @@ Option rows retain library typography and input semantics. Immutable palette/ico
 
 New taps reverse from the current reveal and position, using duration proportional to remaining travel. One gesture cannot be handed between two platform windows. The layer is synchronously laid out before the opening click returns, so another tap can reach it before the next frame.
 
-## Example
+## Regression coverage
 
-`dropdown-demo` is an Android application depending directly on this checkout's root library project. It includes top/bottom edge examples, the real library's audio group, long sample-rate options, light/dark palettes and an RTL layout switch. The application performs no microphone, file or network operations.
+`NativeAnchoredDropdownPlanTest` covers option ordering. The library's Android
+instrumentation suite covers physical window insets, focus and accessibility,
+gesture reversal, fling, lifecycle retirement, and Email choice behavior.
 
-Build: `./gradlew :dropdown-demo:assembleDebug` with Android SDK 37 and JDK 21. Run the pure ordering cases with `./gradlew :testDebugUnitTest --tests smallthingz.ui.components.NativeAnchoredDropdownPlanTest`.
+The lifecycle test can write light and dark window receipts when the
+instrumentation argument `dropdownViewportCapture=true` is supplied.
+The inertia test writes motion traces. Both store diagnostics in the test
+APK's private files directory under `dropdown-regressions/`.

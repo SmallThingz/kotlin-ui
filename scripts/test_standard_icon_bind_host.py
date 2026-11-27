@@ -11,7 +11,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 BASE = 'e17bec64e38a2d4f1758f993dc1199a57b321a1a'
 SOURCE = 'src/main/kotlin/smallthingz/ui/components/NativeStandardIconButtonView.kt'
-FIXTURE = ROOT / 'src/testIconBindHost/kotlin/StandardIconBindFixture.kt'
+FIXTURE = ROOT / 'tests/host-fixtures/icons/kotlin/StandardIconBindFixture.kt'
 
 
 def sha(data):

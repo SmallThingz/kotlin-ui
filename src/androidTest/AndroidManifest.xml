@@ -4,5 +4,12 @@
             android:exported="false" android:theme="@android:style/Theme.Material.Light.NoActionBar" />
         <activity android:name="smallthingz.ui.components.NativeMenuAccessibilityTestActivity"
             android:exported="false" android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+        <activity android:name="smallthingz.ui.components.dropdown.DropdownInteractionHostActivity"
+            android:exported="false" android:enableOnBackInvokedCallback="false"
+            android:theme="@style/NativeDefaultAmoledHostTheme" />
+        <activity android:name="smallthingz.ui.components.dropdown.DropdownViewportHostActivity"
+            android:exported="false" android:enableOnBackInvokedCallback="false"
+            android:taskAffinity="smallthingz.ui.test.dropdown.viewport"
+            android:theme="@style/NativeDefaultLightHostTheme" />
     </application>
 </manifest>

@@ -6,7 +6,7 @@ import smallthingz.ui.components.NativePathIconMask
 /**
  * Recommended common glyph set: AndroidX Material Rounded 1.7.8, 24 x 24 viewport.
  * Names match the pinned upstream pack. Paths are shared lazily; each drawable retains its own mask cache.
- * See docs/icons.md and src/main/resource-provenance/reverb-icons/SOURCE.json for provenance.
+ * See docs/icons.md and docs/resource-provenance/reverb-icons/SOURCE.json for provenance.
  */
 enum class MaterialRoundedIcon(val autoMirrored: Boolean = false) {
     Settings,

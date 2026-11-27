@@ -18,7 +18,8 @@ import fcntl
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE = '05ed4596e505cf945a5d265399c61d6f11365cad'
-REL = Path('src/main/kotlin/smallthingz/ui/reverb')
+REVERB_ADAPTERS = Path('src/main/adapters/kotlin/smallthingz/ui/reverb')
+BASE_REVERB_SOURCE = Path('src/main/kotlin/smallthingz/ui/reverb')
 REFERENCE = Path('/workspace/.tmp/control-idle-memory-20261127/browser-fixture/run-memory-native-01')
 
 
@@ -66,13 +67,13 @@ def main():
         paths = list((gradle / artifact / version).glob('*/*.jar'))
         assert len(paths) == 1, artifact
         compiler.append(str(paths[0]))
-    inputs = [ROOT / REL / 'ReverbBrowserChrome.kt', ROOT / REL / 'ReverbBrowserTabCountDrawable.kt',
+    inputs = [ROOT / REVERB_ADAPTERS / 'ReverbBrowserChrome.kt', ROOT / REVERB_ADAPTERS / 'ReverbBrowserTabCountDrawable.kt',
               Path(__file__).with_name(args.test_class + '.java')]
     source = [p.read_bytes() for p in inputs]
     selected = list(inputs[:2])
     if args.variant == 'parent':
         selected[0] = out / 'ReverbBrowserChrome.kt'
-        selected[0].write_bytes(subprocess.check_output(['git', 'show', BASE + ':' + str(REL / inputs[0].name)], cwd=ROOT))
+        selected[0].write_bytes(subprocess.check_output(['git', 'show', BASE + ':' + str(BASE_REVERB_SOURCE / inputs[0].name)], cwd=ROOT))
     config = config_root / 'com/android/tools/test_config.properties'
     config.parent.mkdir(parents=True)
     properties = (REFERENCE / 'classes/com/android/tools/test_config.properties').read_text().splitlines()

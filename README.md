@@ -1,4 +1,4 @@
-# smallthingz.ui
+# SmallThingz UI
 
 A Kotlin library for Android Views, with retained controls, text and layout
 primitives, animation, and an inline View construction DSL in `smallthingz.ui.dsl`.
@@ -71,8 +71,20 @@ and targets JVM 17 bytecode.
 The standalone build pins Gradle 9.7.1, Android Gradle Plugin 9.4.0, and Kotlin
 2.3.0. Reverb includes the library as `:native-ui` and shares its plugin toolchain.
 
+## Test layout
+
+- `src/test` contains the library's unit tests, including Robolectric cases.
+- `src/androidTest` contains Android instrumentation regressions. Dropdown
+  interaction, viewport, inertia, lifecycle, and Email choice tests use
+  non-exported activities declared in its test manifest.
+- `scripts/` contains focused host runners. Their script-only fixture sources
+  live in `tests/host-fixtures/` under `common`, `views`, and `icons`.
+  Other focused host regressions live in `tests/` and `tools/qa/`.
+  See `docs/qa/` for retained QA evidence.
+
 ## Documentation
 
+- [Anchored dropdowns](docs/anchored-dropdown-draft.md) for interaction and integration.
 - [Reference guide](docs/reference-guide.md) for component ownership, menus,
   dialogs, phase input, scrolling, animation, and API migration.
 - [Settings and browser controls](docs/appearance-controls.md),

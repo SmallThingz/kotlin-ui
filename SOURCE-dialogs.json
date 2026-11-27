@@ -57,10 +57,10 @@
     "shared_helpers": "closePreservingPrimaryFailure and predictiveBackCommitDurationMillis moved once; app imports same implementation."
   },
   "retained_upstream_records": [
-    "src/main/resource-provenance/sheets/SOURCE.md",
-    "src/main/resource-provenance/sheets/LICENSE.txt",
-    "src/main/resource-provenance/dialog-window/SOURCE.json",
-    "src/main/resource-provenance/dialog-window/APACHE-2.0.txt"
+    "docs/resource-provenance/sheets/SOURCE.md",
+    "docs/resource-provenance/sheets/LICENSE.txt",
+    "docs/resource-provenance/dialog-window/SOURCE.json",
+    "docs/resource-provenance/dialog-window/APACHE-2.0.txt"
   ],
   "source_versions": [
     "AndroidX Material3 1.4.0",

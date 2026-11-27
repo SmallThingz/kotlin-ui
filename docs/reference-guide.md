@@ -63,28 +63,9 @@ change.
 `EmailComposerFields` joins caller-supplied recipient rows with an editable
 Subject. Its `subjectEditor` retains Android text input, selection and IME
 behavior. `EmailRecipientRow` styles address text and the selected row while
-the caller supplies children and actions. The `dropdown-demo` Email section
-uses these components with local example data.
-
-#### Verify the Email demo
-
-Build the separate visual-test application and its instrumented tests:
-
-```sh
-./gradlew -PemailVisualTest=true :dropdown-demo:assembleDebug :dropdown-demo:assembleDebugAndroidTest
-```
-
-On an API 36 test device, the guarded controller selects only
-`app.smallthingz.dropdowndemo.EmailDemoPrivateCaptureTest#exerciseCommonAndEmail`
-on `app.smallthingz.dropdowndemo.emailvisual.test/androidx.test.runner.AndroidJUnitRunner`.
-The test targets `app.smallthingz.dropdowndemo.emailvisual`. It requires
-`visualCapture=true`, `visualFixtureScope=synthetic-email-library-demo`,
-`visualDisplayIsolation=private-own-focus`, the verified 40-character Git commit
-as `visualSourceRevision`, and a fresh random 16-digit lowercase hexadecimal
-`visualRouteNonce`. Set `visualDisplayWidthPx` to 720 or 448,
-`visualDisplayHeightPx=1008` and `visualDisplayDensityDpi=320`. The fixture
-allocates and releases its private display. The controller verifies the primary
-display's focus before and after each run and checks the fixture's release receipt.
+the caller supplies children and actions. Library instrumentation covers
+Email field presentation, unavailable-choice recovery, sender label layout,
+and composer behavior.
 
 ## Control bindings
 
@@ -430,15 +411,8 @@ See the [View animation source record](../SOURCE-view-animation.json).
 
 Sampler and clock-owner tests run with the unit suite. The separate
 `scripts/test_view_animation_host.py` runner accepts compiler/test classpaths and
-uses `src/testViewHost` to check View owner cancellation against a narrow host
+uses `tests/host-fixtures/views` to check View owner cancellation against a narrow host
 fixture. This verifies production control flow, not Android rendering or timing.
-
-## Theme demo
-
-Build the standalone comparison with `./gradlew :theme-demo:assembleDebug`.
-It offers AMOLED and Tinted presets with separate page and foreground
-lightness and grain controls. See [appearance configuration](appearance-controls.md#defaults-and-explicit-configuration)
-for the resolver and palette APIs.
 
 ## Procedural background grain
 
@@ -512,7 +486,7 @@ bootstrap script; an offline checkout does not require network access.
 
 [Foundation](../SOURCE-foundation.json), [motion](../SOURCE-motion.json),
 [motion notes](../SOURCE-motion.md), [text](../SOURCE-text.json), and
-[resource provenance](../src/main/resource-provenance/SOURCE.md) retain the original
+[resource provenance](resource-provenance/SOURCE.md) retain the original
 upstream attribution and historical qualification records. Their `native-ui/`
 target paths are relative to the original Reverb checkout. The package migration
 from `app.smallthingz.nativeui` to `smallthingz.ui` also moved the corresponding
@@ -524,7 +498,7 @@ statements are not a claim that a new checkout has passed current tests.
 First-party code is licensed under Apache-2.0; see [LICENSE.txt](../LICENSE.txt).
 Upstream-derived files retain their existing Apache-2.0 notices and provenance.
 The relocated Reverb OneShot and ExportRange glyph paths retain their explicit
-GPL-3.0 notices; see [Reverb icon provenance](../src/main/resource-provenance/reverb-icons/README.md). Their relocation
+GPL-3.0 notices; see [Reverb icon provenance](resource-provenance/reverb-icons/README.md). Their relocation
 does not relicense those paths.
 Dependencies include AndroidX annotation, core, lifecycle, savedstate and emoji2.
 Coroutines, activity-ktx 1.13.0 and RecyclerView 1.4.0 are exposed by the

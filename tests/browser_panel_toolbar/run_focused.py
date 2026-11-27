@@ -17,7 +17,7 @@ import zlib
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE = '05ed4596e505cf945a5d265399c61d6f11365cad'
-REL = Path('src/main/kotlin/smallthingz/ui/reverb')
+REVERB_ADAPTERS = Path('src/main/adapters/kotlin/smallthingz/ui/reverb')
 REFERENCE = Path('/workspace/.tmp/control-idle-memory-20261127/browser-fixture/run-memory-native-01')
 
 
@@ -65,13 +65,13 @@ def main():
         paths = list((gradle / artifact / version).glob('*/*.jar'))
         assert len(paths) == 1, artifact
         compiler.append(str(paths[0]))
-    inputs = [ROOT / REL / 'ReverbBrowserPanel.kt',
-              ROOT / REL / 'ReverbBrowserPanelSettings.kt', ROOT / REL / 'ReverbBrowserPanelTabs.kt',
-              ROOT / REL / 'ReverbBrowserTabCountDrawable.kt',
-              ROOT / REL / 'ReverbBottomActionDock.kt',
+    inputs = [ROOT / REVERB_ADAPTERS / 'ReverbBrowserPanel.kt',
+              ROOT / REVERB_ADAPTERS / 'ReverbBrowserPanelSettings.kt', ROOT / REVERB_ADAPTERS / 'ReverbBrowserPanelTabs.kt',
+              ROOT / REVERB_ADAPTERS / 'ReverbBrowserTabCountDrawable.kt',
+              ROOT / REVERB_ADAPTERS / 'ReverbBottomActionDock.kt',
               ROOT / 'src/main/kotlin/smallthingz/ui/components/NativeBottomActionDock.kt',
               ROOT / 'src/main/kotlin/smallthingz/ui/components/NativeCenteredTopBarLayout.kt',
-              ROOT / REL / 'ReverbTitledTopBarLayout.kt',
+              ROOT / REVERB_ADAPTERS / 'ReverbTitledTopBarLayout.kt',
               Path(__file__).with_name(args.test_class + '.java')]
     source = [p.read_bytes() for p in inputs]
     selected = list(inputs[:-1])

@@ -16,12 +16,12 @@ SOURCES = [
 ]
 # Other host suites have separate production dependencies and runners.
 FIXTURES = [
-    'src/testHost/java/android/os/Handler.java',
-    'src/testHost/java/android/os/Looper.java',
-    'src/testHost/java/android/view/Choreographer.java',
+    'tests/host-fixtures/common/java/android/os/Handler.java',
+    'tests/host-fixtures/common/java/android/os/Looper.java',
+    'tests/host-fixtures/common/java/android/view/Choreographer.java',
 ]
 TESTS = [
-    'src/testHost/kotlin/smallthingz/ui/platform/AndroidUiFrameClockHostTest.kt',
+    'tests/host-fixtures/common/kotlin/smallthingz/ui/platform/AndroidUiFrameClockHostTest.kt',
 ]
 
 

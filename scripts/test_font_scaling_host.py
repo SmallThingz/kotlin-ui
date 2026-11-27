@@ -16,8 +16,8 @@ SOURCES = [
     'src/main/kotlin/smallthingz/ui/unit/fontscaling/FontScaleConverterTable.kt',
     'src/main/kotlin/smallthingz/ui/unit/fontscaling/MathUtils.kt',
 ]
-FIXTURE = 'src/testHost/java/android/util/SparseArray.java'
-TEST = 'src/testHost/kotlin/smallthingz/ui/unit/fontscaling/FontScaleConverterSnapshotHostTest.kt'
+FIXTURE = 'tests/host-fixtures/common/java/android/util/SparseArray.java'
+TEST = 'tests/host-fixtures/common/kotlin/smallthingz/ui/unit/fontscaling/FontScaleConverterSnapshotHostTest.kt'
 TEST_CLASS = 'smallthingz.ui.unit.fontscaling.FontScaleConverterSnapshotHostTest'
 
 

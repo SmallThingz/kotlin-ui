@@ -11,8 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCES = [
     'src/main/kotlin/smallthingz/ui/animation/view/ViewFrameLoop.kt',
     'src/test/kotlin/smallthingz/ui/animation/CapturedFrameClock.kt',
-    'src/testViewHost/kotlin/android/view/View.kt',
-    'src/testViewHost/kotlin/smallthingz/ui/animation/ViewFrameLoopFixtureTest.kt',
+    'tests/host-fixtures/views/kotlin/android/view/View.kt',
+    'tests/host-fixtures/views/kotlin/smallthingz/ui/animation/ViewFrameLoopFixtureTest.kt',
 ]
 
 

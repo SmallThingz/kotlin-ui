@@ -20,7 +20,7 @@ import android.graphics.Path
 import smallthingz.ui.components.NativePathIconMask
 
 // Relocated unchanged from the pinned AndroidX Material Rounded 1.7.8 extraction.
-// Historical source manifest and licenses: src/main/resource-provenance/reverb-icons/.
+// Historical source manifest and licenses: docs/resource-provenance/reverb-icons/.
 internal object MaterialRoundedPaths {
     fun copyArrowBackPath(): Path = Path(backPath0)
     fun copyWarningPath(): Path = Path(incidentsPath0)

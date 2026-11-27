@@ -41,7 +41,7 @@ source and native-path hashes in `credential-visibility.json` beside `SOURCE.jso
 
 ## Provenance and exceptions
 
-- `src/main/resource-provenance/reverb-icons/SOURCE.json` records the historical
+- `docs/resource-provenance/reverb-icons/SOURCE.json` records the historical
   generation: pinned core/extended artifact hashes and per-glyph source hashes.
   `MaterialRoundedPaths.kt` relocates the generated commands without changing
   coordinates. `OWNERSHIP.json` records baseline path-block hashes and platform
