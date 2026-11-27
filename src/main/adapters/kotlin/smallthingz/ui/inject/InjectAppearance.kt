@@ -76,7 +76,7 @@ open class InjectAppearance(private val context: Context, val theme: InjectTheme
                 bind(text, enabled = true, palette = scheme.buttonPalette)
             }
         try {
-            val back = action(0, cancelText, defaults.buttons.text, MaterialRoundedIcon.Close, onCancel)
+            val back = action(0, cancelText, defaults.buttons.text, null, onCancel)
             val recipe = if (destructive) defaults.buttons.destructive else defaults.buttons.filled
             val accept = action(1, confirmText, recipe, confirmIcon, onConfirm)
             return InjectDialogActions(back, accept, scheme)
