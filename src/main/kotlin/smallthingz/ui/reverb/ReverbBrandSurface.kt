@@ -11,7 +11,7 @@ import kotlin.math.roundToInt
 /** Add the shared thin control outline to the circular toolbar mark. */
 @MainThread
 fun ReverbBrandMarkView.setReverbBrandOutline(enabled: Boolean) {
-    val preset = NativeDarkSurfacePreset.Amoled
+    val preset = ReverbDesign.headerIconOutline
     setMarkPlateOutline(preset.borderColor, if (enabled) preset.borderWidthDp else 0f)
 }
 

@@ -45,6 +45,14 @@ data class ZfmChooserRoot(val key: String, val view: View)
  * No explicit traversal metadata is installed: keyboard/accessibility traversal must be qualified
  * in both directions and after incremental publication, with the caller's metadata and service.
  *
+ * [preferredDefaultRootKey] optionally marks an enabled, visible, focusable root as Android's
+ * default focus destination. It never requests focus or handles a key. Android may use this
+ * default on initial non-touch focus restoration or no-focus navigation, not only forward Tab;
+ * existing focus and subsequent keyboard/accessibility navigation remain platform-owned.
+ * Only a false-to-true flag set by this viewport is owned: restore it on removal, ineligibility,
+ * detach or close, leaving pre-existing default flags alone. Publish after eligibility changes.
+ * Reattachment may restore the hint, but never rearms placement or requests focus.
+ *
  * No posts, focus requests, smooth scrolling or global layout retry are used for positioning.
  * Caller controls retain styling, accessible semantics, callbacks, permissions and disposal.
  * The caller also owns the focus fallback when a focused key is removed: read [focusedRoot]
@@ -57,6 +65,7 @@ class ZfmChooserViewport(
     val openingGeneration: Long,
     private val isOpeningCurrent: (Long) -> Boolean,
     bottomFirst: Boolean = true,
+    private val preferredDefaultRootKey: String? = null,
 ) : ScrollView(context), AutoCloseable {
     private val gate = ZfmChooserPlacementGate(openingGeneration)
     private val roots = RootLayout(context)
@@ -76,6 +85,8 @@ class ZfmChooserViewport(
     private var dispatchDepth = 0
     private var touchActive = false
     private val heldKeys = HashSet<Int>()
+    private var ownedDefaultRoot: View? = null
+    private var defaultRootWasAttached = false
     private data class ScrollPosition(val view: View, val x: Int, val y: Int)
     private data class Pending(
         val ticket: ZfmChooserPlacementGate.Ticket,
@@ -113,10 +124,11 @@ class ZfmChooserViewport(
         if (!isOpeningCurrent(openingGeneration)) return false
         val itemsChanged = !roots.matches(items)
         val directionChanged = bottomFirst != this.bottomFirst
+        val next = if (itemsChanged) items.toList().also(roots::validate) else roots.items
+        updateDefaultRoot(next)
         if (!itemsChanged && !directionChanged &&
             (publicationNeedsLayout || (!isLayoutRequested && boundary?.isLayoutRequested != true))) return true
 
-        val next = if (itemsChanged) items.toList().also(roots::validate) else roots.items
         val ticket = gate.ticket()
         if (pending == null && committed && !publicationNeedsLayout && ticket != null &&
             ownsWindow() && hasWindowFocus() && idle()) {
@@ -135,6 +147,28 @@ class ZfmChooserViewport(
 
     fun focusedRoot(): ZfmChooserRoot? = roots.items.firstOrNull { it.view.hasFocus() }
     fun rootView(key: String): View? = roots.items.firstOrNull { it.key == key }?.view
+
+    private fun releaseDefaultRoot() {
+        val owned = ownedDefaultRoot ?: return
+        ownedDefaultRoot = null
+        // A caller clearing our hint has already restored the original false value.
+        if (owned.isFocusedByDefault) owned.isFocusedByDefault = false
+    }
+
+    private fun updateDefaultRoot(items: List<ZfmChooserRoot>) {
+        if (defaultRootWasAttached && !isAttachedToWindow) {
+            releaseDefaultRoot()
+            return
+        }
+        val preferred = items.firstOrNull { it.key == preferredDefaultRootKey }?.view
+            ?.takeIf { it.visibility == VISIBLE && it.isEnabled && it.isFocusable }
+        if (ownedDefaultRoot === preferred) return
+        releaseDefaultRoot()
+        if (preferred != null && !preferred.isFocusedByDefault) {
+            ownedDefaultRoot = preferred
+            preferred.isFocusedByDefault = true
+        }
+    }
 
     private fun idle() = dispatchDepth == 0 && !touchActive && heldKeys.isEmpty()
     private fun ownsWindow(): Boolean {
@@ -225,7 +259,14 @@ class ZfmChooserViewport(
         if (isVisible && !committed && !closed) boundary?.requestLayout()
     }
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        defaultRootWasAttached = true
+        if (!closed && isOpeningCurrent(openingGeneration)) updateDefaultRoot(roots.items)
+    }
+
     override fun onDetachedFromWindow() {
+        releaseDefaultRoot()
         retirePosition()
         super.onDetachedFromWindow()
     }
@@ -238,6 +279,7 @@ class ZfmChooserViewport(
     override fun close() {
         if (closed) return
         closed = true
+        releaseDefaultRoot()
         gate.close()
         pending = null
         touchActive = false
