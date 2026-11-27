@@ -681,10 +681,8 @@ internal class SheetRoot(
         importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_YES
         isScreenReaderFocusable=false
         // AndroidComposeView searches eligible children first; touch mode may retain owner focus.
-        isFocusable=true
-        isFocusableInTouchMode=true
+        configureNativeFocusParking()
         descendantFocusability=FOCUS_AFTER_DESCENDANTS
-        defaultFocusHighlightEnabled=false
         addView(scrim);addView(surface)
     }
     fun insets(value:WindowInsetsCompat) {

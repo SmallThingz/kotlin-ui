@@ -367,9 +367,7 @@ private class FloatingWindowRoot(
         clipChildren = false
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         // Released AndroidComposeView owns initial native window focus before child controls.
-        isFocusable = true
-        isFocusableInTouchMode = true
-        defaultFocusHighlightEnabled = false
+        configureNativeFocusParking()
         addView(content)
         foreground = statusBarProtection
         ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
