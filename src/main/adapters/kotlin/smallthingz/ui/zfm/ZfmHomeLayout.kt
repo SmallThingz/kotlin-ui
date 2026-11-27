@@ -37,12 +37,24 @@ class ZfmHomeLayout(
         orientation = LinearLayout.VERTICAL
         setPaddingRelative(dp(16), dp(12), dp(16), dp(16))
     }
-    val scroll = ScrollView(context).apply {
+    private var bottomFirst: Boolean? = null
+    val scroll = object : ScrollView(context) {
+        private var laidOutRange = 0
+        override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+            // Our frame already has its new size here; use the last complete
+            // layout's range rather than mixing old child and new viewport sizes.
+            val wasAtBottom = bottomFirst == true && scrollY >= laidOutRange
+            super.onLayout(changed, l, t, r, b)
+            laidOutRange = (content.height - (height - paddingTop - paddingBottom)).coerceAtLeast(0)
+            // Storage metadata and warnings arrive after the first layout. Keep
+            // the user's chosen end anchored; never pull a scrolled-up user back.
+            if (wasAtBottom) scrollTo(scrollX, laidOutRange)
+        }
+    }.apply {
         isFillViewport = true
         clipToPadding = false
         addView(content, android.widget.FrameLayout.LayoutParams(-1, -2))
     }
-    private var bottomFirst: Boolean? = null
 
     init {
         val glyph = ImageView(context).apply {
@@ -64,7 +76,7 @@ class ZfmHomeLayout(
         })
     }
 
-    /** Only direction changes choose an edge; ordinary publications retain the user's scroll. */
+    /** Direction changes choose an edge; subsequent layouts preserve the user's end/offset. */
     fun bindDirection(bottomUp: Boolean) {
         if (bottomFirst == bottomUp) return
         bottomFirst = bottomUp
