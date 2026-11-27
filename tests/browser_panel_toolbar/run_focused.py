@@ -31,7 +31,8 @@ def main():
     parser.add_argument('--test-class', choices=['BrowserPanelToolbarHostTest'], default='BrowserPanelToolbarHostTest')
     parser.add_argument('--production-from', type=Path, help='Reuse matching production bytecode while compiling only the selected new fixture')
     parser.add_argument('--execute', action='store_true', help='Execute the prepared stages only in the admitted serial slot')
-    parser.add_argument('--method', help='Run only one named affected JUnit method')
+    parser.add_argument('--method', choices=['browserPanelsUseUnboxedUtilitiesWithRetainedTargetsAndCallbacks'],
+                        help='Compatibility alias for the sole JUnit test in this fixture')
     args = parser.parse_args()
     assert not (args.compiled_from and args.production_from)
     # Use the same root/04 fixture lock: busy means no compile/native launch or extraction.
@@ -109,8 +110,6 @@ def main():
         ('test', [str(java / 'java'), *runtime_options, '-Daddress.test.output=' + str(out),
                   '-cp', classpath, 'org.junit.runner.JUnitCore', args.test_class]),
     ]
-    if args.method:
-        commands[-1][1][-2:] = [args.test_class, args.method]
     receipt = {'method':args.method, 'variant': args.variant, 'base': BASE, 'gradle': False, 'device': False,
                'test_class': args.test_class,
                'native_execution_requested': args.run_native, 'execute_requested': args.execute,

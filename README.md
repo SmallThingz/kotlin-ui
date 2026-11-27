@@ -25,10 +25,11 @@ delegate to the existing `smallthingz.ui.email` controls.
 
 ## Build
 
-Use JDK 21 and Android SDK platform 37. Set `ANDROID_HOME`, or set `sdk.dir`
-in an untracked `local.properties`. The library supports API 28+ and targets
-JVM 17 bytecode. The standalone build pins Gradle 9.7.1, Android Gradle Plugin
-9.4.0, and Kotlin 2.3.0. Reverb supplies its own plugin toolchain.
+Use JDK 21, Android SDK platform 37, and Python 3 with `python3` on `PATH`
+for build-time brand verification. Set `ANDROID_HOME`, or set `sdk.dir` in an
+untracked `local.properties`. The library supports API 28+ and targets JVM 17
+bytecode. The standalone build pins Gradle 9.7.1, Android Gradle Plugin 9.4.0,
+and Kotlin 2.3.0. Reverb supplies its own plugin toolchain.
 
 ```sh
 ./gradlew assembleRelease testDebugUnitTest
