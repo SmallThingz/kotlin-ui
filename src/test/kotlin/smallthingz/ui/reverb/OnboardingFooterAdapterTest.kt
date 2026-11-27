@@ -59,6 +59,25 @@ class OnboardingFooterAdapterTest {
         assertFalse(next.performClick())
     }
 
+    @Test fun closeRetiresEnabledButtonsWithLiveActions() = withFooter(1f) { footer, palette ->
+        val back = footer.getChildAt(0) as NativeMaterialButtonView
+        val next = footer.getChildAt(1) as NativeMaterialButtonView
+        val calls = mutableListOf<String>()
+        footer.connect({ calls += "back" }, { calls += "next" }).use {
+            footer.bind(OnboardingFooterPresentation(1, "Back", "Finish", true, true), palette)
+            measure(footer, 272)
+            assertTrue(back.performClick())
+            assertTrue(next.performClick())
+
+            footer.close()
+            assertFalse(back.isEnabled)
+            assertFalse(next.isEnabled)
+            assertFalse(back.performClick())
+            assertFalse(next.performClick())
+            assertEquals(listOf("back", "next"), calls)
+        }
+    }
+
     @Test fun fontTwoAndRtlUseSharedGapsAndKeepBothTargetsInsideTheFooter() {
         for (scale in listOf(1f, 2f)) withFooter(scale) { footer, palette ->
             val recipe = NativeUiAppearance.Default.onboardingFooter

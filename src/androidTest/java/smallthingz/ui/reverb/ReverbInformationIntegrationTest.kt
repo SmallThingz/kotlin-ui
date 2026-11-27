@@ -279,7 +279,11 @@ class ReverbInformationIntegrationTest {
             test(activity, gate)
         } finally { main { activity.finish() } }
     }
-    private fun main(action: () -> Unit) = InstrumentationRegistry.getInstrumentation().runOnMainSync(action)
+    private fun main(action: () -> Unit) {
+        var result: Result<Unit>? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { result = runCatching(action) }
+        checkNotNull(result).getOrThrow()
+    }
     private fun idle() = InstrumentationRegistry.getInstrumentation().waitForIdleSync()
     private fun descendants(view: View): Sequence<View> = sequence {
         yield(view)

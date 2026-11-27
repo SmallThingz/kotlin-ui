@@ -17,6 +17,7 @@ import org.robolectric.annotation.Implements
 import org.robolectric.annotation.LooperMode
 import org.robolectric.annotation.RealObject
 import org.robolectric.shadow.api.Shadow
+import org.robolectric.shadows.ShadowViewGroup
 import org.robolectric.util.ReflectionHelpers.ClassParameter
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeMaterialButtonView
@@ -77,7 +78,7 @@ class InjectConfirmationFailureTest {
 
     /** Fail during the existing palette bind, after real construction has installed both buttons. */
     @Implements(value = NativeMergedActionLayout::class, isInAndroidSdk = false)
-    class JoinedPaletteShadow {
+    class JoinedPaletteShadow : ShadowViewGroup() {
         @RealObject
         private lateinit var layout: NativeMergedActionLayout
 

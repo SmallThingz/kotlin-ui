@@ -25,6 +25,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import smallthingz.ui.components.NativeChip
+import smallthingz.ui.components.NativeGrainPreset
 import smallthingz.ui.components.NativeMenuAccessibilityTestActivity
 import smallthingz.ui.components.NativeChoice
 import smallthingz.ui.components.NativeChoiceStyle
@@ -35,6 +36,7 @@ import smallthingz.ui.components.NativeTabBar
 import smallthingz.ui.components.NativeSegmentedChoice
 import smallthingz.ui.components.ChoiceArrangement
 import smallthingz.ui.components.withRetiringTestActivity
+import smallthingz.ui.controls.textSurfaceRange
 import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.graphics.NoiseTexture
 import kotlin.math.roundToInt
@@ -617,6 +619,61 @@ class GalleryNavigationBarIntegrationTest {
                     } finally { bitmap.recycle() }
                 }
             } finally { group.close() }
+        }
+    }
+
+    @Test fun libraryBackdropRebindRetainsDrawableAndNavigation() = main {
+        withBar(1f, listOf("Photos", "Search", "Albums"), View.LAYOUT_DIRECTION_LTR) { f ->
+            val light = GalleryDesign.palette(f.context, dark = false)
+                .copy(surfacePreset = NativeGrainPreset(backgroundGrain = 0f, foregroundGrain = 0f))
+            val dark = GalleryDesign.palette(f.context, dark = true)
+                .copy(surfacePreset = NativeGrainPreset(backgroundGrain = 1f, foregroundGrain = 0f))
+            val backdrop = GalleryDesign.libraryBackground(light)
+            val page = FrameLayout(f.context).apply {
+                background = backdrop
+                addView(f.bar, FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+            }
+            val w = f.dp(360)
+            val h = f.dp(640)
+            page.measure(exact(w), exact(h))
+            page.layout(0, 0, w, h)
+            val pixel = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+            try {
+                val canvas = Canvas(pixel)
+                page.draw(canvas)
+                val originalBounds = Rect(backdrop.bounds)
+                assertEquals(Rect(0, 0, w, h), originalBounds)
+                assertEquals(textSurfaceRange(light.background), backdrop.paintedTextSurface)
+                val nodes = f.chips
+                val selected = f.ids[1]
+
+                for (palette in listOf(light, dark, light)) {
+                    // Exercise restoration of the shared page seed as well as fill and opacity updates.
+                    if (palette === dark) backdrop.setGrainSeed(null)
+                    GalleryDesign.bindLibraryBackground(backdrop, palette)
+                    f.bar.bind(selected, palette.pageControls)
+                    assertSame(backdrop, page.background)
+                    assertSame(page, backdrop.callback)
+                    assertEquals(originalBounds, backdrop.bounds)
+                    val expected = GalleryDesign.appearance.backdrops.pageBackground(palette)
+                    assertEquals(expected.paintedTextSurface, backdrop.paintedTextSurface)
+                    val flat = textSurfaceRange(palette.background)
+                    if (palette === dark) assertNotEquals(flat, backdrop.paintedTextSurface)
+                    else assertEquals(flat, backdrop.paintedTextSurface)
+                    f.chips.forEach { (id, chip) ->
+                        assertSame(nodes.getValue(id), chip)
+                        assertEquals(id == selected, chip.isChecked)
+                    }
+                    if (palette === light) {
+                        page.draw(canvas)
+                        assertEquals(light.background, pixel.getPixel(0, 0))
+                    }
+                    assertTrue(f.requests.isEmpty())
+                }
+            } finally {
+                pixel.recycle()
+            }
         }
     }
 

@@ -62,7 +62,10 @@ class InjectPluginToolbarIntegrationTest {
         val toggle = View(context)
         val status = View(context)
         val bar = InjectPluginDetailToolbar(context, theme, navigation, toggle, status)
+        identity.visibility = View.INVISIBLE
         bar.setIdentity(identity)
+        assertEquals(View.INVISIBLE, identity.visibility)
+        assertEquals(View.GONE, bar.titleView.visibility)
         bar.bindPresentation("Plugin", true, true, false, true, null)
         assertEquals(View.VISIBLE, identity.visibility)
         assertEquals(View.GONE, bar.titleView.visibility)
@@ -74,6 +77,56 @@ class InjectPluginToolbarIntegrationTest {
         assertSame(retainedParent, toggle.parent)
         assertSame(bar, identity.parent)
         assertSame(bar, navigation.parent)
+    }
+
+    @Test fun centerPresentationSurvivesLateIdentityInstallationAndReplacement() = main {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val theme = InjectDesign.theme(context, false)
+        val ui = InjectAppearance(context, theme)
+        val navigation = ui.semanticIconAction("Back", MaterialRoundedIcon.ArrowBack) {}
+        val identity = ui.semanticIconAction("Plugin menu", MaterialRoundedIcon.Info) {}
+        val replacement = ui.semanticIconAction("Other plugin menu", MaterialRoundedIcon.Info) {}
+        val bar = InjectPluginDetailToolbar(context, theme, navigation, View(context), View(context))
+
+        bar.bindPresentation("Plugin", true, false, false, false, null)
+        assertEquals(View.VISIBLE, bar.titleView.visibility)
+        bar.setIdentity(identity)
+        assertEquals(View.VISIBLE, identity.visibility)
+        assertEquals(View.GONE, bar.titleView.visibility)
+
+        bar.bindPresentation("Files", false, false, false, false, null)
+        bar.setIdentity(replacement)
+        assertNull(identity.parent)
+        assertSame(bar, replacement.parent)
+        assertEquals(View.GONE, replacement.visibility)
+        assertEquals(View.VISIBLE, bar.titleView.visibility)
+        assertEquals("Files", bar.titleView.getText())
+    }
+
+    @Test fun topInsetKeepsTitleAndEndSlotInTheSameContentRowAsNavigation() = main {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val theme = InjectDesign.theme(context, false)
+        val ui = InjectAppearance(context, theme)
+        val navigation = ui.semanticIconAction("Back", MaterialRoundedIcon.ArrowBack) {}
+        val toggle = View(context)
+        val bar = InjectPluginDetailToolbar(context, theme, navigation, toggle, View(context))
+        bar.bindPresentation("Files and diagnostic logs", false, true, false, true, null)
+
+        val density = theme.density.density
+        val width = (320f * density).roundToInt()
+        for (inset in listOf(0, (40f * density).roundToInt(), 0)) {
+            bar.bindToolbar(density, theme.palette, inset)
+            bar.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+            bar.layout(0, 0, width, bar.measuredHeight)
+            val navigationCenter = bounds(bar, navigation).exactCenterY()
+            for (child in listOf(bar.titleView, toggle.parent as View)) {
+                val actual = bounds(bar, child)
+                assertTrue(actual.top >= inset && actual.bottom <= bar.height)
+                assertTrue("The title and end slot must align vertically with navigation",
+                    abs(actual.exactCenterY() - navigationCenter) <= .5f)
+            }
+        }
     }
 
     private fun bounds(parent: ViewGroup, child: View) = Rect(0, 0, child.width, child.height).also {

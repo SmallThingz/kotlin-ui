@@ -6,6 +6,7 @@ import android.view.View
 import android.widget.FrameLayout
 import androidx.core.view.ViewCompat
 import smallthingz.ui.components.NativeTopBarAction
+import smallthingz.ui.components.compactToolbarActionTop
 import smallthingz.ui.reverb.ReverbTopBarLayout
 import smallthingz.ui.text.style.TextOverflow
 import kotlin.math.roundToInt
@@ -43,6 +44,7 @@ class InjectPluginDetailToolbar(
             dp(InjectPluginToolbarRecipe.statusSizeDp), Gravity.CENTER))
     }
     private var identityAction: NativeTopBarAction? = null
+    private var boundShowIdentity: Boolean? = null
 
     init {
         // Retain NativeTopBarLayout's expanded hit routing and each action's standalone semantics.
@@ -56,18 +58,26 @@ class InjectPluginDetailToolbar(
         identityAction?.let(::removeView)
         addView(action, ActionLayoutParams(Slot.CENTER))
         identityAction = action
+        updateCenterPresentation()
     }
 
     fun bindPresentation(label: String, showIdentity: Boolean, showToggle: Boolean,
         showStatus: Boolean, showEnd: Boolean, statusDescription: String?) {
-        identityAction?.visibility = if (showIdentity) VISIBLE else GONE
+        boundShowIdentity = showIdentity
         titleView.setText(label)
-        titleView.visibility = if (showIdentity) GONE else VISIBLE
+        updateCenterPresentation()
         ViewCompat.setAccessibilityPaneTitle(this, label)
         endActions.visibility = if (showEnd) VISIBLE else GONE
         toggle.visibility = if (showToggle) VISIBLE else GONE
         status.visibility = if (showStatus) VISIBLE else GONE
         status.contentDescription = statusDescription
+    }
+
+    private fun updateCenterPresentation() {
+        val showIdentity = boundShowIdentity ?: return
+        val identityVisible = showIdentity && identityAction != null
+        identityAction?.visibility = if (identityVisible) VISIBLE else GONE
+        titleView.visibility = if (identityVisible) GONE else VISIBLE
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -77,18 +87,21 @@ class InjectPluginDetailToolbar(
         val safeWidth = (measuredWidth - leftInsetPx - rightInsetPx).coerceAtLeast(0)
         val titleWidth = (safeWidth - 2 * (dp(style.compactEdgeInsetDp) + sideWidth +
             dp(style.leadingTitleGapDp))).coerceAtLeast(0)
+        val contentHeight = (measuredHeight - compactToolbarTopInsetPx).coerceAtLeast(0)
         titleView.measure(MeasureSpec.makeMeasureSpec(titleWidth, MeasureSpec.AT_MOST),
-            MeasureSpec.makeMeasureSpec(measuredHeight, MeasureSpec.AT_MOST))
+            MeasureSpec.makeMeasureSpec(contentHeight, MeasureSpec.AT_MOST))
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
         val x = if (layoutDirection == LAYOUT_DIRECTION_RTL) leftInsetPx + dp(style.compactEdgeInsetDp)
             else width - rightInsetPx - dp(style.compactEdgeInsetDp) - endActions.measuredWidth
-        val y = (height - endActions.measuredHeight) / 2
+        val contentTop = compactToolbarTopInsetPx
+        val contentHeight = height - contentTop
+        val y = contentTop + compactToolbarActionTop(contentHeight, endActions.measuredHeight)
         endActions.layout(x, y, x + endActions.measuredWidth, y + endActions.measuredHeight)
         val tx = leftInsetPx + (width - leftInsetPx - rightInsetPx - titleView.measuredWidth) / 2
-        val ty = (height - titleView.measuredHeight) / 2
+        val ty = contentTop + compactToolbarActionTop(contentHeight, titleView.measuredHeight)
         titleView.layout(tx, ty, tx + titleView.measuredWidth, ty + titleView.measuredHeight)
     }
 

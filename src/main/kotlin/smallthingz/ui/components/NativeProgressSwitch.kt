@@ -11,6 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
 import smallthingz.ui.platform.AndroidUiFrameClock
+import smallthingz.ui.util.closePreservingPrimaryFailure
 import kotlin.math.roundToInt
 
 private val actionProgressScope by lazy { CoroutineScope(Dispatchers.Main.immediate) }
@@ -35,6 +36,7 @@ open class NativeProgressSwitch(
     private val minimumTargetDp: Float = NativeToolbarActionStyle.Default.minimumTargetDp,
     private val mark: NativeMaterialSwitchView = NativeMaterialSwitchView(context, scheme),
 ) : NativeToggleRow(context, View(context), null, mark, onChanged = onChanged) {
+    private var closed = false
     private val spinner by lazy {
         nativeActionSpinner(context, scheme.ink).apply {
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -47,9 +49,19 @@ open class NativeProgressSwitch(
 
     /** A null description removes progress and restores the shared On/Off semantics. */
     fun bindProgress(checked: Boolean, enabled: Boolean, progress: CharSequence?) {
+        if (closed) return
         bindToggle(checked, enabled, scheme)
         mark.setThumbProgress(if (progress == null) null else spinner)
         ViewCompat.setStateDescription(this, progress)
+    }
+
+    override fun close() {
+        if (closed) return
+        closed = true
+        var failure = closePreservingPrimaryFailure(null) { super.close() }
+        // Detaching stops the indicator's frames and observer without creating an unused spinner.
+        failure = closePreservingPrimaryFailure(failure) { mark.setThumbProgress(null) }
+        failure?.let { throw it }
     }
 
     override fun createAccessibilityNodeInfo(): AccessibilityNodeInfo? =

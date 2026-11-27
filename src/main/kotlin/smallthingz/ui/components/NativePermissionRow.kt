@@ -1,6 +1,7 @@
 package smallthingz.ui.components
 
 import android.content.Context
+import android.text.TextUtils
 import android.view.View
 import androidx.core.view.ViewCompat
 import smallthingz.ui.text.TextStyle
@@ -39,7 +40,7 @@ open class NativePermissionRow(
         isClickable = false
         if (independentAccessory) descendantFocusability = FOCUS_AFTER_DESCENDANTS
         if (standaloneAccessibility) mergedRowAccessibility.enableStandaloneAccessibility({ isShown }) {
-            val detail = bodyText?.takeIf { it.isNotEmpty() }
+            val detail = bodyText?.takeIf { it.isNotEmpty() && !TextUtils.equals(it, status) }
             if (detail == null) titleText else "$titleText, $detail"
         }
     }

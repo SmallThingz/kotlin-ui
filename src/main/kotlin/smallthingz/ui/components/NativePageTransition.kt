@@ -100,6 +100,9 @@ object NativePageTransition {
         private val pager: Boolean = false,
         private val renderOffset: ((View, Float) -> Unit)? = null,
     ) : AutoCloseable {
+        /** Preserve the original JVM entry point and its bottom-edge defaults. */
+        constructor(container: FrameLayout) : this(container, Gravity.BOTTOM, false, null)
+
         init { require(edge == Gravity.BOTTOM || edge == Gravity.TOP || edge == Gravity.END || edge == Gravity.RIGHT) }
         private val renderedOffsets = java.util.WeakHashMap<View, Float>()
         private val horizontal get() = edge == Gravity.END || edge == Gravity.RIGHT
@@ -167,6 +170,9 @@ object NativePageTransition {
             previewProgress = progress.coerceIn(0f, 1f)
             position(run, run.start + (run.end - run.start) * previewProgress)
         }
+
+        /** Preserve the original JVM entry point with full-duration settlement. */
+        fun commitPreview() = commitPreview(PredictiveSettlement.FULL_DURATION)
 
         fun commitPreview(policy: PredictiveSettlement = PredictiveSettlement.FULL_DURATION) {
             if (!previewing) return

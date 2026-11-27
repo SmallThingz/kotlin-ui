@@ -122,7 +122,7 @@ class NativeProgressSwitchIntegrationTest {
     }
 
     @Test fun slotKeepsIntrinsicSwitchAndMinimumTargetAcrossProgressAndLayoutDirections() {
-        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+        main {
             val context = InstrumentationRegistry.getInstrumentation().targetContext
             val scheme = NativeColorScheme.fallback(darkTheme = false)
             val mark = NativeMaterialSwitchView(context, scheme)
@@ -173,17 +173,23 @@ class NativeProgressSwitchIntegrationTest {
         }
     }
 
+    private fun main(action: () -> Unit) {
+        var result: Result<Unit>? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { result = runCatching(action) }
+        checkNotNull(result).getOrThrow()
+    }
+
     private fun withWindow(mount: (Activity) -> () -> Unit) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
             NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         try {
             lateinit var assertions: () -> Unit
-            instrumentation.runOnMainSync { assertions = mount(activity) }
+            main { assertions = mount(activity) }
             instrumentation.waitForIdleSync()
-            instrumentation.runOnMainSync(assertions)
+            main(assertions)
         } finally {
-            instrumentation.runOnMainSync { activity.finish() }
+            main { activity.finish() }
         }
     }
 }

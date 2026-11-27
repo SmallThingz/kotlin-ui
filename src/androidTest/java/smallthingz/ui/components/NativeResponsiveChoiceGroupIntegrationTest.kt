@@ -179,7 +179,11 @@ class NativeResponsiveChoiceGroupIntegrationTest {
         }
         return null
     }
-    private fun main(action: () -> Unit) = instrumentation.runOnMainSync(action)
+    private fun main(action: () -> Unit) {
+        var result: Result<Unit>? = null
+        instrumentation.runOnMainSync { result = runCatching(action) }
+        checkNotNull(result).getOrThrow()
+    }
     private fun exact(value: Int) = View.MeasureSpec.makeMeasureSpec(value, View.MeasureSpec.EXACTLY)
     private fun unspecified() = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
 }

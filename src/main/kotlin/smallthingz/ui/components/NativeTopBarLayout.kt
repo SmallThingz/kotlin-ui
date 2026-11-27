@@ -17,6 +17,8 @@ open class NativeTopBarLayout(context: Context, initialStyle: NativeToolbarStyle
     class ActionLayoutParams(val slot: Slot, val minimumVisualOffset: Boolean = false) :
         ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     private var topInsetPx = 0
+    @get:JvmSynthetic
+    internal val compactToolbarTopInsetPx: Int get() = topInsetPx
     protected var leftInsetPx = 0
         private set
     protected var rightInsetPx = 0

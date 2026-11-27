@@ -1,17 +1,21 @@
 package smallthingz.ui.inject
 
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import smallthingz.ui.components.NativeMenuAccessibilityTestActivity
 import smallthingz.ui.components.NativeSurface
 import smallthingz.ui.components.NativeToolbarActionTone
+import smallthingz.ui.components.withRetiringTestActivity
 import smallthingz.ui.text.view.ParagraphView
 import kotlin.math.roundToInt
 
@@ -40,6 +44,34 @@ class InjectPluginVisualsIntegrationTest {
             assertEquals(0, calls)
             assertEquals(theme.palette.copy(primaryContainer = Color.TRANSPARENT),
                 InjectPluginVisuals.permissionPalette(theme.palette))
+        }
+    }
+
+    @Test fun shownPermissionStatusIsExposedOnlyAsTheStandaloneState() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(Intent(instrumentation.context,
+            NativeMenuAccessibilityTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        var installed: InjectPermissionRow? = null
+        withRetiringTestActivity(activity, root = { installed }) {
+            main {
+                val row = InjectPermissionRow(activity, InjectDesign.theme(activity, false), ICON)
+                installed = row
+                row.bindStatus("Root", "Waiting…", showStatus = true, granted = false,
+                    enabled = true, requestEnabled = false, requestLabel = "Allow") {}
+                activity.setContentView(row, ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            }
+            instrumentation.waitForIdleSync()
+            main {
+                val row = checkNotNull(installed)
+                val visibleStatus = descendants(row).filterIsInstance<ParagraphView>().single { it.getText() == "Waiting…" }
+                assertEquals(View.VISIBLE, visibleStatus.visibility)
+                val node = checkNotNull(row.createAccessibilityNodeInfo())
+                assertTrue(node.isVisibleToUser)
+                assertEquals("Root", node.contentDescription.toString())
+                assertEquals("Waiting…", AccessibilityNodeInfoCompat.wrap(node).stateDescription.toString())
+                assertFalse(node.isClickable)
+            }
         }
     }
 
