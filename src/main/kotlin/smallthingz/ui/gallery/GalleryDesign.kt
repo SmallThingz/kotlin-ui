@@ -18,6 +18,11 @@ import smallthingz.ui.text.NativeTypographyRole
 object GalleryDesign {
     val appearance = ReverbDesign.appearance
 
+    /** Secondary viewer browsing keeps the existing compact native target in every pose.
+     * This metric does not opt the primary action row into icon-only presentation.
+     */
+    val viewerFilmstripHeightDp = appearance.toolbars.action.minimumTargetDp.coerceAtLeast(48f)
+
     val actionTextStyle = appearance.typography[NativeTypographyRole.LABEL_LARGE]
     val libraryHeadingTextStyle = appearance.typography[NativeTypographyRole.TITLE_MEDIUM]
     val libraryHeadingButtonStyle = NativeMaterialButtonStyle(
