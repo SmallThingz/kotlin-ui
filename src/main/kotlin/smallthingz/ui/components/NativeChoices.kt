@@ -46,6 +46,14 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+/** Paint padding around a centered top compound icon; never changes the label or touch target. */
+internal data class NativeStackedIconSurfacePadding(val horizontalDp: Float, val verticalDp: Float) {
+    init {
+        require(horizontalDp.isFinite() && horizontalDp >= 0f)
+        require(verticalDp.isFinite() && verticalDp >= 0f)
+    }
+}
+
 /** Geometry is explicit so a consumer can retain its established design. */
 data class NativeChoiceStyle(
     val radiusDp: Float = 12f,
@@ -340,6 +348,16 @@ class NativeChip private constructor(
     private var typography: ChoiceTypography? = null
     private var visualInsetPx = 0
     private var contentSurfaceInsetPx = 0
+    // This opt-in is owned by the retained chip so NativeChoiceStyle keeps its public ABI.
+    // Parent-owned moving fills retain their shared geometry and foreground path.
+    internal var stackedIconSurfacePadding: NativeStackedIconSurfacePadding? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            if (value == null) selectionAnimation?.setFillBounds(null)
+            else updateIconFillBounds(width, height)
+        }
+    private var iconFillRect: RectF? = null
     internal val selectedFillInset: Int get() = visualInsetPx
     internal val selectedFillHorizontalInset: Int
         get() = if (uniformSelectionForeground == null) contentSurfaceInsetPx else 0
@@ -623,11 +641,66 @@ class NativeChip private constructor(
             max(0, (measuredHeight - max(dp(minimum), contentHeight)) / 2)
         if (visualInsetPx != inset) { visualInsetPx = inset; invalidate() }
         updateContentSurfaceInset(measuredWidth)
+        updateIconFillBounds(measuredWidth, measuredHeight)
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
         updateContentSurfaceInset(width)
+        updateIconFillBounds(width, height)
+    }
+
+    override fun setGravity(gravity: Int) {
+        super.setGravity(gravity)
+        if (ready) updateIconFillBounds(width, height)
+    }
+
+    override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
+        super.onScrollChanged(l, t, oldl, oldt)
+        if (ready) updateIconFillBounds(width, height)
+    }
+
+    private fun updateIconFillBounds(cellWidth: Int, cellHeight: Int) {
+        val padding = stackedIconSurfacePadding ?: return
+        if (parentDrawsSelectedFill || choiceStyle.contentSurfacePaddingDp != null) return
+        val icon = activeIcon()
+        val textLayout = layout
+        val drawables = compoundDrawablesRelative
+        // Use only TextView's unshifted, centered top-drawable path. Keep layout and icon
+        // bounds untouched, including wrapped labels. All unsupported cases reset the fill.
+        val supported = choiceStyle.iconAbove && choiceStyle.visualMinHeightDp == null &&
+            !stretchTopIconToWidth && trailingIcon == null && !text.isNullOrEmpty() &&
+            transformationMethod == null && !hasSelectionPaintSpans(text) &&
+            paddingLeft == paddingRight && scrollX == 0 && scrollY == 0 &&
+            (gravity and Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.CENTER_HORIZONTAL &&
+            (gravity and Gravity.VERTICAL_GRAVITY_MASK) == Gravity.TOP &&
+            textLayout != null && textLayout.alignment == Layout.Alignment.ALIGN_CENTER &&
+            !hasSelectionPaintSpans(textLayout.text) &&
+            (0 until textLayout.lineCount).all { textLayout.getEllipsisCount(it) == 0 } &&
+            textLayout.height <= cellHeight - compoundPaddingTop - compoundPaddingBottom &&
+            icon != null && drawables[1] === icon && drawables[0] == null &&
+            drawables[2] == null && drawables[3] == null &&
+            icon.bounds.left == 0 && icon.bounds.top == 0 &&
+            icon.bounds.width() == dp(choiceStyle.iconSizeDp) &&
+            icon.bounds.height() == dp(choiceStyle.iconSizeDp) && icon.bounds.width() > 0
+        if (!supported) {
+            selectionAnimation?.setFillBounds(null)
+            return
+        }
+        val bounds = checkNotNull(icon).bounds
+        val extraWidth = cellWidth - paddingLeft - paddingRight - bounds.width()
+        if (extraWidth < 0) {
+            selectionAnimation?.setFillBounds(null)
+            return
+        }
+        val x = paddingLeft + extraWidth / 2
+        // Narrow cells can reduce paint padding while retaining the original icon and target.
+        val horizontal = min(dp(padding.horizontalDp), extraWidth / 2)
+        val vertical = minOf(dp(padding.verticalDp), paddingTop, compoundDrawablePadding)
+        val rect = iconFillRect ?: RectF().also { iconFillRect = it }
+        rect.set((x - horizontal).toFloat(), (paddingTop - vertical).toFloat(),
+            (x + bounds.width() + horizontal).toFloat(), (paddingTop + bounds.height() + vertical).toFloat())
+        selectionAnimation?.setFillBounds(rect)
     }
 
     private fun updateContentSurfaceInset(cellWidth: Int) {
@@ -760,6 +833,7 @@ class NativeChip private constructor(
         // Relative top-only replacement can skip TextView's retained tint application.
         // Keep a null tint untouched so supplied artwork retains its own colors/tint.
         compoundDrawableTintList?.let { setCompoundDrawableTintList(it) }
+        updateIconFillBounds(width, height)
     }
 
     private fun paintPalette() {

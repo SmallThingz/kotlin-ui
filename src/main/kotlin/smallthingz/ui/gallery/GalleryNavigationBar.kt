@@ -8,6 +8,7 @@ import smallthingz.ui.components.ChoiceArrangement
 import smallthingz.ui.components.NativeChoice
 import smallthingz.ui.components.NativeChoiceStyle
 import smallthingz.ui.components.NativeTabBar
+import smallthingz.ui.components.NativeStackedIconSurfacePadding
 import smallthingz.ui.components.NativeTextRole
 import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.text.NativeTypographyRole
@@ -21,27 +22,26 @@ class GalleryNavigationBar(
     selectedId: String,
     onSelectionRequest: (String) -> Boolean,
 ) : FrameLayout(context) {
-    private val tabs = NativeTabBar(context, palette, NativeChoiceStyle(
+    private val tabs = NativeTabBar(context, GalleryDesign.navigationPalette(palette), NativeChoiceStyle(
         radiusDp = 16f,
         minHeightDp = 64f,
         horizontalPaddingDp = 4f,
         verticalPaddingDp = 6f,
         outlined = false,
         selectedFill = true,
-        // Native choice visual spacing, independent of the retained4dp target padding.
-        contentSurfacePaddingDp = NativeChoiceStyle().horizontalPaddingDp,
         iconAbove = true,
         iconSizeDp = 24f,
         iconGapDp = 4f,
         textStyle = GalleryDesign.textStyle(NativeTypographyRole.LABEL_MEDIUM),
         normalTextRole = NativeTextRole.MUTED,
-        selectedTextRole = null, // Shared contrast-aware ink for the selected surface.
+        selectedTextRole = NativeTextRole.CONTENT, // The label stays on the page, outside the fill.
         normalIconRole = NativeTextRole.MUTED,
         selectedIconRole = null,
         indicatorHeightDp = 0f,
     ), gapDp = 0f, arrangement = ChoiceArrangement.EqualWidth,
         fixedColumns = destinations.size, maxColumns = destinations.size,
         fillRowHeight = true, activateOnFocusNavigation = false)
+    private val iconSurfacePadding = NativeStackedIconSurfacePadding(16f, 4f)
     private var viewportWidth = 0
     private val viewport = object : HorizontalScrollView(context) {
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -74,12 +74,14 @@ class GalleryNavigationBar(
 
     fun bind(selectedId: String, palette: ControlPalette) {
         setBackgroundColor(palette.surface)
-        tabs.applyPalette(palette)
+        tabs.applyPalette(GalleryDesign.navigationPalette(palette))
         tabs.bind(destinations, selectedId)
         destinations.forEach { destination -> tabs.choiceView(destination.id)?.apply {
             // Larger text may grow the one navigation row; no ellipsis or hidden destination.
             // Anchor icons at the same top inset even when only one label wraps.
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            // Only the icon fill is inset. The focus outline and ripple still cover the tab.
+            stackedIconSurfacePadding = iconSurfacePadding
             maxLines = Int.MAX_VALUE
             ellipsize = null
         } }

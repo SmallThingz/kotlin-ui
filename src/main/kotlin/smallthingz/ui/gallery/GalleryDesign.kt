@@ -7,6 +7,8 @@ import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeTextStyle
 import smallthingz.ui.components.NativeMaterialButtonStyle
 import smallthingz.ui.components.nativeTextStyle
+import smallthingz.ui.components.srgbColorWithAlpha
+import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.reverb.ReverbDesign
 import smallthingz.ui.reverb.reverbActionSheetStyle
 import smallthingz.ui.text.NativeTypography
@@ -17,6 +19,17 @@ import smallthingz.ui.text.NativeTypographyRole
 /** Gallery uses the shared appearance; product marks and content remain Gallery-owned. */
 object GalleryDesign {
     val appearance = ReverbDesign.appearance
+
+    /** Secondary viewer browsing keeps the existing compact native target in every pose.
+     * This metric does not opt the primary action row into icon-only presentation.
+     */
+    val viewerFilmstripHeightDp = appearance.toolbars.action.minimumTargetDp.coerceAtLeast(48f)
+
+    /** Quieter destination paint, derived from the incoming page palette on every bind.
+     * Replace selection alpha (143/255); keep shared ink, focus and all target geometry.
+     */
+    fun navigationPalette(palette: ControlPalette): ControlPalette =
+        palette.copy(selection = srgbColorWithAlpha(palette.selection, .56f))
 
     val actionTextStyle = appearance.typography[NativeTypographyRole.LABEL_LARGE]
     val libraryHeadingTextStyle = appearance.typography[NativeTypographyRole.TITLE_MEDIUM]
@@ -29,8 +42,14 @@ object GalleryDesign {
     val libraryActionButtonStyle = NativeMaterialButtonStyle(
         horizontalPaddingDp = 0, verticalPaddingDp = 0,
         minimumWidthDp = 48, minimumHeightDp = 48,
-        iconSizeDp = appearance.toolbars.action.glyphDp.toInt(),
+        iconSizeDp = 20,
         radiusDp = appearance.toolbars.action.radiusDp, showLabel = false,
+    )
+    /** Secondary library tools retain the existing labelled 48dp targets. */
+    val libraryUtilityActionRecipe = appearance.buttons.neutralText.copy(
+        surface = NativeMaterialButtonStyle(horizontalPaddingDp = 6, minimumWidthDp = 48,
+            minimumHeightDp = 48, iconSizeDp = 20, iconGapDp = 6, showLabel = true),
+        labelStyle = appearance.typography[NativeTypographyRole.LABEL_MEDIUM],
     )
     val dialogChoiceTextStyle = appearance.typography[appearance.modals.floating.titleRole]
     val settingsTitleTextStyle = NativeTypography(mapOf(

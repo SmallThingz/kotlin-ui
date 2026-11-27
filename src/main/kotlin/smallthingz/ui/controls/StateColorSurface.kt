@@ -6,6 +6,7 @@ import android.graphics.ColorFilter
 import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.PixelFormat
+import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
@@ -60,6 +61,21 @@ class StateColorSurface(
         }
     private var grain: smallthingz.ui.graphics.ViewGrain? = null
     private var grainIntensity = 0f
+    private var fillBounds: RectF? = null
+    private var useFillBounds = false
+
+    /** A copied view-local paint rectangle. Never changes Drawable/mask/outline bounds. */
+    internal fun setFillBounds(bounds: RectF?) {
+        if (bounds == null) {
+            if (!useFillBounds) return
+            useFillBounds = false
+        } else {
+            if (useFillBounds && fillBounds == bounds) return
+            (fillBounds ?: RectF().also { fillBounds = it }).set(bounds)
+            useFillBounds = true
+        }
+        if (ready) publish()
+    }
 
     internal fun setSurfacePreset(preset: smallthingz.ui.components.NativeSurfacePreset?) {
         val intensity = preset?.foregroundGrain ?: 0f
@@ -82,8 +98,14 @@ class StateColorSurface(
             paint.style=Paint.Style.FILL;paint.color=motion.color(0)
             paint.alpha=(paint.alpha*opacity+127)/255
             if (paintFill) {
-                canvas.drawRoundRect(bounds.left.toFloat(),bounds.top.toFloat(),bounds.right.toFloat(),bounds.bottom.toFloat(),corner,corner,paint)
-                grain?.draw(canvas, bounds.left.toFloat(), bounds.top.toFloat(), bounds.right.toFloat(), bounds.bottom.toFloat(), corner, paint.alpha)
+                val fill = if (useFillBounds) fillBounds else null
+                val left = fill?.left ?: bounds.left.toFloat()
+                val top = fill?.top ?: bounds.top.toFloat()
+                val right = fill?.right ?: bounds.right.toFloat()
+                val bottom = fill?.bottom ?: bounds.bottom.toFloat()
+                val fillCorner = min(radius, min(right - left, bottom - top) / 2f)
+                canvas.drawRoundRect(left, top, right, bottom, fillCorner, fillCorner, paint)
+                grain?.draw(canvas, left, top, right, bottom, fillCorner, paint.alpha)
             }
             paint.style=Paint.Style.STROKE;paint.color=motion.color(1)
             paint.alpha=(paint.alpha*opacity+127)/255
@@ -151,8 +173,32 @@ class StateColorSurface(
             return if (motion.isInterpolating) selectionForeground(motion.color(0), motion.color(6), color, color) else color
         }
         val accent = motion.color(5)
-        publishInk(readable(motion.color(2)),readable(motion.color(4)),if (qualifyAccentInk) readable(accent) else accent)
-        if (!parentOwnsForeground) publishRipple(motion.color(3))
+        if (useFillBounds && !parentOwnsForeground && view.isEnabled && underlayColor ushr 24 == 255) {
+            // The label is on the page; the icon is on animated fill/grain. Qualify each
+            // against its own background and retain one full-target ripple, using the
+            // opacity prefix admitted by BOTH opaque inks independently. Translucent
+            // caller ink is retained; disabled styling uses the established path. Historical platform ripple paints are
+            // outside the existing sampled-current-color indication contract.
+            // The host paints the new palette surface synchronously. The local fill and
+            // inks still animate over that surface, including on the first bind frame.
+            val page = textSurfaceRange(underlayColor)
+            val fill = motion.color(0)
+            val composite = androidx.core.graphics.ColorUtils.compositeColors(fill, underlayColor)
+            val iconRange = if (grainIntensity > 0f)
+                checkNotNull(grain).surfaceRange(composite, fill ushr 24) else textSurfaceRange(composite)
+            val ripple = motion.color(3)
+            fun qualified(range: Long, ink: Int): Long = if (ink ushr 24 == 255)
+                textSurfaceForegroundWithIndication(range, ink, ripple)
+                else ((ripple ushr 24).toLong() shl 32) or (ink.toLong() and 0xffffffffL)
+            val label = qualified(page, motion.color(2))
+            val icon = qualified(iconRange, motion.color(4))
+            val alpha = min((label ushr 32).toInt(), (icon ushr 32).toInt())
+            publishInk(label.toInt(), icon.toInt(), if (qualifyAccentInk) readable(accent) else accent)
+            publishRipple((ripple and 0x00ffffff) or (alpha shl 24))
+        } else {
+            publishInk(readable(motion.color(2)),readable(motion.color(4)),if (qualifyAccentInk) readable(accent) else accent)
+            if (!parentOwnsForeground) publishRipple(motion.color(3))
+        }
         surface.invalidateSelf()
     }
     override fun close()=motion.close()
