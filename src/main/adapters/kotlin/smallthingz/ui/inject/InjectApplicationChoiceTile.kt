@@ -34,6 +34,9 @@ open class InjectApplicationChoiceTile(context: Context, ui: InjectAppearance) :
     private val recipe = ui.defaults.applicationGrid
     private var closed = false
     private var bound = false
+    // A bound tile must retain an availability cue while artwork loads or lookup returns null.
+    // Own one platform application glyph; never tint supplied/cached app artwork or dim labels.
+    private val fallbackIcon by lazy { context.packageManager.defaultActivityIcon.mutate() }
     private val choice = NativeChip(context, palette, recipe.choiceStyle).apply {
         gravity = Gravity.CENTER
         textAlignment = View.TEXT_ALIGNMENT_CENTER
@@ -99,7 +102,9 @@ open class InjectApplicationChoiceTile(context: Context, ui: InjectAppearance) :
         closePreservingPrimaryFailure(failure) { icon.setImageDrawable(null) }?.let { throw it }
     }
 
-    fun bindIcon(drawable: Drawable?) { if (!closed) icon.setImageDrawable(drawable) }
+    fun bindIcon(drawable: Drawable?) {
+        if (!closed) icon.setImageDrawable(drawable ?: if (bound) fallbackIcon else null)
+    }
 
     /** Null [unavailableDescription] exposes a checkbox; non-null exposes the explanation action. */
     fun bindChoice(
@@ -113,6 +118,7 @@ open class InjectApplicationChoiceTile(context: Context, ui: InjectAppearance) :
     ) {
         if (closed) return
         bound = true
+        if (icon.drawable == null) icon.setImageDrawable(fallbackIcon)
         val available = unavailableDescription == null
         choice.bind(label, selected, enabled = available)
         choice.isFocusable = available
