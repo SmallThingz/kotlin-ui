@@ -15,6 +15,8 @@ open class GalleryHealControlsLayout(context: Context) : LinearLayout(context) {
     private var attachmentGeneration = 0
 
     var reservedDecisionGroup: GalleryHealDecisionGroup? = null
+    /** Retained status row; placement changes neither its text nor accessibility identity. */
+    var reservedReadyGuidance: View? = null
     var anchorReadyDecision = false
         set(value) {
             if (field == value) return
@@ -31,7 +33,10 @@ open class GalleryHealControlsLayout(context: Context) : LinearLayout(context) {
             if (generation != attachmentGeneration) return@add
             pendingDecisionPlacement = null
             val group = decisionWithSpareSpace()
-            if (group != null && fullyFitsScrollViewport()) group.extendDecisionTo(height - paddingBottom)
+            if (group != null && fullyFitsScrollViewport()) {
+                placeReadyGuidance(group)
+                group.extendDecisionTo(height - paddingBottom)
+            }
         }
     }
 
@@ -49,6 +54,23 @@ open class GalleryHealControlsLayout(context: Context) : LinearLayout(context) {
         // Details or any other later visible content must retain ordinary vertical flow.
         val lastVisible = (childCount - 1 downTo 0).firstOrNull { getChildAt(it).visibility != View.GONE }
         return if (lastVisible != null && getChildAt(lastVisible) === group) group else null
+    }
+
+    private fun placeReadyGuidance(group: GalleryHealDecisionGroup) {
+        val guidance = reservedReadyGuidance ?: return
+        if (guidance.parent !== this || guidance.visibility != View.VISIBLE) return
+        val guidanceIndex = indexOfChild(guidance)
+        val groupIndex = indexOfChild(group)
+        if (guidanceIndex >= groupIndex) return
+        // Never move guidance past progress, a warning or another retained flow item.
+        if ((guidanceIndex + 1 until groupIndex).any { getChildAt(it).visibility != View.GONE }) return
+        val gap = maxOf(group.top - guidance.bottom,
+            (GalleryDesign.appearance.modals.sheet.actionsGapDp *
+                resources.displayMetrics.density).roundToInt().coerceAtLeast(0))
+        val anchoredGroupTop = height - paddingBottom - group.height
+        val displacement = anchoredGroupTop - gap - guidance.bottom
+        // Spend spare space only. super.onLayout restores natural positions every time.
+        if (displacement > 0) guidance.offsetTopAndBottom(displacement)
     }
 
     private fun fullyFitsScrollViewport(): Boolean {
