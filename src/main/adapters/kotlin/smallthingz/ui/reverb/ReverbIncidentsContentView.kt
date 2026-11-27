@@ -41,7 +41,7 @@ import kotlin.math.roundToInt
 
 /** Keep the tool strip clear even when a focused menu reveals the system status bar. */
 fun reverbIncidentSafeInsets(insets: WindowInsetsCompat): Insets = insets.getInsetsIgnoringVisibility(
-    WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.displayCutout(),
+    WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.captionBar() or WindowInsetsCompat.Type.displayCutout(),
 )
 
 private data class IncidentsContentAppearance(
@@ -558,7 +558,7 @@ private class IncidentsHeader(
         title.animateTextColor(style.contentColor(palette))
         navigation.setDescription(if (selecting) texts.clearSelection else texts.back)
         navigation.bindToolbarAction(density, palette, true, NativeToolbarActionTone.MUTED, back)
-        actions.visibility = if (count > 0) VISIBLE else INVISIBLE
+        actions.visibility = if (count > 0) VISIBLE else GONE
         actions.setSurfacePreset(palette.surfacePreset)
         actions.setPalette(style.actionFill(palette), style.actionOutline(palette, NativeToolbarActionTone.NEUTRAL))
         destructive.setDescription(if (selecting) texts.deleteSelected else texts.clearAll)

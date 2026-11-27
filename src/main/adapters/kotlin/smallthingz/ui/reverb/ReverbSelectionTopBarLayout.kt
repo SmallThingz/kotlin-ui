@@ -33,8 +33,10 @@ open class ReverbSelectionTopBarLayout(
         // Retain the measured title width and its gap from the start wrapper. The end group
         // moves outwards, so the existing conservative title allocation remains disjoint.
         title.offsetLeftAndRight(shift)
-        endActions.lastOrNull()?.let { outer ->
-            alignAction(end, outer, if (rtl) startLeft else endLeft, actionTop, size)
+        if (end.visibility != GONE) {
+            endActions.lastOrNull()?.let { outer ->
+                alignAction(end, outer, if (rtl) startLeft else endLeft, actionTop, size)
+            }
         }
     }
 

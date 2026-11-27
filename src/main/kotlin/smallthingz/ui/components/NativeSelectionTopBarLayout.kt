@@ -23,13 +23,14 @@ open class NativeSelectionTopBarLayout(
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val size = dp(toolbarStyle.action.selectionSizeDp)
-        val endWidth = size * endSlots
+        val hasEnd = end.visibility != GONE
+        val endWidth = if (hasEnd) size * endSlots else 0
         val edge = dp(toolbarStyle.selectionEdgeInsetDp)
         val available = (width - leftInsetPx - rightInsetPx - edge * 2 - size - endWidth - dp(toolbarStyle.selectionTitleGapDp)).coerceAtLeast(0)
         val contentHeight = toolbarStyle.compactHeightPx(touchDensity)
         val actionSpec = exact(size)
         start.measure(actionSpec, actionSpec)
-        end.measure(exact(endWidth), actionSpec)
+        if (hasEnd) end.measure(exact(endWidth), actionSpec)
         title.measure(exact(available), MeasureSpec.makeMeasureSpec(contentHeight, MeasureSpec.AT_MOST))
         setMeasuredDimension(width, resolveSize(contentHeight, heightMeasureSpec))
     }
@@ -37,7 +38,8 @@ open class NativeSelectionTopBarLayout(
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         val gap = dp(toolbarStyle.selectionTitleGapDp)
         val titleStart = place(start, dp(toolbarStyle.selectionEdgeInsetDp)) + gap
-        place(end, place(title, titleStart))
+        val titleEnd = place(title, titleStart)
+        if (end.visibility != GONE) place(end, titleEnd)
     }
 
     private fun place(child: View, logicalX: Int): Int {
