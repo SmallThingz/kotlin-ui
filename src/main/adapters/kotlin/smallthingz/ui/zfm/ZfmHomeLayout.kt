@@ -45,7 +45,7 @@ class ZfmHomeLayout(
             // layout's range rather than mixing old child and new viewport sizes.
             val wasAtBottom = bottomFirst == true && scrollY >= laidOutRange
             super.onLayout(changed, l, t, r, b)
-            laidOutRange = (content.height - (height - paddingTop - paddingBottom)).coerceAtLeast(0)
+            laidOutRange = bottomScrollY(this)
             // Storage metadata and warnings arrive after the first layout. Keep
             // the user's chosen end anchored; never pull a scrolled-up user back.
             if (wasAtBottom) scrollTo(scrollX, laidOutRange)
@@ -54,6 +54,11 @@ class ZfmHomeLayout(
         isFillViewport = true
         clipToPadding = false
         addView(content, android.widget.FrameLayout.LayoutParams(-1, -2))
+    }
+
+    private fun bottomScrollY(viewport: ScrollView): Int {
+        val viewportHeight = viewport.height - viewport.paddingTop - viewport.paddingBottom
+        return (content.height - viewportHeight).coerceAtLeast(0)
     }
 
     init {
@@ -82,8 +87,7 @@ class ZfmHomeLayout(
         bottomFirst = bottomUp
         content.gravity = if (bottomUp) Gravity.BOTTOM else Gravity.TOP
         OneShotPreDrawListener.add(scroll) {
-            if (bottomFirst == bottomUp) scroll.scrollTo(0,
-                if (bottomUp) (content.height - scroll.height).coerceAtLeast(0) else 0)
+            if (bottomFirst == bottomUp) scroll.scrollTo(0, if (bottomUp) bottomScrollY(scroll) else 0)
         }
     }
 }
