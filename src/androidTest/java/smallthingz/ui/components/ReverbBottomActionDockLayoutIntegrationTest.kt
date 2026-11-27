@@ -1,5 +1,6 @@
 package smallthingz.ui.components
 
+import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Rect
 import android.view.Gravity
@@ -17,11 +18,49 @@ import smallthingz.ui.reverb.ReverbDesign
 import smallthingz.ui.reverb.ReverbIcon
 import smallthingz.ui.reverb.ReverbIconDrawable
 import smallthingz.ui.text.view.ParagraphView
+import smallthingz.ui.unit.Density
 import kotlin.math.roundToInt
 
 /** Real paragraph and button measurement; no window, device configuration change, or input. */
 @RunWith(AndroidJUnit4::class)
 class ReverbBottomActionDockLayoutIntegrationTest {
+    @Test fun bothBinaryDefaultConstructorsUseTheOriginalInsetAndHeight() = main {
+        val context = InstrumentationRegistry.getInstrumentation().context
+        val theme = ReverbDesign.theme(context, dark = false)
+        val dockType = NativeBottomActionDock::class.java
+        val prefix = arrayOf(Context::class.java, Density::class.java, NativeMaterialButtonView::class.java)
+        val int = Int::class.javaPrimitiveType!!
+        val marker = Class.forName("kotlin.jvm.internal.DefaultConstructorMarker")
+        val legacyBridge = dockType.getConstructor(*prefix, int, int, marker)
+        val currentBridge = dockType.getConstructor(*prefix, int, int, int, marker)
+        fun dp(value: Int) = (value * theme.density.density).roundToInt()
+        fun assertDock(minimumHeightDp: Int, insetDp: Int, makeDock: (NativeMaterialButtonView) -> NativeBottomActionDock) {
+            val button = NativeMaterialButtonView(context, ReverbBottomActionDock.buttonStyle(theme),
+                theme.density, theme.fontResolver) {}
+            try {
+                button.bind("Start", true, theme.palette.buttonPalette)
+                val dock = makeDock(button)
+                dock.measure(exact(dp(320)), unspecified())
+                dock.layout(0, 0, dock.measuredWidth, dock.measuredHeight)
+                assertEquals(dp(minimumHeightDp), dock.minimumActionHeightPx)
+                assertEquals(dp(insetDp), button.left)
+            } finally { button.close() }
+        }
+        assertDock(64, NativeScreenSpacing.HORIZONTAL_DP) { button ->
+            legacyBridge.newInstance(context, theme.density, button, 0, 1 shl 3, null)
+        }
+        assertDock(64, NativeScreenSpacing.HORIZONTAL_DP) { button ->
+            currentBridge.newInstance(context, theme.density, button, 0, 0, (1 shl 3) or (1 shl 4), null)
+        }
+        assertDock(64, 7) { button -> NativeBottomActionDock(context, theme.density, button, horizontalInsetDp = 7) }
+        assertDock(48, NativeScreenSpacing.HORIZONTAL_DP) { button ->
+            NativeBottomActionDock(context, theme.density, button, minimumActionHeightDp = 1)
+        }
+        assertDock(56, 7) { button ->
+            NativeBottomActionDock(context, theme.density, button, horizontalInsetDp = 7, minimumActionHeightDp = 56)
+        }
+    }
+
     @Test fun completeLabelsFitWithIconsLargeFontsAndNarrowWidths() = main {
         var wrappingBeyondTheOldBudget = 0
         for (fontScale in listOf(1f, 2f)) for (icon in listOf(false, true)) {

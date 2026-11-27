@@ -19,13 +19,22 @@ import kotlin.math.roundToInt
  * The existing button retains input, accessibility, state, callback and lifetime ownership.
  * Pass remaining insets only; the navigation region is painted but is not an action target.
  */
-open class NativeBottomActionDock @JvmOverloads constructor(
+open class NativeBottomActionDock(
     context: Context,
     density: Density,
     val action: NativeMaterialButtonView,
     horizontalInsetDp: Int = NativeScreenSpacing.HORIZONTAL_DP,
-    minimumActionHeightDp: Int = 64,
+    minimumActionHeightDp: Int = DEFAULT_MINIMUM_ACTION_HEIGHT_DP,
 ) : ViewGroup(context) {
+    // Keep the original four-argument constructor and its Kotlin default bridge.
+    @JvmOverloads
+    constructor(
+        context: Context,
+        density: Density,
+        action: NativeMaterialButtonView,
+        horizontalInsetDp: Int = NativeScreenSpacing.HORIZONTAL_DP,
+    ) : this(context, density, action, horizontalInsetDp, DEFAULT_MINIMUM_ACTION_HEIGHT_DP)
+
     private val densityScale = density.density
     private val horizontalInsetPx = (horizontalInsetDp.coerceAtLeast(0) * densityScale).roundToInt()
     val topCornerRadiusPx: Float = 28f * densityScale
@@ -151,6 +160,7 @@ open class NativeBottomActionDock @JvmOverloads constructor(
     }
 
     companion object {
+        private const val DEFAULT_MINIMUM_ACTION_HEIGHT_DP = 64
         private fun exact(value: Int) = MeasureSpec.makeMeasureSpec(value, MeasureSpec.EXACTLY)
     }
 }
