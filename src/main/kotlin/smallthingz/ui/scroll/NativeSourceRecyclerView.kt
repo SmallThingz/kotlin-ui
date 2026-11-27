@@ -18,6 +18,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import smallthingz.ui.input.phase.NativeDragPointerEvent
+import smallthingz.ui.input.phase.NativePointerCoordinates
 import smallthingz.ui.input.phase.NativePointerPass
 import smallthingz.ui.input.phase.NativeViewPhasePointerNode
 import smallthingz.ui.text.view.NativeSourceAccessibilityNode
@@ -167,7 +168,13 @@ class NativeSourceRecyclerView(context: Context) : RecyclerView(context) {
         override val view: View get() = this@NativeSourceRecyclerView
         private var pointerId = Long.MIN_VALUE
         private var grabOffset = 0f
+        private var canceledRelease = false
         val dragging get() = pointerId != Long.MIN_VALUE
+
+        override fun bindMotion(event: MotionEvent?, coordinates: NativePointerCoordinates?, androidPointerMask: Int) {
+            // A split canceled lift still projects as an unpressed change.
+            canceledRelease = event != null && event.flags and MotionEvent.FLAG_CANCELED != 0
+        }
 
         override fun dispatch(event: NativeDragPointerEvent, pass: NativePointerPass) {
             if (pass != NativePointerPass.INITIAL) return
@@ -187,11 +194,14 @@ class NativeSourceRecyclerView(context: Context) : RecyclerView(context) {
             }
             val change = event.changes.firstOrNull { it.id == pointerId } ?: return
             change.consume()
-            if (!change.pressed) {
-                finishDrag()
-            } else if (isEnabled && !isLayoutSuppressed && change.delta.y != 0f) {
+            if (!change.pressed && canceledRelease) {
+                cancel()
+                return
+            }
+            if (isEnabled && !isLayoutSuppressed && change.delta.y != 0f) {
                 indicator.scrollToThumb(change.position.y - grabOffset)
             }
+            if (!change.pressed) finishDrag()
         }
 
         override fun cancel() {

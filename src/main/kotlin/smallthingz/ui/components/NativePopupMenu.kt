@@ -79,13 +79,15 @@ class NativePopupMenu<I> private constructor(
 
     fun <T> bindChoices(choices: NativeMenuChoices<T>, select: (T) -> Unit) {
         val snapshot = choices.copy(options = choices.options.toList())
-        render = { menu.bind(snapshot, recipe.colors(palette), select) }
+        render = { menu.bind(snapshot, recipe.colors(palette)) { value -> if (acceptsInput) select(value) } }
         render()
         input.refreshRows()
     }
 
     fun bindActions(actions: List<NativeMenuAction<I>>) {
-        val snapshot = actions.toList()
+        val snapshot = actions.map { action ->
+            action.copy(onClick = { if (acceptsInput) action.onClick() })
+        }
         render = { menu.bindActions(snapshot.map { it.resolve(palette) }, recipe.colors(palette)) }
         render()
         input.refreshRows()
@@ -137,7 +139,9 @@ class NativePopupMenu<I> private constructor(
     private var back: Any? = null
     private var added = false
     private var closed = false
-    private var actionInputRetired = false
+    private enum class InputState { ADMITTED, DISMISSED, ACTION_ACCEPTED }
+    private var inputState = InputState.ADMITTED
+    private val acceptsInput get() = !closed && inputState == InputState.ADMITTED
     private var inputGeneration = 0L
     private var admittedFlags = 0
     private var admittedAccessibility = IMPORTANT_FOR_ACCESSIBILITY_AUTO
@@ -190,21 +194,31 @@ class NativePopupMenu<I> private constructor(
 
     fun expanded(expanded: Boolean) {
         if (closed) return
-        if (expanded && actionInputRetired) {
+        if (expanded && !acceptsInput) {
             // Explicit readmission is a new input lifetime, even while the old exit is painted.
-            inputGeneration++
-            actionInputRetired = false
-            params.flags = admittedFlags
-            importantForAccessibility = admittedAccessibility
-            val generation = inputGeneration
-            if (added) manager.updateViewLayout(this, params)
+            val releaseWasRequested = inputState == InputState.ACTION_ACCEPTED
+            val generation = ++inputGeneration
+            inputState = InputState.ADMITTED
+            if (Build.VERSION.SDK_INT >= 33) MenuBackApi33.unregister(this, back)
+            back = null
+            if (releaseWasRequested) {
+                params.flags = admittedFlags
+                importantForAccessibility = admittedAccessibility
+                if (added) manager.updateViewLayout(this, params)
+            }
             if (closed || inputGeneration != generation) return
             if (isAttachedToWindow) registerBack()
         }
+        val dismissing = !expanded && acceptsInput
+        if (dismissing) {
+            inputState = InputState.DISMISSED
+            inputGeneration++
+        }
+        val generation = inputGeneration
         animationLayer.retargetMotion(expanded)
-        // An interrupted entry retains this same window until the exit settles. Explicit
-        // owner teardown still uses close() and removes the window immediately.
-        if (!animationLayer.motionShouldExist) onTerminal()
+        // Ordinary dismissal keeps the window flags and exit paint while retiring held input.
+        if (dismissing) cancelHeldInput(generation)
+        if (!closed && inputGeneration == generation && !animationLayer.motionShouldExist) onTerminal()
     }
 
     /**
@@ -215,19 +229,14 @@ class NativePopupMenu<I> private constructor(
      * No work is deferred until after the caller, which may close or explicitly reopen this menu.
      */
     fun acceptAction(): Boolean {
-        if (closed || actionInputRetired) return false
-        actionInputRetired = true
+        if (!acceptsInput) return false
+        inputState = InputState.ACTION_ACCEPTED
         val generation = ++inputGeneration
         admittedFlags = params.flags
         admittedAccessibility = importantForAccessibility
-        // This tracking is separate from row.input; a stale BACK/ESC UP must not dismiss a
-        // same-window lifetime explicitly reopened by the accepted action.
-        keyDispatcherState?.reset(this)
-        fun stillRetiring() = !closed && actionInputRetired && inputGeneration == generation
+        fun stillRetiring() = !closed && inputGeneration == generation
         try {
-            cancelPointerInput()
-            // Key/accessibility activation need not have a retained pointer path to cancel.
-            for (row in menu.column.rows) if (stillRetiring()) row.input.cancel()
+            cancelHeldInput(generation)
             if (stillRetiring()) {
                 importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
                 if (Build.VERSION.SDK_INT >= 33) MenuBackApi33.unregister(this, back)
@@ -251,11 +260,18 @@ class NativePopupMenu<I> private constructor(
         return true
     }
 
+    private fun cancelHeldInput(generation: Long) {
+        // Root key tracking is separate from row input and must also retire before reopen.
+        keyDispatcherState?.reset(this)
+        cancelPointerInput()
+        for (row in menu.column.rows) if (!closed && inputGeneration == generation) row.input.cancel()
+    }
+
     private fun registerBack() {
-        if (Build.VERSION.SDK_INT < 33 || closed || actionInputRetired || back != null) return
+        if (Build.VERSION.SDK_INT < 33 || !acceptsInput || back != null) return
         val generation = inputGeneration
         back = MenuBackApi33.register(this) {
-            if (!closed && !actionInputRetired && inputGeneration == generation) onDismissRequest()
+            if (acceptsInput && inputGeneration == generation) onDismissRequest()
         }
     }
 
@@ -352,7 +368,7 @@ class NativePopupMenu<I> private constructor(
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (closed || actionInputRetired) return true
+        if (!acceptsInput) return true
         if (event.keyCode == KeyEvent.KEYCODE_BACK || event.keyCode == KeyEvent.KEYCODE_ESCAPE) {
             val state = keyDispatcherState ?: return super.dispatchKeyEvent(event)
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
@@ -367,7 +383,7 @@ class NativePopupMenu<I> private constructor(
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-        if (closed || actionInputRetired) return true
+        if (!acceptsInput) return true
         if ((event.action == MotionEvent.ACTION_DOWN &&
                 (event.x < 0 || event.x >= width || event.y < 0 || event.y >= height)) ||
             event.action == MotionEvent.ACTION_OUTSIDE) {
@@ -378,7 +394,7 @@ class NativePopupMenu<I> private constructor(
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
-        if (closed || actionInputRetired) true else super.dispatchGenericMotionEvent(event)
+        if (!acceptsInput) true else super.dispatchGenericMotionEvent(event)
 
     // Source Popup ignores ViewRootImpl's locale override and retains its parent's direction.
     override fun setLayoutDirection(layoutDirection: Int) = Unit

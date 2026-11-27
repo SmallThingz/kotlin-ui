@@ -473,8 +473,8 @@ class AudioReactiveBlobView(
         val life = if (renderingVisible) targetLife else COLLAPSED_LIFE
         val silence = targetSilence
         val presence = targetPresence
-        var changed = currentActivity != activity || currentLife != life ||
-            currentSilence != silence || currentPresence != presence
+        val appearanceChanged = currentLife != life || currentSilence != silence || currentPresence != presence
+        var changed = currentActivity != activity || appearanceChanged
         currentActivity = activity
         currentLife = life
         currentSilence = silence
@@ -484,10 +484,8 @@ class AudioReactiveBlobView(
             if (currentBands[index] != band) changed = true
             currentBands[index] = band
         }
-        if (changed) {
-            invalidate()
-            publishReadoutAppearance()
-        }
+        if (changed) invalidate()
+        if (appearanceChanged) publishReadoutAppearance()
     }
 
     private fun hasHotAudio(): Boolean =
@@ -530,13 +528,19 @@ class AudioReactiveBlobView(
             val mix = if (targetBands[index] > currentBands[index]) attackMix else releaseMix
             currentBands[index] += (targetBands[index] - currentBands[index]) * mix
         }
+        val previousLife = currentLife
+        val previousSilence = currentSilence
+        val previousPresence = currentPresence
         val lifeRate = if (targetLife > currentLife) 0.18f else 0.15f
         val lifeMix = 1f - (1f - lifeRate).pow(normalized)
         currentLife += (targetLife - currentLife) * lifeMix
         if (kotlin.math.abs(currentLife - targetLife) <= LIFE_EPSILON) currentLife = targetLife
         currentSilence = advanceSilenceBlob(currentSilence, targetSilence, dtSeconds)
         currentPresence = advanceBlobPresence(currentPresence, targetPresence, dtSeconds)
-        publishReadoutAppearance()
+        // The readout uses a conservative envelope independent of raw activity and bands.
+        if (currentLife != previousLife || currentSilence != previousSilence || currentPresence != previousPresence) {
+            publishReadoutAppearance()
+        }
     }
 
     internal interface Renderer {

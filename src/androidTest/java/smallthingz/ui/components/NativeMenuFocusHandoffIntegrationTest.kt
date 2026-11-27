@@ -36,8 +36,10 @@ class NativeMenuFocusHandoffIntegrationTest {
         var runtime: NativeModalWindowRuntime? = null
         lateinit var editor: EditText
         lateinit var anchor: View
+        var rowCallbacks = 0
         var accepts = 0
         var dismisses = 0
+        var collapseOnDismiss = false
         var terminals = 0
         val accepted = CountDownLatch(1)
         val retiredFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
@@ -65,9 +67,13 @@ class NativeMenuFocusHandoffIntegrationTest {
                     alphaSpring = SpringSpec(dampingRatio = 1f, stiffness = 16f)))
                 val menu = NativePopupMenu(anchor, Density(1f), NativeTypography.Default, createFontFamilyResolver(activity),
                     palette, NativeVerticalScrollState(), clock.frames, clock.scope, icons, slow,
-                    onDismissRequest = { dismisses++ }, onTerminal = { terminals++; popup?.close() })
+                    onDismissRequest = {
+                        dismisses++
+                        if (collapseOnDismiss) popup?.expanded(false)
+                    }, onTerminal = { terminals++; popup?.close() })
                 popup = menu
                 menu.bindActions(listOf(NativeMenuAction("Rename", 0) {
+                    rowCallbacks++
                     if (menu.acceptAction()) {
                         // Input authority is retired before the editor's own readiness handling.
                         assertEquals(retiredFlags, (menu.layoutParams as WindowManager.LayoutParams).flags and retiredFlags)
@@ -123,8 +129,57 @@ class NativeMenuFocusHandoffIntegrationTest {
             instrumentation.runOnMainSync {
                 assertEquals(0, terminals) // Old exit work did not close the explicitly reopened window.
                 assertNotEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS, menu.importantForAccessibility)
-                menu.expanded(false) // Ordinary dismiss keeps its existing input/focus flags.
+                val content = panel().getChildAt(0) as NativeMenuContent<*>
+                val row = content.column.rows.single()
+                val origin = IntArray(2).also(menu::getLocationOnScreen)
+                val label = row.getChildAt(0)
+                val point = IntArray(2).also(label::getLocationOnScreen)
+                val x = point[0] - origin[0] + label.width / 2f
+                val y = point[1] - origin[1] + label.height / 2f
+                fun touch(down: Long, action: Int) {
+                    val event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, y, 0).apply {
+                        source = InputDevice.SOURCE_TOUCHSCREEN
+                    }
+                    try {
+                        val handled = menu.dispatchTouchEvent(event)
+                        if (action == MotionEvent.ACTION_DOWN) assertTrue("Menu row must receive DOWN", handled)
+                    } finally { event.recycle() }
+                }
+                fun dismissWithBack() {
+                    val down = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK)
+                    assertTrue(menu.dispatchKeyEvent(down))
+                    assertTrue(menu.dispatchKeyEvent(KeyEvent.changeAction(down, KeyEvent.ACTION_UP)))
+                }
+
+                collapseOnDismiss = true
+                assertEquals(1, rowCallbacks)
+                val heldUntilDismiss = SystemClock.uptimeMillis()
+                touch(heldUntilDismiss, MotionEvent.ACTION_DOWN)
+                dismissWithBack()
+                assertEquals(3, dismisses)
                 assertEquals(0, (menu.layoutParams as WindowManager.LayoutParams).flags and retiredFlags)
+                assertTrue(menu.isAttachedToWindow && panel().alpha > 0f)
+                touch(heldUntilDismiss, MotionEvent.ACTION_UP)
+                assertEquals("A release cannot select a dismissed row", 1, rowCallbacks)
+                row.performClick()
+                assertEquals("Direct row activation cannot bypass dismissal", 1, rowCallbacks)
+                assertFalse(menu.acceptAction())
+
+                // Reopen before UP: an admission check alone would let this old press select.
+                menu.expanded(true)
+                val heldThroughReopen = SystemClock.uptimeMillis()
+                touch(heldThroughReopen, MotionEvent.ACTION_DOWN)
+                dismissWithBack()
+                assertEquals(4, dismisses)
+                menu.expanded(true)
+                touch(heldThroughReopen, MotionEvent.ACTION_UP)
+                assertEquals("The previous press must be canceled", 1, rowCallbacks)
+
+                val fresh = SystemClock.uptimeMillis()
+                touch(fresh, MotionEvent.ACTION_DOWN)
+                touch(fresh, MotionEvent.ACTION_UP)
+                assertEquals(2, rowCallbacks)
+                assertEquals(2, accepts)
             }
         } catch (error: Throwable) {
             failure = error

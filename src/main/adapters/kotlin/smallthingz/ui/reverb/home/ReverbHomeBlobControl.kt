@@ -173,7 +173,8 @@ class ReverbHomeBlobControl(
         updateRendererState(value)
         // Keep the renderer and its bounds live while the recorder is resolving its first state.
         overlay.visibility = if (value.captureStateKnown) VISIBLE else INVISIBLE
-        overlay.bind(value.active, value.filled, value.primaryText, value.secondaryText, flip.contentAlpha)
+        overlay.bind(value.active, value.filled, value.primaryText, value.secondaryText, flip.contentAlpha,
+            dimmedReady = value.dimmed && value.captureEnabled && value.clickableEnabled && !value.saving)
         applyTransform()
     }
 

@@ -33,6 +33,8 @@ class NativeAudioBlobReadout(
     private var contentBound = false
     private var active = false
     private var filled = false
+    private var dimmedReady = false
+    private var dimmedReadyInk = pageInk(style.readoutBackground)
     private var primaryText: String? = null
     private var secondaryText: String? = null
     private val icon = AudioBlobIcon(context, icons)
@@ -57,6 +59,7 @@ class NativeAudioBlobReadout(
     private var fallbackGradientMin = 0f
     private var fallbackGradientMax = 1f
     private var contentOpacity = 1f
+    private var primaryGap = 0
 
     init {
         clipChildren = false
@@ -74,6 +77,7 @@ class NativeAudioBlobReadout(
         descriptions: NativeAudioBlobDescriptions,
     ) {
         this.style = style
+        dimmedReadyInk = pageInk(style.readoutBackground)
         this.textDensity = textDensity
         this.descriptions = descriptions
         primary.setTypography(style.primaryTextStyle, textDensity, fontResolver)
@@ -121,10 +125,15 @@ class NativeAudioBlobReadout(
         renderer.setReadoutMaterialCorrection(correction)
     }
 
-    fun bind(active: Boolean, filled: Boolean, primaryText: String?, secondaryText: String?, contentAlpha: Float) {
+    fun bind(active: Boolean, filled: Boolean, primaryText: String?, secondaryText: String?, contentAlpha: Float) =
+        bind(active, filled, primaryText, secondaryText, contentAlpha, dimmedReady = false)
+
+    internal fun bind(active: Boolean, filled: Boolean, primaryText: String?, secondaryText: String?,
+        contentAlpha: Float, dimmedReady: Boolean) {
         contentBound = true
         this.active = active
         this.filled = filled
+        this.dimmedReady = dimmedReady
         this.primaryText = primaryText
         this.secondaryText = secondaryText
         setContentOpacity(contentAlpha)
@@ -137,6 +146,8 @@ class NativeAudioBlobReadout(
             materialTransitioning -> if (materialUsesDarkInk) Color.BLACK else AUDIO_BLOB_READOUT_INK
             filled -> style.filledInk
             active -> if (materialUsesDarkInk) Color.BLACK else AUDIO_BLOB_READOUT_INK
+            // Keep the Home dimming layer, and give the still-actionable idle glyphs stronger ink.
+            dimmedReady -> dimmedReadyInk
             else -> style.idleInk
         }
         icon.bind(
@@ -174,7 +185,7 @@ class NativeAudioBlobReadout(
         var maximum = 0f
         for (index in 0 until childCount) {
             val child = getChildAt(index)
-            if (child.visibility == GONE) continue
+            if (child.visibility == GONE || child.width == 0 || child.height == 0) continue
             val dx = max(abs(child.left - centerX), abs(child.right - centerX))
             val dy = max(abs(child.top - centerY), abs(child.bottom - centerY))
             maximum = max(maximum, dx * dx + dy * dy)
@@ -223,7 +234,7 @@ class NativeAudioBlobReadout(
             var fMax = Float.NEGATIVE_INFINITY
             for (index in 0 until childCount) {
                 val child = getChildAt(index)
-                if (child.visibility == GONE) continue
+                if (child.visibility == GONE || child.width == 0 || child.height == 0) continue
                 val left = child.left - centerX - margin
                 val right = child.right - centerX + margin
                 val top = child.top - centerY - margin
@@ -252,24 +263,31 @@ class NativeAudioBlobReadout(
     }
 
     private fun dp(value: Int) = (value * textDensity.density).roundToInt()
+    private fun pageInk(background: Int) =
+        if (audioBlobMaterialLuminance(background) >= .179) Color.BLACK else AUDIO_BLOB_READOUT_INK
+
     override fun onMeasure(w: Int, h: Int) {
         val maxWidth = MeasureSpec.getSize(w)
         val maxHeight = MeasureSpec.getSize(h)
-        val iconWidth = dp(38).coerceAtMost(maxWidth)
-        val iconHeight = dp(38).coerceAtMost(maxHeight)
+        val labelWidth = MeasureSpec.makeMeasureSpec(maxWidth, MeasureSpec.AT_MOST)
+        val hasPrimary = primary.visibility != GONE
+        if (hasPrimary) primary.measure(labelWidth, MeasureSpec.makeMeasureSpec(maxHeight, MeasureSpec.AT_MOST))
+        val primaryHeight = if (hasPrimary) primary.measuredHeight else 0
+        val roomAbovePrimary = (maxHeight - primaryHeight).coerceAtLeast(0)
+        // Reserve the actual primary line first so the fixed icon and gap cannot clip it.
+        primaryGap = if (hasPrimary) dp(10).coerceAtMost(roomAbovePrimary) else 0
+        val iconHeight = dp(38).coerceAtMost(roomAbovePrimary - primaryGap)
+        val iconWidth = minOf(iconHeight, maxWidth)
         icon.measure(MeasureSpec.makeMeasureSpec(iconWidth, MeasureSpec.EXACTLY),
             MeasureSpec.makeMeasureSpec(iconHeight, MeasureSpec.EXACTLY))
-        var usedHeight = icon.measuredHeight
-        var usedWidth = icon.measuredWidth
-        for (index in 0..1) {
-            val label = if (index == 0) primary else secondary
-            if (label.visibility == GONE) continue
-            val gap = if (index == 0) 10 else 2
-            usedHeight += dp(gap).coerceAtMost((maxHeight - usedHeight).coerceAtLeast(0))
-            label.measure(MeasureSpec.makeMeasureSpec(maxWidth, MeasureSpec.AT_MOST),
+        var usedHeight = icon.measuredHeight + primaryGap + primaryHeight
+        var usedWidth = max(icon.measuredWidth, if (hasPrimary) primary.measuredWidth else 0)
+        if (secondary.visibility != GONE) {
+            usedHeight += dp(2).coerceAtMost((maxHeight - usedHeight).coerceAtLeast(0))
+            secondary.measure(labelWidth,
                 MeasureSpec.makeMeasureSpec((maxHeight - usedHeight).coerceAtLeast(0), MeasureSpec.AT_MOST))
-            usedHeight += label.measuredHeight
-            usedWidth = max(usedWidth, label.measuredWidth)
+            usedHeight += secondary.measuredHeight
+            usedWidth = max(usedWidth, secondary.measuredWidth)
         }
         setMeasuredDimension(resolveSize(usedWidth, w), resolveSize(usedHeight, h))
     }
@@ -281,8 +299,8 @@ class NativeAudioBlobReadout(
         for (index in 0..1) {
             val label = if (index == 0) primary else secondary
             if (label.visibility == GONE) continue
-            val gap = if (index == 0) 10 else 2
-            y += dp(gap).coerceAtMost((height - y).coerceAtLeast(0))
+            val gap = if (index == 0) primaryGap else dp(2)
+            y += gap.coerceAtMost((height - y).coerceAtLeast(0))
             val x = ((width - label.measuredWidth) / 2f).roundToInt()
             label.layout(x, y, x + label.measuredWidth, y + label.measuredHeight)
             y += label.measuredHeight

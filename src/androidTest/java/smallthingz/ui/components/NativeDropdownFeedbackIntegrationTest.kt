@@ -1,5 +1,6 @@
 package smallthingz.ui.components
 
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.Intent
 import android.graphics.drawable.Drawable
@@ -367,6 +368,35 @@ class NativeDropdownFeedbackIntegrationTest {
             assertTrue("No late old-session publication", f.deliveries.isEmpty())
         }
     }
+
+    @Test fun horizontalNonTapResumesInterruptedProgressiveSnap() =
+        scenario(policy = DropdownSelectionPolicy.PROGRESSIVE, settleMillis = 160) { f ->
+            main {
+                browse(f, 1)
+                val animator = field(session(f), "animator") as ValueAnimator
+                animator.currentPlayTime = 80
+                assertTrue("Must interrupt a running snap between rows",
+                    animator.isRunning && position(f) > 20f && position(f) < 21f)
+                assertTrue(f.deliveries.isEmpty())
+
+                val now = SystemClock.uptimeMillis()
+                val x = f.wheel.width / 2f
+                val y = slotY(f)
+                val movedX = x + (field(f.wheel, "slop") as Int) * 2
+                touch(f.wheel, MotionEvent.ACTION_DOWN, now, x, y)
+                touch(f.wheel, MotionEvent.ACTION_MOVE, now, movedX, y)
+                touch(f.wheel, MotionEvent.ACTION_UP, now, movedX, y)
+                assertTrue(f.group.isExpanded)
+            }
+            await("Interrupted snap must reach its slot and publish once") {
+                position(f) == 21f && f.deliveries == listOf(21)
+            }
+            frames(f.host, 2)
+            main {
+                assertTrue(f.group.isExpanded)
+                assertEquals(listOf(21), f.deliveries)
+            }
+        }
 
     @Test fun escapeBeforeProgressivePublishCannotCommitCancelledCandidateAfterReopen() =
         scenario(policy = DropdownSelectionPolicy.PROGRESSIVE, settleMillis = 160, collapseMillis = 160) { f ->

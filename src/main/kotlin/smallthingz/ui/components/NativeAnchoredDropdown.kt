@@ -587,6 +587,7 @@ class NativeAnchoredDropdown private constructor(
             private var flingTiming: NativeDropdownFlingTiming? = null
             private var flinging = false
             private var stopTap = false
+            private var interruptedSnap = false
             private var heldIndication: RowIndication? = null
             private var pressedCue: NativeDropdownOverflowCue? = null
             private var flingPath: NativeDropdownFlingPath? = null
@@ -646,6 +647,7 @@ class NativeAnchoredDropdown private constructor(
                 dragging = false
                 explicitTap = false
                 stopTap = false
+                interruptedSnap = false
                 velocityTracker?.clear()
             }
 
@@ -915,7 +917,10 @@ class NativeAnchoredDropdown private constructor(
                         stopTap = wasFlinging
                         // A closing gesture can reopen on drag/tap. Until then its terminal
                         // animation must keep running, including after cancellation/pointer loss.
-                        if (!closing) stopAnimation()
+                        if (!closing) {
+                            interruptedSnap = !wasFlinging && animator?.isRunning == true && position != settled.toFloat()
+                            stopAnimation()
+                        }
                         if (!insideReveal(event.x, event.y)) return true
                         downRow = rowAt(event.y)
                         downRowWasFullyVisible = rows[downRow]?.importantForAccessibility == View.IMPORTANT_FOR_ACCESSIBILITY_YES
@@ -971,7 +976,9 @@ class NativeAnchoredDropdown private constructor(
                         if (moved) tracker?.computeCurrentVelocity(1000, maximumFlingVelocity.toFloat())
                         val velocity = if (moved) -(tracker?.getYVelocity(pointer) ?: 0f) else 0f
                         val stoppedFling = stopTap
+                        val resumeSnap = interruptedSnap
                         stopTap = false
+                        interruptedSnap = false
                         pointer = -1
                         tracker?.clear()
                         if (moved) {
@@ -1002,19 +1009,18 @@ class NativeAnchoredDropdown private constructor(
                             val y = event.getY(i)
                             if (!insideReveal(x, y)) {
                                 if (closing && reveal == 0f) dispose()
-                                return true
-                            }
-                            if (tappedCue != null) {
-                                if (explicitTap && tappedCue.contains(x, y)) tappedCue.performClick()
-                                return true // A cue-owned tap never falls through to an option.
-                            }
-                            if (closing) {
+                            } else if (tappedCue != null) {
+                                // A cue-owned tap never falls through to an option.
+                                if (explicitTap && tappedCue.contains(x, y)) {
+                                    tappedCue.performClick()
+                                    return true
+                                }
+                            } else if (closing) {
                                 closing = false
                                 animate(settled.toFloat(), 1f, style.expandMillis) {}
                             } else if (explicitTap && rowAt(y) == downRow) {
-                                val row = rows[downRow] ?: return true
-                                val rowY = y - row.translationY
-                                if (rowY >= 0f && rowY < rowHeight) {
+                                val row = rows[downRow]
+                                if (row != null && y - row.translationY >= 0f && y - row.translationY < rowHeight) {
                                     // A partial option is a scroll affordance. Bring it into the
                                     // slot before accepting a separate explicit activation.
                                     if (selectionPolicy == DropdownSelectionPolicy.EXPLICIT &&
@@ -1023,8 +1029,10 @@ class NativeAnchoredDropdown private constructor(
                                     } else {
                                         collapse(downRow, afterTapIndication = true)
                                     }
+                                    return true
                                 }
                             }
+                            if (resumeSnap) settle(settled, browsed = false)
                         }
                     }
                     MotionEvent.ACTION_POINTER_DOWN -> {

@@ -7,6 +7,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.view.MotionEvent
 import android.view.View
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -24,8 +25,15 @@ import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.LooperMode
 import smallthingz.ui.components.NativeCaptureControlsStyle
 import smallthingz.ui.components.NativeColorScheme
+import smallthingz.ui.components.NativeModalWindowRuntime
+import smallthingz.ui.interaction.view.NativeClickEnvironment
+import smallthingz.ui.reverb.ReverbEnvironment
 import smallthingz.ui.reverb.ReverbIcon
 import smallthingz.ui.reverb.ReverbIconDrawable
+import smallthingz.ui.reverb.home.ReverbHomeBlobAttachment
+import smallthingz.ui.reverb.home.ReverbHomeBlobControl
+import smallthingz.ui.reverb.home.ReverbHomeBlobState
+import smallthingz.ui.reverb.home.ReverbHomeFlipFrame
 import smallthingz.ui.reverb.home.reverbHomeGeometry
 import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.text.view.ParagraphView
@@ -55,6 +63,7 @@ class AudioBlobReadoutContrastHostTest {
             val intermediate = fixture.sample(expectedDarkInk = scene.backdropUsesDarkInk, failures)
 
             fixture.layoutHome(190, dimmed = false)
+            assertTrue("${scene.name}: the complete timer must fit the 56px readout", fixture.primaryFits())
             val shortest = fixture.sample(expectedDarkInk = scene.backdropUsesDarkInk, failures)
             fixture.layoutHome(215, dimmed = false)
             if (!fixture.primaryFits()) failures += "${scene.name}: the complete timer does not fit the 80px readout"
@@ -111,6 +120,87 @@ class AudioBlobReadoutContrastHostTest {
         fixture.layoutHome(190, dimmed = true)
         assertArrayEquals("Apply the latest correction when a zero-size material grows",
             directlyDimmed, fixture.material())
+    }
+
+    @Test fun actionableDimmedReadyReadoutFitsAndKeepsContrastOnHomeBackdrops() = withSettledAnimations {
+        val context = RuntimeEnvironment.getApplication()
+        NativeModalWindowRuntime(context).use { runtime ->
+            for (dark in listOf(false, true)) {
+                val environment = ReverbEnvironment(context, dark)
+                val backdrop = environment.palette.background
+                val size = reverbHomeGeometry(360, 190, 1f, environment.appearance.captureControls).blobSize
+                assertEquals(56, size)
+                val attachment = object : ReverbHomeBlobAttachment {
+                    override fun attach(view: AudioReactiveBlobView) = Unit
+                    override fun detach(view: AudioReactiveBlobView) = Unit
+                    override fun currentBaseRadiusFraction(): Float? = null
+                }
+                val state = ReverbHomeBlobState(
+                    attachment, active = false, saving = false, captureEnabled = true,
+                    clickableEnabled = true, filled = false, dimmed = true, primaryText = PRIMARY,
+                    secondaryText = "42.0 MiB", visualizerVisible = true,
+                )
+                ReverbHomeBlobControl(context, environment, NoPointerInput, runtime.scope) {}.use { control ->
+                    control.bind(state, ReverbHomeFlipFrame()) {}
+                    val exact = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY)
+                    control.measure(exact, exact)
+                    control.layout(0, 0, size, size)
+                    assertTrue(control.isEnabled)
+                    assertEquals(.56f, control.alpha, 0f)
+
+                    val material = control.getChildAt(0)
+                    val readout = control.getChildAt(1) as NativeAudioBlobReadout
+                    val primary = readout.getChildAt(1) as ParagraphView
+                    assertTrue("The complete 56px primary line must fit", completePrimaryFits(primary))
+                    val underlay = rasterOverPage(backdrop, control.alpha, material)
+                    val composite = rasterOverPage(backdrop, control.alpha, control)
+                    for (index in 0..1) {
+                        val child = readout.getChildAt(index)
+                        val mask = raster { canvas ->
+                            canvas.translate((PADDING + readout.left + child.left).toFloat(),
+                                (PADDING + readout.top + child.top).toFloat())
+                            child.draw(canvas)
+                        }
+                        val glyphCores = mask.indices.filter { Color.alpha(mask[it]) == 255 }
+                        assertTrue("dark=$dark glyph=$index must have opaque samples", glyphCores.isNotEmpty())
+                        assertTrue("dark=$dark glyph=$index contrast after group opacity",
+                            glyphCores.all { contrast(composite[it], underlay[it]) >= MIN_CONTRAST })
+                        if (index == 1) assertTrue("The short primary line must cross the material edge",
+                            glyphCores.any { underlay[it] == backdrop })
+                    }
+                }
+            }
+        }
+    }
+
+    @Test fun settledAudioOnlyFramesSkipReadoutProjectionUntilSilenceChanges() = withSettledAnimations {
+        val fixture = Fixture(RuntimeEnvironment.getApplication(), Scene.DarkBackdrop)
+        fixture.layoutHome(190, dimmed = false)
+        val renderer = fixture.audioView
+        val lastAppearance = AudioReactiveBlobView::class.java.getDeclaredField("lastReadoutAppearance")
+            .apply { isAccessible = true }
+        // Clear only the delivery sentinel so a redundant projection would become observable.
+        lastAppearance.setInt(renderer, -1)
+        val quietRadius = renderer.currentBaseRadiusFraction()
+        renderer.submitFrame(.4f, FloatArray(8) { .3f }, silenceSuppressed = false)
+        val snappedRadius = renderer.currentBaseRadiusFraction()
+        assertTrue(snappedRadius > quietRadius)
+        assertEquals("Audio-only snap must leave the projection untouched", -1, lastAppearance.getInt(renderer))
+
+        // The unattached fixture has no vsync. Set a new audio target and step the real frame path.
+        AudioReactiveBlobView::class.java.getDeclaredField("targetActivity").apply {
+            isAccessible = true
+            setFloat(renderer, .9f)
+        }
+        AudioReactiveBlobView::class.java.getDeclaredMethod("advance", Float::class.javaPrimitiveType).apply {
+            isAccessible = true
+            invoke(renderer, 1f / 60f)
+        }
+        assertTrue(renderer.currentBaseRadiusFraction() > snappedRadius)
+        assertEquals("Audio-only animation must leave the projection untouched", -1, lastAppearance.getInt(renderer))
+
+        renderer.submitFrame(.9f, FloatArray(8) { .3f }, silenceSuppressed = true)
+        assertTrue("Silence pigment must refresh the projection", lastAppearance.getInt(renderer) >= 0)
     }
 
     @Test fun clearingSettledSilencePublishesCompactReadoutSupportImmediately() = withSettledAnimations {
@@ -280,12 +370,7 @@ class AudioBlobReadoutContrastHostTest {
                 it.getFloat(audioView) / minOf(audioView.width, audioView.height)
             }
 
-        fun primaryFits(): Boolean {
-            val primary = readout.getChildAt(1) as ParagraphView
-            val line = requireNotNull(primary.createOriginalSemanticsParagraph())
-            return line.lineCount == 1 && !line.didExceedMaxLines && line.height <= primary.height &&
-                line.getLineEnd(0, visibleEnd = true) == PRIMARY.length
-        }
+        fun primaryFits(): Boolean = completePrimaryFits(readout.getChildAt(1) as ParagraphView)
 
         fun sample(expectedDarkInk: Boolean, failures: MutableList<String>): Sample {
             val scope = "${scene.name} ${control.width}px alpha=$alpha expectedDarkInk=$expectedDarkInk"
@@ -400,6 +485,14 @@ class AudioBlobReadoutContrastHostTest {
 
     private data class Sample(val pixels: IntArray, val fadePixels: Int, val outsidePixels: Int)
 
+    private object NoPointerInput : NativeClickEnvironment {
+        override fun admitDown(event: MotionEvent) = false
+        override fun interestedParent(event: MotionEvent) = false
+        override fun longPressOwnershipChanged(owns: Boolean) = Unit
+        override val minimumTouchWidthPx = 0f
+        override val minimumTouchHeightPx = 0f
+    }
+
     private fun withSettledAnimations(test: () -> Unit) {
         val setScale = ValueAnimator::class.java.getDeclaredMethod("setDurationScale", Float::class.javaPrimitiveType)
             .apply { isAccessible = true }
@@ -436,6 +529,20 @@ class AudioBlobReadoutContrastHostTest {
             } finally {
                 bitmap.recycle()
             }
+        }
+
+        fun rasterOverPage(page: Int, opacity: Float, view: View): IntArray = raster { canvas ->
+            canvas.drawColor(page)
+            canvas.translate(PADDING.toFloat(), PADDING.toFloat())
+            val layer = canvas.saveLayerAlpha(0f, 0f, view.width.toFloat(), view.height.toFloat(),
+                (opacity * 255f).roundToInt())
+            try { view.draw(canvas) } finally { canvas.restoreToCount(layer) }
+        }
+
+        fun completePrimaryFits(primary: ParagraphView): Boolean {
+            val line = requireNotNull(primary.createOriginalSemanticsParagraph())
+            return line.lineCount == 1 && !line.didExceedMaxLines && line.height <= primary.height &&
+                line.getLineEnd(0, visibleEnd = true) == PRIMARY.length
         }
 
         fun contrast(ink: Int, underlay: Int): Double {

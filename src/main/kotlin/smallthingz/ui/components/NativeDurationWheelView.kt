@@ -208,7 +208,6 @@ class NativeDurationWheelView internal constructor(
     }
 
     init {
-        isClickable = true
         isFocusable = true
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         updateContentDescription()
@@ -424,6 +423,8 @@ class NativeDurationWheelView internal constructor(
                 parent?.requestDisallowInterceptTouchEvent(false)
                 return true
             }
+            // The first pointer owns the edit. Keep consuming the held stream.
+            MotionEvent.ACTION_POINTER_DOWN -> return true
             MotionEvent.ACTION_POINTER_UP -> {
                 if (event.getPointerId(event.actionIndex) == pointerId) {
                     if (event.flags and MotionEvent.FLAG_CANCELED != 0) {
@@ -462,11 +463,6 @@ class NativeDurationWheelView internal constructor(
             return true
         }
         return super.onGenericMotionEvent(event)
-    }
-
-    override fun performClick(): Boolean {
-        super.performClick()
-        return true
     }
 
     override fun onDetachedFromWindow() {
