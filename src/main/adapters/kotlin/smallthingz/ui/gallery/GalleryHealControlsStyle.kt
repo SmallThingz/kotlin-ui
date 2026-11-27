@@ -2,9 +2,11 @@ package smallthingz.ui.gallery
 
 import android.content.Context
 import android.graphics.Path
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import smallthingz.ui.components.CachedPathIconDrawable
 import smallthingz.ui.components.NativePathIconMask
@@ -97,6 +99,41 @@ object GalleryHealControlsStyle {
         appearance: NativeUiAppearance = GalleryDesign.appearance,
     ) {
         ControlStyle(button.context, colors.pageControls).applyButton(button, appearance.buttons.filled, colors.buttonPalette)
+    }
+}
+
+/** Keeps Cancel/Discard in its existing half-row slot; Apply uses only its natural width.
+ * Both slots remain allocated while Apply is INVISIBLE. This owns layout only: the caller
+ * retains the native buttons, callbacks, focus, enabled state and input-owner guards.
+ */
+class GalleryHealDecisionRow(context: Context, cancelAction: Button, applyAction: Button) : LinearLayout(context) {
+    init {
+        orientation = HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+        val density = resources.displayMetrics.density
+        val halfGap = (4f * density).roundToInt()
+        val target = (48f * density).roundToInt()
+        for (button in listOf(cancelAction, applyAction)) {
+            button.minWidth = maxOf(button.minWidth, target)
+            button.minimumWidth = maxOf(button.minimumWidth, target)
+            button.minHeight = maxOf(button.minHeight, target)
+            button.minimumHeight = maxOf(button.minimumHeight, target)
+            button.setSingleLine(false)
+            button.maxLines = Int.MAX_VALUE
+            button.ellipsize = null
+        }
+        addView(cancelAction, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginEnd = halfGap
+        })
+        val applySlot = FrameLayout(context).apply {
+            importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+            addView(applyAction, FrameLayout.LayoutParams(
+                LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.END or Gravity.CENTER_VERTICAL))
+        }
+        addView(applySlot, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginStart = halfGap
+        })
     }
 }
 
