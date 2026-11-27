@@ -71,7 +71,7 @@ object GalleryHealControlsStyle {
 }
 
 /** Comparison precedes the decision row; both retained rows keep their exact width/height rules. */
-class GalleryHealDecisionGroup(context: Context, comparisonRow: View, private val decisionRow: View) : LinearLayout(context) {
+class GalleryHealDecisionGroup(context: Context, comparisonRow: View, decisionRow: View) : LinearLayout(context) {
     init {
         orientation = VERTICAL
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -81,11 +81,12 @@ class GalleryHealDecisionGroup(context: Context, comparisonRow: View, private va
         addView(decisionRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
     }
 
-    /** Layout-only extension inside already reserved parent space; comparison stays put. */
+    /** Move the intact natural-height group within already reserved parent space.
+     * The parent's next ordinary layout restores natural placement before re-evaluating
+     * fit; neither panel measurement nor the spacing between these rows changes.
+     */
     internal fun extendDecisionTo(reservedBottom: Int) {
-        if (reservedBottom <= bottom) return
-        layout(left, top, right, reservedBottom)
-        val spare = height - paddingBottom - decisionRow.bottom
-        if (spare > 0) decisionRow.offsetTopAndBottom(spare)
+        val spare = reservedBottom - bottom
+        if (spare > 0) offsetTopAndBottom(spare)
     }
 }

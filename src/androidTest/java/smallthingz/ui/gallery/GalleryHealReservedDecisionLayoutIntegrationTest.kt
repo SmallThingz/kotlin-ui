@@ -49,9 +49,10 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
                         f.ready(true)
                         assertEquals(reserved, f.panel.measuredHeight)
                         assertEquals("Canvas budget proxy cannot change", canvasBudget, f.dp(1000) - f.scroll.measuredHeight)
-                        assertEquals(comparison, f.bounds(f.before))
-                        assertEquals(reserved - f.panel.paddingBottom, f.bounds(f.decisions).bottom)
-                        assertTrue(f.bounds(f.decisions).top >= f.bounds(f.before).bottom)
+                        f.assertAnchoredGroup(comparison, natural, reserved)
+                        // Repeated Ready layouts must not accumulate displacement or stretch rows.
+                        f.ready(true)
+                        f.assertAnchoredGroup(comparison, natural, reserved)
                         assertSame("Placement must not choose Apply", f.discard, f.panel.findFocus())
                         assertSame(retained[0], f.group.getChildAt(0))
                         assertSame(retained[1], f.decisions.getChildAt(0))
@@ -61,7 +62,7 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
                         assertEquals(View.GONE, f.group.visibility)
                         assertEquals(reserved, f.panel.measuredHeight)
                         f.ready(false) // Same retained rows, natural Preparing placement.
-                        assertEquals("No accumulated extension", natural, f.bounds(f.decisions))
+                        assertEquals("Natural placement restored", natural, f.bounds(f.decisions))
                         assertEquals(comparison, f.bounds(f.before))
                         assertTrue(f.discard.requestFocus())
                     }
@@ -78,20 +79,23 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
                     val drawing = Rect(); f.scroll.getDrawingRect(drawing)
                     assertEquals(f.scroll.scrollY, drawing.top)
                     assertEquals(f.scroll.scrollY + f.scroll.height, drawing.bottom)
-                    assertEquals(reserved - f.panel.paddingBottom, f.bounds(f.decisions).bottom)
+                    f.assertAnchoredGroup(comparison, natural, reserved)
                     // At the next forced layout the panel is clipped at the top: natural placement.
                     // Scrolling alone need not relayout or reposition the decision row.
                     f.scroll.scrollTo(0, f.body.top + f.panel.top + f.dp(30))
                     f.ready(true)
                     assertTrue(f.scroll.scrollY + f.scroll.paddingTop > f.body.top + f.panel.top)
                     assertEquals(natural, f.bounds(f.decisions))
+                    assertEquals(comparison, f.bounds(f.before))
                     // A short viewport also refuses anchoring, independently of scroll position.
                     f.scroll.scrollTo(0, 0); f.viewportHeight = f.dp(180); f.ready(true)
                     assertTrue(f.panel.height > f.scroll.height - f.scroll.paddingTop - f.scroll.paddingBottom)
                     assertEquals(natural, f.bounds(f.decisions))
+                    assertEquals(comparison, f.bounds(f.before))
                     // Details after the decision group retains normal document flow.
                     f.viewportHeight = f.dp(600); f.details.visibility = View.VISIBLE; f.ready(true)
                     assertEquals(natural, f.bounds(f.decisions))
+                    assertEquals(comparison, f.bounds(f.before))
                     assertTrue(f.bounds(f.details).top >= f.bounds(f.decisions).bottom)
                     // Real wrapped labels, narrow font1/font2: no compression to force fitting.
                     f.details.visibility = View.GONE
@@ -99,10 +103,12 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
                     f.discard.text = "Discard preview without applying changes"
                     f.apply.text = "Apply this preview to the photo"
                     f.ready(false); val narrow = f.bounds(f.decisions)
+                    val narrowComparison = f.bounds(f.before)
                     val naturalHeight = f.panel.measuredHeight
                     f.ready(true)
                     assertEquals(naturalHeight, f.panel.measuredHeight)
                     assertEquals(narrow, f.bounds(f.decisions))
+                    assertEquals(narrowComparison, f.bounds(f.before))
                     assertTrue(f.discard.height >= f.dp(48) && f.apply.height >= f.dp(48))
                     for (button in listOf(f.discard, f.apply)) {
                         assertTrue(button.width >= f.dp(48))
@@ -141,6 +147,7 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
                 val oldOffset = f.scroll.scrollY
                 assertTrue(oldOffset + f.scroll.paddingTop > panelRect.top)
                 assertEquals(natural, f.bounds(f.decisions))
+                assertEquals(comparison, f.bounds(f.before))
 
                 // Keep the same content but shrink the scroll range to a nonzero offset.
                 val finalOffset = f.dp(24)
@@ -153,8 +160,7 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
                 assertTrue(panelRect.top >= finalOffset + f.scroll.paddingTop)
                 assertTrue(panelRect.bottom <= finalOffset + f.scroll.height - f.scroll.paddingBottom)
                 assertEquals(reserved, f.panel.measuredHeight)
-                assertEquals(comparison, f.bounds(f.before))
-                assertEquals(reserved - f.panel.paddingBottom, f.bounds(f.decisions).bottom)
+                f.assertAnchoredGroup(comparison, natural, reserved)
                 assertSame(retained[0], f.group.getChildAt(0))
                 assertSame(retained[1], f.decisions.getChildAt(0))
                 assertSame(retained[2], f.decisions.getChildAt(1))
@@ -236,6 +242,18 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
         fun ready(anchor: Boolean) {
             selection.visibility = View.GONE; group.visibility = View.VISIBLE; panel.anchorReadyDecision = anchor
             layout()
+        }
+        fun assertAnchoredGroup(comparison: Rect, decision: Rect, reserved: Int) {
+            val delta = reserved - panel.paddingBottom - decision.bottom
+            assertTrue("The fixture must exercise positive reserved slack", delta > 0)
+            val expectedComparison = Rect(comparison).apply { offset(0, delta) }
+            val expectedDecision = Rect(decision).apply { offset(0, delta) }
+            assertEquals("Comparison and decisions move together", expectedComparison, bounds(before))
+            assertEquals("Decision slots retain their bottom anchor and dimensions", expectedDecision, bounds(decisions))
+            assertEquals("No stretched container or internal spacer", group.measuredHeight, group.height)
+            assertEquals("Natural row spacing is retained", decision.top - comparison.bottom,
+                bounds(decisions).top - bounds(before).bottom)
+            assertEquals(reserved, panel.measuredHeight)
         }
         fun bounds(view: View) = Rect(0, 0, view.width, view.height).also {
             panel.offsetDescendantRectToMyCoords(view, it)

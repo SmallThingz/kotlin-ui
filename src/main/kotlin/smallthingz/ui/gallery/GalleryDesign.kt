@@ -32,6 +32,12 @@ object GalleryDesign {
         iconSizeDp = appearance.toolbars.action.glyphDp.toInt(),
         radiusDp = appearance.toolbars.action.radiusDp, showLabel = false,
     )
+    /** Secondary library tools retain the existing labelled 48dp targets. */
+    val libraryUtilityActionRecipe = appearance.buttons.neutralText.copy(
+        surface = NativeMaterialButtonStyle(horizontalPaddingDp = 6, minimumWidthDp = 48,
+            minimumHeightDp = 48, iconSizeDp = 20, iconGapDp = 6, showLabel = true),
+        labelStyle = actionTextStyle,
+    )
     val dialogChoiceTextStyle = appearance.typography[appearance.modals.floating.titleRole]
     val settingsTitleTextStyle = NativeTypography(mapOf(
         NativeTypographyRole.TITLE_MEDIUM to appearance.settingsSelectors.sectionTitle,
