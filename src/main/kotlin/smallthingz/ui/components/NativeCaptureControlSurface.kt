@@ -188,12 +188,16 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
         val selectorWidth = min(metrics.selectorWidth, width)
         measureRow(selectors, selectorWidth, min(metrics.selectorHeight, height),
             metrics.selectorSpacing, metrics.segmentWidth, MeasureSpec.AT_MOST,
+            horizontalSpacing = selectorHorizontalSpacing(selectorWidth),
             minimumChildWidth = if (selectorWidth < metrics.selectorWidth) metrics.segmentWidth else 0)
         val actionWidth = min(metrics.preferredWidth, width)
         measureRow(actions, actionWidth, min(metrics.actionHeight, height),
             metrics.actionSpacing, metrics.actionSize, MeasureSpec.EXACTLY,
             horizontalSpacing = actionHorizontalSpacing(actionWidth), minimumChildWidth = actionTargetWidth())
     }
+
+    private fun selectorHorizontalSpacing(width: Int): Int =
+        min(metrics.selectorSpacing, (width - selectors.size).coerceAtLeast(0) / (selectors.size + 1))
 
     private fun actionTargetWidth() = captureActionTargetWidth(density, metrics.actionSize)
 
@@ -214,6 +218,7 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
         val childHeight = if (heightMode == MeasureSpec.EXACTLY) min(childWidth, innerHeight) else innerHeight
         val heightSpec = MeasureSpec.makeMeasureSpec(childHeight, heightMode)
         for (index in views.indices) {
+            // Preserve the preferred placement and its rounding while leaving room for later targets.
             val reserved = minimumChildWidth * (views.lastIndex - index)
             val allocated = if (share < minimumChildWidth) {
                 share + if (index < extra) 1 else 0
@@ -227,8 +232,9 @@ abstract class NativeCaptureControlSurface(context: Context) : ViewGroup(context
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         content.layout(0, 0, width, height)
-        layoutRow(selectors, min(metrics.selectorWidth, width), 0, min(metrics.selectorHeight, height),
-            metrics.selectorSpacing)
+        val selectorWidth = min(metrics.selectorWidth, width)
+        layoutRow(selectors, selectorWidth, 0, min(metrics.selectorHeight, height),
+            metrics.selectorSpacing, horizontalSpacing = selectorHorizontalSpacing(selectorWidth))
         val actionHeight = min(metrics.actionHeight, height)
         val actionWidth = min(metrics.preferredWidth, width)
         layoutRow(actions, actionWidth, height - actionHeight, actionHeight,
