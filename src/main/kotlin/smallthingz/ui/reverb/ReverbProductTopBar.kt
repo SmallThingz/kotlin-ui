@@ -78,6 +78,17 @@ class ReverbProductTopBar(context: Context, initialTheme: ReverbTheme, inputRoot
         openRepository: () -> Boolean,
         onUserDismiss: () -> Unit = {},
         onWindowDismissed: () -> Unit = {},
+    ): Boolean = openAbout(theme, details, paneLabel, 0, openRepository, onUserDismiss, onWindowDismissed)
+
+    /** Reopen an owner-restored panel without changing the existing opening/dismissal contract. */
+    fun openAbout(
+        theme: ReverbTheme,
+        details: ReverbAboutDetails,
+        paneLabel: String,
+        restoredScrollPosition: Int,
+        openRepository: () -> Boolean,
+        onUserDismiss: () -> Unit = {},
+        onWindowDismissed: () -> Unit = {},
     ): Boolean {
         val anchor = bar.centerAnchor ?: return false
         if (about != null || !anchor.isAttachedToWindow || !anchor.isShown || !anchor.hasWindowFocus()) return false
@@ -98,6 +109,7 @@ class ReverbProductTopBar(context: Context, initialTheme: ReverbTheme, inputRoot
             }
         }
         opened = ReverbAboutDialog(anchor, theme, details.copy(identity = identity, paneLabel = paneLabel),
+            restoredScrollPosition = restoredScrollPosition.coerceAtLeast(0),
             openRepository = openRepository, onDismiss = { retire(onUserDismiss, restoreFocus = true) })
         detach = object : OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(view: View) = Unit
@@ -116,6 +128,9 @@ class ReverbProductTopBar(context: Context, initialTheme: ReverbTheme, inputRoot
             false
         }
     }
+
+    /** Null means the panel is closed; hosts may save an open panel's live scroll offset. */
+    fun aboutScrollPosition(): Int? = about?.scrollPosition()
 
     fun closeAbout() {
         clearFocusReturn?.invoke()
