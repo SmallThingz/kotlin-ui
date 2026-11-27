@@ -7,6 +7,7 @@ import android.content.Context
 import android.os.SystemClock
 import android.view.MotionEvent
 import smallthingz.ui.common.NativeSurfaceInputAdmission
+import smallthingz.ui.animation.predictiveBackCommitDurationMillis
 import android.transition.Slide
 import android.transition.Transition
 import android.transition.TransitionManager
@@ -65,6 +66,22 @@ object NativePageTransition {
     /** A child panel enters over its stationary predecessor; Back lowers that same foreground. */
     enum class Direction { FORWARD, BACK }
 
+    /** Ordinary navigation remains 220ms; retained predictive owners can opt into Reverb's policy. */
+    enum class PredictiveSettlement {
+        FULL_DURATION,
+        /** Commit uses remaining gesture progress; cancellation returns in 160ms. */
+        REMAINING_PROGRESS;
+
+        internal fun commitDuration(progress: Float): Long = when (this) {
+            FULL_DURATION -> DURATION_MILLIS
+            REMAINING_PROGRESS -> predictiveBackCommitDurationMillis(progress).toLong()
+        }
+        internal val cancelDuration: Long get() = when (this) {
+            FULL_DURATION -> DURATION_MILLIS
+            REMAINING_PROGRESS -> 160L
+        }
+    }
+
     /**
      * Retained, opaque route roots in a dedicated FrameLayout. The caller binds the destination
      * before show(), and removes transient outgoing roots in onFinished. No pixels are captured
@@ -114,6 +131,7 @@ object NativePageTransition {
         private var active: Run? = null
         private var closed = false
         private var previewing = false
+        private var previewProgress = 0f
         val isRunning: Boolean get() = active != null
         fun isOutgoing(view: View): Boolean = active?.outgoing === view
 
@@ -146,17 +164,34 @@ object NativePageTransition {
         fun seekPreview(progress: Float) {
             val run = active ?: return
             if (!previewing || !ValueAnimator.areAnimatorsEnabled()) return
-            position(run, run.start + (run.end - run.start) * progress.coerceIn(0f, 1f))
+            previewProgress = progress.coerceIn(0f, 1f)
+            position(run, run.start + (run.end - run.start) * previewProgress)
         }
 
-        fun commitPreview() {
+        fun commitPreview(policy: PredictiveSettlement = PredictiveSettlement.FULL_DURATION) {
             if (!previewing) return
             previewing = false
-            animate()
+            animate(policy.commitDuration(previewProgress))
+        }
+
+        /** Reverse only an uncommitted preview, preserving its currently presented pose. */
+        fun cancelPreview(policy: PredictiveSettlement = PredictiveSettlement.FULL_DURATION,
+                          onFinished: () -> Unit = {}) {
+            val run = active ?: return
+            if (!previewing) return
+            val direction = if (run.direction == Direction.FORWARD) Direction.BACK else Direction.FORWARD
+            // Incident cancellation first restores the pose at gesture start. If entry was
+            // interrupted, resume its ordinary path only after that return phase completes.
+            val returnOffset = if (policy == PredictiveSettlement.REMAINING_PROGRESS) run.start else null
+            prepare(run.outgoing, run.incoming, direction, preview = false,
+                onFinished = onFinished, durationMillis = policy.cancelDuration,
+                cancelReturnOffset = returnOffset)
         }
 
         private fun prepare(incoming: View, outgoing: View, direction: Direction,
-                            preview: Boolean, onFinished: () -> Unit) {
+                            preview: Boolean, onFinished: () -> Unit,
+                            durationMillis: Long = DURATION_MILLIS,
+                            cancelReturnOffset: Float? = null) {
             require(incoming !== outgoing && incoming.parent === container && outgoing.parent === container)
             val previous = active
             val reverse = previous != null && previous.direction != direction &&
@@ -198,6 +233,7 @@ object NativePageTransition {
             }
             container.addView(shield, FrameLayout.LayoutParams(-1, -1))
             previewing = preview
+            previewProgress = 0f
             active = Run(incoming, outgoing, direction, moving, baseline, start, end, otherBaseline) { settle ->
                 val cancelledPreview = previewing
                 previewing = false
@@ -216,7 +252,7 @@ object NativePageTransition {
                 }
             }
             position(checkNotNull(active), start)
-            if (!preview) animate()
+            if (!preview) animate(durationMillis, cancelReturnOffset)
         }
 
         private fun position(run: Run, value: Float) {
@@ -227,13 +263,20 @@ object NativePageTransition {
             }
         }
 
-        private fun animate() {
+        private fun animate(durationMillis: Long = DURATION_MILLIS, targetOffset: Float? = null) {
             val run = active ?: return
+            val target = targetOffset ?: run.end
             if (!ValueAnimator.areAnimatorsEnabled() || !container.isShown ||
                 container.windowVisibility != View.VISIBLE) { cancel(); return }
-            val motion = ValueAnimator.ofFloat(run.moving.offset, run.end)
+            // A completed gesture releases ownership synchronously, with no equal-endpoint animator.
+            if (durationMillis == 0L) {
+                position(run, target)
+                if (target == run.end) cancel() else animate()
+                return
+            }
+            val motion = ValueAnimator.ofFloat(run.moving.offset, target)
             animator = motion
-            motion.duration = DURATION_MILLIS
+            motion.duration = durationMillis
             motion.interpolator = panelInterpolator()
             motion.addUpdateListener {
                 if (animator !== motion) return@addUpdateListener
@@ -243,7 +286,13 @@ object NativePageTransition {
             }
             motion.addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
-                    if (animator === animation) cancel()
+                    if (animator !== animation) return
+                    if (target == run.end) cancel() else {
+                        // Keep the same retained roots, input shield and completion owner across
+                        // phases. Superseded animators cannot resume entry or release a new run.
+                        animator = null
+                        animate()
+                    }
                 }
             })
             motion.start()
