@@ -43,8 +43,17 @@ class NativeBackdropIntegrationTest {
             val lightBase = NativeColorScheme.resolve(false, sdk, context::getColor)
             val light = ReverbDesign.appearance.colorScheme.resolve(false, sdk, context::getColor)
             val backdrop = context.getColor(R.color.native_default_light_background)
-            assertEquals(lightBase.copy(background = backdrop, surface = backdrop,
-                surfacePreset = NativeGrainPreset(backgroundGrain = 1f, foregroundGrain = .5f)), light)
+            assertEquals(0xfff6f6f6.toInt(), backdrop)
+            assertEquals(lightBase.copy(
+                background = backdrop, surface = backdrop, surfaceDim = backdrop,
+                surfaceBright = 0xffffffff.toInt(), surfaceVariant = 0xfffcfcfc.toInt(),
+                surfaceContainerLowest = 0xffffffff.toInt(), surfaceContainerLow = 0xfffcfcfc.toInt(),
+                surfaceContainer = 0xfffcfcfc.toInt(), surfaceContainerHigh = 0xfffcfcfc.toInt(),
+                surfaceContainerHighest = 0xfffcfcfc.toInt(), surfacePreset = NativeGrainPreset(.22f, .20f), popupFillOverride = 0xffffffff.toInt(),
+            ), light)
+            assertEquals(.22f, light.backgroundGrain, 0f)
+            assertEquals(.20f, light.foregroundGrain, 0f)
+            assertEquals(0xffffffff.toInt(), light.popupFill)
         }
     }
 
