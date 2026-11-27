@@ -23,8 +23,8 @@ data class ReverbLibraryStatusLabels(val failure: () -> String, val retry: () ->
 
 /**
  * Only FilesScreen's existing three non-list branches. The real owner chooses the branch and owns
- * refresh. Empty uses the shared native vertical viewport so pull/scroll routing is not replaced
- * with a platform ScrollView. Pull-to-refresh ancestor and edge-dismiss remain the outer owner.
+ * refresh. Empty and Failed use the shared native vertical viewport. Pull-to-refresh and
+ * edge dismissal remain with the outer owner.
  */
 open class ReverbLibraryStatusView(
     context: Context,
@@ -41,15 +41,16 @@ open class ReverbLibraryStatusView(
     private var retry: () -> Unit = {}
     private var body: LibraryStatusColumn? = null
     private var viewport: NativeVerticalViewport? = null
-    private var emptyScrollState: NativeVerticalScrollState? = null
-    val emptyViewport: NativeVerticalViewport? get() = viewport
-    val emptyScrollPosition: Int? get() = emptyScrollState?.save()
+    val statusViewport: NativeVerticalViewport? get() = viewport
+    val emptyViewport: NativeVerticalViewport? get() = viewport.takeIf { mode == LibraryBodyMode.EMPTY }
+    val emptyScrollPosition: Int? get() = emptyViewport?.state?.save()
 
     fun openAtTop() {
-        // Rebuild the empty viewport so an old fling cannot overwrite the new opening position.
-        if (mode == LibraryBodyMode.EMPTY) {
+        // Retire the old viewport so its motion cannot advance a new opening.
+        val current = mode ?: return
+        if (viewport != null) {
             mode = null
-            bind(LibraryBodyMode.EMPTY, 0, retry)
+            bind(current, onRetry = retry)
         }
     }
 
@@ -65,22 +66,25 @@ open class ReverbLibraryStatusView(
         if (mode != next) {
             removeAllViews()
             viewport = null
-            emptyScrollState = null
             mode = next
             val column = LibraryStatusColumn(context, environment, next, nativeInputRoot, frames, parentScope, durationScale, labels) { retry() }
             column.setPresentationActive(presentationActive)
             body = column
-            if (next == LibraryBodyMode.EMPTY) {
-                val scroll = NativeVerticalScrollState(restoredScrollPosition ?: 0)
-                emptyScrollState = scroll
-                viewport = NativeVerticalViewport(context, scroll, environment.textDensity, frames, parentScope, nested,
-                    glowColor = environment.palette.muted).also {
-                    it.setContent(column)
-                    addView(it)
-                }
-            } else addView(column)
+            if (next == LibraryBodyMode.LOADING) addView(column)
+            else {
+                val initial = if (next == LibraryBodyMode.EMPTY) restoredScrollPosition ?: 0 else 0
+                attachViewport(column, NativeVerticalScrollState(initial))
+            }
         } else body?.bind(environment) { retry() }
         requestLayout()
+    }
+
+    private fun attachViewport(column: LibraryStatusColumn, state: NativeVerticalScrollState) {
+        viewport = NativeVerticalViewport(context, state, environment.textDensity, frames, parentScope, nested,
+            glowColor = environment.palette.muted).also {
+            it.setContent(column)
+            addView(it)
+        }
     }
 
     fun setPresentationActive(active: Boolean) {
@@ -93,16 +97,11 @@ open class ReverbLibraryStatusView(
         environment = next
         body?.bind(next) { retry() }
         val oldViewport = viewport
-        val state = emptyScrollState
         val column = body
-        if (densityChanged && oldViewport != null && state != null && column != null) {
+        if (densityChanged && oldViewport != null && column != null) {
             oldViewport.removeView(column)
             removeView(oldViewport)
-            viewport = NativeVerticalViewport(context, state, next.textDensity, frames, parentScope, nested,
-                glowColor = next.palette.muted).also {
-                it.setContent(column)
-                addView(it)
-            }
+            attachViewport(column, oldViewport.state)
         } else oldViewport?.setGlowColor(next.palette.muted)
         requestLayout()
     }

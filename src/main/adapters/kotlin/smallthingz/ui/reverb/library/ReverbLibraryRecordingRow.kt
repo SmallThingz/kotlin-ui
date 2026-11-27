@@ -577,6 +577,7 @@ private class RecordingRowBody(context: Context, initial: ReverbEnvironment) : R
     private val timestamp = initial.paragraph(context, "", ReverbTextRole.LABEL_LARGE)
     var measured: () -> Unit = {}
     private var textColumnWidth = 0
+    private var timestampBelow = false
     private var trailingContent: View? = null
     private var hasTimestamp = false
     val paragraphLeaves = listOf(title, subtitle, timestamp)
@@ -662,7 +663,12 @@ private class RecordingRowBody(context: Context, initial: ReverbEnvironment) : R
         val trailing = trailingContent ?: timestamp.takeIf { it.visibility != GONE }
         val gap = if (trailing == null) 0 else minOf(dp(if (trailingContent == null) 12 else 8), innerWidth)
         trailing?.measure(MeasureSpec.makeMeasureSpec((innerWidth - gap).coerceAtLeast(0), MeasureSpec.AT_MOST), textHeightSpec)
-        textColumnWidth = (innerWidth - gap - (trailing?.measuredWidth ?: 0)).coerceAtLeast(0)
+        // Keep primary text ahead of ordinary time metadata when the trailing reservation
+        // would consume most of this measured width. Custom action slots keep their layout.
+        timestampBelow = trailingContent == null && trailing != null &&
+            2L * (trailing.measuredWidth.toLong() + gap) > innerWidth
+        textColumnWidth = if (timestampBelow) innerWidth else
+            (innerWidth - gap - (trailing?.measuredWidth ?: 0)).coerceAtLeast(0)
         val columnSpec = MeasureSpec.makeMeasureSpec(textColumnWidth, MeasureSpec.AT_MOST)
         title.measure(columnSpec, textHeightSpec)
         val subtitleTop = minOf(dp(4), (innerHeight - title.measuredHeight).coerceAtLeast(0))
@@ -670,7 +676,14 @@ private class RecordingRowBody(context: Context, initial: ReverbEnvironment) : R
             (innerHeight - title.measuredHeight - subtitleTop).coerceAtLeast(0), MeasureSpec.AT_MOST)
         subtitle.measure(columnSpec, subtitleHeight)
         textColumnHeight = title.measuredHeight + subtitleTop + subtitle.measuredHeight
-        bodyHeight = maxOf(textColumnHeight, trailing?.measuredHeight ?: 0) + top + bottom
+        bodyHeight = if (timestampBelow) {
+            val timestampGap = minOf(dp(4), (innerHeight - textColumnHeight).coerceAtLeast(0))
+            val timestampHeightSpec = if (maxHeight == Int.MAX_VALUE) textHeightSpec else
+                MeasureSpec.makeMeasureSpec((innerHeight - textColumnHeight - timestampGap).coerceAtLeast(0),
+                    MeasureSpec.AT_MOST)
+            timestamp.measure(MeasureSpec.makeMeasureSpec(innerWidth, MeasureSpec.AT_MOST), timestampHeightSpec)
+            textColumnHeight + timestampGap + timestamp.measuredHeight + top + bottom
+        } else maxOf(textColumnHeight, trailing?.measuredHeight ?: 0) + top + bottom
         setMeasuredDimension(resolveSize(width, widthMeasureSpec), resolveSize(maxOf(leading.measuredHeight, bodyHeight), heightMeasureSpec))
         measureRole()
     }
@@ -684,12 +697,16 @@ private class RecordingRowBody(context: Context, initial: ReverbEnvironment) : R
         val textStart = leading.measuredWidth
         val bodyTop = center(height, bodyHeight) + dp(12)
         val innerHeight = bodyHeight - dp(12) - dp(12)
-        val columnTop = bodyTop + center(innerHeight, textColumnHeight)
+        val columnTop = if (timestampBelow) bodyTop else bodyTop + center(innerHeight, textColumnHeight)
         place(title, textStart, columnTop)
         place(subtitle, textStart, columnTop + textColumnHeight - subtitle.measuredHeight)
         (trailingContent ?: timestamp.takeIf { it.visibility != GONE })?.let { trailing ->
-            place(trailing, width - dp(14) - trailing.measuredWidth,
-                bodyTop + center(innerHeight, trailing.measuredHeight))
+            if (timestampBelow) {
+                place(trailing, textStart, bodyTop + innerHeight - trailing.measuredHeight)
+            } else {
+                place(trailing, width - dp(14) - trailing.measuredWidth,
+                    bodyTop + center(innerHeight, trailing.measuredHeight))
+            }
         }
         layoutRole()
         measured()
