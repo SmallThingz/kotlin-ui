@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Path
 import android.os.Build
 import android.view.View
+import android.view.ViewGroup
 import android.view.Window
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -14,6 +15,8 @@ import androidx.core.graphics.Insets
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import smallthingz.ui.components.NativeMaterialButtonView
+import smallthingz.ui.reverb.onboarding.OnboardingFooterPresentation
+import smallthingz.ui.reverb.onboarding.ReverbOnboardingScreenHost
 import kotlin.math.roundToInt
 
 /**
@@ -28,9 +31,9 @@ class ReverbControlScreenFrame(
     theme: ReverbTheme,
     productHeader: View,
     settingsHeader: View,
-    controls: ScrollView,
+    private val controls: ScrollView,
     transcript: View,
-    onboarding: View,
+    private val onboarding: View,
     private val primaryAction: NativeMaterialButtonView,
 ) : LinearLayout(context), ReverbTextSurfaceScope {
     private val appearance = theme.appearance
@@ -48,10 +51,12 @@ class ReverbControlScreenFrame(
     val content = FrameLayout(context)
     val primaryActionDock = ReverbBottomActionDock(context, theme, primaryAction)
     private val transition = ReverbScreenTransition(content)
+    private var onboardingHost: ReverbOnboardingScreenHost? = null
+    private var onboardingPresentation: OnboardingFooterPresentation? = null
     private var safeInsets = Insets.NONE
     /** Remaining browser bottom inset; this frame owns left/top/right once. */
     val browserSafeInsets: Insets get() = Insets.of(0, 0, 0, safeInsets.bottom)
-    val isTransitionRunning: Boolean get() = transition.isRunning
+    val isTransitionRunning: Boolean get() = transition.isRunning || onboardingHost?.isTransitionRunning == true
     private val backdrop = appearance.backdrops.attachPage(this, theme.palette) { ReverbTextSurface.invalidate(this) }
     private val statusBarProtection = ReverbDesign.statusBarProtection(context)
     private val windowSurface = Path()
@@ -75,6 +80,48 @@ class ReverbControlScreenFrame(
         addView(content, LayoutParams(-1, 0, 1f))
         addView(primaryActionDock, row())
     }
+
+    /** Opt in to the complete shared footer. Rebinding replaces presentation, not page state. */
+    fun configureOnboardingFooter(theme: ReverbTheme, onBack: () -> Unit, onContinue: () -> Unit) {
+        val previous = onboardingHost
+        val page = previous?.pageArea ?: FrameLayout(context).apply {
+            (onboarding.parent as ViewGroup).removeView(onboarding)
+            addView(onboarding, FrameLayout.LayoutParams(-1, -1))
+        }
+        val index = previous?.let(content::indexOfChild) ?: content.childCount
+        if (previous != null) {
+            previous.close()
+            previous.removeView(page)
+            content.removeView(previous)
+        }
+        val next = ReverbOnboardingScreenHost(context, theme, page, 2, onBack, onContinue)
+        onboardingHost = next
+        content.addView(next, index, FrameLayout.LayoutParams(-1, -1))
+        bindOnboardingFooter(onboardingPresentation)
+    }
+
+    /** Null restores ordinary Settings/Home placement without recreating their scroll owner. */
+    fun bindOnboardingFooter(value: OnboardingFooterPresentation?) {
+        val host = onboardingHost ?: return
+        onboardingPresentation = value
+        val destination: ViewGroup = if (value != null) host.pageArea else content
+        if (controls.parent !== destination) {
+            (controls.parent as ViewGroup).removeView(controls)
+            destination.addView(controls, if (value != null) 0 else 1,
+                FrameLayout.LayoutParams(-1, -1))
+        }
+        if (value != null) {
+            controlsContent.setPaddingRelative(0, 0, 0, 0)
+            host.bind(value)
+        } else {
+            host.cancelTransition()
+            controlsContent.setPaddingRelative(dp(sections.sideInsetDp), dp(sections.stackedGapDp),
+                dp(sections.sideInsetDp), dp(sections.trailingInsetDp))
+        }
+        host.visibility = if (value != null) VISIBLE else GONE
+    }
+
+    fun closeOnboardingFooter() { onboardingHost?.close() }
 
     // The retained page backdrop is opaque, but the Home dock gutters are window cutouts.
     override fun isOpaque(): Boolean = false
@@ -120,16 +167,19 @@ class ReverbControlScreenFrame(
         transition.transitionTo(routeKey)
     }
 
-    fun cancelTransition() = transition.cancel()
+    fun cancelTransition() {
+        transition.cancel()
+        onboardingHost?.cancelTransition()
+    }
 
     override fun onWindowVisibilityChanged(visibility: Int) {
         super.onWindowVisibilityChanged(visibility)
-        if (visibility != VISIBLE) transition.cancel()
+        if (visibility != VISIBLE) cancelTransition()
     }
 
     override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
         super.onWindowFocusChanged(hasWindowFocus)
-        if (!hasWindowFocus) transition.cancel()
+        if (!hasWindowFocus) cancelTransition()
     }
 
     /** Reverb keeps status icons fixed over its protection; navigation follows the selected theme. */

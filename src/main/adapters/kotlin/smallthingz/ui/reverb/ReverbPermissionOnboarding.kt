@@ -189,6 +189,16 @@ open class ReverbPermissionOnboardingScreen(
         addView(NativeButtonTouchTarget(done), FrameLayout.LayoutParams(-2, -2, Gravity.END))
     }
     private val label = continueLabel
+    private var externalFooter = false
+
+    /** A containing Reverb onboarding host owns the whole footer and outer page spacing. */
+    fun useExternalFooter() {
+        if (externalFooter) return
+        externalFooter = true
+        done.cancelInput()
+        removeView(footer)
+        requestLayout()
+    }
 
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -213,11 +223,17 @@ open class ReverbPermissionOnboardingScreen(
     override fun onMeasure(w: Int, h: Int) {
         val width = MeasureSpec.getSize(w)
         val height = MeasureSpec.getSize(h)
-        geometry.measure(width, height, Rect(), page, footer)
+        if (externalFooter) {
+            page.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY))
+        } else geometry.measure(width, height, Rect(), page, footer)
         setMeasuredDimension(resolveSize(width, w), resolveSize(height, h))
     }
 
-    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) = geometry.layout(page, footer)
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        if (externalFooter) page.layout(0, 0, r - l, b - t)
+        else geometry.layout(page, footer)
+    }
     override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
         if (!hasWindowFocus) cancelPendingInputEvents()
         super.onWindowFocusChanged(hasWindowFocus)
