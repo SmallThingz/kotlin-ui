@@ -2,6 +2,7 @@ package smallthingz.ui.components
 
 import android.animation.ValueAnimator
 import android.app.Activity
+import android.content.pm.ApplicationInfo
 import android.os.Looper
 import android.view.View
 import android.view.Gravity
@@ -35,9 +36,16 @@ class NativePageTransitionPanelsTest {
     private fun animator(motion: NativePageTransition.Panels): ValueAnimator =
         ReflectionHelpers.getField(motion, "animator")
 
-    private fun withPanels(edge: Int = Gravity.BOTTOM, pager: Boolean = false, block: (FrameLayout, FrameLayout, FrameLayout, NativePageTransition.Panels) -> Unit) {
+    private fun withPanels(edge: Int = Gravity.BOTTOM, pager: Boolean = false, rtl: Boolean = false, block: (FrameLayout, FrameLayout, FrameLayout, NativePageTransition.Panels) -> Unit) {
         val controller = Robolectric.buildActivity(Activity::class.java).setup().visible()
-        val host = FrameLayout(controller.get())
+        val applicationInfo = controller.get().applicationInfo
+        val previousFlags = applicationInfo.flags
+        // The library's empty test manifest does not enable RTL. Opt the fixture in before
+        // creating its Views, as the consuming application's manifest does in production.
+        if (rtl) applicationInfo.flags = previousFlags or ApplicationInfo.FLAG_SUPPORTS_RTL
+        val host = FrameLayout(controller.get()).apply {
+            layoutDirection = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+        }
         val first = FrameLayout(controller.get())
         val next = FrameLayout(controller.get()).apply { visibility = View.GONE }
         host.addView(first, FrameLayout.LayoutParams(-1, -1))
@@ -71,6 +79,7 @@ class NativePageTransitionPanelsTest {
             controller.pause().stop().destroy()
             shadowOf(Looper.getMainLooper()).idle()
             setScale.invoke(null, previousScale)
+            applicationInfo.flags = previousFlags
         }
     }
 
@@ -384,8 +393,8 @@ class NativePageTransitionPanelsTest {
         assertEquals(2, host.childCount)
     }
 
-    @Test fun endPanelUsesLogicalEndInRtlAndSharesTheReverseProgress() = withPanels(Gravity.END) { host, first, next, motion ->
-        host.layoutDirection = View.LAYOUT_DIRECTION_RTL
+    @Test fun endPanelUsesLogicalEndInRtlAndSharesTheReverseProgress() = withPanels(Gravity.END, rtl = true) { host, first, next, motion ->
+        assertEquals("Fixture must resolve RTL before testing END geometry", View.LAYOUT_DIRECTION_RTL, host.layoutDirection)
         motion.show(next, first, NativePageTransition.Direction.FORWARD)
         assertEquals(-360f, next.translationX, 0f)
         assertEquals(0f, next.translationY, 0f)
