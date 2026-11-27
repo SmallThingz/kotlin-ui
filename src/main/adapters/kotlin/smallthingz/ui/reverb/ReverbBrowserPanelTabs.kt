@@ -438,6 +438,26 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private var theme
         // inherit that surface's pointer clip, which rejects its outer finger corner.
         private val cardContent = object : FrameLayout(context) {
             private val headerBounds = Rect()
+            override fun onMeasure(w: Int, h: Int) {
+                // Theme density can change while keyed cards remain attached. Refresh the
+                // actual owner and the SELECT reservation together, before either is measured.
+                // A refreshed icon inside a construction-time pixel slot can otherwise be
+                // clipped below its 48dp target or leave a stale oversized exclusion beside X.
+                val target = dp(48)
+                val closeParams = close.layoutParams as FrameLayout.LayoutParams
+                if (closeParams.width != target || closeParams.height != target) {
+                    closeParams.width = target
+                    closeParams.height = target
+                    close.layoutParams = closeParams
+                }
+                val rowParams = row.layoutParams as FrameLayout.LayoutParams
+                if (rowParams.marginEnd != target) {
+                    rowParams.marginEnd = target
+                    row.layoutParams = rowParams
+                }
+                header.minimumHeight = target
+                super.onMeasure(w, h)
+            }
             override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
                 super.onLayout(changed, l, t, r, b)
                 headerBounds.set(0, 0, header.width, header.height)
@@ -618,9 +638,8 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private var theme
             gesture.retireForAppearanceChange()
             row.bindTheme(theme)
             bindTitleGeometry(force = true)
-            surface.setSurfacePreset(theme.palette.surfacePreset)
-            surface.setPaletteImmediately(recipe.fillColor(theme.palette),
-                if (entry.current) theme.palette.primary else recipe.borderColor(theme.palette))
+            // Current-tab identity is announced by row stateDescription, not a brighter outline.
+            recipe.bindImmediately(surface, theme.palette)
             close.visual.background = NativeForeground.foregroundBackground(theme.palette.pageControls)
             close.bind(environment, ReverbIcon.Close, entry.closeLabel, entry.enabled, theme.palette.muted, theme.palette.ink) {
                 dispatch(ReverbBrowserPanelTabAction.CLOSE, close.visual)
@@ -640,9 +659,7 @@ open class ReverbBrowserPanelTabs<Key : Any>(context: Context, private var theme
             }
             if (previous?.current != entry.current || previous.currentLabel != entry.currentLabel) {
                 ViewCompat.setStateDescription(row, entry.currentLabel.takeIf { entry.current })
-                surface.setSurfacePreset(theme.palette.surfacePreset)
-                surface.setPaletteImmediately(recipe.fillColor(theme.palette),
-                    if (entry.current) theme.palette.primary else recipe.borderColor(theme.palette))
+                recipe.bindImmediately(surface, theme.palette)
             }
             if (previous?.closeLabel != entry.closeLabel || previous.enabled != entry.enabled) {
                 close.bind(environment, ReverbIcon.Close, entry.closeLabel, entry.enabled, theme.palette.muted, theme.palette.ink) {
