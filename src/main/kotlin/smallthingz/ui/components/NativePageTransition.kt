@@ -225,10 +225,10 @@ object NativePageTransition {
             val start = presented ?: (baseline + if (direction == Direction.FORWARD) distance else 0f)
             val end = baseline + if (direction == Direction.FORWARD) 0f else distance
             incoming.visibility = View.VISIBLE
-            outgoing.visibility = View.GONE
             if (closed || !container.isLaidOut || container.height <= 0 || !container.isAttachedToWindow ||
                 !container.isShown || container.windowVisibility != View.VISIBLE ||
                 (!preview && !ValueAnimator.areAnimatorsEnabled())) {
+                outgoing.visibility = View.GONE
                 moving.offset = baseline
                 if (pager) other.offset = otherBaseline
                 if (!preview) onFinished() else {
@@ -237,6 +237,8 @@ object NativePageTransition {
                 }
                 return false
             }
+            // The outgoing root remains presented until settlement. A temporary GONE here
+            // needlessly invalidates layout and tells its retained descendants they were hidden.
             val oldAccessibility = outgoing.importantForAccessibility
             val oldFocusability = (outgoing as? ViewGroup)?.descendantFocusability
             outgoing.clearFocus()

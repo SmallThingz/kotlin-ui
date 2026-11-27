@@ -83,6 +83,42 @@ class NativePageTransitionPanelsTest {
         }
     }
 
+    @Test fun ordinaryEntryKeepsOutgoingDescendantsVisibleUntilSettlement() {
+        for (direction in NativePageTransition.Direction.entries) {
+            withPanels { host, first, next, motion ->
+                val incoming = if (direction == NativePageTransition.Direction.FORWARD) next else first
+                val outgoing = if (direction == NativePageTransition.Direction.FORWARD) first else next
+                incoming.visibility = View.GONE
+                outgoing.visibility = View.VISIBLE
+                val visibilityEvents = mutableListOf<Int>()
+                outgoing.addView(object : View(host.context) {
+                    override fun onVisibilityChanged(changedView: View, visibility: Int) {
+                        super.onVisibilityChanged(changedView, visibility)
+                        if (changedView === outgoing) visibilityEvents += visibility
+                    }
+                }, FrameLayout.LayoutParams(20, 20))
+                layout(host)
+                visibilityEvents.clear()
+                var completed = 0
+
+                motion.show(incoming, outgoing, direction) { completed++ }
+                animator(motion).currentPlayTime = 110L
+                assertTrue(motion.isRunning)
+                assertEquals(View.VISIBLE, outgoing.visibility)
+                assertTrue("Presented descendants must not receive a transient hide: $visibilityEvents",
+                    visibilityEvents.isEmpty())
+                assertEquals(0, completed)
+
+                animator(motion).end()
+                assertEquals(listOf(View.GONE), visibilityEvents)
+                assertEquals(View.GONE, outgoing.visibility)
+                assertEquals(View.VISIBLE, incoming.visibility)
+                assertEquals(1, completed)
+                assertEquals(2, host.childCount)
+            }
+        }
+    }
+
     @Test fun forwardCoversStationaryPredecessorAndBackLowersOnlyForeground() = withPanels { host, first, next, motion ->
         motion.show(next, first, NativePageTransition.Direction.FORWARD)
         assertTrue(motion.isRunning)
