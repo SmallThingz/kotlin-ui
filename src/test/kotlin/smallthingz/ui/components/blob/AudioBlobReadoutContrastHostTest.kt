@@ -30,8 +30,9 @@ import smallthingz.ui.text.font.createFontFamilyResolver
 import smallthingz.ui.text.view.ParagraphView
 import smallthingz.ui.unit.Density
 
+/** SDK 28 uses the production fallback renderer, which supports a bitmap Canvas. */
 @RunWith(RobolectricTestRunner::class)
-@Config(application = Application::class, sdk = [35], qualifiers = "en-mdpi")
+@Config(application = Application::class, sdk = [28], qualifiers = "en-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class AudioBlobReadoutContrastHostTest {
@@ -241,7 +242,10 @@ class AudioBlobReadoutContrastHostTest {
     private fun withSettledAnimations(test: () -> Unit) {
         val setScale = ValueAnimator::class.java.getDeclaredMethod("setDurationScale", Float::class.javaPrimitiveType)
             .apply { isAccessible = true }
-        val prior = ValueAnimator.getDurationScale()
+        // The getter is hidden in the Android 28 SDK but is present in the host runtime.
+        val getScale = ValueAnimator::class.java.getDeclaredMethod("getDurationScale")
+            .apply { isAccessible = true }
+        val prior = getScale.invoke(null) as Float
         setScale.invoke(null, 0f)
         try {
             assertFalse(ValueAnimator.areAnimatorsEnabled())
