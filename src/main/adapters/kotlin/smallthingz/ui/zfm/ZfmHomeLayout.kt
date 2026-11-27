@@ -4,14 +4,15 @@ import android.content.Context
 import android.graphics.drawable.Drawable
 import android.view.Gravity
 import android.view.View
-import android.view.ViewTreeObserver
+import androidx.core.view.OneShotPreDrawListener
 import android.widget.GridLayout
 import android.widget.ImageView
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
-import smallthingz.ui.components.NativeTopBarLayout
+import android.widget.Space
 import smallthingz.ui.components.NativeToolbarContentAction
-import smallthingz.ui.reverb.ReverbTopBarLayout
+import smallthingz.ui.reverb.ReverbTitledTopBarLayout
 import smallthingz.ui.reverb.ReverbScaffold
 import kotlin.math.roundToInt
 
@@ -23,7 +24,11 @@ class ZfmHomeLayout(
     settingsIcon: Drawable?,
     settingsLabel: String,
     onSettings: () -> Unit,
-    val header: ReverbTopBarLayout = ReverbTopBarLayout(context, theme.density.density, theme.colors),
+    private val settingsHost: FrameLayout = FrameLayout(context),
+    val header: ReverbTitledTopBarLayout = ReverbTitledTopBarLayout(context,
+        theme.density.density, theme.colors, Space(context), identity, settingsHost).apply {
+        contentClipView.measureCompactActionsNaturally = true
+    },
 ) : ReverbScaffold(context, header, theme.colors) {
     private val density = theme.density.density
     private fun dp(value: Int) = (value * density).roundToInt()
@@ -40,7 +45,6 @@ class ZfmHomeLayout(
     private var bottomFirst: Boolean? = null
 
     init {
-        header.addToolbarSlot(identity, NativeTopBarLayout.Slot.CENTER)
         val glyph = ImageView(context).apply {
             setImageDrawable(settingsIcon)
             setColorFilter(theme.ink)
@@ -52,7 +56,7 @@ class ZfmHomeLayout(
             density, 48f, theme.ink, standaloneAccessibility = true).apply {
             bindAction(density, 48f, theme.ink, onSettings)
         }
-        header.addToolbarSlot(settings, NativeTopBarLayout.Slot.END)
+        settingsHost.addView(settings, FrameLayout.LayoutParams(dp(48), dp(48)))
         setBody(LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             addView(contextualActions, LinearLayout.LayoutParams(-1, -2))
@@ -65,15 +69,10 @@ class ZfmHomeLayout(
         if (bottomFirst == bottomUp) return
         bottomFirst = bottomUp
         content.gravity = if (bottomUp) Gravity.BOTTOM else Gravity.TOP
-        val observer = scroll.viewTreeObserver
-        observer.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
-            override fun onPreDraw(): Boolean {
-                if (observer.isAlive) observer.removeOnPreDrawListener(this)
-                if (bottomFirst == bottomUp) scroll.scrollTo(0,
-                    if (bottomUp) (content.height - scroll.height).coerceAtLeast(0) else 0)
-                return true
-            }
-        })
+        OneShotPreDrawListener.add(scroll) {
+            if (bottomFirst == bottomUp) scroll.scrollTo(0,
+                if (bottomUp) (content.height - scroll.height).coerceAtLeast(0) else 0)
+        }
     }
 }
 
