@@ -27,10 +27,10 @@ import org.robolectric.util.ReflectionHelpers
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class NativePageTransitionPanelsTest {
-    private fun layout(host: FrameLayout) {
-        host.measure(View.MeasureSpec.makeMeasureSpec(360, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY))
-        host.layout(0, 0, 360, 600)
+    private fun layout(host: FrameLayout, width: Int = 360, height: Int = 600) {
+        host.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+        host.layout(0, 0, width, height)
     }
 
     private fun animator(motion: NativePageTransition.Panels): ValueAnimator =
@@ -249,6 +249,65 @@ class NativePageTransitionPanelsTest {
         assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_AUTO, next.importantForAccessibility)
         motion.close()
         assertEquals(1, finished)
+    }
+
+    @Test fun ordinaryResizeSettlesVerticalPanelsAndHorizontalPagerExactlyOnce() {
+        for (pager in listOf(false, true)) for (direction in NativePageTransition.Direction.entries) {
+            for ((width, height) in listOf(420 to 660, 300 to 540)) {
+                withPanels(if (pager) Gravity.END else Gravity.BOTTOM, pager = pager) { host, first, next, motion ->
+                    fun offset(view: View) = if (pager) view.translationX else view.translationY
+                    if (pager) { first.translationX = 3f; next.translationX = 7f }
+                    else { first.translationY = 3f; next.translationY = 7f }
+                    val incoming = if (direction == NativePageTransition.Direction.FORWARD) next else first
+                    val outgoing = if (direction == NativePageTransition.Direction.FORWARD) first else next
+                    incoming.visibility = View.GONE
+                    outgoing.visibility = View.VISIBLE
+                    outgoing.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+                    outgoing.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+                    var cleanups = 0
+                    // No app preview wrapper/listener: Panels must own ordinary resize settlement.
+                    motion.show(incoming, outgoing, direction) {
+                        cleanups++
+                        assertFalse(motion.isRunning)
+                        host.removeView(outgoing)
+                    }
+                    val retired = animator(motion)
+                    retired.currentPlayTime = 110L
+                    assertTrue(motion.isRunning)
+                    assertEquals(3, host.childCount)
+                    val firstPose = offset(first)
+                    val nextPose = offset(next)
+                    // A position-only layout must not settle motion or retire its reversal target.
+                    host.layout(8, 12, 368, 612)
+                    assertSame(retired, animator(motion))
+                    assertEquals(firstPose, offset(first), .001f)
+                    assertEquals(nextPose, offset(next), .001f)
+                    assertEquals(0, cleanups)
+
+                    layout(host, width, height)
+                    assertEquals(1, cleanups)
+                    assertFalse(motion.isRunning)
+                    assertFalse(motion.owns(first) || motion.owns(next))
+                    assertEquals(3f, offset(first), 0f)
+                    assertEquals(7f, offset(next), 0f)
+                    assertEquals(View.VISIBLE, incoming.visibility)
+                    assertEquals(View.GONE, outgoing.visibility)
+                    assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_YES, outgoing.importantForAccessibility)
+                    assertEquals(ViewGroup.FOCUS_AFTER_DESCENDANTS, outgoing.descendantFocusability)
+                    assertNull(outgoing.parent)
+                    assertSame(host, incoming.parent)
+                    assertEquals(1, host.childCount) // departed root and input shield both released
+                    retired.end()
+                    layout(host, 360, 600)
+                    motion.cancel()
+                    motion.close()
+                    assertEquals(1, cleanups)
+                    assertEquals(3f, offset(first), 0f)
+                    assertEquals(7f, offset(next), 0f)
+                    assertEquals(1, host.childCount)
+                }
+            }
+        }
     }
 
     @Test fun disabledAnimationsSettleBothDirectionsWithoutAShield() = withPanels { host, first, next, motion ->
