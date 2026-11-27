@@ -1,6 +1,7 @@
 package smallthingz.ui.gallery
 
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Rect
 import android.view.View
 import android.view.ViewGroup
@@ -13,6 +14,17 @@ import kotlin.math.roundToInt
 open class GalleryHealControlsLayout(context: Context) : LinearLayout(context) {
     private var pendingDecisionPlacement: OneShotPreDrawListener? = null
     private var attachmentGeneration = 0
+
+    /** The app owns phase/admission; the enclosing scroll view owns viewport measurement. */
+    var selectionViewportState = GalleryHealViewportState.Natural
+        set(value) {
+            if (field == value) return
+            field = value
+            if (value != GalleryHealViewportState.Retained) selectionViewportEpoch++
+            requestLayout()
+        }
+    internal var selectionViewportEpoch = 0L
+        private set
 
     var reservedDecisionGroup: GalleryHealDecisionGroup? = null
     /** Retained status row; placement changes neither its text nor accessibility identity. */
@@ -119,5 +131,64 @@ class GalleryHealScrollEndInset(private val body: View) : AutoCloseable {
         if (closed) return
         refresh(false)
         closed = true
+    }
+}
+
+/** Natural content remains scrollable when an owned Heal job returns a longer error. */
+enum class GalleryHealViewportState { Natural, Selecting, Retained }
+
+/** Retains only an intrinsic portrait viewport, never the error body's measured height. */
+open class GalleryHealControlsScrollView(context: Context) : ScrollView(context) {
+    var healControls: GalleryHealControlsLayout? = null
+        set(value) {
+            if (field === value) return
+            field = value
+            selectingHeight = 0
+            requestLayout()
+        }
+    private var selectingHeight = 0
+    private var measuredWidthSpec = 0
+    private var measuredDirection = -1
+    private var measuredPadding = Rect()
+    private var measuredEpoch = -1L
+    private val measuredConfiguration = Configuration()
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val controls = healControls
+        if (controls == null) {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            return
+        }
+        val configuration = resources.configuration
+        val state = controls.selectionViewportState
+        val padding = Rect(paddingLeft, paddingTop, paddingRight, paddingBottom)
+        val intrinsicPortrait = !isFillViewport &&
+            configuration.screenWidthDp <= configuration.screenHeightDp &&
+            MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED &&
+            MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.AT_MOST
+        if (!intrinsicPortrait || state == GalleryHealViewportState.Natural ||
+            measuredWidthSpec != widthMeasureSpec || measuredDirection != layoutDirection ||
+            measuredPadding != padding || measuredConfiguration != configuration ||
+            measuredEpoch != controls.selectionViewportEpoch) selectingHeight = 0
+        measuredWidthSpec = widthMeasureSpec
+        measuredDirection = layoutDirection
+        measuredPadding = padding
+        measuredConfiguration.setTo(configuration)
+        measuredEpoch = controls.selectionViewportEpoch
+        val retained = if (intrinsicPortrait && state == GalleryHealViewportState.Retained)
+            selectingHeight else 0
+        // A real height constraint clamps this viewport without replacing the baseline.
+        // ScrollView still measures the body naturally; error text and Details can scroll.
+        val boundedHeight = if (retained > 0) MeasureSpec.makeMeasureSpec(
+            minOf(retained, MeasureSpec.getSize(heightMeasureSpec)), MeasureSpec.EXACTLY)
+            else heightMeasureSpec
+        super.onMeasure(widthMeasureSpec, boundedHeight)
+        if (intrinsicPortrait && state == GalleryHealViewportState.Selecting)
+            selectingHeight = measuredHeight
+    }
+
+    override fun onDetachedFromWindow() {
+        selectingHeight = 0
+        super.onDetachedFromWindow()
     }
 }
