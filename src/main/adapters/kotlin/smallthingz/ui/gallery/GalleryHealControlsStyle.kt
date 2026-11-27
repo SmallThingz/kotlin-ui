@@ -18,7 +18,8 @@ import kotlin.math.roundToInt
 
 /** Gallery-owned Heal appearance; selection metrics and action targets stay native. */
 object GalleryHealControlsStyle {
-    /** Fixed separation outside scrolling content, before the existing category divider.
+    /** Fixed clearance outside scrolling content, including a panel ending at the window edge.
+     * The historical category-bar name also covers the single-bar editor without a category dock.
      * Apply after attaching the Heal viewport to its vertical controls parent. Natural
      * parent measurement budgets this margin; never inset/clip the button or auto-scroll.
      * This owns the viewport's bottom margin for that panel's lifetime; repeated binding
@@ -39,6 +40,10 @@ object GalleryHealControlsStyle {
         selectedTextStyle = GalleryDesign.textStyle(NativeTypographyRole.LABEL_LARGE).copy(weight = 600),
         selectedFill = false, selectedOutlined = true, unselectedOutlined = false,
         normalTextRole = NativeTextRole.MUTED, selectedTextRole = NativeTextRole.CONTENT)
+
+    /** Retain the native checked toggle and 48dp target with a centered common eye glyph. */
+    val maskIconChoice = preparationChoice.copy(horizontalPaddingDp = 12f,
+        verticalPaddingDp = 8f, iconSizeDp = 24f, iconGapDp = 0f, iconAbove = true)
 
     val comparisonChoice = preparationChoice.copy(outlined = true, unselectedOutlined = true, selectedFill = true,
         normalTextRole = NativeTextRole.CONTENT, selectedTextRole = null)
