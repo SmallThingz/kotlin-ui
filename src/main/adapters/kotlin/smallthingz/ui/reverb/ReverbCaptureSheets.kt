@@ -25,6 +25,12 @@ class ReverbTextSheet(
     init {
         dialog.setContent(body, actions, listOf(actions.hitLayout), scrollable = true)
     }
+
+    /** Opt into guarding footer actions from the start of a committed dismissal. Call before [show]. */
+    fun guardActionsDuringDismissal() {
+        dialog.setAnimateCloseButton(true)
+    }
+
     fun show() = dialog.show()
     fun bind(title: String, message: String, next: ReverbTheme, onDismiss: () -> Unit) {
         if (closed) return

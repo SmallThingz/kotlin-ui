@@ -13,6 +13,8 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.TypedValue
+import android.view.InputDevice
+import android.view.MotionEvent
 import android.view.PixelCopy
 import android.view.View
 import android.view.ViewConfiguration
@@ -271,9 +273,9 @@ class NativeScrollIndicatorDrawTest {
                 assertTrue("Dragging to the middle bound ${rows.binds - before} rows", rows.binds - before < 24)
 
                 val beforeEnd = rows.binds
-                assertTrue(pointer(120f, 48f, pressed = true, previouslyPressed = true))
                 rows.prependRow()
-                assertTrue(pointer(120f, 120f, pressed = false, previouslyPressed = true))
+                // The endpoint coordinate arrives on UP without an intervening MOVE.
+                assertTrue(pointer(92f, 48f, pressed = false, previouslyPressed = true))
                 assertFalse(list.isScrollIndicatorDragging)
                 assertTrue(list.hasPendingScrollIndicatorPlacement)
                 layout(list, 120, 96)
@@ -290,6 +292,30 @@ class NativeScrollIndicatorDrawTest {
                 assertFalse(list.canScrollVertically(-1))
                 assertTrue(pointer(-24f, -24f, pressed = false, previouslyPressed = true))
                 assertThumb(list, Rect(116, 0, 118, 24))
+
+                assertTrue(pointer(12f, 12f, pressed = true, previouslyPressed = false))
+                assertTrue(pointer(48f, 12f, pressed = true, previouslyPressed = true))
+                assertTrue(list.hasPendingScrollIndicatorPlacement)
+                val now = SystemClock.uptimeMillis()
+                val properties = Array(2) { id ->
+                    MotionEvent.PointerProperties().apply { this.id = id; toolType = MotionEvent.TOOL_TYPE_FINGER }
+                }
+                val coords = Array(2) { index ->
+                    MotionEvent.PointerCoords().apply { x = 110f; y = if (index == 0) 92f else 48f }
+                }
+                val canceledLift = MotionEvent.obtain(now, now, MotionEvent.ACTION_POINTER_UP, 2, properties,
+                    coords, 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, MotionEvent.FLAG_CANCELED)
+                try {
+                    node.bindMotion(canceledLift, null, 1)
+                    assertTrue(pointer(92f, 48f, pressed = false, previouslyPressed = true))
+                } finally {
+                    node.bindMotion(null, null, 0)
+                    canceledLift.recycle()
+                }
+                assertFalse(list.isScrollIndicatorDragging)
+                assertFalse(list.hasPendingScrollIndicatorPlacement)
+                layout(list, 120, 96)
+                assertFalse(list.canScrollVertically(-1))
 
                 assertTrue(pointer(12f, 12f, pressed = true, previouslyPressed = false))
                 assertTrue(pointer(120f, 12f, pressed = true, previouslyPressed = true))

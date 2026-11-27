@@ -39,6 +39,7 @@ open class NativeToggleRow internal constructor(
     private var leadingIcon: View? = null
     private var leadingWidth = 0
     private var closed = false
+    private var switchReady = false
 
     init {
         for (child in text) {
@@ -59,6 +60,7 @@ open class NativeToggleRow internal constructor(
                 }.joinToString("\n")
             }
         }
+        switchReady = true
     }
 
     override fun accessibilityChildren(): List<View> = text.filter { it.visibility == VISIBLE }
@@ -92,9 +94,17 @@ open class NativeToggleRow internal constructor(
             this.density = density
             requestLayout()
         }
-        bindRow(enabled, ink, checked)
         switch.setPalette(colors)
         switch.setState(checked, enabled)
+        bindRow(enabled, ink, checked)
+    }
+
+    override fun setEnabled(enabled: Boolean) {
+        super.setEnabled(enabled)
+        // View construction can call the setter before this row has installed its mark.
+        if (switchReady && switch.isEnabled != rowInputEnabled) {
+            switch.isEnabled = rowInputEnabled
+        }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
