@@ -1,13 +1,58 @@
 package smallthingz.ui.components
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import smallthingz.ui.R
 
 class NativeDarkSurfacesTest {
     private val base = NativeColorScheme.fallback(true)
     private val blue = 0xff6682dc.toInt()
+
+    @Test fun darkSurfaceTransformsDiscardResolvedLightPopupPaint() {
+        val light = defaultLight()
+        assertEquals(0xffffffff.toInt(), light.popupFill)
+        for (style in NativeDarkSurfaces.values()) {
+            val actual = light.withDarkSurfaces(style)
+            val withoutLightPopup = light.copy(popupFillOverride = null).withDarkSurfaces(style)
+            assertEquals("Only the replaced popup policy differs before this fix: $style", withoutLightPopup, actual)
+            assertNull(actual.popupFillOverride)
+            assertEquals(withoutLightPopup.popupFill, actual.popupFill)
+            assertSame(light.surfacePreset, actual.surfacePreset)
+            assertEquals(light.primary, actual.primary)
+            assertEquals(light.onSurface, actual.onSurface)
+        }
+        val amoled = light.withDarkSurfaces(NativeDarkSurfaces.AMOLED)
+        assertEquals(0xff000000.toInt(), amoled.field)
+        assertEquals(0xff0a0a0a.toInt(), amoled.popupFill)
+    }
+
+    @Test fun lightResolverPassThroughAndGrainOnlyCopiesKeepResolvedPopupPaint() {
+        val light = defaultLight()
+        val resolver = NativeColorSchemeResolver { _, _, _ -> light }
+            .withDarkSurfaces(NativeDarkSurfaces.AMOLED)
+        assertSame(light, resolver.resolve(false, 28) { error("Unused") })
+        assertEquals(light.popupFill, resolver.resolve(false, 28) { error("Unused") }.popupFill)
+        assertNull(resolver.resolve(true, 28) { error("Unused") }.popupFillOverride)
+        val flat = light.copy(surfacePreset = NativeGrainPreset(0f, 0f))
+        assertEquals(light.popupFillOverride, flat.popupFillOverride)
+        assertEquals(light.popupFill, flat.popupFill)
+        assertEquals(light, light.copy(surfacePreset = NativeGrainPreset(.22f, .20f)))
+        val material = NativeColorScheme.resolve(false, 28) { error("No fallback resources") }
+        assertSame(NativeColorScheme.fallback(false), material)
+        assertNull(material.popupFillOverride)
+    }
+
+    private fun defaultLight() = NativeDefaultColorScheme.resolve(false, 28) { id ->
+        when (id) {
+            R.color.native_default_light_background -> 0xfff6f6f6.toInt()
+            R.color.native_default_light_foreground -> 0xfffcfcfc.toInt()
+            R.color.native_default_light_popup -> 0xffffffff.toInt()
+            else -> error("Unexpected resource $id")
+        }
+    }
 
     @Test fun amoledKeepsSurfaceFillsAndElevationOverlayBlack() {
         val colors = base.withDarkSurfaces(NativeDarkSurfaces.AMOLED)

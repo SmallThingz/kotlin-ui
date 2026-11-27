@@ -3,6 +3,7 @@ package smallthingz.ui.components
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
+import smallthingz.ui.R
 import smallthingz.ui.graphics.NoiseDrawable
 import smallthingz.ui.reverb.ReverbDesign
 import smallthingz.ui.reverb.reverbActionSheetStyle
@@ -53,12 +54,19 @@ class NativeModalDefaultSurfaceTest {
     @Test fun defaultPopupIsDistinctFromBothOtherMaterialsAndUsesForegroundGrain() {
         val recipe = NativeAnchoredMenuRecipe.Default
         for (dark in listOf(false, true)) {
-            val palette = NativeDefaultColorScheme.resolve(dark, 30) { 0xfff4eaf5.toInt() }
+            val palette = NativeDefaultColorScheme.resolve(dark, 30) { id ->
+                when (id) {
+                    R.color.native_default_light_background -> 0xfff6f6f6.toInt()
+                    R.color.native_default_light_foreground -> 0xfffcfcfc.toInt()
+                    R.color.native_default_light_popup -> 0xffffffff.toInt()
+                    else -> error("Unexpected resource $id")
+                }
+            }
             val fill = recipe.surfaceColor(palette)
             assertNotEquals(palette.background, fill)
             assertNotEquals(palette.surfaceContainerHigh, fill)
             assertEquals(fill, recipe.colors(palette).raised)
-            assertEquals(.5f, recipe.colors(palette).grainIntensity, 0f)
+            assertEquals(if (dark) .5f else .20f, recipe.colors(palette).grainIntensity, 0f)
             assertEquals(fill, NativeBufferSegmentStyle().fill(palette, selected = false, recording = true, filled = false))
         }
     }

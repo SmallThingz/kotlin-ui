@@ -71,6 +71,8 @@ fun NativeColorScheme.withDarkSurfaces(
         surfaceContainerHighest = foreground(57, 50),
         surfaceContainerLow = foreground(34, 29),
         surfaceContainerLowest = foreground(19, 15),
+        // A resolved popup belongs to the replaced surface roles, not the new dark treatment.
+        popupFillOverride = null,
     )
 }
 
