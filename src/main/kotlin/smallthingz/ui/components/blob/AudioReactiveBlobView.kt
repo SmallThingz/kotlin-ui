@@ -55,6 +55,8 @@ class AudioReactiveBlobView(
     private var materialPaused = 0
     private var readoutRadiusPixels = 0f
     private var readoutBackground = 0
+    private var readoutPrefersBackdropInk = false
+    private var readoutBackdropUsesDarkInk = false
     private var readoutAgslMin = 0f
     private var readoutAgslMax = 1f
     private var readoutFallbackMin = 0f
@@ -62,11 +64,23 @@ class AudioReactiveBlobView(
 
     fun updateReadoutGeometry(radiusPixels: Float, background: Int, agslMin: Float = 0f, agslMax: Float = 1f,
         fallbackMin: Float = 0f, fallbackMax: Float = 1f) {
+        updateReadoutGeometry(radiusPixels, background, agslMin, agslMax, fallbackMin, fallbackMax,
+            prefersBackdropInk = false)
+    }
+
+    internal fun updateReadoutGeometry(radiusPixels: Float, background: Int, agslMin: Float, agslMax: Float,
+        fallbackMin: Float, fallbackMax: Float, prefersBackdropInk: Boolean) {
         if (readoutRadiusPixels == radiusPixels && readoutBackground == background &&
+            readoutPrefersBackdropInk == prefersBackdropInk &&
             readoutAgslMin == agslMin && readoutAgslMax == agslMax &&
             readoutFallbackMin == fallbackMin && readoutFallbackMax == fallbackMax) return
         readoutRadiusPixels = radiusPixels
-        readoutBackground = background
+        if (readoutBackground != background) {
+            // Black and white offer equal contrast at this backdrop luminance.
+            readoutBackdropUsesDarkInk = audioBlobMaterialLuminance(background) >= .179
+            readoutBackground = background
+        }
+        readoutPrefersBackdropInk = prefersBackdropInk
         readoutAgslMin = agslMin
         readoutAgslMax = agslMax
         readoutFallbackMin = fallbackMin
@@ -126,10 +140,14 @@ class AudioReactiveBlobView(
     fun readoutUsesDarkInk(): Boolean = resolveReadoutInkAndSupport() and 1 != 0
 
     private fun resolveReadoutInkAndSupport(): Int {
-        var darkInk = audioBlobUsesDarkInk(materialPrimary, materialTertiary, materialPaused, currentLife,
-            currentPresence, currentSilence, renderer is FallbackRenderer)
+        var darkInk = if (readoutPrefersBackdropInk) {
+            readoutBackdropUsesDarkInk
+        } else {
+            audioBlobUsesDarkInk(materialPrimary, materialTertiary, materialPaused, currentLife,
+                currentPresence, currentSilence, renderer is FallbackRenderer)
+        }
         var supportNeeded = readoutNeedsSupport(darkInk)
-        if (supportNeeded && !readoutNeedsSupport(!darkInk)) {
+        if (!readoutPrefersBackdropInk && supportNeeded && !readoutNeedsSupport(!darkInk)) {
             darkInk = !darkInk
             supportNeeded = false
         }

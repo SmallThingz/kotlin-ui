@@ -15,6 +15,7 @@ import android.graphics.drawable.Drawable
 import android.view.View
 import android.view.ViewGroup
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -61,6 +62,10 @@ class NativeAudioBlobReadout(
     private var readoutMaskWidth = 0
     private var readoutMaskHeight = 0
     private var readoutEdgeExtent = 0f
+    private var supportViewportCenterX = 0f
+    private var supportViewportCenterY = 0f
+    private var supportViewportRadius = -1f // No renderer geometry supplied yet.
+    private var readoutPrefersBackdropInk = false
     private var radialReadoutShader: Shader? = null
     private var boundedReadoutShader: Shader? = null
     private var readoutLayoutRevision = 0
@@ -164,7 +169,8 @@ class NativeAudioBlobReadout(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (!materialNeedsSupport || (!active && !materialTransitioning) || (filled && !materialTransitioning) || readoutOuterRadius <= 0f || readoutPaint.alpha == 0) return
+        if (!materialNeedsSupport || (!active && !materialTransitioning) || (filled && !materialTransitioning) ||
+            supportViewportRadius == 0f || readoutOuterRadius <= 0f || readoutPaint.alpha == 0) return
         if (materialTransitioning) {
             // A broad, diffuse correction follows the changing material without a rectangular plate.
             canvas.drawCircle(readoutCenterX, readoutCenterY, readoutOuterRadius, readoutPaint)
@@ -192,11 +198,18 @@ class NativeAudioBlobReadout(
     fun updateMaterialGeometry(renderer: AudioReactiveBlobView, background: Int) {
         val canvasWidth = renderer.width
         val canvasHeight = renderer.height
+        val viewportChanged = updateSupportViewport(renderer.left - left + canvasWidth * .5f,
+            renderer.top - top + canvasHeight * .5f, minOf(canvasWidth, canvasHeight) * .495f)
         if (readoutLayoutRevision == 0 || width <= 0 || height <= 0 || canvasWidth <= 0 || canvasHeight <= 0) {
             renderer.updateReadoutGeometry(0f, background)
             return
         }
-        if (projectedLayoutRevision != readoutLayoutRevision || projectedWidth != canvasWidth || projectedHeight != canvasHeight) {
+        if (viewportChanged || projectedLayoutRevision != readoutLayoutRevision ||
+            projectedWidth != canvasWidth || projectedHeight != canvasHeight) {
+            val solidRadius = supportViewportRadius - supportViewportFeatherWidth()
+            // Where the correction fades, the surrounding surface must carry the readout ink.
+            readoutPrefersBackdropInk = supportReachesViewport() &&
+                readoutCornerDistanceSquared(supportViewportCenterX, supportViewportCenterY) > solidRadius * solidRadius
             val minSize = minOf(canvasWidth, canvasHeight).toFloat()
             val w = canvasWidth.toFloat()
             val h = canvasHeight.toFloat()
@@ -227,7 +240,7 @@ class NativeAudioBlobReadout(
             projectedHeight = canvasHeight
         }
         renderer.updateReadoutGeometry(readoutFootprintRadius(), background,
-            agslGradientMin, agslGradientMax, fallbackGradientMin, fallbackGradientMax)
+            agslGradientMin, agslGradientMax, fallbackGradientMin, fallbackGradientMax, readoutPrefersBackdropInk)
     }
 
     private fun updateReadoutGeometry() {
@@ -258,6 +271,23 @@ class NativeAudioBlobReadout(
         rebuildReadoutShader()
     }
 
+    private fun supportReachesViewport(): Boolean = supportViewportRadius > 0f &&
+        readoutOuterRadius + hypot(readoutCenterX - supportViewportCenterX,
+            readoutCenterY - supportViewportCenterY) > supportViewportRadius
+
+    private fun supportViewportFeatherWidth(): Float = minOf(8f * textDensity.density, supportViewportRadius * .10f)
+
+    private fun updateSupportViewport(centerX: Float, centerY: Float, radius: Float): Boolean {
+        if (supportViewportCenterX == centerX && supportViewportCenterY == centerY &&
+            supportViewportRadius == radius) return false
+        val wasConstrained = supportReachesViewport()
+        supportViewportCenterX = centerX
+        supportViewportCenterY = centerY
+        supportViewportRadius = radius
+        if (wasConstrained || supportReachesViewport()) rebuildReadoutShader()
+        return true
+    }
+
     private fun rebuildReadoutShader() {
         if (readoutOuterRadius <= 0f) return
         val coreFraction = readoutCoreRadius / readoutOuterRadius
@@ -272,6 +302,19 @@ class NativeAudioBlobReadout(
         }
         val radial = RadialGradient(readoutCenterX, readoutCenterY, readoutOuterRadius,
             colors, stops, Shader.TileMode.CLAMP)
+        val support = if (supportReachesViewport()) {
+            // On a short surface the readout's field can be larger than the renderer. Keep its
+            // inner correction and fade to transparent before a rectangular layer can cut it off.
+            // The inner 90% includes even the renderer's fully extended audible body.
+            val radius = supportViewportRadius
+            val fringe = supportViewportFeatherWidth() / radius
+            val viewportMask = RadialGradient(supportViewportCenterX, supportViewportCenterY, radius,
+                intArrayOf(Color.WHITE, Color.WHITE, 0xd7ffffff.toInt(), 0x80ffffff.toInt(),
+                    0x28ffffff, 0x00ffffff),
+                floatArrayOf(0f, 1f - fringe, 1f - fringe * .75f, 1f - fringe * .5f,
+                    1f - fringe * .25f, 1f), Shader.TileMode.CLAMP)
+            ComposeShader(radial, viewportMask, PorterDuff.Mode.DST_IN)
+        } else radial
         // The enclosing circle contains empty space far beyond the glyphs. Confine its correction
         // to the measured readout plus a smooth fringe, so energetic concavities get no gray halo.
         val margin = 2f * textDensity.density
@@ -296,8 +339,8 @@ class NativeAudioBlobReadout(
             maskColors, horizontalStops, Shader.TileMode.CLAMP)
         val vertical = LinearGradient(0f, -readoutEdgeExtent, 0f, readoutMaskHeight + readoutEdgeExtent,
             maskColors, verticalStops, Shader.TileMode.CLAMP)
-        radialReadoutShader = radial
-        boundedReadoutShader = ComposeShader(ComposeShader(radial, horizontal, PorterDuff.Mode.DST_IN),
+        radialReadoutShader = support
+        boundedReadoutShader = ComposeShader(ComposeShader(support, horizontal, PorterDuff.Mode.DST_IN),
             vertical, PorterDuff.Mode.DST_IN)
         readoutPaint.shader = if (materialTransitioning) radialReadoutShader else boundedReadoutShader
         invalidate()
