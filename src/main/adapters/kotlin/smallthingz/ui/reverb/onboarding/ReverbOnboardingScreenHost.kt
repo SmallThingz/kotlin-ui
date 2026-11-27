@@ -29,6 +29,7 @@ class ReverbOnboardingScreenHost(
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         addView(pageArea)
+        footer.enableStandaloneAndroidAccessibility()
         footer.filterTouchesWhenObscured = true
         addView(footer)
     }

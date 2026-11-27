@@ -65,6 +65,16 @@ class OnboardingFooterView(
     constructor(context: Context, environment: ReverbEnvironment, inputRoot: () -> View?) :
         this(context, environment.theme.controlTheme, 3, NativeButtonInputPolicy(inputRoot))
 
+    /** Opt in when native Android Views own accessibility instead of a source-window cursor.
+     * Explicit input roots/revision guards remain unchanged. Source geometry, when bound,
+     * continues to take precedence; Reverb's source-owned consumers do not call this method.
+     */
+    fun enableStandaloneAndroidAccessibility() {
+        check(!closed)
+        back.mergedRowAccessibility.enableStandaloneAccessibility({ !closed }) { back.label.getText() }
+        next.mergedRowAccessibility.enableStandaloneAccessibility({ !closed }) { next.label.getText() }
+    }
+
     fun clipsAccessibilityTextAt(view: View): Boolean =
         back.clipsAccessibilityTextAt(view) || next.clipsAccessibilityTextAt(view)
 
