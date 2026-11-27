@@ -19,6 +19,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
+import smallthingz.ui.scroll.NativeVerticalViewport
 
 /** Real shared header/About bindings in a modeled host window; not device/render evidence. */
 @RunWith(RobolectricTestRunner::class)
@@ -114,6 +115,40 @@ class ReverbProductHeaderBrandTest {
             assertTrue(home.clipToOutline)
             header.closeAbout()
             assertFalse(dialog.isShowing)
+        }
+    }
+
+    @Test fun aboutScrollSnapshotTracksTheSharedViewportAndClosedPanelIsNotRestored() {
+        withHeader { activity, header, root ->
+            val theme = ReverbDesign.theme(activity, false)
+            val details = ReverbAboutDetails("Fixture", "Version\n".repeat(40), "Source", "Repository", "Unavailable")
+            header.bind(theme, ReverbProductIdentity.Monochrome(android.R.drawable.ic_menu_info_details),
+                "About fixture", {}, null, ReverbHeaderAction("Settings", {}))
+            layout(root)
+            assertNull(header.aboutScrollPosition())
+            assertTrue(header.openAbout(theme, details, "About fixture", restoredScrollPosition = 64,
+                openRepository = { true }))
+            shadowOf(Looper.getMainLooper()).idle()
+            val decor = checkNotNull(ShadowDialog.getLatestDialog().window).decorView
+            layout(decor)
+            val viewport = nodes(decor).filterIsInstance<NativeVerticalViewport>().single()
+            assertTrue("Long version creates real scrollable shared content", viewport.state.maxValue > 64)
+            assertEquals(64, checkNotNull(header.aboutScrollPosition()))
+            viewport.state.scrollBy(23f)
+            val saved = checkNotNull(header.aboutScrollPosition())
+            assertEquals(87, saved)
+            header.closeAbout()
+            assertNull("Owner close retires both window and saved-open state", header.aboutScrollPosition())
+
+            // Reopening is admitted by the same real retained anchor/window-focus policy.
+            root.rootView.dispatchWindowFocusChanged(true)
+            assertTrue(header.openAbout(theme, details, "About fixture", restoredScrollPosition = saved,
+                openRepository = { true }))
+            shadowOf(Looper.getMainLooper()).idle()
+            layout(checkNotNull(ShadowDialog.getLatestDialog().window).decorView)
+            assertEquals(saved, checkNotNull(header.aboutScrollPosition()))
+            root.removeView(header)
+            assertNull("Anchor retirement cannot leave a saved-open panel", header.aboutScrollPosition())
         }
     }
 
