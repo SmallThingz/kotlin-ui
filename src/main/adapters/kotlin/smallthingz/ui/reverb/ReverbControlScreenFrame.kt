@@ -33,7 +33,7 @@ class ReverbControlScreenFrame(
     settingsHeader: View,
     private val controls: ScrollView,
     transcript: View,
-    private val onboarding: View,
+    onboarding: View,
     private val primaryAction: NativeMaterialButtonView,
 ) : LinearLayout(context), ReverbTextSurfaceScope {
     private val appearance = theme.appearance
@@ -51,6 +51,7 @@ class ReverbControlScreenFrame(
     val content = FrameLayout(context)
     val primaryActionDock = ReverbBottomActionDock(context, theme, primaryAction)
     private val transition = ReverbScreenTransition(content)
+    private var pendingOnboarding: View? = onboarding
     private var onboardingHost: ReverbOnboardingScreenHost? = null
     private var onboardingPresentation: OnboardingFooterPresentation? = null
     private var safeInsets = Insets.NONE
@@ -85,8 +86,10 @@ class ReverbControlScreenFrame(
     fun configureOnboardingFooter(theme: ReverbTheme, onBack: () -> Unit, onContinue: () -> Unit) {
         val previous = onboardingHost
         val page = previous?.pageArea ?: FrameLayout(context).apply {
-            (onboarding.parent as ViewGroup).removeView(onboarding)
-            addView(onboarding, FrameLayout.LayoutParams(-1, -1))
+            val initial = checkNotNull(pendingOnboarding)
+            (initial.parent as ViewGroup).removeView(initial)
+            addView(initial, FrameLayout.LayoutParams(-1, -1))
+            pendingOnboarding = null
         }
         val index = previous?.let(content::indexOfChild) ?: content.childCount
         if (previous != null) {
