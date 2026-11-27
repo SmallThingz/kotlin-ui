@@ -1,6 +1,8 @@
 package smallthingz.ui.gallery
 
 import android.content.Context
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.RotateDrawable
 import smallthingz.ui.components.NativeChoiceColor
 import smallthingz.ui.components.NativeTextRole
 import smallthingz.ui.components.NativeColorScheme
@@ -36,6 +38,18 @@ object GalleryDesign {
      * This metric does not opt the primary action row into icon-only presentation.
      */
     val viewerFilmstripHeightDp = appearance.toolbars.action.minimumTargetDp.coerceAtLeast(48f)
+
+    /** Secondary browsing uses the existing rounded right-chevron asset, not the header Back arrow.
+     * Pass a fresh, unowned drawable per button; its tint, state and RTL mirroring stay host-owned.
+     * Quietness comes from the shaftless glyph, without fading ink or changing the 48dp target.
+     */
+    fun viewerSequenceIcon(rightChevron: Drawable, next: Boolean): Drawable =
+        if (next) rightChevron else RotateDrawable().apply {
+            drawable = rightChevron
+            fromDegrees = 180f
+            toDegrees = 180f
+            level = 10_000
+        }
 
     /** Quieter destination paint, derived from the incoming page palette on every bind.
      * Replace selection alpha (143/255); keep shared ink, focus and all target geometry.
