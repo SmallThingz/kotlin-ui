@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
+import android.os.Looper
 import android.view.KeyEvent
 import android.view.View
 import android.view.accessibility.AccessibilityNodeInfo
@@ -19,6 +20,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import smallthingz.ui.components.NativeChip
@@ -260,17 +262,25 @@ class InjectApplicationChoiceTileTest {
                     assertEquals(36, icon.height)
                     val originalInk = choice.currentTextColor
                     val textTop = choice.baseline - choice.layout.getLineBaseline(0)
+                    // Drain binding/focus work and retain one preparation draw after changing
+                    // alpha/selection. Resting evidence still requires two exact matching draws.
+                    shadowOf(Looper.getMainLooper()).idle()
+                    val availablePreparation = capture()
                     val available = capture()
                     val availableControl = capture()
                     tile.bindChoice("Example app", "Example app", selected = selected,
                         unavailableDescription = "Unavailable fixture", explanationDescription = "Why unavailable")
                     layout(root)
                     assertTrue(root.requestFocus())
+                    shadowOf(Looper.getMainLooper()).idle()
+                    val unavailablePreparation = capture()
                     val unavailable = capture()
                     val unavailableControl = capture()
                     val prefix = "${if (dark) "dark" else "light"}-${if (selected) "selected" else "unselected"}"
                     val output = File("build/reports/grid-null-artwork").apply { mkdirs() }
-                    for ((name, frame) in listOf("available" to available, "available-control" to availableControl,
+                    for ((name, frame) in listOf("available-preparation" to availablePreparation,
+                        "available" to available, "available-control" to availableControl,
+                        "unavailable-preparation" to unavailablePreparation,
                         "unavailable" to unavailable, "unavailable-control" to unavailableControl)) {
                         File(output, "$prefix-$name.png").outputStream().use { frame.compress(Bitmap.CompressFormat.PNG, 100, it) }
                     }
@@ -284,7 +294,9 @@ class InjectApplicationChoiceTileTest {
                         }
                     }
                     File(output, "$prefix-measurements.txt").writeText(
-                        "available_repeat_stable=${available.sameAs(availableControl)}\n" +
+                        "available_preparation_matches_sample=${availablePreparation.sameAs(available)}\n" +
+                            "unavailable_preparation_matches_sample=${unavailablePreparation.sameAs(unavailable)}\n" +
+                            "available_repeat_stable=${available.sameAs(availableControl)}\n" +
                             "unavailable_repeat_stable=${unavailable.sameAs(unavailableControl)}\n" +
                             "changed_pixels=$changed\nlabel_changed_pixels=$labelChanged\n" +
                             "available_text_argb=$originalInk\nunavailable_text_argb=${choice.currentTextColor}\n" +
