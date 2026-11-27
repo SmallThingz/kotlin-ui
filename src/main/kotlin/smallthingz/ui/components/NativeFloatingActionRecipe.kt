@@ -42,8 +42,13 @@ data class NativeFloatingActionRecipe(
         var closed = false
         fun applyBottom(bottom: Int) {
             if (scrollContent.paddingBottom != bottom) {
-                scrollContent.setPadding(scrollContent.paddingLeft, scrollContent.paddingTop,
-                    scrollContent.paddingRight, bottom)
+                if (scrollContent.isPaddingRelative) {
+                    scrollContent.setPaddingRelative(scrollContent.paddingStart, scrollContent.paddingTop,
+                        scrollContent.paddingEnd, bottom)
+                } else {
+                    scrollContent.setPadding(scrollContent.paddingLeft, scrollContent.paddingTop,
+                        scrollContent.paddingRight, bottom)
+                }
             }
             appliedBottom = bottom
         }

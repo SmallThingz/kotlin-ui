@@ -86,6 +86,37 @@ class NativeFloatingActionRecipeTest {
             assertEquals(1, f.clicks)
         }
 
+    @Test fun clearancePreservesAsymmetricRelativePaddingAcrossRtlResizeAndClose() =
+        withFixture(360, 2f, false) { f ->
+            f.content.setPaddingRelative(13, 12, 31, 24)
+            fun assertPadding(bottom: Int, rtl: Boolean) {
+                assertTrue(f.content.isPaddingRelative)
+                assertEquals(13, f.content.paddingStart)
+                assertEquals(31, f.content.paddingEnd)
+                assertEquals(if (rtl) 31 else 13, f.content.paddingLeft)
+                assertEquals(if (rtl) 13 else 31, f.content.paddingRight)
+                assertEquals(12, f.content.paddingTop)
+                assertEquals(bottom, f.content.paddingBottom)
+            }
+
+            f.bind()
+            f.settleLayout()
+            assertPadding(96, rtl = false)
+
+            f.root.layoutDirection = View.LAYOUT_DIRECTION_RTL
+            f.width = 180
+            f.settleLayout()
+            val clearance = f.action.view.height + 20 + NativeScreenSpacing.CONTROL_GAP_DP
+            assertTrue(clearance > 96)
+            assertPadding(clearance, rtl = true)
+
+            checkNotNull(f.binding).close()
+            assertPadding(24, rtl = true)
+            f.root.layoutDirection = View.LAYOUT_DIRECTION_LTR
+            f.settleLayout()
+            assertPadding(24, rtl = false)
+        }
+
     private fun withFixture(width: Int, font: Float, rtl: Boolean, block: (Fixture) -> Unit) {
         val controller = Robolectric.buildActivity(Activity::class.java).setup().visible().windowFocusChanged(true)
         val fixture = Fixture(controller.get(), width, font, rtl)
