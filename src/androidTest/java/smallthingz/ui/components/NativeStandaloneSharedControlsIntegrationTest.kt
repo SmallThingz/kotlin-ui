@@ -3,6 +3,7 @@ package smallthingz.ui.components
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -36,6 +37,44 @@ import kotlin.math.roundToInt
 
 @RunWith(AndroidJUnit4::class)
 class NativeStandaloneSharedControlsIntegrationTest {
+    @Test fun subclassOwnedInitialTextColorsRetainAttachedRoleTransitions() = withWindow { activity ->
+        val palette = NativeColorScheme.fallback(false).pageControls.copy(content = Color.BLACK, accent = Color.BLUE)
+        val ordinary = NativeText(activity, palette)
+        val owned = object : NativeText(
+            activity, palette, NativeTextStyle(), NativeTextRole.CONTENT, initializeOwnInk = false,
+        ) {}
+        val motion = NativeText::class.java.getDeclaredField("inkMotion").apply { isAccessible = true }
+        assertTrue(motion.get(ordinary) != null)
+        assertEquals(null, motion.get(owned))
+        assertEquals(palette.content, ordinary.currentTextColor)
+        owned.setTextColor(ColorStateList(
+            arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()),
+            intArrayOf(Color.GRAY, palette.content),
+        ))
+        owned.isEnabled = false
+        assertEquals(Color.GRAY, owned.currentTextColor)
+        owned.isEnabled = true
+        assertEquals(palette.content, owned.currentTextColor)
+        val parent = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(ordinary)
+            addView(owned)
+        }
+        activity.setContentView(parent)
+        return@withWindow {
+            val motionEnabled = ValueAnimator.areAnimatorsEnabled() && readCachedAnimatorDurationScale(activity) > 0f
+            for (label in listOf(ordinary, owned)) {
+                assertTrue(label.isAttachedToWindow && label.isShown)
+                label.setRole(NativeTextRole.ACCENT)
+                assertTrue(motion.get(label) != null)
+                assertEquals(if (motionEnabled) palette.content else palette.accent, label.currentTextColor)
+            }
+            parent.removeAllViews()
+            assertEquals(palette.accent, ordinary.currentTextColor)
+            assertEquals(palette.accent, owned.currentTextColor)
+        }
+    }
+
     @Test fun parentDispatchesFingerInEmptyButtonMarginWithoutStealingAdjacentAction() = withWindow { activity ->
         val appearance = NativeUiAppearance.Default
         val colors = NativeColorScheme.fallback(darkTheme = false)
