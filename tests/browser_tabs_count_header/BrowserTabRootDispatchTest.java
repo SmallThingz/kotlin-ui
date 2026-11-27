@@ -12,6 +12,7 @@ import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.FrameLayout;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -81,6 +82,25 @@ public class BrowserTabRootDispatchTest {
                     assertEquals("Current Reverb dock floor must be48dp", minimum, dock.getMinimumActionHeightPx());
                     assertTrue("Dock action retains48dp actual height", dock.getAction().getHeight() >= minimum);
                     Rect bounds = relative(root, close.getVisual());
+                    // The native semantic owner must describe the same full target we tap.
+                    AccessibilityNodeInfo node = close.getVisual().createAccessibilityNodeInfo();
+                    assertNotNull(node);
+                    try {
+                        Rect semantic = new Rect(); node.getBoundsInScreen(semantic);
+                        int[] rootScreen = new int[2]; root.getLocationOnScreen(rootScreen);
+                        Rect expectedScreen = new Rect(bounds); expectedScreen.offset(rootScreen[0], rootScreen[1]);
+                        assertEquals("Close semantic bounds match the actual 48dp owner", expectedScreen, semantic);
+                        assertTrue(node.isEnabled() && node.isVisibleToUser());
+                        assertEquals("Close Alpha", String.valueOf(node.getContentDescription()));
+                        assertEquals(1, node.getActionList().stream().filter(a -> a.getId() == AccessibilityNodeInfo.ACTION_CLICK).count());
+                    } finally { node.recycle(); }
+                    assertEquals("Compact glyph remains centered in full touch owner", close.getVisual().getWidth()/2f,
+                        close.getVisual().getGlyph().getLeft()+close.getVisual().getGlyph().getWidth()/2f, .5f);
+                    assertEquals(20f*context.getResources().getDisplayMetrics().density,
+                        close.getVisual().getGlyph().getWidth()*close.getVisual().getGlyph().getScaleX(), 1f);
+                    // Close stays outside the rounded surface's pointer-content clipping chain.
+                    for (android.view.ViewParent parent = close.getParent(); parent instanceof View; parent=parent.getParent())
+                        assertFalse("Group clipping must not reject close's outer corners", parent instanceof smallthingz.ui.components.NativeGroupLayout);
                     Rect title = relative(root, row);
                     Rect preview = panel.tabPreviewBounds("a"); assertNotNull(preview);
                     Rect panelInRoot = relative(root, panel); preview.offset(panelInRoot.left, panelInRoot.top);
@@ -91,11 +111,15 @@ public class BrowserTabRootDispatchTest {
                         {bounds.right - inset, bounds.top + inset},
                         {bounds.left + inset, bounds.bottom - inset},
                         {bounds.right - inset, bounds.bottom - inset},
+                        {bounds.exactCenterX(), bounds.top + inset},
+                        {bounds.right - inset, bounds.exactCenterY()},
+                        {bounds.exactCenterX(), bounds.bottom - inset},
+                        {bounds.left + inset, bounds.exactCenterY()},
                         {direction == View.LAYOUT_DIRECTION_LTR ? bounds.left - inset : bounds.right + inset, bounds.exactCenterY()},
                         {title.exactCenterX(), title.exactCenterY()},
                         {preview.exactCenterX(), preview.exactCenterY()}
                     };
-                    String[] labels = {"close-center", "close-top-left", "close-top-right", "close-bottom-left", "close-bottom-right", "adjacent-title", "title-center", "preview-center"};
+                    String[] labels = {"close-center", "close-top-left", "close-top-right", "close-bottom-left", "close-bottom-right", "close-top-edge", "close-right-edge", "close-bottom-edge", "close-left-edge", "adjacent-title", "title-center", "preview-center"};
                     for (int i = 0; i < points.length; i++) {
                         // A mounted Activity may consume its queued traversal after the prior tap.
                         // Sample the live owners for every probe, never stale pre-traversal rectangles.
@@ -109,6 +133,10 @@ public class BrowserTabRootDispatchTest {
                             {liveClose.right - inset, liveClose.top + inset},
                             {liveClose.left + inset, liveClose.bottom - inset},
                             {liveClose.right - inset, liveClose.bottom - inset},
+                            {liveClose.exactCenterX(), liveClose.top + inset},
+                            {liveClose.right - inset, liveClose.exactCenterY()},
+                            {liveClose.exactCenterX(), liveClose.bottom - inset},
+                            {liveClose.left + inset, liveClose.exactCenterY()},
                             {direction == View.LAYOUT_DIRECTION_LTR ? liveClose.left - inset : liveClose.right + inset, liveClose.exactCenterY()},
                             {liveTitle.exactCenterX(), liveTitle.exactCenterY()},
                             {livePreview.exactCenterX(), livePreview.exactCenterY()}
@@ -118,7 +146,7 @@ public class BrowserTabRootDispatchTest {
                         points[i] = livePoints[i];
                         events.clear();
                         boolean handled = tap(root, points[i][0], points[i][1]);
-                        List<String> expected = Collections.singletonList(i < 5 ? "a:CLOSE" : "a:SELECT");
+                        List<String> expected = Collections.singletonList(i < 9 ? "a:CLOSE" : "a:SELECT");
                         String observation = "direction=" + direction + " point=" + labels[i] + " xy=" + Arrays.toString(points[i])
                             + " close=" + liveClose + " handled=" + handled + " events=" + events + " expected=" + expected;
                         System.out.println(observation);

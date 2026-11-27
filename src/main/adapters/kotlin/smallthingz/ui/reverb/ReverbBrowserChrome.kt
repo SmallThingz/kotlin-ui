@@ -1,15 +1,21 @@
 package smallthingz.ui.reverb
 
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Outline
+import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.DrawableWrapper
 import android.os.Bundle
 import android.text.InputFilter
 import android.text.InputType
 import android.text.Spanned
 import android.view.Gravity
 import android.view.View
+import android.view.ViewOutlineProvider
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
@@ -55,6 +61,13 @@ class ReverbBrowserChromeActionView internal constructor(context: Context, priva
     private var bound = false
     // Retain semantic count across appearance/content bindings, not just a one-off drawable.
     private var tabCount: Int? = null
+    private var glyphOffsetDp = 0f
+    internal fun bindGlyphOffset(offsetDp: Float) {
+        if (closed || glyphOffsetDp == offsetDp) return
+        glyphOffsetDp = offsetDp
+        bound = false
+        bindContent(action)
+    }
     init {
         // Browser controls share their parent's material, while each keeps a full input target.
         bindStyle(theme.appearance.toolbars.action.copy(sizeDp = 48f, glyphDp = 22f))
@@ -82,7 +95,8 @@ class ReverbBrowserChromeActionView internal constructor(context: Context, priva
         action = next
         val drawable = tabCount?.let { ReverbBrowserTabCountDrawable(it, theme.density.density, sampledIconTint) }
             ?: requireNotNull(next.icon.drawable(context, theme, sampledIconTint))
-        setGlyph(drawable, sampledIconTint)
+        setGlyph(if (glyphOffsetDp == 0f) drawable else BrowserToolbarGlyph(drawable,
+            glyphOffsetDp * theme.density.density), sampledIconTint)
         setDescription(next.label)
         accessibilityAction.tooltipText = next.label
         accessibilityAction.filterTouchesWhenObscured = true
@@ -110,6 +124,52 @@ class ReverbBrowserChromeActionView internal constructor(context: Context, priva
     }
 }
 
+/** One address silhouette also clips the site action's focus/pressed paint on software canvases. */
+private class BrowserAddressSurface(context: Context) : FrameLayout(context) {
+    private val clip = Path()
+    private fun radius() = minOf(24f * resources.displayMetrics.density, width / 2f, height / 2f)
+    init {
+        clipToOutline = true
+        outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                outline.setRoundRect(0, 0, width, height, radius())
+            }
+        }
+    }
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        refreshGeometry()
+    }
+    fun refreshGeometry() {
+        clip.rewind()
+        clip.addRoundRect(RectF(0f, 0f, width.toFloat(), height.toFloat()), radius(), radius(), Path.Direction.CW)
+        invalidateOutline()
+        invalidate()
+    }
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        refreshGeometry()
+    }
+    override fun draw(canvas: Canvas) {
+        if (canvas.isHardwareAccelerated) super.draw(canvas) else {
+            val checkpoint = canvas.save()
+            try { canvas.clipPath(clip); super.draw(canvas) }
+            finally { canvas.restoreToCount(checkpoint) }
+        }
+    }
+}
+
+/** Optical spacing only: adjacent browser utilities retain separate, nonoverlapping48dp targets. */
+private class BrowserToolbarGlyph(drawable: Drawable, private val offsetPx: Float) : DrawableWrapper(drawable) {
+    override fun draw(canvas: Canvas) {
+        val checkpoint = canvas.save()
+        try {
+            canvas.translate(if (layoutDirection == View.LAYOUT_DIRECTION_RTL) -offsetPx else offsetPx, 0f)
+            super.draw(canvas)
+        } finally { canvas.restoreToCount(checkpoint) }
+    }
+}
+
 /** Presentation-only browser chrome. The host owns the editor's navigation and all renderer lifecycle. */
 open class ReverbBrowserChrome(context: Context, private var chromeTheme: ReverbTheme,
     addressHint: String, site: ReverbBrowserChromeAction, tabs: ReverbBrowserChromeAction, menu: ReverbBrowserChromeAction,
@@ -124,15 +184,21 @@ open class ReverbBrowserChrome(context: Context, private var chromeTheme: Reverb
         if (!panelClosed) onChromeAction?.invoke(id)
     }
     val siteAction = ReverbBrowserChromeActionView(context, chromeTheme, site, ::action, ::admitsChromeAction)
-    val tabsAction = ReverbBrowserChromeActionView(context, chromeTheme, tabs, ::action, ::admitsChromeAction)
-    val menuAction = ReverbBrowserChromeActionView(context, chromeTheme, menu, ::action, ::admitsChromeAction)
+    val tabsAction = ReverbBrowserChromeActionView(context, chromeTheme, tabs, ::action, ::admitsChromeAction).apply { bindGlyphOffset(6f) }
+    val menuAction = ReverbBrowserChromeActionView(context, chromeTheme, menu, ::action, ::admitsChromeAction).apply { bindGlyphOffset(-6f) }
     private val field = chromeTheme.appearance.compactField.style
     // One elongated address surface identifies the native editor. Utility actions retain the
     // continuous toolbar material; the field has neither a button outline nor elevation.
     val addressEditor: NativeTextField = ReverbBrowserChromeAddressEditor(context, chromeTheme.palette.pageControls,
         field.copy(outlined = false, filled = true, radiusDp = 24f, minHeightDp = 48f,
-            startPaddingDp = 8f, endPaddingDp = 8f, verticalPaddingDp = 8f)).apply {
+            startPaddingDp = 48f, endPaddingDp = 12f, verticalPaddingDp = 8f)).apply {
         hint = addressHint
+    }
+    // The site action is inside the same filled address silhouette. Reserve its complete
+    // input target in the editor padding; text selection and composition remain native.
+    private val addressSurface = BrowserAddressSurface(context).apply {
+        addView(addressEditor, FrameLayout.LayoutParams(-1, -2))
+        addView(siteAction, FrameLayout.LayoutParams(-2, -2, Gravity.START or Gravity.CENTER_VERTICAL))
     }
     val pageHost = FrameLayout(context)
     private lateinit var toolbarBackground: NativeToolbarBackground
@@ -147,8 +213,7 @@ open class ReverbBrowserChrome(context: Context, private var chromeTheme: Reverb
             minimumHeight = recipe.compactHeightPx(chromeTheme.density.density)
             val inset = (recipe.centeredPaddingDp * chromeTheme.density.density).roundToInt()
             setPaddingRelative(inset, 0, inset, 0)
-            addView(siteAction)
-            addView(addressEditor, LayoutParams(0, -2, 1f))
+            addView(addressSurface, LayoutParams(0, -2, 1f))
             addView(tabsAction)
             addView(menuAction)
         }, FrameLayout.LayoutParams(-1, -2))
@@ -175,6 +240,7 @@ open class ReverbBrowserChrome(context: Context, private var chromeTheme: Reverb
         toolbarBackground.bind(theme.appearance.toolbars, theme.palette)
         siteAction.bindTheme(theme); tabsAction.bindTheme(theme); menuAction.bindTheme(theme)
         (addressEditor as ReverbBrowserChromeAddressEditor).bindTheme(theme)
+        addressSurface.refreshGeometry()
         progress.bindTheme(theme)
         ReverbTextSurface.invalidate(this)
     }
@@ -269,7 +335,8 @@ private class ReverbBrowserChromeAddressEditor(context: Context, palette: Contro
     }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (!isFocused || !isEnabled) return
+        if (!isFocused || !isEnabled || isInTouchMode) return
+        // Touch editing keeps the browser pill borderless; keyboard focus still has a cue.
         // The focus cue follows the address silhouette without taking the host's listener.
         // TextView scrolls its canvas for long URLs; keep the outline in viewport coordinates.
         val density = resources.displayMetrics.density
