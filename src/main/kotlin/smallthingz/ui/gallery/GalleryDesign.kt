@@ -41,7 +41,7 @@ object GalleryDesign {
     val libraryUtilityActionRecipe = appearance.buttons.neutralText.copy(
         surface = NativeMaterialButtonStyle(horizontalPaddingDp = 6, minimumWidthDp = 48,
             minimumHeightDp = 48, iconSizeDp = 20, iconGapDp = 6, showLabel = true),
-        labelStyle = actionTextStyle,
+        labelStyle = appearance.typography[NativeTypographyRole.LABEL_MEDIUM],
     )
     val dialogChoiceTextStyle = appearance.typography[appearance.modals.floating.titleRole]
     val settingsTitleTextStyle = NativeTypography(mapOf(
