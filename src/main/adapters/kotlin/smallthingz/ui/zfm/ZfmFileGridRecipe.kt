@@ -20,7 +20,7 @@ import kotlin.math.roundToInt
 data class ZfmFileGridRecipe(
     val titleStyle: NativeTextStyle = NativeTextStyle(12f, weight = 500),
     val detailStyle: NativeTextStyle = NativeTextStyle(11f),
-    val metadataGapDp: Int = 2,
+    val metadataGapDp: Int = 4,
 ) {
     init { require(metadataGapDp >= 0) }
 

@@ -192,6 +192,11 @@ class ZfmSearchChrome @JvmOverloads constructor(
     }
     private val statusRow = LinearLayout(context).apply {
         orientation = HORIZONTAL
+        // The weighted host can contain a full toolbar, not just a text baseline.
+        // Baseline probing measures weighted children with UNSPECIFIED width,
+        // which is invalid for the retained Reverb header. Measure it once with
+        // its actual share of the viewport instead.
+        isBaselineAligned = false
         gravity = Gravity.CENTER_VERTICAL
         addView(statusHost, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
         trailingStatusAction?.let { addView(it, LayoutParams(0, 0)) }
