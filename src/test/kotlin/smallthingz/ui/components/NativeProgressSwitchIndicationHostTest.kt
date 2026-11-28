@@ -28,6 +28,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowChoreographer
+import org.robolectric.shadows.ShadowLog
 import org.robolectric.util.ReflectionHelpers
 import smallthingz.ui.interaction.view.RowIndication
 
@@ -175,16 +176,20 @@ class NativeProgressSwitchIndicationHostTest {
 
     private fun assertRoundedInk(row: View) {
         foreground(row).useBitmap { bitmap ->
-            for ((x, y) in listOf(1 to 1, bitmap.width - 2 to 1,
-                1 to bitmap.height - 2, bitmap.width - 2 to bitmap.height - 2)) {
-                assertEquals("No square indication at $x,$y", 0, Color.alpha(bitmap.getPixel(x, y)))
+            // Capture the existing unmasked causal control at the same clock, even if clipped ink fails.
+            Bitmap.createBitmap(row.width, row.height, Bitmap.Config.ARGB_8888).useBitmap { raw ->
+                val canvas = Canvas(raw)
+                row.foreground.draw(canvas)
+                val receipt = "rawCenterAlpha=${Color.alpha(raw.getPixel(raw.width / 2, raw.height / 2))} " +
+                    "rawCornerAlpha=${Color.alpha(raw.getPixel(1, 1))} canvasHardware=${canvas.isHardwareAccelerated} " +
+                    "rippleLogs=${ShadowLog.getLogsForTag("RippleDrawable").takeLast(3).map { it.msg }}; $inkDiagnostics"
+                for ((x, y) in listOf(1 to 1, bitmap.width - 2 to 1,
+                    1 to bitmap.height - 2, bitmap.width - 2 to bitmap.height - 2)) {
+                    assertEquals("No square indication at $x,$y", 0, Color.alpha(bitmap.getPixel(x, y)))
+                }
+                assertTrue("Focus/hover/press remains visible; $receipt", Color.alpha(bitmap.getPixel(bitmap.width / 2, bitmap.height / 2)) > 0)
+                assertTrue("The rounded assertion must exercise actual ink; $receipt", Color.alpha(raw.getPixel(1, 1)) > 0)
             }
-            assertTrue("Focus/hover/press remains visible; $inkDiagnostics", Color.alpha(bitmap.getPixel(bitmap.width / 2, bitmap.height / 2)) > 0)
-        }
-        // Causal control: the very same live indication still paints the formerly rectangular corner.
-        Bitmap.createBitmap(row.width, row.height, Bitmap.Config.ARGB_8888).useBitmap {
-            row.foreground.draw(Canvas(it))
-            assertTrue("The rounded assertion must exercise actual ink", Color.alpha(it.getPixel(1, 1)) > 0)
         }
     }
 
@@ -204,6 +209,7 @@ class NativeProgressSwitchIndicationHostTest {
         fun size(owner: Any?, name: String) = (field(owner, name) as? Collection<*>)?.size
         inkDiagnostics += "$phase uptime=${SystemClock.uptimeMillis()} " +
             "focus=${row.isFocused} window=${row.hasWindowFocus()} touchMode=${row.isInTouchMode} " +
+            "rowHardware=${row.isHardwareAccelerated} rootHardware=${row.rootView.isHardwareAccelerated} " +
             "attached=${row.isAttachedToWindow} shown=${row.isShown} enabled=${row.isEnabled} " +
             "size=${row.width}x${row.height} measured=${row.measuredWidth}x${row.measuredHeight} " +
             "layoutRequested=${row.isLayoutRequested} foregroundBounds=${row.foreground.bounds} " +
@@ -213,7 +219,8 @@ class NativeProgressSwitchIndicationHostTest {
             "inkMeasured=${field(indication, "measured")} inkSize=${field(indication, "widthPx")}x${field(indication, "heightPx")} " +
             "states=${size(indication, "states")} alpha=${field(alpha, "value")} running=${field(alpha, "running")} " +
             "framePosted=${field(indication, "framePosted")} lastFrame=${field(alpha, "lastFrame")} " +
-            "ripple=${ripple?.javaClass?.simpleName} visible=${ripple?.isVisible} bounds=${ripple?.bounds} state=${ripple?.state?.contentToString()}"
+            "ripple=${ripple?.javaClass?.simpleName} visible=${ripple?.isVisible} bounds=${ripple?.bounds} state=${ripple?.state?.contentToString()} " +
+            "rippleStyle=${field(field(ripple, "mState"), "mRippleStyle")} patternedSessions=${size(ripple, "mRunningAnimations")}"
     }
 
     private fun Bitmap.useBitmap(block: (Bitmap) -> Unit) { try { block(this) } finally { recycle() } }
