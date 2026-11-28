@@ -108,21 +108,6 @@ class CompactAudioBlobReadoutPixelsHostTest {
             fixture.verifySettledPageInk("Quiet after full bands"))
     }
 
-    @Test fun bodyMaterialKeepsItsColorAcrossExplicitCompactAndFullBounds() = withAnimatorScale { setScale ->
-        setScale(0f)
-        val context = RuntimeEnvironment.getApplication()
-        for (scene in Scene.entries) {
-            val fixture = Fixture(context, scene, size = 405)
-            fixture.activate()
-            val audible = fixture.materialSamplesAcrossSizes("$scene audible", activity = .5f, suppressed = false)
-            val suppressed = fixture.materialSamplesAcrossSizes("$scene suppressed", activity = .5f, suppressed = true)
-            assertTrue("$scene suppression must remain visible in the body", audible.first() != suppressed.first())
-
-            fixture.settleRest()
-            fixture.materialSamplesAcrossSizes("$scene rest", activity = 0f, suppressed = false)
-        }
-    }
-
     private fun withAnimatorScale(test: ((Float) -> Unit) -> Unit) {
         val getScale = ValueAnimator::class.java.getDeclaredMethod("getDurationScale")
             .apply { isAccessible = true }
@@ -165,14 +150,11 @@ class CompactAudioBlobReadoutPixelsHostTest {
         ).apply { bind(active = true, filled = false, primaryText = "7:57", secondaryText = secondaryLabel, contentAlpha = 1f) }
         private val control = Control(context, readout, style, readoutDensity)
         private val body = control.getChildAt(0) as AudioReactiveBlobView
-        private var bitmapSize = size + 2 * PADDING
+        private val bitmapSize = size + 2 * PADDING
         val transitioning get() = control.transitioning
         val needsSupport get() = body.readoutNeedsSupport(body.readoutUsesDarkInk())
 
-        init { resize(size) }
-
-        private fun resize(size: Int) {
-            bitmapSize = size + 2 * PADDING
+        init {
             val exact = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY)
             control.measure(exact, exact)
             control.layout(0, 0, size, size)
@@ -180,33 +162,6 @@ class CompactAudioBlobReadoutPixelsHostTest {
 
         fun activate() = control.activate()
         fun settleActive() = body.submitFrame(0f, FloatArray(0), silenceSuppressed = false)
-
-        fun settleRest() {
-            readout.bind(active = false, filled = false, primaryText = "7:57", secondaryText = null, contentAlpha = 1f)
-            control.rest()
-        }
-
-        fun materialSamplesAcrossSizes(scope: String, activity: Float, suppressed: Boolean): List<Int> {
-            val bands = FloatArray(8) { .25f }
-            fun sample(size: Int): List<Int> {
-                resize(size)
-                body.submitFrame(activity, bands, silenceSuppressed = suppressed)
-                val pixels = raster { body.draw(this) }
-                val center = PADDING + size / 2
-                // Odd sizes give a true center pixel. The other two samples use the same
-                // normalized offset because both sizes are multiples of nine.
-                return listOf(0, size / 9, -size / 9).map { dx ->
-                    val color = pixels[center * bitmapSize + center + dx]
-                    assertEquals("$scope size=$size dx=$dx must be inside opaque material", 255, Color.alpha(color))
-                    color
-                }
-            }
-            val full = sample(405)
-            val compact = sample(81)
-            assertEquals("$scope body must preserve RGB under the same palette and input", full, compact)
-            assertEquals("$scope full body must recover on grow-back", full, sample(405))
-            return full
-        }
 
         fun assertFitsLegacyViewport() {
             // The old optimized circle was no bigger than the measured bounds' centered circle.
@@ -409,11 +364,6 @@ class CompactAudioBlobReadoutPixelsHostTest {
 
         fun activate() {
             renderer.updateState(active = true, enabled = true, saving = false, visible = true, style = style)
-            updateBlobDecoration(dimmed = false)
-        }
-
-        fun rest() {
-            renderer.updateState(active = false, enabled = true, saving = false, visible = true, style = style)
             updateBlobDecoration(dimmed = false)
         }
     }

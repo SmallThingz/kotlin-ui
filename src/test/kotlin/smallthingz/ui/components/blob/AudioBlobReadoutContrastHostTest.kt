@@ -45,7 +45,7 @@ import smallthingz.ui.unit.Density
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class AudioBlobReadoutContrastHostTest {
-    @Test fun rendererKeepsBackdropInkOnShrinkAndGrow() = withSettledAnimations {
+    @Test fun rendererSwitchesToBackdropInkOnShrinkAndRestoresMaterialInkOnGrow() = withSettledAnimations {
         val failures = mutableListOf<String>()
         for (scene in Scene.entries) {
             val fixture = Fixture(RuntimeEnvironment.getApplication(), scene)
@@ -53,7 +53,9 @@ class AudioBlobReadoutContrastHostTest {
             val normalFootprint = fixture.projectedFootprintRatio()
             assertTrue("${scene.name} normal readout must fit stable material coverage: $normalFootprint",
                 normalFootprint in 0f..STABLE_SETTLED_COVERAGE)
-            val normal = fixture.sample(expectedDarkInk = scene.backdropUsesDarkInk, failures)
+            assertEquals("${scene.name} covered body must keep the original palette",
+                scene.material, fixture.material()[fixture.centerPixel])
+            val normal = fixture.sample(expectedDarkInk = !scene.backdropUsesDarkInk, failures)
 
             fixture.layoutHome(INTERMEDIATE_HOME_HEIGHT, dimmed = false)
             assertEquals(216, fixture.audioView.width)
@@ -67,6 +69,13 @@ class AudioBlobReadoutContrastHostTest {
             val shortest = fixture.sample(expectedDarkInk = scene.backdropUsesDarkInk, failures)
             fixture.layoutHome(215, dimmed = false)
             if (!fixture.primaryFits()) failures += "${scene.name}: the complete timer does not fit the 80px readout"
+            val compactPigment = fixture.material()[fixture.centerPixel]
+            assertEquals("${scene.name} compact center must remain opaque", 255, Color.alpha(compactPigment))
+            val compactLuminance = audioBlobMaterialLuminance(compactPigment)
+            val originalLuminance = audioBlobMaterialLuminance(scene.material)
+            assertTrue("${scene.name} compact pigment must support the page-facing ink",
+                if (scene.backdropUsesDarkInk) compactLuminance > originalLuminance
+                else compactLuminance < originalLuminance)
             val short = fixture.sample(expectedDarkInk = scene.backdropUsesDarkInk, failures)
             recordEdgeWitnesses("${scene.name} undimmed", shortest.fadePixels + short.fadePixels,
                 shortest.outsidePixels + short.outsidePixels, failures)
@@ -78,7 +87,9 @@ class AudioBlobReadoutContrastHostTest {
             }
 
             fixture.layoutHome(COVERED_HOME_HEIGHT, dimmed = false)
-            val grown = fixture.sample(expectedDarkInk = scene.backdropUsesDarkInk, failures)
+            assertEquals("${scene.name} grow-back must restore the original palette",
+                scene.material, fixture.material()[fixture.centerPixel])
+            val grown = fixture.sample(expectedDarkInk = !scene.backdropUsesDarkInk, failures)
             if (!normal.pixels.contentEquals(grown.pixels)) {
                 failures += "${scene.name}: growing did not restore the original per-pixel output"
             }
