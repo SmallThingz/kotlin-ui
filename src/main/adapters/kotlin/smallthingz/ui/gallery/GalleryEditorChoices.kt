@@ -3,6 +3,7 @@ package smallthingz.ui.gallery
 import android.content.Context
 import smallthingz.ui.components.ChoiceArrangement
 import smallthingz.ui.components.NativeChoiceColor
+import smallthingz.ui.components.NativeChoiceLabelWidth
 import smallthingz.ui.components.NativeChoiceSemantics
 import smallthingz.ui.components.NativeChoiceStyle
 import smallthingz.ui.components.NativeSegmentedChoice
@@ -32,8 +33,8 @@ class GalleryEditorChoices(
     fixedColumns = if (kind == GalleryEditorChoiceKind.MENU) 3 else null,
     fillRowHeight = true,
 ) {
-    // Retouch and Finish fit natural labels before choosing their column count. All
-    // groups fill their columns equally so short labels cannot leave ragged rows.
+    // The shared grid reduces the three-column maximum using the actual scaled labels.
+    // All groups fill their columns equally so short labels cannot leave ragged rows.
     override val fillWrappedCells: Boolean get() = true
 }
 
@@ -44,6 +45,7 @@ private fun editorChoiceStyle(kind: GalleryEditorChoiceKind): NativeChoiceStyle 
         radiusDp = 12f, minHeightDp = if (grouped) 56f else 64f,
         horizontalPaddingDp = 4f, verticalPaddingDp = if (grouped) 6f else 8f,
         outlined = false, iconSizeDp = 22f, iconGapDp = 4f, iconAbove = true,
+        minimumLabelWidth = NativeChoiceLabelWidth.WholeLabel,
         textStyle = label.copy(weight = 400), selectedTextStyle = label.copy(weight = 600),
         disabledContent = NativeChoiceColor(NativeTextRole.MUTED, .38f),
         disabledSelectedContent = NativeChoiceColor(NativeTextRole.ACCENT, .38f),
