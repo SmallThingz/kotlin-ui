@@ -17,6 +17,7 @@ import smallthingz.ui.animation.core.AnimationVector1D
 import smallthingz.ui.animation.view.ViewColorTransition
 import smallthingz.ui.animation.view.ViewSpringDriver
 import smallthingz.ui.graphics.Color
+import smallthingz.ui.graphics.compositeOver
 import smallthingz.ui.graphics.toArgb
 import smallthingz.ui.text.view.ParagraphView
 import kotlin.math.max
@@ -151,9 +152,12 @@ private class CalibrationActionSurface(
             enabled -> palette.primary
             else -> Color(palette.onSurfaceVariant).copy(alpha = environment.appearance.calibration.disabledActionContentOpacity).toArgb()
         }
+        // Resolve the tonal fill against the shared Settings/Onboarding group role.
+        // An opaque owner paints theme grain once, without attenuating it by the tonal opacity.
         val container = if (progressSurface) Color(palette.primary)
             .copy(alpha = if (enabled || running) environment.appearance.calibration.actionOpacity
-                else environment.appearance.calibration.disabledActionOpacity).toArgb() else 0
+                else environment.appearance.calibration.disabledActionOpacity)
+            .compositeOver(Color(palette.foregroundFill)).toArgb() else 0
         bind(text, enabled, container, ink)
         progressColors?.retarget(progressTint())
     }
