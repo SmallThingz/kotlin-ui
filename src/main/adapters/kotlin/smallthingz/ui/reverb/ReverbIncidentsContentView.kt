@@ -35,6 +35,7 @@ import androidx.core.graphics.Insets
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import smallthingz.ui.common.mergedButtonGroup
+import smallthingz.ui.common.nativeSurfaceInputAllowed
 import androidx.recyclerview.widget.RecyclerView
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -304,7 +305,7 @@ class ReverbIncidentsContentView(
     }
 
     private fun selectAllOrEnter() {
-        if (!history.canMutate || history.rows.isEmpty()) return
+        if (!nativeSurfaceInputAllowed(this) || !history.canMutate || history.rows.isEmpty()) return
         if (!selecting) selecting = true
         else if (selection.size == history.rows.size) selection.clear()
         else history.rows.forEach { selection[it.key] = it.target }
@@ -349,13 +350,13 @@ class ReverbIncidentsContentView(
     }
 
     private fun deleteSelected() {
-        if (!history.canMutate || selection.isEmpty()) return
+        if (!nativeSurfaceInputAllowed(this) || !history.canMutate || selection.isEmpty()) return
         actions.deleteMany(selection.values.toList())
         consumeSelectionBack()
     }
 
     private fun requestClear() {
-        if (!history.canMutate || clearSheet != null) return
+        if (!nativeSurfaceInputAllowed(this) || !history.canMutate || clearSheet != null) return
         val targets = history.rows.map { it.target }
         if (targets.isEmpty()) return
         lateinit var sheet: ReverbIncidentClearSheet
