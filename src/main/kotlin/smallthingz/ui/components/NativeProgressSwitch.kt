@@ -1,6 +1,8 @@
 package smallthingz.ui.components
 
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Path
 import android.view.Choreographer
 import android.view.MotionEvent
 import android.view.View
@@ -11,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import smallthingz.ui.interaction.view.readCachedAnimatorDurationScale
 import smallthingz.ui.platform.AndroidUiFrameClock
+import smallthingz.ui.geometry.roundedGroupGeometry
 import smallthingz.ui.util.closePreservingPrimaryFailure
 import kotlin.math.roundToInt
 
@@ -37,6 +40,7 @@ open class NativeProgressSwitch(
     private val mark: NativeMaterialSwitchView = NativeMaterialSwitchView(context, scheme),
 ) : NativeToggleRow(context, View(context), null, mark, onChanged = onChanged) {
     private var closed = false
+    private val indicationClip = Path()
     private val spinner by lazy {
         nativeActionSpinner(context, scheme.ink).apply {
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -87,6 +91,27 @@ open class NativeProgressSwitch(
         val y = (height - mark.measuredHeight) / 2
         mark.layout(x, y, x + mark.measuredWidth, y + mark.measuredHeight)
         layoutRowRole()
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        val density = resources.displayMetrics.density
+        val radius = roundedGroupGeometry(w.toFloat(), h.toFloat(), density,
+            minOf(w, h) / (2f * density)).radius
+        indicationClip.rewind()
+        indicationClip.addRoundRect(0f, 0f, w.toFloat(), h.toFloat(), radius, radius, Path.Direction.CW)
+    }
+
+    override fun onDrawForeground(canvas: Canvas) {
+        // Only the standalone indication is pill-shaped. Keep the mark/progress and the full
+        // rectangular input/accessibility target, including its corners, owned by the same row.
+        val checkpoint = canvas.save()
+        try {
+            canvas.clipPath(indicationClip)
+            super.onDrawForeground(canvas)
+        } finally {
+            canvas.restoreToCount(checkpoint)
+        }
     }
 
     // A disabled accessory still owns its area instead of falling through to its parent.

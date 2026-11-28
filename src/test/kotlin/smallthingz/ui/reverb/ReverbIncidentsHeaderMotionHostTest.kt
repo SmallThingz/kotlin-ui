@@ -9,7 +9,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
+import java.time.Duration
+import org.junit.After
 import org.junit.Assert.*
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -18,6 +21,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.LooperMode
+import org.robolectric.shadows.ShadowChoreographer
 import org.robolectric.util.ReflectionHelpers
 import smallthingz.ui.components.NativeGroupLayout
 import smallthingz.ui.components.NativeModalWindowRuntime
@@ -29,10 +33,27 @@ import smallthingz.ui.text.view.PlainTextAccessibilityWindowScope
 
 /** Retained real header actions, including the source-bound path used by an owning Activity. */
 @RunWith(RobolectricTestRunner::class)
-@Config(application = Application::class, sdk = [35], qualifiers = "w360dp-h640dp-mdpi")
+@Config(application = Application::class, sdk = [35], qualifiers = "w360dp-h640dp-mdpi",
+    instrumentedPackages = ["smallthingz.ui.animation.view"])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class ReverbIncidentsHeaderMotionHostTest {
+    private var previousFramePaused = false
+    private lateinit var previousFrameDelay: Duration
+
+    @Before fun useControlledFrames() {
+        previousFramePaused = ShadowChoreographer.isPaused()
+        previousFrameDelay = ShadowChoreographer.getFrameDelay()
+        // Keep retarget's instrumented nanoTime and vsync on the same clock, with finite steps.
+        ShadowChoreographer.setPaused(true)
+        ShadowChoreographer.setFrameDelay(Duration.ofMillis(16))
+    }
+
+    @After fun restoreFramePolicy() {
+        ShadowChoreographer.setFrameDelay(previousFrameDelay)
+        ShadowChoreographer.setPaused(previousFramePaused)
+    }
+
     @Test fun standaloneHeaderDefersNonBackEffectsUntilMotionSettles() = verifyAdmission(false)
     @Test fun sourceBoundHeaderDefersNonBackEffectsUntilMotionSettles() = verifyAdmission(true)
 
@@ -75,7 +96,7 @@ class ReverbIncidentsHeaderMotionHostTest {
                 try {
                     panel.bind(history)
                     panel.pointerList?.itemAnimator = null
-                    shadowOf(Looper.getMainLooper()).idle()
+                    shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(16))
                     fun place() {
                         host.measure(View.MeasureSpec.makeMeasureSpec(360, View.MeasureSpec.EXACTLY),
                             View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY))

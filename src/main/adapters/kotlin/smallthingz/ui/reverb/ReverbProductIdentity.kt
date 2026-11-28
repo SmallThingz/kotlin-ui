@@ -69,12 +69,13 @@ internal class ReverbIdentityMarkView(context: Context) : NativeRoundedClipLayou
 
     override fun getAccessibilityClassName(): CharSequence = "android.widget.ImageView"
 
-    private fun refreshLauncherArtwork(value: ReverbProductIdentity.Launcher, force: Boolean = false) {
+    private fun refreshLauncherArtwork(value: ReverbProductIdentity.Launcher, force: Boolean = false): Boolean {
         // Launcher resources follow the application/system configuration, even in a forced-theme Activity.
         val resources = context.applicationContext.resources
-        if (!force && launcherConfiguration == resources.configuration) return
+        if (!force && launcherConfiguration == resources.configuration) return false
         monochrome.setImageDrawable(resources.getDrawable(value.drawable, null))
         launcherConfiguration = Configuration(resources.configuration)
+        return true
     }
 
     private fun bindLauncherOutline(value: ReverbProductIdentity) {
@@ -140,12 +141,14 @@ internal class ReverbIdentityMarkView(context: Context) : NativeRoundedClipLayou
             }
             if (value !is ReverbProductIdentity.Launcher) launcherConfiguration = null
         }
-        if (value is ReverbProductIdentity.Launcher) {
+        val launcherReloaded = if (value is ReverbProductIdentity.Launcher) {
             refreshLauncherArtwork(value, force = previous !is ReverbProductIdentity.Launcher ||
                 previous.drawable != value.drawable)
-        }
+        } else false
         if (value == ReverbProductIdentity.Reverb) reverb.refreshResourcePalette()
-        monochrome.imageTintList = null
+        // Reapplying even a null tint can invalidate an adaptive icon's retained child raster.
+        // New resources still receive the original clearing; an established Launcher is untinted.
+        if (value !is ReverbProductIdentity.Launcher || launcherReloaded) monochrome.imageTintList = null
         if (value is ReverbProductIdentity.Monochrome) {
             monochrome.setColorFilter(ReverbDesign.appearance.toolbars.contentColor(palette))
         } else monochrome.clearColorFilter()
