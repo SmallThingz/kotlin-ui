@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.RotateDrawable
 import smallthingz.ui.components.NativeChoiceColor
+import smallthingz.ui.components.NativeActionSheetStyle
 import smallthingz.ui.components.NativeTextRole
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeDarkSurfacePreset
@@ -97,16 +98,23 @@ object GalleryDesign {
     val settingsGroup = appearance.groupSurfaces.settingsGroup
 
     /** Gallery settings sheets share the flat library backdrop and common modal geometry. */
-    fun settingsSheetStyle(density: Density, resolver: FontFamily.Resolver, colors: NativeColorScheme): smallthingz.ui.components.NativeActionSheetStyle {
+    fun settingsSheetStyle(density: Density, resolver: FontFamily.Resolver, colors: NativeColorScheme): NativeActionSheetStyle =
+        quietSheetStyle(density, resolver, colors).let {
+            it.copy(recipe = it.recipe.copy(actionsGapDp = 0f))
+        }
+
+    /** Quiet editor backdrop with the common recipe's footer and action spacing intact. */
+    fun editorSheetStyle(density: Density, resolver: FontFamily.Resolver, colors: NativeColorScheme): NativeActionSheetStyle =
+        quietSheetStyle(density, resolver, colors)
+
+    private fun quietSheetStyle(density: Density, resolver: FontFamily.Resolver, colors: NativeColorScheme): NativeActionSheetStyle {
         val surface = when (val current = colors.surfacePreset) {
             is NativeDarkSurfacePreset -> current.copy(backgroundGrain = 0f)
             is NativeGrainPreset -> current.copy(backgroundGrain = 0f)
             null -> NativeGrainPreset(backgroundGrain = 0f, foregroundGrain = 0f)
         }
         val sheetColors = colors.copy(surfacePreset = surface)
-        return reverbActionSheetStyle(ReverbDesign.windowTheme(density, resolver, sheetColors)).let {
-            it.copy(recipe = it.recipe.copy(actionsGapDp = 0f))
-        }
+        return reverbActionSheetStyle(ReverbDesign.windowTheme(density, resolver, sheetColors))
     }
 
     fun palette(context: Context, dark: Boolean): NativeColorScheme =
