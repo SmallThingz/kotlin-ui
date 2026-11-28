@@ -133,6 +133,8 @@ class NativeProgressSwitchIndicationHostTest {
             shadowOf(Looper.getMainLooper()).idleFor(16, MILLISECONDS)
             assertTrue("Real control must attach before window focus", row.isAttachedToWindow)
             activity.windowFocusChanged(true)
+            // SDK35 queues focus on ViewRoot's Handler; the next traversal releases its message.
+            shadowOf(Looper.getMainLooper()).idleFor(16, MILLISECONDS)
             assertTrue("Real window must own focus", row.hasWindowFocus())
             layout(root, 360, 640)
             assertTrue(parking.requestFocus())
