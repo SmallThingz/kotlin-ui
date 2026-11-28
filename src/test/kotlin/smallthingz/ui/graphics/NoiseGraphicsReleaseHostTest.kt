@@ -29,11 +29,13 @@ import smallthingz.ui.components.NativeCaptureControlsStyle
 import smallthingz.ui.components.NativeColorScheme
 import smallthingz.ui.components.NativeDecorativeIconView
 import smallthingz.ui.components.NativeModalWindowRuntime
+import smallthingz.ui.components.NativeTopBarAction
 import smallthingz.ui.components.blob.NativeAudioBlobIcons
 import smallthingz.ui.input.phase.NativeViewPointerHitLayout
 import smallthingz.ui.reverb.ReverbEnvironment
 import smallthingz.ui.reverb.ReverbGlyphView
 import smallthingz.ui.reverb.ReverbIcon
+import smallthingz.ui.reverb.ReverbIconDrawable
 import smallthingz.ui.reverb.SpringFineSeekEnvironment
 import smallthingz.ui.reverb.createReverbSpringFineSeekView
 import smallthingz.ui.reverb.home.ReverbHomeControls
@@ -233,6 +235,58 @@ class NoiseGraphicsReleaseHostTest {
                 assertArrayEquals(before, render(view))
                 assertNotSame(replacement, checkNotNull(mask()))
             }
+        } finally {
+            controller.pause().stop().destroy()
+        }
+    }
+
+    @Test fun toolbarGlyphReleasesOnAncestorHideAndDetachAndRestoresExactPixels() {
+        val controller = Robolectric.buildActivity(Activity::class.java).setup().visible()
+        try {
+            val activity = controller.get()
+            val root = FrameLayout(activity)
+            activity.setContentView(root)
+            val parent = FrameLayout(activity)
+            root.addView(parent)
+            val tint = Color.rgb(27, 112, 147)
+            val action = NativeTopBarAction(activity, 1f, { root }, "Settings", initialTint = tint)
+            val glyph = ReverbIconDrawable(ReverbIcon.Settings, 1f, tint)
+            action.setGlyph(glyph, tint)
+            parent.addView(action)
+            size(action, 48, 48)
+            val leaf = action.visual
+            fun mask() = field(glyph, "maskBitmap") as Bitmap?
+            fun assertReleased(previous: Bitmap) {
+                assertNull(mask())
+                assertNull(field(glyph, "maskCanvas"))
+                assertFalse(previous.isRecycled)
+            }
+
+            assertTrue(leaf.isAttachedToWindow && leaf.isShown)
+            val pixels = render(leaf)
+            assertTrue(tint in pixels)
+            val original = checkNotNull(mask())
+            assertArrayEquals(pixels, render(leaf))
+            assertSame(original, mask())
+
+            parent.visibility = View.INVISIBLE
+            assertTrue(leaf.isAttachedToWindow)
+            assertFalse(leaf.isShown)
+            assertReleased(original)
+            parent.visibility = View.VISIBLE
+            assertNull(mask())
+            assertArrayEquals(pixels, render(leaf))
+            val restored = checkNotNull(mask())
+            assertNotSame(original, restored)
+
+            // Seed a mask while already hidden so detach must release it again.
+            parent.visibility = View.INVISIBLE
+            assertReleased(restored)
+            assertArrayEquals(pixels, render(leaf))
+            val hiddenMask = checkNotNull(mask())
+            parent.removeView(action)
+            assertFalse(leaf.isAttachedToWindow)
+            assertReleased(hiddenMask)
         } finally {
             controller.pause().stop().destroy()
         }

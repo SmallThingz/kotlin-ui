@@ -30,7 +30,6 @@ class GalleryEditorChoices(
     semantics = if (kind == GalleryEditorChoiceKind.MENU) NativeChoiceSemantics.RADIO
         else NativeChoiceSemantics.BUTTON,
     activateOnFocusNavigation = false,
-    fixedColumns = if (kind == GalleryEditorChoiceKind.MENU) 3 else null,
     fillRowHeight = true,
 ) {
     // The shared grid reduces the three-column maximum using the actual scaled labels.

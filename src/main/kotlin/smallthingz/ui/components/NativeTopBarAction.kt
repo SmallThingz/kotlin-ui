@@ -81,6 +81,22 @@ open class NativeTopBarAction(
         leaf.invalidate()
     }
 
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        updateGlyphVisibility(isVisible)
+    }
+
+    override fun onDetachedFromWindow() {
+        updateGlyphVisibility(false)
+        super.onDetachedFromWindow()
+    }
+
+    private fun updateGlyphVisibility(visible: Boolean) {
+        glyph?.setVisible(visible, false)
+        // The leaf draws the glyph directly and must rerecord its display list.
+        leaf.invalidate()
+    }
+
     fun setGlyphMorph(renderer: NativePathMorph?, progress: Float, targetTint: () -> Int) {
         morph = renderer
         morphProgress = progress.coerceIn(0f, 1f)
