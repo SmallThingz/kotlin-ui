@@ -42,7 +42,8 @@ open class InjectPermissionRow(
         enabled: Boolean, requestEnabled: Boolean, requestLabel: String, onRequest: () -> Unit) {
         (trailing as ImageView).apply {
             visibility = if (showStatus) GONE else VISIBLE
-            setImageDrawable(if (granted) grantedIcon else ungrantedIcon)
+            // Status text replaces this icon. Keep its drawable lazy until it can be shown.
+            if (!showStatus) setImageDrawable(if (granted) grantedIcon else ungrantedIcon)
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             alpha = InjectPluginVisuals.permissionStatusAlpha(enabled, granted)
         }
