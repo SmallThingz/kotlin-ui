@@ -36,7 +36,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * Shared switch with a constant 24dp thumb in every state. Thumb content is opt-in.
+ * Shared switch with a 24dp thumb in every state when the bounds allow it. Thumb content is opt-in.
  * The parent owns the row's click target, checked semantics and press feedback. This View adds
  * no click listener, focus stop, minimum 48dp target, ripple or platform Switch styling.
  *
@@ -183,22 +183,31 @@ class NativeMaterialSwitchView(
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val density = resources.displayMetrics.density
-        trackWidth = (52f * density).roundToInt()
-        trackHeight = (32f * density).roundToInt()
-        borderWidth = min(NativeDefaultColorScheme.THIN_OUTLINE_WIDTH_DP * density, min(trackWidth, trackHeight) / 2f)
+        val nominalWidth = (52f * density).roundToInt()
+        val nominalHeight = (32f * density).roundToInt()
         setMeasuredDimension(
-            resolveSize(trackWidth, widthMeasureSpec),
-            resolveSize(trackHeight, heightMeasureSpec),
+            resolveSize(nominalWidth, widthMeasureSpec),
+            resolveSize(nominalHeight, heightMeasureSpec),
         )
+        trackWidth = min(nominalWidth, measuredWidth)
+        trackHeight = min(nominalHeight, measuredHeight)
+        val shortSide = min(trackWidth, trackHeight)
+        borderWidth = min(NativeDefaultColorScheme.THIN_OUTLINE_WIDTH_DP * density, shortSide / 2f)
 
         thumbProgress?.let {
             val size = MeasureSpec.makeMeasureSpec((12f * density).roundToInt(), MeasureSpec.EXACTLY)
             it.measure(size, size)
         }
 
-        thumbSize = (THUMB_SIZE_DP * density).toInt()
-        val minBound = ((32f - THUMB_SIZE_DP) / 2f) * density
-        val maxBound = ((52f - THUMB_SIZE_DP) - (32f - THUMB_SIZE_DP) / 2f) * density
+        thumbSize = min((THUMB_SIZE_DP * density).toInt(), shortSide)
+        val travel = trackWidth - thumbSize
+        val nominalInset = ((32f - THUMB_SIZE_DP) / 2f) * density
+        val minBound = min(nominalInset, travel / 2f)
+        val maxBound = if (trackWidth == nominalWidth && trackHeight == nominalHeight) {
+            ((52f - THUMB_SIZE_DP) - (32f - THUMB_SIZE_DP) / 2f) * density
+        } else {
+            travel - minBound
+        }
         val targetOffset = if (checked) maxBound else minBound
         val offset = offsetMotion
         if (offset == null) {
@@ -230,7 +239,8 @@ class NativeMaterialSwitchView(
 
         // Preserve pixel truncation for the fixed diameter and animated offset.
         val actualSize = thumbSize
-        val logicalOffset = offset.value.toInt()
+        // A resize can leave the current spring sample outside the new track until it settles.
+        val logicalOffset = offset.value.toInt().coerceIn(0, trackWidth - actualSize)
         val thumbX = if (layoutDirection == LAYOUT_DIRECTION_RTL) {
             trackWidth - actualSize - logicalOffset
         } else logicalOffset

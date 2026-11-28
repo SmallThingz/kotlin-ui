@@ -590,6 +590,7 @@ class NativeAnchoredDropdown private constructor(
             private var interruptedSnap = false
             private var heldIndication: RowIndication? = null
             private var pressedCue: NativeDropdownOverflowCue? = null
+            private val pressedCueBounds = RectF()
             private var flingPath: NativeDropdownFlingPath? = null
             private val previousCue = NativeDropdownOverflowCue(context, -1, density.density, palette.ink, ::stepCue)
             private val nextCue = NativeDropdownOverflowCue(context, 1, density.density, palette.ink, ::stepCue)
@@ -935,7 +936,12 @@ class NativeAnchoredDropdown private constructor(
                                 else -> null
                             }
                             val cue = pressedCue
-                            if (cue != null) cue.pressAt(event.x, event.y) else pressRow(downRow, event.x, event.y)
+                            if (cue != null) {
+                                // The reveal can move this cue while the pointer stays still.
+                                pressedCueBounds.set(cue.left.toFloat(), cue.top.toFloat(),
+                                    cue.right.toFloat(), cue.bottom.toFloat())
+                                cue.pressAt(event.x, event.y)
+                            } else pressRow(downRow, event.x, event.y)
                         }
                         val tracker = velocityTracker ?: VelocityTracker.obtain().also { velocityTracker = it }
                         tracker.addMovement(event)
@@ -968,6 +974,8 @@ class NativeAnchoredDropdown private constructor(
                         if (i < 0) { endGesture(); return true }
                         trackExplicitTap(event, i)
                         val tappedCue = pressedCue
+                        val hitPressedCue = tappedCue?.isPressed == true &&
+                            pressedCueBounds.contains(event.getX(i), event.getY(i))
                         clearPress(cancel = false)
                         val delta = downY - event.getY(i)
                         val moved = dragging || abs(delta) > slop
@@ -1011,7 +1019,7 @@ class NativeAnchoredDropdown private constructor(
                                 if (closing && reveal == 0f) dispose()
                             } else if (tappedCue != null) {
                                 // A cue-owned tap never falls through to an option.
-                                if (explicitTap && tappedCue.contains(x, y)) {
+                                if (explicitTap && hitPressedCue) {
                                     tappedCue.performClick()
                                     return true
                                 }

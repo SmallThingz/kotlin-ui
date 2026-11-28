@@ -511,6 +511,40 @@ class NativeDropdownFeedbackIntegrationTest {
         }
     }
 
+    @Test fun stationaryOverflowCueTapUsesPressBoundsAfterRevealMovesCue() =
+        scenario(initial = 0, anchorGravity = Gravity.TOP) { f -> main {
+            val cue = children(f.wheel).filterIsInstance<NativeDropdownOverflowCue>().single { it.isShown }
+            val session = session(f)
+            val viewport = checkNotNull(field(session, "viewport")) as NativeDropdownViewport
+            val rowHeight = f.control.view.height
+            val inset = f.activity.resources.displayMetrics.density / 2f
+            val x = f.wheel.width / 2f
+
+            for (cancel in listOf(true, false)) {
+                // Stage the cue at an early reveal sample without depending on animator scale or frame timing.
+                cue.place(f.wheel.width, viewport.revealTop(0f, .1f) + inset,
+                    viewport.revealBottom(0f, f.content.options.lastIndex, .1f) - inset,
+                    slotY(f), rowHeight, bothVisible = false, visible = true)
+                val y = cue.top + cue.height / 2f
+                assertTrue(cue.contains(x, y))
+                val down = SystemClock.uptimeMillis()
+                touch(f.wheel, MotionEvent.ACTION_DOWN, down, x, y)
+                assertTrue(cue.isPressed)
+
+                // Lay out the fully revealed wheel while the pointer remains down.
+                f.wheel.requestLayout()
+                f.wheel.layout(f.wheel.left, f.wheel.top, f.wheel.right, f.wheel.bottom)
+                assertTrue(cue.isShown)
+                assertTrue(cue.isPressed)
+                assertFalse("The down point must be outside the moved cue", cue.contains(x, y))
+                touch(f.wheel, if (cancel) MotionEvent.ACTION_CANCEL else MotionEvent.ACTION_UP, down, x, y)
+                assertFalse(cue.isPressed)
+                assertEquals(if (cancel) 0 else 1, field(session, "settled"))
+                assertTrue(f.group.isExpanded)
+                assertTrue(f.deliveries.isEmpty())
+            }
+        } }
+
     @Test fun edgeAnchoredOptionCenterActivatesWhileOverflowArrowStillSteps() {
         for (atTop in listOf(true, false)) for (policy in DropdownSelectionPolicy.values()) {
             val initial = if (atTop) 1 else 2

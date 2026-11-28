@@ -7,6 +7,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -444,7 +446,7 @@ class NativeModalContrastIntegrationTest {
             }
             // Public sheet contentBackground covers the mark as well as the body.
             val customFill = 0xffdddddd.toInt()
-            val customLayer = FrameLayout(context).apply { background = android.graphics.drawable.ColorDrawable(customFill) }
+            val customLayer = FrameLayout(context).apply { background = ColorDrawable(customFill) }
             sheet.clip.removeView(handle)
             sheet.clip.addView(customLayer)
             customLayer.addView(handle)
@@ -452,6 +454,24 @@ class NativeModalContrastIntegrationTest {
             assertMark(handle, textSurfaceRange(customFill))
             assertEquals("Ordinary paragraph ownership must not opt into a caller background", 0L,
                 NativeModalTextSurface.sample(handle.mark))
+
+            val base = reverbActionSheetStyle(light)
+            sheet.updateStyle(base.copy(
+                palette = base.palette.copy(surfaceContainerLow = Color.BLACK),
+                recipe = base.recipe.copy(grainIntensity = 0f),
+            ))
+            handle.mark.bindColor(Color.BLACK)
+            customLayer.background = ColorDrawable(Color.TRANSPARENT)
+            assertMark(handle, textSurfaceRange(Color.BLACK))
+            assertEquals(0L, NativeModalTextSurface.sample(handle.mark))
+
+            customLayer.background = ColorDrawable(0x80000000.toInt())
+            assertEquals(0L, NativeModalTextSurface.sample(handle.mark, forHandle = true))
+            customLayer.background = ColorDrawable(Color.TRANSPARENT).apply { setTint(Color.WHITE) }
+            assertEquals(0L, NativeModalTextSurface.sample(handle.mark, forHandle = true))
+            customLayer.background = GradientDrawable().apply { setColor(Color.BLACK) }
+            assertEquals(0L, NativeModalTextSurface.sample(handle.mark, forHandle = true))
+
             customLayer.removeView(handle)
             sheet.clip.removeView(customLayer)
             sheet.clip.addView(handle)
