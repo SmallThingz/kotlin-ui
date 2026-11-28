@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
+import android.graphics.drawable.DrawableWrapper
 import android.os.Looper
 import android.os.SystemClock
 import android.view.MotionEvent
@@ -27,6 +28,9 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowChoreographer
+import org.robolectric.shadows.ShadowLog
+import org.robolectric.util.ReflectionHelpers
+import smallthingz.ui.interaction.view.RowIndication
 
 /** Software/native-graphics foreground pixels, not a GPU ripple or physical focus qualification. */
 @RunWith(RobolectricTestRunner::class)
@@ -34,6 +38,7 @@ import org.robolectric.shadows.ShadowChoreographer
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class NativeProgressSwitchIndicationHostTest {
+    private val inkDiagnostics = mutableListOf<String>()
     private lateinit var frameDelay: Duration
     private var vsyncPaused = false
 
@@ -84,13 +89,22 @@ class NativeProgressSwitchIndicationHostTest {
         foreground(row).useBitmap { assertEquals(0, Color.alpha(it.getPixel(it.width / 2, it.height / 2))) }
     }
 
-    @Test fun pressedInkIsRoundedButCornerTapStillUsesTheFullTarget() = withRow { row, values ->
+    @Test fun pressedCornerKeepsTheFullInputAndSemanticTarget() = withRow { row, values ->
         assertTrue(row.width >= 48 && row.height >= 48)
         val down = SystemClock.uptimeMillis()
         event(MotionEvent.ACTION_DOWN, 1f, 1f, down) { assertTrue(row.onTouchEvent(it)) }
-        settleInk(row)
-        assertRoundedInk(row)
+        // API35 patterned ripple skips bitmap Canvas. The pressed pixel contract lives in
+        // NativeProgressSwitchPressedWindowIntegrationTest, with real hardware Window pixels.
+        advanceFrames(420) // Same held-press budget; no software foreground pixel qualification.
         assertTrue("A press does not dispatch before release", values.isEmpty())
+        val node = checkNotNull(row.createAccessibilityNodeInfo())
+        try {
+            assertTrue(node.isFocusable && node.isCheckable && !node.isChecked && node.isEnabled)
+            assertTrue(node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK })
+            val bounds = Rect().also(node::getBoundsInScreen)
+            assertEquals(row.width, bounds.width())
+            assertEquals(row.height, bounds.height())
+        } finally { node.recycle() }
         event(MotionEvent.ACTION_UP, 1f, 1f, down) { assertTrue(row.onTouchEvent(it)) }
         shadowOf(Looper.getMainLooper()).idle()
         assertEquals("Visually clipped corner remains an ordinary target", listOf(true), values)
@@ -100,7 +114,7 @@ class NativeProgressSwitchIndicationHostTest {
         assertTrue(row.requestFocusFromTouch())
         settleInk(row)
         foreground(row).useBitmap {
-            assertTrue(Color.alpha(it.getPixel(1, 1)) > 0)
+            assertTrue("Grouped corner ink; $inkDiagnostics", Color.alpha(it.getPixel(1, 1)) > 0)
             assertTrue(Color.alpha(it.getPixel(it.width / 2, it.height / 2)) > 0)
         }
         assertTrue(row.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
@@ -128,7 +142,14 @@ class NativeProgressSwitchIndicationHostTest {
         setScale(1f)
         try {
             context.setContentView(root)
-            activity.visible().windowFocusChanged(true)
+            activity.visible()
+            // Paused 16ms vsync defers the first traversal; focus dispatch requires its ViewRoot.
+            shadowOf(Looper.getMainLooper()).idleFor(16, MILLISECONDS)
+            assertTrue("Real control must attach before window focus", row.isAttachedToWindow)
+            activity.windowFocusChanged(true)
+            // SDK35 queues focus on ViewRoot's Handler; the next traversal releases its message.
+            shadowOf(Looper.getMainLooper()).idleFor(16, MILLISECONDS)
+            assertTrue("Real window must own focus", row.hasWindowFocus())
             layout(root, 360, 640)
             assertTrue(parking.requestFocus())
             settleInk(row)
@@ -144,28 +165,72 @@ class NativeProgressSwitchIndicationHostTest {
     }
 
     private fun settleInk(row: View) {
-        shadowOf(Looper.getMainLooper()).idleFor(120, MILLISECONDS) // Deliver accepted interactions/delayed press.
+        recordInk(row, "before-settle")
+        advanceFrames(120) // Deliver accepted interactions/delayed press within the original budget.
         foreground(row).recycle() // Start the real RippleDrawable's software draw timeline if pressed.
-        shadowOf(Looper.getMainLooper()).idleFor(300, MILLISECONDS)
+        recordInk(row, "after-first-draw")
+        advanceFrames(300)
+        recordInk(row, "after-settle")
+    }
+
+    private fun advanceFrames(millis: Long) {
+        // Paused native vsync is clock-driven, not a queued Looper task: large jumps can coalesce it.
+        var remaining = millis
+        while (remaining > 0) {
+            val step = minOf(16L, remaining)
+            shadowOf(Looper.getMainLooper()).idleFor(step, MILLISECONDS)
+            remaining -= step
+        }
     }
 
     private fun assertRoundedInk(row: View) {
         foreground(row).useBitmap { bitmap ->
-            for ((x, y) in listOf(1 to 1, bitmap.width - 2 to 1,
-                1 to bitmap.height - 2, bitmap.width - 2 to bitmap.height - 2)) {
-                assertEquals("No square indication at $x,$y", 0, Color.alpha(bitmap.getPixel(x, y)))
+            // Capture the existing unmasked causal control at the same clock, even if clipped ink fails.
+            Bitmap.createBitmap(row.width, row.height, Bitmap.Config.ARGB_8888).useBitmap { raw ->
+                val canvas = Canvas(raw)
+                row.foreground.draw(canvas)
+                val receipt = "rawCenterAlpha=${Color.alpha(raw.getPixel(raw.width / 2, raw.height / 2))} " +
+                    "rawCornerAlpha=${Color.alpha(raw.getPixel(1, 1))} canvasHardware=${canvas.isHardwareAccelerated} " +
+                    "rippleLogs=${ShadowLog.getLogsForTag("RippleDrawable").takeLast(3).map { it.msg }}; $inkDiagnostics"
+                for ((x, y) in listOf(1 to 1, bitmap.width - 2 to 1,
+                    1 to bitmap.height - 2, bitmap.width - 2 to bitmap.height - 2)) {
+                    assertEquals("No square indication at $x,$y", 0, Color.alpha(bitmap.getPixel(x, y)))
+                }
+                assertTrue("Focus/hover/press remains visible; $receipt", Color.alpha(bitmap.getPixel(bitmap.width / 2, bitmap.height / 2)) > 0)
+                assertTrue("The rounded assertion must exercise actual ink; $receipt", Color.alpha(raw.getPixel(1, 1)) > 0)
             }
-            assertTrue("Focus/hover/press remains visible", Color.alpha(bitmap.getPixel(bitmap.width / 2, bitmap.height / 2)) > 0)
-        }
-        // Causal control: the very same live indication still paints the formerly rectangular corner.
-        Bitmap.createBitmap(row.width, row.height, Bitmap.Config.ARGB_8888).useBitmap {
-            row.foreground.draw(Canvas(it))
-            assertTrue("The rounded assertion must exercise actual ink", Color.alpha(it.getPixel(1, 1)) > 0)
         }
     }
 
     private fun foreground(row: View): Bitmap =
         Bitmap.createBitmap(row.width, row.height, Bitmap.Config.ARGB_8888).also { row.onDrawForeground(Canvas(it)) }
+
+    /** Read-only receipts: do not synthesize state, deliver callbacks, draw, or advance clocks. */
+    private fun recordInk(row: View, phase: String) {
+        fun field(owner: Any?, name: String): Any? = if (owner == null) null else
+            runCatching { ReflectionHelpers.getField<Any?>(owner, name) }.getOrElse { "unavailable:$name" }
+        val controller = field(row, "input")
+        var drawable = row.foreground
+        while (drawable is DrawableWrapper && drawable !is RowIndication) drawable = drawable.drawable
+        val indication = drawable as? RowIndication
+        val alpha = field(indication, "stateAlpha")
+        val ripple = field(indication, "ripple") as? android.graphics.drawable.Drawable
+        fun size(owner: Any?, name: String) = (field(owner, name) as? Collection<*>)?.size
+        inkDiagnostics += "$phase uptime=${SystemClock.uptimeMillis()} " +
+            "focus=${row.isFocused} window=${row.hasWindowFocus()} touchMode=${row.isInTouchMode} " +
+            "rowHardware=${row.isHardwareAccelerated} rootHardware=${row.rootView.isHardwareAccelerated} " +
+            "attached=${row.isAttachedToWindow} shown=${row.isShown} enabled=${row.isEnabled} " +
+            "size=${row.width}x${row.height} measured=${row.measuredWidth}x${row.measuredHeight} " +
+            "layoutRequested=${row.isLayoutRequested} foregroundBounds=${row.foreground.bounds} " +
+            "inputAttached=${field(controller, "attached")} bindingEnabled=${field(field(controller, "binding"), "enabled")} " +
+            "focusToken=${field(controller, "focus")} pending=${size(controller, "pendingInteractions")} " +
+            "deliveredStates=${size(controller, "deliveredStates")} deliveredPresses=${size(controller, "deliveredPresses")} " +
+            "inkMeasured=${field(indication, "measured")} inkSize=${field(indication, "widthPx")}x${field(indication, "heightPx")} " +
+            "states=${size(indication, "states")} alpha=${field(alpha, "value")} running=${field(alpha, "running")} " +
+            "framePosted=${field(indication, "framePosted")} lastFrame=${field(alpha, "lastFrame")} " +
+            "ripple=${ripple?.javaClass?.simpleName} visible=${ripple?.isVisible} bounds=${ripple?.bounds} state=${ripple?.state?.contentToString()} " +
+            "rippleStyle=${field(field(ripple, "mState"), "mRippleStyle")} patternedSessions=${size(ripple, "mRunningAnimations")}"
+    }
 
     private fun Bitmap.useBitmap(block: (Bitmap) -> Unit) { try { block(this) } finally { recycle() } }
 
