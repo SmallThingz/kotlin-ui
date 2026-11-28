@@ -665,9 +665,12 @@ class AudioReactiveBlobView(
         private var tertiary = 0
         private var paused = 0
         private var gradientState = -1
+        // The drain geometry depends on size, independent of the animated palette.
+        private var silenceDrainMask: RadialGradient? = null
 
         override fun resize(width: Int, height: Int) {
             gradientState = -1
+            silenceDrainMask = null
         }
 
         override fun setReadoutColorFilter(filter: LightingColorFilter?) {
@@ -728,11 +731,12 @@ class AudioReactiveBlobView(
                     val baseGradient = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(), primary, tertiary, Shader.TileMode.CLAMP)
                     val mutedGradient = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(),
                         silenceBlobMutedColor(primary), silenceBlobMutedColor(tertiary), Shader.TileMode.CLAMP)
-                    val drainMask = RadialGradient(cx, cy, minSize * .33f,
+                    val drainMask = silenceDrainMask ?: RadialGradient(cx, cy, minSize * .33f,
                         intArrayOf(silenceBlobDrainMaskColor(0f), silenceBlobDrainMaskColor(.175f),
                             silenceBlobDrainMaskColor(.35f), silenceBlobDrainMaskColor(.525f),
                             silenceBlobDrainMaskColor(.7f), silenceBlobDrainMaskColor(1f)),
                         floatArrayOf(0f, .175f, .35f, .525f, .7f, 1f), Shader.TileMode.CLAMP)
+                        .also { silenceDrainMask = it }
                     silencePaint.shader = ComposeShader(mutedGradient, drainMask, PorterDuff.Mode.DST_IN)
                     baseGradient
                 } else {
