@@ -215,6 +215,41 @@ class GalleryEditorChoicesIntegrationTest {
         }
     }
 
+    @Test fun menuLongLabelsUseFewerColumnsAtLargeFontWithoutBreakingWords() = onMain {
+        val labels = listOf("Exposure", "Brightness", "Contrast", "Highlights", "Shadows", "Saturation",
+            "Warmth", "Tint", "Vignette", "Detail", "Bloom", "Curves", "Color mix", "Color grading", "Color steps")
+        for (dpi in listOf(160, 421)) for (font in listOf(1f, 2f)) for (rtl in listOf(false, true)) {
+            val context = context(font, dpi)
+            val group = GalleryEditorChoices(context, GalleryDesign.palette(context, true).pageControls,
+                GalleryEditorChoiceKind.MENU)
+            val options = labels.map { NativeChoice(it, it, ColorDrawable(Color.WHITE),
+                contentDescription = it, semantics = NativeChoiceSemantics.BUTTON) }
+            try {
+                group.layoutDirection = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+                group.bind(options, null)
+                val retained = chips(group, options)
+                val textSizes = retained.map { it.textSize }
+                // Re-measure the same nodes at wide/narrow/wide widths; no forced layout/cache reset.
+                for (width in listOf(363, 220, 392, 363)) {
+                    measure(group, width)
+                    assertReadable(group, options)
+                    assertGrid(group, options, 8)
+                    retained.forEachIndexed { index, chip ->
+                        assertSame(chip, group.choiceView(options[index].id))
+                        assertEquals("Do not shrink scaled typography", textSizes[index], chip.textSize, 0f)
+                        assertEquals("Full short label must not break: ${options[index].label}, font=$font width=$width",
+                            1, checkNotNull(chip.layout).lineCount)
+                    }
+                    val columns = retained.count { it.top == retained.first().top }
+                    if (width == 363) {
+                        if (font == 1f) assertEquals("Ordinary editor grid keeps three columns", 3, columns)
+                        else assertTrue("200% labels must reduce the observed three-column layout", columns < 3)
+                    }
+                }
+            } finally { group.close() }
+        }
+    }
+
     @Test fun disabledOptionsAndDisabledGroupsRejectClickAndAccessibilityActivation() = onMain {
         val context = context(1f)
         for (kind in GalleryEditorChoiceKind.values()) {
