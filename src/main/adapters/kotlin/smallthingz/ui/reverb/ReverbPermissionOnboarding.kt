@@ -184,6 +184,9 @@ open class ReverbPermissionOnboardingScreen(
             })
         }, FrameLayout.LayoutParams(-1, -2))
     }
+    /** Actual permission-page viewport, for host-owned position preservation. */
+    val pageViewport: ScrollView get() = page
+
     private val footer = FrameLayout(context).apply {
         setPadding(0, dp(theme.appearance.onboardingFooter.actionsTopGapDp), 0, 0)
         addView(NativeButtonTouchTarget(done), FrameLayout.LayoutParams(-2, -2, Gravity.END))
