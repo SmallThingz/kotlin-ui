@@ -16,6 +16,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.annotation.ColorInt
+import smallthingz.ui.common.nativeSurfaceInputAllowed
 import smallthingz.ui.controls.ControlPalette
 import smallthingz.ui.controls.ControlStyle
 import smallthingz.ui.controls.StateColorSurface
@@ -279,7 +280,13 @@ open class NativeSettingsRow(
     // The row's selection is visual and semantic state for its own action.
     override fun dispatchSetSelected(selected: Boolean) = Unit
 
-    override fun performClick(): Boolean = acceptsNativeInput() && super.performClick()
+    override fun performClick(): Boolean =
+        acceptsNativeInput() && nativeSurfaceInputAllowed(this) && super.performClick()
+
+    // View.performLongClick(x, y) forwards to this overload, retaining coordinates for
+    // the platform context-menu fallback. Long-only rows need no primary click action.
+    override fun performLongClick(): Boolean =
+        acceptsNativeInput() && nativeSurfaceInputAllowed(this) && super.performLongClick()
 
     private fun updateLabelState() {
         titleView.isEnabled = isEnabled
