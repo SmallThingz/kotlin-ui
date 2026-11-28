@@ -71,6 +71,8 @@ class ReverbIncidentsHeaderMotionHostTest {
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(16))
         assertTrue("Real incident host must attach before window focus", host.isAttachedToWindow)
         activity.windowFocusChanged(true)
+        // SDK35 focus is a queued ViewRoot message; let the next traversal release it.
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(16))
         assertTrue("Real incident window must own focus", host.hasWindowFocus())
         val oldScale = ValueAnimator.getDurationScale()
         setScale(1f)
