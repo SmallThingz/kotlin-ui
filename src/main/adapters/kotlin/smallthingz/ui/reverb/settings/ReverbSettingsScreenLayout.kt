@@ -27,11 +27,13 @@ abstract class ReverbSettingsScreenLayout(
 ) : ViewGroup(context), ReverbTextSurfaceScope {
     private lateinit var toolbar: View
     private var list: ReverbSettingsSectionListView? = null
+    private var listFocusability = FOCUS_BEFORE_DESCENDANTS
     private var progress: NativeCircularProgress? = null
     private var insets = NativeTopBarInsets(0, 0, 0)
     private var bottomInset = 0
     private var inputsAllowed = false
     private var hydrationPending = false
+    private var loadingBackAllowed = false
 
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
@@ -48,11 +50,15 @@ abstract class ReverbSettingsScreenLayout(
 
     protected fun setSettingsList(next: ReverbSettingsSectionListView?) {
         if (list === next) return
-        list?.let(::removeView)
+        list?.let {
+            removeView(it)
+            it.descendantFocusability = listFocusability
+        }
         list = next
         if (next != null) {
+            listFocusability = next.descendantFocusability
+            applyListExposure(next)
             addView(next, 0)
-            applyExposure()
         }
     }
 
@@ -62,16 +68,19 @@ abstract class ReverbSettingsScreenLayout(
         remainingBottom: Int,
         inputAllowed: Boolean,
         pending: Boolean,
+        loadingBackAllowed: Boolean = false,
     ) {
         val layoutChanged = environment.textDensity != next.textDensity || insets != remainingInsets ||
             bottomInset != remainingBottom
         val paintChanged = environment.palette.primary != next.palette.primary
-        val exposureChanged = inputsAllowed != inputAllowed || hydrationPending != pending
+        val exposureChanged = inputsAllowed != inputAllowed || hydrationPending != pending ||
+            this.loadingBackAllowed != loadingBackAllowed
         environment = next
         insets = remainingInsets
         bottomInset = remainingBottom
         inputsAllowed = inputAllowed
         hydrationPending = pending
+        this.loadingBackAllowed = loadingBackAllowed
         if (exposureChanged) applyExposure()
         if (pending) {
             val existing = progress
@@ -96,11 +105,17 @@ abstract class ReverbSettingsScreenLayout(
         importantForAccessibility = if (inputsAllowed || hydrationPending) IMPORTANT_FOR_ACCESSIBILITY_NO
             else IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         val descendants = if (inputsAllowed) IMPORTANT_FOR_ACCESSIBILITY_NO else IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-        toolbar.importantForAccessibility = descendants
-        list?.let {
-            it.importantForAccessibility = descendants
-            it.alpha = if (hydrationPending) .38f else 1f
-        }
+        toolbar.importantForAccessibility = if (loadingBackAllowed) IMPORTANT_FOR_ACCESSIBILITY_NO else descendants
+        list?.let(::applyListExposure)
+    }
+
+    private fun applyListExposure(view: ReverbSettingsSectionListView) {
+        view.descendantFocusability = if (inputsAllowed) listFocusability else FOCUS_BLOCK_DESCENDANTS
+        // Main can request a leaf directly, so block the subtree before clearing its focus.
+        if (!inputsAllowed) view.findFocus()?.clearFocus()
+        view.importantForAccessibility = if (inputsAllowed) IMPORTANT_FOR_ACCESSIBILITY_NO
+            else IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        view.alpha = if (hydrationPending) .38f else 1f
     }
 
     protected fun settingsSourceClip(view: View): NativeTextSemanticsClip {
