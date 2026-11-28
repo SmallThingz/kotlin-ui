@@ -63,4 +63,13 @@ abstract class NativeEditableInputView(
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
         editing.nativeEdit { super.onKeyDown(keyCode, event) }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        if (super.onKeyUp(keyCode, event)) return true
+        // Native movement owns Home/End DOWN, including modifiers. Keep the matching UP with
+        // the active editor instead of letting a parent interpret it as a second navigation.
+        return (keyCode == KeyEvent.KEYCODE_MOVE_HOME || keyCode == KeyEvent.KEYCODE_MOVE_END) &&
+            isAttachedToWindow && isShown && hasWindowFocus() && isFocused && isEnabled &&
+            onCheckIsTextEditor() && nativeSurfaceInputAllowed(this)
+    }
 }
