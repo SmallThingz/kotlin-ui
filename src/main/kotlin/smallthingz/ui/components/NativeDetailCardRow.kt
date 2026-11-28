@@ -103,6 +103,7 @@ open class NativeDetailCardRow(
 ) : NativeControlRow(context, accessibilityRole, inputRoot) {
     private val title = ParagraphView(context, titleStyle, density, resolver, 0)
     private val body = ParagraphView(context, bodyStyle, density, resolver, 0)
+    private var paletteInitialized = false
     private var textHeight = 0
     private var rowPadding = 0
     private var rowGap = 0
@@ -134,6 +135,13 @@ open class NativeDetailCardRow(
     protected fun bindCard(titleText: String, bodyText: String?, enabled: Boolean, palette: NativeColorScheme,
         checked: Boolean? = null) {
         bindRow(enabled, palette.ink, checked)
+        if (!paletteInitialized) {
+            // The first published palette is readable immediately, even after attachment.
+            // Keep animateTextColor below to retain palette/contrast ownership thereafter.
+            title.setTextColor(palette.ink)
+            body.setTextColor(palette.muted)
+            paletteInitialized = true
+        }
         title.setText(titleText)
         title.animateTextColor(palette.ink)
         bodyVisible = !bodyText.isNullOrEmpty()
