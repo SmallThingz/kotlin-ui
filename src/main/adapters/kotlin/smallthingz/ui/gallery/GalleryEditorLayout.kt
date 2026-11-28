@@ -1,6 +1,7 @@
 package smallthingz.ui.gallery
 
 import android.content.Context
+import android.graphics.Canvas
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -36,6 +37,40 @@ class GalleryEditorLayout(
         }
     }
     private var plan = GalleryEditorPlan(false, GalleryEditorBounds(0, 0, 0, 0), GalleryEditorBounds(0, 0, 0, 0))
+    private var previewReservation: Any? = null
+    private var previewBottom: Int? = null
+    private var measuredPreview = plan.preview
+    private var reservationGeneration = 0L
+    private var measuredGeneration = -1L
+    private var appliedGeneration = -1L
+    private var drawnGeneration = -1L
+
+    internal fun reservePreview(owner: Any) {
+        previewReservation = owner
+        reservationGeneration++
+        if (previewBottom != null) { previewBottom = null; requestLayout() }
+    }
+
+    internal fun ownsPreviewReservation(owner: Any) = previewReservation === owner
+
+    internal fun updatePreviewReservation(owner: Any, bottom: Int) {
+        if (previewReservation !== owner || previewBottom == bottom) return
+        previewBottom = bottom
+        reservationGeneration++
+        requestLayout()
+    }
+
+    internal fun releasePreviewReservation(owner: Any) {
+        if (previewReservation !== owner) return
+        previewReservation = null
+        reservationGeneration++
+        if (previewBottom != null) { previewBottom = null; requestLayout() }
+    }
+
+    /** A View draw observation of this reservation, not compositor/pixel presentation proof. */
+    internal fun previewReservationDrawn(owner: Any) = previewReservation === owner &&
+        previewBottom != null && drawnGeneration == reservationGeneration &&
+        isLaidOut && !isLayoutRequested && !previewBox.isLayoutRequested
 
     init {
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -88,7 +123,10 @@ class GalleryEditorLayout(
         // Intrinsic footer probes also invalidate an optional controls wrapper at unchanged specs.
         controls.forceLayout()
         controls.measure(exact(plan.controls.width), exact(plan.controls.height))
-        previewBox.measure(exact(plan.preview.width), exact(plan.preview.height))
+        measuredPreview = galleryEditorReservedPreview(plan.preview, paddingTop + actionHeight, previewBottom)
+        drawnGeneration = -1L
+        measuredGeneration = reservationGeneration
+        previewBox.measure(exact(measuredPreview.width), exact(measuredPreview.height))
         setMeasuredDimension(resolveSize(width, widthMeasureSpec),
             resolveSize(maxOf(suggestedMinimumHeight, actionHeight + bodyHeight + verticalPadding), heightMeasureSpec))
     }
@@ -100,8 +138,18 @@ class GalleryEditorLayout(
             view.layout(paddingLeft + bounds.left, bodyTop + bounds.top,
                 paddingLeft + bounds.right, bodyTop + bounds.bottom)
         }
-        place(previewBox, plan.preview)
+        place(previewBox, measuredPreview)
         place(controls, plan.controls)
+        appliedGeneration = measuredGeneration
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        super.dispatchDraw(canvas)
+        if (!isLayoutRequested && !previewBox.isLayoutRequested &&
+            appliedGeneration == reservationGeneration &&
+            previewBox.height == measuredPreview.height && previewBox.width == measuredPreview.width) {
+            drawnGeneration = appliedGeneration
+        }
     }
 
     override fun generateDefaultLayoutParams(): LayoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
@@ -126,6 +174,10 @@ internal data class GalleryEditorBounds(val left: Int, val top: Int, val right: 
 }
 
 internal data class GalleryEditorPlan(val sideBySide: Boolean, val preview: GalleryEditorBounds, val controls: GalleryEditorBounds)
+
+/** Only the photo slot shrinks; the ordinary toolbar/control plan is not reallocated. */
+internal fun galleryEditorReservedPreview(preview: GalleryEditorBounds, bodyTop: Int, bottom: Int?): GalleryEditorBounds =
+    if (bottom == null) preview else preview.copy(bottom = (bottom - bodyTop).coerceIn(preview.top, preview.bottom))
 
 private fun previewEdgePx(density: Float) = (NativeToolbarStyle.Default.centeredPaddingDp * density).roundToInt()
 private fun previewMinimumPx(density: Float) =

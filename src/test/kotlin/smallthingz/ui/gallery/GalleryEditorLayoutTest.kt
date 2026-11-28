@@ -4,6 +4,42 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class GalleryEditorLayoutTest {
+    @Test fun sheetFirstFrameFallsBackAfterTwoAttemptsAndNeverRearms() {
+        val gate = GalleryEditorSheetFirstFrame()
+        assertFalse(gate.allowDraw(false))
+        assertFalse(gate.allowDraw(false))
+        repeat(100) { assertTrue(gate.allowDraw(false)) }
+        assertTrue(gate.allowDraw(true))
+        assertTrue(gate.allowDraw(false))
+        val drawn = GalleryEditorSheetFirstFrame()
+        assertTrue(drawn.allowDraw(true))
+        assertTrue(drawn.allowDraw(false))
+        val delayed = GalleryEditorSheetFirstFrame()
+        assertFalse(delayed.allowDraw(false))
+        assertTrue(delayed.allowDraw(true))
+        assertTrue(delayed.allowDraw(false))
+    }
+
+    @Test fun sheetReservationClampsOnlyPhotoAndReleaseUsesCurrentPlan() {
+        for (rtl in listOf(false, true)) for ((width, height) in listOf(360 to 600, 800 to 320)) {
+            val plan = galleryEditorPlan(width, height, 120, 100, 1f, rtl)
+            val bodyTop = 67
+            val original = plan.preview
+            for (sheetTop in listOf(0, bodyTop - 1, bodyTop, 160, 260, 900)) {
+                val reserved = galleryEditorReservedPreview(original, bodyTop, sheetTop)
+                assertEquals(original.left, reserved.left); assertEquals(original.right, reserved.right)
+                assertEquals(original.top, reserved.top)
+                assertTrue(reserved.height >= 0 && reserved.height <= original.height)
+                if (sheetTop >= bodyTop + original.top) assertTrue(bodyTop + reserved.bottom <= sheetTop)
+                else assertEquals(0, reserved.height)
+            }
+            assertEquals(original, galleryEditorReservedPreview(original, bodyTop, null))
+            val resized = galleryEditorPlan(height, width, 120, 100, 1f, rtl)
+            assertEquals(resized.preview, galleryEditorReservedPreview(resized.preview, bodyTop, null))
+            assertEquals(plan, galleryEditorPlan(width, height, 120, 100, 1f, rtl))
+        }
+    }
+
     @Test fun widthEligibleSidebarStillRequiresItsMeasuredFooterToFit() {
         assertTrue(galleryEditorPlan(800, 180, 300, 180, 1f).sideBySide)
         assertFalse(galleryEditorPlan(800, 180, 300, 181, 1f).sideBySide)
