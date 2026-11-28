@@ -6,14 +6,14 @@ import android.view.Gravity
 import android.view.View
 import androidx.core.view.OneShotPreDrawListener
 import android.widget.GridLayout
-import android.widget.ImageView
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Space
-import smallthingz.ui.components.NativeToolbarContentAction
+import smallthingz.ui.components.NativeToolbarActionTone
 import smallthingz.ui.reverb.ReverbTitledTopBarLayout
 import smallthingz.ui.reverb.ReverbScaffold
+import smallthingz.ui.reverb.ReverbToolbarActionView
 import kotlin.math.roundToInt
 
 /** Retained launcher: shared product chrome, one scrolling body, no navigation dock. */
@@ -62,16 +62,15 @@ class ZfmHomeLayout(
     }
 
     init {
-        val glyph = ImageView(context).apply {
-            setImageDrawable(settingsIcon)
-            setColorFilter(theme.ink)
-            scaleType = ImageView.ScaleType.CENTER_INSIDE
-            minimumWidth = dp(24)
-            minimumHeight = dp(24)
-        }
-        val settings = NativeToolbarContentAction(context, glyph, settingsLabel, this,
-            density, 48f, theme.ink, standaloneAccessibility = true).apply {
-            bindAction(density, 48f, theme.ink, onSettings)
+        val settings = ReverbToolbarActionView(context, density, theme.colors,
+            { this@ZfmHomeLayout }, settingsLabel, rolePresent = true).apply {
+            bindToolbarAction(density, theme.colors, true, NativeToolbarActionTone.MUTED) {
+                if (isAttachedToWindow && isShown) onSettings()
+            }
+            settingsIcon?.mutate()?.let { glyph ->
+                glyph.setTint(sampledIconTint)
+                setGlyph(glyph, sampledIconTint)
+            }
         }
         settingsHost.addView(settings, FrameLayout.LayoutParams(dp(48), dp(48)))
         setBody(LinearLayout(context).apply {
