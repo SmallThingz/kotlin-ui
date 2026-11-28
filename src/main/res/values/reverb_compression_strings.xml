@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="compression_faster">Faster</string>
-    <string name="compression_level">Compression level</string>
-    <string name="compression_smaller">Smaller</string>
-    <string name="output_compression">Output compression</string>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="compression_faster" tools:ignore="MissingTranslation">Faster</string>
+    <string name="compression_level" tools:ignore="MissingTranslation">Compression level</string>
+    <string name="compression_smaller" tools:ignore="MissingTranslation">Smaller</string>
+    <string name="output_compression" tools:ignore="MissingTranslation">Output compression</string>
 </resources>

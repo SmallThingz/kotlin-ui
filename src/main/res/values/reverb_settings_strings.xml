@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="reverb_settings_storage_settings_title">Storage</string>
-    <string name="reverb_settings_default_folder">Default</string>
-    <string name="reverb_settings_choose_folder">Choose</string>
-    <string name="reverb_settings_move_recordings">Move existing</string>
-    <string name="reverb_settings_settings_audio_read_missing">Audio access needed</string>
-    <string name="reverb_settings_background_review">Review</string>
-    <string name="reverb_settings_audio_read_access_settings">Review audio access</string>
-    <string name="reverb_settings_settings_all_files_optional">All files access (optional)</string>
-    <string name="reverb_settings_settings_manage_access">Manage</string>
-    <string name="reverb_settings_all_files_access_settings">Manage all files access</string>
-    <string name="reverb_settings_background_use_restricted">Background use restricted</string>
-    <string name="reverb_settings_settings_resume_notification_blocked">Resume reminders are blocked. Review notification access.</string>
-    <string name="reverb_settings_settings_notification_access">Review notification access</string>
-    <string name="reverb_settings_settings_restart_access_missing">Auto-start after restart needs permission to display over other apps.</string>
-    <string name="reverb_settings_settings_restart_access">Review restart access</string>
-    <string name="reverb_settings_feature_notification_save">Save from notification</string>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="reverb_settings_storage_settings_title" tools:ignore="MissingTranslation">Storage</string>
+    <string name="reverb_settings_default_folder" tools:ignore="MissingTranslation">Default</string>
+    <string name="reverb_settings_choose_folder" tools:ignore="MissingTranslation">Choose</string>
+    <string name="reverb_settings_move_recordings" tools:ignore="MissingTranslation">Move existing</string>
+    <string name="reverb_settings_settings_audio_read_missing" tools:ignore="MissingTranslation">Audio access needed</string>
+    <string name="reverb_settings_background_review" tools:ignore="MissingTranslation">Review</string>
+    <string name="reverb_settings_audio_read_access_settings" tools:ignore="MissingTranslation">Review audio access</string>
+    <string name="reverb_settings_settings_all_files_optional" tools:ignore="MissingTranslation">All files access (optional)</string>
+    <string name="reverb_settings_settings_manage_access" tools:ignore="MissingTranslation">Manage</string>
+    <string name="reverb_settings_all_files_access_settings" tools:ignore="MissingTranslation">Manage all files access</string>
+    <string name="reverb_settings_background_use_restricted" tools:ignore="MissingTranslation">Background use restricted</string>
+    <string name="reverb_settings_settings_resume_notification_blocked" tools:ignore="MissingTranslation">Resume reminders are blocked. Review notification access.</string>
+    <string name="reverb_settings_settings_notification_access" tools:ignore="MissingTranslation">Review notification access</string>
+    <string name="reverb_settings_settings_restart_access_missing" tools:ignore="MissingTranslation">Auto-start after restart needs permission to display over other apps.</string>
+    <string name="reverb_settings_settings_restart_access" tools:ignore="MissingTranslation">Review restart access</string>
+    <string name="reverb_settings_feature_notification_save" tools:ignore="MissingTranslation">Save from notification</string>
 </resources>

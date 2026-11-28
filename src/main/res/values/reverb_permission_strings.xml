@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="permission_required_message">Microphone access required.</string>
-    <string name="storage_permission_required_message">Storage access is required on Android 9 to save recordings durably in Music/Reverb.</string>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="permission_required_message" tools:ignore="MissingTranslation">Microphone access required.</string>
+    <string name="storage_permission_required_message" tools:ignore="MissingTranslation">Storage access is required on Android 9 to save recordings durably in Music/Reverb.</string>
 </resources>

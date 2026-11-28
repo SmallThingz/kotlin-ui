@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="reverb_incident_time_duration">%1$s · %2$s</string>
-    <string name="reverb_incident_checked">Checked</string>
-    <string name="reverb_incident_unchecked">Unchecked</string>
-    <string name="reverb_incident_select_error">Select all occurrences of this error</string>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="reverb_incident_time_duration" tools:ignore="MissingTranslation">%1$s · %2$s</string>
+    <string name="reverb_incident_checked" tools:ignore="MissingTranslation">Checked</string>
+    <string name="reverb_incident_unchecked" tools:ignore="MissingTranslation">Unchecked</string>
+    <string name="reverb_incident_select_error" tools:ignore="MissingTranslation">Select all occurrences of this error</string>
 </resources>

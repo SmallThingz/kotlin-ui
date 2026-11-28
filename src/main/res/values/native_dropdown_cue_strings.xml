@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="native_dropdown_previous_option">Show previous option</string>
-    <string name="native_dropdown_next_option">Show next option</string>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="native_dropdown_previous_option" tools:ignore="MissingTranslation">Show previous option</string>
+    <string name="native_dropdown_next_option" tools:ignore="MissingTranslation">Show next option</string>
 </resources>

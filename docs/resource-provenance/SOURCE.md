@@ -5,3 +5,11 @@ The finite resources in res/values*/native_platform_resources.xml preserve the l
 UI resources: in_progress, state_on, state_off, selected, not_selected, switch_role, tab, default_popup_window_title, template_percent, close_sheet, default_error_message, state_empty, FloatingDialogWindowTheme, accessibility_custom_action_0 and1. Foundation resource: tooltip_label. All available locale variants were retained. The Hindi `state_empty` was deliberately corrected to `खाली` (empty); its upstream wording described an unplugged cable rather than an empty text field. Other values retain their upstream translations; no color/layout substitution.
 
 Settings radio selection adds only `selected` and `not_selected`, including all 86 supplied resource configurations, from UI1.11.2 `ui.aar` SHA-256 `a0d7f930af2ca775ce5e0e55c83f28a36c3b9b35ee0475190c3ff062f6962572`.
+
+## English fallback for custom strings
+
+The AndroidX locale inventory describes the bundled platform semantics and window copy. Custom Reverb and shared control strings have their own translation coverage. Reverb ships English defaults and translations for some copy in Arabic, Chinese, French, German, Hindi, Indonesian, Italian, Japanese, Korean, Persian, Portuguese, Russian, Spanish, and Turkish.
+
+Keep existing locale variants. Where a reviewed custom string has no translation for the device locale, Android resolves its English default. For accessibility actions and states, an accurate English label is preferable to a missing or incorrect translated label. Preserve format arguments and plural meaning when adding translations.
+
+Use `tools:ignore="MissingTranslation"` on the individual default string or plural when that fallback is intentional, as in `native_theme_strings.xml`. This acknowledges the coverage difference for that entry and leaves lint active for new strings.

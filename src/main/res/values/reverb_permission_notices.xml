@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <plurals name="reverb_permission_notices_summary">
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <plurals name="reverb_permission_notices_summary" tools:ignore="MissingTranslation">
         <item quantity="one">%d permission needs attention</item>
         <item quantity="other">%d permissions need attention</item>
     </plurals>
-    <string name="reverb_permission_notices_review">Review permissions</string>
-    <string name="reverb_permission_notices_hide">Hide details</string>
+    <string name="reverb_permission_notices_review" tools:ignore="MissingTranslation">Review permissions</string>
+    <string name="reverb_permission_notices_hide" tools:ignore="MissingTranslation">Hide details</string>
 </resources>

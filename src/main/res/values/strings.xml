@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="reverb_browser_tab_move_earlier">Move tab earlier</string>
-    <string name="reverb_browser_tab_move_later">Move tab later</string>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="reverb_browser_tab_move_earlier" tools:ignore="MissingTranslation">Move tab earlier</string>
+    <string name="reverb_browser_tab_move_later" tools:ignore="MissingTranslation">Move tab later</string>
 </resources>

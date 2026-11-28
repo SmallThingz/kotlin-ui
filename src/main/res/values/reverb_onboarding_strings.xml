@@ -1,32 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="onboarding_permissions_title">Permissions</string>
-    <string name="onboarding_permissions_body">Reverb needs these for background recording.</string>
-    <string name="onboarding_microphone_title">Microphone</string>
-    <string name="onboarding_microphone_body">Required to capture audio.</string>
-    <string name="onboarding_notifications_title">Notifications</string>
-    <string name="onboarding_notifications_body">Shows recording status.</string>
-    <string name="onboarding_allowed">Allowed</string>
-    <string name="onboarding_background_title">Background recording</string>
-    <string name="onboarding_background_body">Helps recording continue with the screen off.</string>
-    <string name="onboarding_title">Buffers</string>
-    <string name="onboarding_one_shot_title">One-shot</string>
-    <string name="onboarding_one_shot_body">Fills once. It keeps that audio until you clear it.</string>
-    <string name="onboarding_looping_title">Looping</string>
-    <string name="onboarding_looping_body">Keeps the newest audio. Old audio is overwritten.</string>
-    <string name="onboarding_order">When One-shot fills, recording continues in Looping if it is enabled.</string>
-    <string name="onboarding_continue">Continue</string>
-    <string name="onboarding_back">Back</string>
-    <string name="onboarding_get_started">Get started</string>
-    <string name="allow">Allow</string>
-    <string name="recording_settings_title">Audio</string>
-    <string name="storage_settings_title">Storage</string>
-    <string name="all_files_access_settings">Manage all files access</string>
-    <string name="settings_all_files_optional">All files access (optional)</string>
-    <string name="settings_audio_read_missing">Audio access needed</string>
-    <string name="flac_pcm_required">Choose 16-bit capture for FLAC export. WAV preserves the other capture formats.</string>
-    <string name="silence_invalid_settings">Silence settings could not be read. All audio is being kept.</string>
-    <string name="onboarding_restart_resume_title">Resume recording after restart</string>
-    <string name="onboarding_restart_resume_body">Allow display over other apps to use Auto-start after restart in Settings.</string>
-    <string name="settings_restart_access">Review restart access</string>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="onboarding_permissions_title" tools:ignore="MissingTranslation">Permissions</string>
+    <string name="onboarding_permissions_body" tools:ignore="MissingTranslation">Reverb needs these for background recording.</string>
+    <string name="onboarding_microphone_title" tools:ignore="MissingTranslation">Microphone</string>
+    <string name="onboarding_microphone_body" tools:ignore="MissingTranslation">Required to capture audio.</string>
+    <string name="onboarding_notifications_title" tools:ignore="MissingTranslation">Notifications</string>
+    <string name="onboarding_notifications_body" tools:ignore="MissingTranslation">Shows recording status.</string>
+    <string name="onboarding_allowed" tools:ignore="MissingTranslation">Allowed</string>
+    <string name="onboarding_background_title" tools:ignore="MissingTranslation">Background recording</string>
+    <string name="onboarding_background_body" tools:ignore="MissingTranslation">Helps recording continue with the screen off.</string>
+    <string name="onboarding_title" tools:ignore="MissingTranslation">Buffers</string>
+    <string name="onboarding_one_shot_title" tools:ignore="MissingTranslation">One-shot</string>
+    <string name="onboarding_one_shot_body" tools:ignore="MissingTranslation">Fills once. It keeps that audio until you clear it.</string>
+    <string name="onboarding_looping_title" tools:ignore="MissingTranslation">Looping</string>
+    <string name="onboarding_looping_body" tools:ignore="MissingTranslation">Keeps the newest audio. Old audio is overwritten.</string>
+    <string name="onboarding_order" tools:ignore="MissingTranslation">When One-shot fills, recording continues in Looping if it is enabled.</string>
+    <string name="onboarding_continue" tools:ignore="MissingTranslation">Continue</string>
+    <string name="onboarding_back" tools:ignore="MissingTranslation">Back</string>
+    <string name="onboarding_get_started" tools:ignore="MissingTranslation">Get started</string>
+    <string name="allow" tools:ignore="MissingTranslation">Allow</string>
+    <string name="recording_settings_title" tools:ignore="MissingTranslation">Audio</string>
+    <string name="storage_settings_title" tools:ignore="MissingTranslation">Storage</string>
+    <string name="all_files_access_settings" tools:ignore="MissingTranslation">Manage all files access</string>
+    <string name="settings_all_files_optional" tools:ignore="MissingTranslation">All files access (optional)</string>
+    <string name="settings_audio_read_missing" tools:ignore="MissingTranslation">Audio access needed</string>
+    <string name="flac_pcm_required" tools:ignore="MissingTranslation">Choose 16-bit capture for FLAC export. WAV preserves the other capture formats.</string>
+    <string name="silence_invalid_settings" tools:ignore="MissingTranslation">Silence settings could not be read. All audio is being kept.</string>
+    <string name="onboarding_restart_resume_title" tools:ignore="MissingTranslation">Resume recording after restart</string>
+    <string name="onboarding_restart_resume_body" tools:ignore="MissingTranslation">Allow display over other apps to use Auto-start after restart in Settings.</string>
+    <string name="settings_restart_access" tools:ignore="MissingTranslation">Review restart access</string>
 </resources>
