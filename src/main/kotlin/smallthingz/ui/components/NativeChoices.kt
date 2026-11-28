@@ -524,6 +524,7 @@ class NativeChip private constructor(
             action == AccessibilityNodeInfo.ACTION_CLEAR_SELECTION)) return false
         if (action == AccessibilityNodeInfo.ACTION_SELECT && exclusive) {
             if (!isEnabled || !acceptsNativeInput()) return false
+            if (isChecked) return true
             if (onActivationRequest != null) return performClick()
             if (!isChecked) performClick()
             return isChecked
