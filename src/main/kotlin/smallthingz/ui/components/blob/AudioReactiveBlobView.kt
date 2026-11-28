@@ -61,7 +61,7 @@ class AudioReactiveBlobView(
     private var lighteningCorrection = 0
     private var lighteningFilter: LightingColorFilter? = null
     private var readoutBackground = 0
-    private var readoutUsesBackdropInkWhenUncovered = false
+    private var readoutUsesBackdropInk = false
     private var readoutLayerOpacity = 1f
     private var readoutBackdropUsesDarkInk = false
     private var readoutAgslMin = 0f
@@ -72,13 +72,13 @@ class AudioReactiveBlobView(
     fun updateReadoutGeometry(radiusPixels: Float, background: Int, agslMin: Float = 0f, agslMax: Float = 1f,
         fallbackMin: Float = 0f, fallbackMax: Float = 1f) {
         updateReadoutGeometry(radiusPixels, background, agslMin, agslMax, fallbackMin, fallbackMax,
-            useBackdropInkWhenUncovered = false, layerOpacity = 1f)
+            useBackdropInk = false, layerOpacity = 1f)
     }
 
     internal fun updateReadoutGeometry(radiusPixels: Float, background: Int, agslMin: Float, agslMax: Float,
-        fallbackMin: Float, fallbackMax: Float, useBackdropInkWhenUncovered: Boolean, layerOpacity: Float) {
+        fallbackMin: Float, fallbackMax: Float, useBackdropInk: Boolean, layerOpacity: Float) {
         if (readoutRadiusPixels == radiusPixels && readoutBackground == background &&
-            readoutUsesBackdropInkWhenUncovered == useBackdropInkWhenUncovered && readoutLayerOpacity == layerOpacity &&
+            readoutUsesBackdropInk == useBackdropInk && readoutLayerOpacity == layerOpacity &&
             readoutAgslMin == agslMin && readoutAgslMax == agslMax &&
             readoutFallbackMin == fallbackMin && readoutFallbackMax == fallbackMax) return
         readoutRadiusPixels = radiusPixels
@@ -87,7 +87,7 @@ class AudioReactiveBlobView(
             readoutBackdropUsesDarkInk = audioBlobMaterialLuminance(background) >= .179
             readoutBackground = background
         }
-        readoutUsesBackdropInkWhenUncovered = useBackdropInkWhenUncovered
+        readoutUsesBackdropInk = useBackdropInk
         readoutLayerOpacity = layerOpacity
         readoutAgslMin = agslMin
         readoutAgslMax = agslMax
@@ -143,10 +143,18 @@ class AudioReactiveBlobView(
 
     private fun readoutNeedsSupport(darkInk: Boolean, size: Float, covered: Boolean): Boolean {
         if (size <= 0f || readoutRadiusPixels <= 0f) return true
+        val fallback = renderer is FallbackRenderer
+        if (readoutUsesBackdropInk) {
+            // The shared control can put ink across the contour at any size. Bound its
+            // entire material against the same ink on both the body and the page.
+            return audioBlobInkNeedsSupport(materialPrimary, materialTertiary, materialPaused,
+                currentLife, currentPresence, currentSilence, fallback, darkInk,
+                radiusFraction = 1f, covered = false, background = readoutBackground,
+                layerOpacity = readoutLayerOpacity)
+        }
         val radius = readoutRadiusPixels / size
         // The quiet base gives an upper bound on radial drain without following raw audio.
         val base = baseRadiusFraction(activity = 0f)
-        val fallback = renderer is FallbackRenderer
         return audioBlobInkNeedsSupport(materialPrimary, materialTertiary, materialPaused,
             currentLife, currentPresence, currentSilence, fallback, darkInk,
             (radius / base).coerceIn(0f, 1f),
@@ -189,16 +197,16 @@ class AudioReactiveBlobView(
 
     private fun resolveReadoutInkAndSupport(): Int {
         val size = minOf(width, height).toFloat()
-        val covered = materialCoversReadout(size)
-        val prefersBackdropInk = readoutUsesBackdropInkWhenUncovered && !covered
-        var darkInk = if (prefersBackdropInk) {
-            readoutBackdropUsesDarkInk
-        } else {
-            audioBlobUsesDarkInk(materialPrimary, materialTertiary, materialPaused, currentLife,
-                currentPresence, currentSilence, renderer is FallbackRenderer)
+        if (readoutUsesBackdropInk) {
+            val darkInk = readoutBackdropUsesDarkInk
+            val supportNeeded = readoutNeedsSupport(darkInk, size, covered = false)
+            return (if (darkInk) 1 else 0) or (if (supportNeeded) 4 else 0)
         }
+        val covered = materialCoversReadout(size)
+        var darkInk = audioBlobUsesDarkInk(materialPrimary, materialTertiary, materialPaused, currentLife,
+            currentPresence, currentSilence, renderer is FallbackRenderer)
         var supportNeeded = readoutNeedsSupport(darkInk, size, covered)
-        if (!prefersBackdropInk && supportNeeded && !readoutNeedsSupport(!darkInk, size, covered)) {
+        if (supportNeeded && !readoutNeedsSupport(!darkInk, size, covered)) {
             darkInk = !darkInk
             supportNeeded = false
         }

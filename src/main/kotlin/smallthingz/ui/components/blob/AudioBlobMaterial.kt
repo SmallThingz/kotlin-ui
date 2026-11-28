@@ -118,5 +118,6 @@ internal fun audioBlobMaterialLuminance(color: Int): Double {
         .0722 * linear(color and 255)
 }
 
-/** Keep the theme's full color; measured readout support, not a body-wide cap, owns legibility. */
+/** Keep opaque theme pigments as shader inputs. The shared readout can correct the resulting
+ * material for contrast against its backdrop ink, using the same policy at every size. */
 internal fun audioBlobMaterialColor(color: Int): Int = color or -0x1000000

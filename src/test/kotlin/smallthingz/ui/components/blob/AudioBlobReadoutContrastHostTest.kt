@@ -45,7 +45,7 @@ import smallthingz.ui.unit.Density
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class AudioBlobReadoutContrastHostTest {
-    @Test fun rendererSwitchesToBackdropInkOnShrinkAndRestoresMaterialInkOnGrow() = withSettledAnimations {
+    @Test fun rendererKeepsBackdropInkOnShrinkAndGrow() = withSettledAnimations {
         val failures = mutableListOf<String>()
         for (scene in Scene.entries) {
             val fixture = Fixture(RuntimeEnvironment.getApplication(), scene)
@@ -53,7 +53,7 @@ class AudioBlobReadoutContrastHostTest {
             val normalFootprint = fixture.projectedFootprintRatio()
             assertTrue("${scene.name} normal readout must fit stable material coverage: $normalFootprint",
                 normalFootprint in 0f..STABLE_SETTLED_COVERAGE)
-            val normal = fixture.sample(expectedDarkInk = !scene.backdropUsesDarkInk, failures)
+            val normal = fixture.sample(expectedDarkInk = scene.backdropUsesDarkInk, failures)
 
             fixture.layoutHome(INTERMEDIATE_HOME_HEIGHT, dimmed = false)
             assertEquals(216, fixture.audioView.width)
@@ -78,7 +78,7 @@ class AudioBlobReadoutContrastHostTest {
             }
 
             fixture.layoutHome(COVERED_HOME_HEIGHT, dimmed = false)
-            val grown = fixture.sample(expectedDarkInk = !scene.backdropUsesDarkInk, failures)
+            val grown = fixture.sample(expectedDarkInk = scene.backdropUsesDarkInk, failures)
             if (!normal.pixels.contentEquals(grown.pixels)) {
                 failures += "${scene.name}: growing did not restore the original per-pixel output"
             }

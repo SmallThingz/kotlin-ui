@@ -257,7 +257,7 @@ class NativeAudioBlobReadout(
         }
         renderer.updateReadoutGeometry(projectedRadius, background,
             agslGradientMin, agslGradientMax, fallbackGradientMin, fallbackGradientMax,
-            useBackdropInkWhenUncovered = true, layerOpacity = opacity)
+            useBackdropInk = true, layerOpacity = opacity)
         // Paint inputs can change even when the renderer has no new appearance to publish.
         updateMaterialSupport()
     }
