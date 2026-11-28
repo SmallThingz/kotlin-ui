@@ -472,6 +472,18 @@ class NativeSpringFineSeekView<B : NativeSpringFineSeekBinding>(
             invalidate()
         }
 
+        override fun onVisibilityAggregated(isVisible: Boolean) {
+            super.onVisibilityAggregated(isVisible)
+            glyph.setVisible(isVisible, false)
+            invalidate()
+        }
+
+        override fun onDetachedFromWindow() {
+            glyph.setVisible(false, false)
+            invalidate()
+            super.onDetachedFromWindow()
+        }
+
         override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) = glyph.setBounds(0, 0, w, h)
         override fun onDraw(canvas: Canvas) = glyph.draw(canvas)
     }

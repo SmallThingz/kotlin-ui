@@ -34,6 +34,8 @@ import smallthingz.ui.input.phase.NativeViewPointerHitLayout
 import smallthingz.ui.reverb.ReverbEnvironment
 import smallthingz.ui.reverb.ReverbGlyphView
 import smallthingz.ui.reverb.ReverbIcon
+import smallthingz.ui.reverb.SpringFineSeekEnvironment
+import smallthingz.ui.reverb.createReverbSpringFineSeekView
 import smallthingz.ui.reverb.home.ReverbHomeControls
 import smallthingz.ui.reverb.home.createHomeBlobReadout
 import smallthingz.ui.text.font.createFontFamilyResolver
@@ -181,6 +183,56 @@ class NoiseGraphicsReleaseHostTest {
             assertTrue(glyph.isVisible)
             assertArrayEquals(before, render(view))
             assertEquals(3, rasterizations)
+        } finally {
+            controller.pause().stop().destroy()
+        }
+    }
+
+    @Test fun fineSeekGlyphReleasesOnAncestorHideAndDetachAndRebuildsExactPixels() {
+        val controller = Robolectric.buildActivity(Activity::class.java).setup().visible()
+        try {
+            val activity = controller.get()
+            val root = FrameLayout(activity)
+            activity.setContentView(root)
+            NativeModalWindowRuntime(activity).use { runtime ->
+                val seek = createReverbSpringFineSeekView(activity, SpringFineSeekEnvironment(
+                    NativeColorScheme.fallback(false), Density(1f), 8f, runtime.frames, runtime.scope,
+                    root, { false },
+                )) { if (it) "Pause" else "Play" }
+                root.addView(seek)
+                size(seek, 240, 120)
+                val view = (seek.puckClickView as ViewGroup).getChildAt(0)
+                val glyph = checkNotNull(field(view, "glyph")) as CachedPathIconDrawable
+                fun mask() = field(glyph, "maskBitmap") as Bitmap?
+                fun assertReleased(previous: Bitmap) {
+                    assertNull(mask())
+                    assertNull(field(glyph, "maskCanvas"))
+                    assertFalse(previous.isRecycled)
+                }
+
+                assertTrue(view.isAttachedToWindow)
+                val before = render(view)
+                assertTrue(before.any { Color.alpha(it) != 0 })
+                val original = checkNotNull(mask())
+                assertNotNull(field(glyph, "maskCanvas"))
+
+                root.visibility = View.INVISIBLE
+                assertTrue(view.isAttachedToWindow)
+                assertReleased(original)
+                root.visibility = View.VISIBLE
+                assertArrayEquals(before, render(view))
+                val replacement = checkNotNull(mask())
+                assertNotSame(original, replacement)
+
+                root.removeView(seek)
+                assertFalse(view.isAttachedToWindow)
+                assertReleased(replacement)
+                root.addView(seek)
+                size(seek, 240, 120)
+                assertTrue(view.isAttachedToWindow)
+                assertArrayEquals(before, render(view))
+                assertNotSame(replacement, checkNotNull(mask()))
+            }
         } finally {
             controller.pause().stop().destroy()
         }
