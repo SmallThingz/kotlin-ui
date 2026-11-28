@@ -19,6 +19,13 @@ class GalleryHealStatusRow(
     data class Completion(val full: String, val short: String)
     private data class Copy(val guidance: String, val alternate: String?, val completion: Completion?)
     private var copy: Copy? = null
+    /** Keep confirmed completion available to accessibility without adding canvas captions. */
+    var completionTextVisible: Boolean = true
+        set(value) {
+            if (field == value) return
+            field = value
+            requestLayout()
+        }
 
     init {
         require(status !== alternate && status !== probe && alternate !== probe)
@@ -72,6 +79,7 @@ class GalleryHealStatusRow(
             }
             val budget = measured(current.guidance)
             val chosen = when {
+                !completionTextVisible -> ""
                 measured(completion.full) <= budget -> completion.full
                 measured(completion.short) <= budget -> completion.short
                 else -> "" // Never revive tutorial ink; the full completion remains the accessible description.
