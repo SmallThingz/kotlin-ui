@@ -718,7 +718,7 @@ class NativeMergedActionLayoutIntegrationTest {
         }
         try {
             val footer = descendants(editor).filterIsInstance<NativeMergedActionLayout>().single()
-            for (label in listOf("Add", "Save")) {
+            for (label in listOf("Add", "Save", "Save anyway")) {
                 editor.bindLabel(label)
                 for (width in listOf(220, 700)) {
                     measure(editor, width)
@@ -726,7 +726,15 @@ class NativeMergedActionLayoutIntegrationTest {
                     assertTrue(footer.isActionFooter)
                     assertEquals(0, editor.height - footer.bottom)
                     assertEquals(6, footer.height - footer.actionSurface.bottom)
-                    assertEquals(2, descendants(footer).filterIsInstance<NativeMaterialButtonView>().size)
+                    val buttons = descendants(footer).filterIsInstance<NativeMaterialButtonView>()
+                    assertEquals(2, buttons.size)
+                    assertEquals(ReverbIcon.Close, actionGlyph(buttons[0])?.icon)
+                    assertEquals(ReverbIcon.Save, actionGlyph(buttons[1])?.icon)
+                    val actions = descendants(footer).filterIsInstance<NativeProgressActionView>()
+                    assertEquals(2, actions.size)
+                    for (action in actions) {
+                        assertTrue(action.width >= action.actionMinimumWidthPx)
+                    }
                 }
             }
             assertEquals(0, callbacks)

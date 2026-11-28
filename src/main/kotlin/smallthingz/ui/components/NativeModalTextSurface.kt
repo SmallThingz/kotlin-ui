@@ -1,5 +1,7 @@
 package smallthingz.ui.components
 
+import android.graphics.PixelFormat
+import android.graphics.drawable.ColorDrawable
 import android.view.View
 import android.view.ViewGroup
 import java.util.function.LongSupplier
@@ -14,6 +16,7 @@ interface NativeModalPaintedSurface {
 /** Modal labels follow their nearest painted underlay. Controls with their own paint keep ownership. */
 internal object NativeModalTextSurface {
     // Only the shared handle opts into caller-owned flat panels; paragraph ownership stays unchanged.
+    @Suppress("DEPRECATION") // ColorDrawable reports tint through its opacity.
     fun sample(view: View, forHandle: Boolean = false): Long {
         if (view.background != null) return 0L
         var parent = view.parent as? View
@@ -26,9 +29,12 @@ internal object NativeModalTextSurface {
             }
             val background = parent.background
             if (background is NoiseDrawable) return background.paintedTextSurface
-            if (forHandle && background is android.graphics.drawable.ColorDrawable &&
-                background.alpha == 255 && background.colorFilter == null) {
-                return smallthingz.ui.controls.textSurfaceRange(background.color)
+            if (forHandle && background is ColorDrawable && background.colorFilter == null) {
+                if (background.alpha == 255) return smallthingz.ui.controls.textSurfaceRange(background.color)
+                if (background.alpha == 0 && background.opacity == PixelFormat.TRANSPARENT) {
+                    parent = parent.parent as? View
+                    continue
+                }
             }
             if (background != null) return 0L
             parent = parent.parent as? View

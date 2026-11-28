@@ -40,7 +40,7 @@ open class ReverbQuickTileEditor<T : Any>(
     private val warning = tileStatus(context, "", environment)
     private val message = tileStatus(context, "", environment)
     private val cancel = ReverbSettingsActionView(context, environment, inputRoot, leadingIcon = ReverbIcon.Close, action = onCancel)
-    private val save = ReverbSettingsActionView(context, environment, inputRoot, action = onSave)
+    private val save = ReverbSettingsActionView(context, environment, inputRoot, leadingIcon = ReverbIcon.Save, action = onSave)
     private var wheelView: View? = null
     private val footer = NativeMergedActionLayout(context, listOf(cancel, save), environment.palette).asActionFooter(density = environment.textDensity.density)
     private val recipe get() = environment.appearance.quickTiles

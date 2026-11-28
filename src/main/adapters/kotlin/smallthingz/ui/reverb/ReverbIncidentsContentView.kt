@@ -422,7 +422,11 @@ class ReverbIncidentsContentView(
     }
 
     private fun dp(value: Float) = (value * appearance.card.density.density).roundToInt()
-    private fun updateListPadding() = list.setPaddingRelative(dp(18f), dp(12f), dp(18f), dp(28f))
+    private fun updateListPadding() {
+        val sidePadding = dp(18f)
+        val gutter = theme.appearance.scrollIndicator.contentGutterPx(list.resources.displayMetrics.density)
+        list.setPadding(sidePadding, dp(12f), maxOf(sidePadding, gutter), dp(28f))
+    }
 
     fun setPanelProgress(value: Float) {
         panelProgress = value.coerceIn(0f, 1f)

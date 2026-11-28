@@ -48,7 +48,15 @@ class ReverbIncidentScrollIndicatorIntegrationTest {
         val top = checkNotNull(f.panel.savePosition())
         assertTrue("History remains virtualized", list.childCount < adapter.itemCount)
         assertTrue("Populated history overflows the real viewport", list.canScrollVertically(1))
+        val density = list.resources.displayMetrics.density
+        assertEquals((18f * density).roundToInt(), list.paddingLeft)
+        assertEquals(insetAppearance.scrollIndicator.contentGutterPx(density), list.paddingRight)
         assertTrue("Initial muted color paints the thumb", list.rightGutterContains(initialMuted))
+        val thumbCenterX = list.width -
+            (insetAppearance.scrollIndicator.rightInsetDp + insetAppearance.scrollIndicator.widthDp / 2f) * density
+        assertTrue("Painted thumb is inside the physical-right hit gutter",
+            thumbCenterX >= list.width - list.paddingRight &&
+                (0 until list.height).any { list.canStartScrollIndicatorDrag(thumbCenterX, it.toFloat()) })
         assertFalse("Initial theme supplies the wider inset",
             list.rightGutterContains(initialMuted, list.paddingRight / 2))
 
@@ -85,6 +93,9 @@ class ReverbIncidentScrollIndicatorIntegrationTest {
     fun thumbAppearsOnlyWhilePublishedHistoryOverflows() = withFixture { f ->
         f.publish(shortHistory)
         val shortList = f.list
+        val sidePadding = (18f * shortList.resources.displayMetrics.density).roundToInt()
+        assertEquals(sidePadding, shortList.paddingLeft)
+        assertEquals(sidePadding, shortList.paddingRight)
         assertFalse(shortList.canScrollVertically(1))
         assertFalse(shortList.canScrollVertically(-1))
         assertFalse(shortList.rightGutterContains(initialMuted))
@@ -224,7 +235,7 @@ class ReverbIncidentScrollIndicatorIntegrationTest {
         private val initialMuted = 0xffe812a6.toInt()
         private val updatedMuted = 0xff098e32.toInt()
         private val insetAppearance = ReverbDesign.appearance.let {
-            it.copy(scrollIndicator = it.scrollIndicator.copy(rightInsetDp = 10f))
+            it.copy(scrollIndicator = it.scrollIndicator.copy(rightInsetDp = 22f))
         }
         private val shortHistory = ReverbIncidentDay(2, "Today",
             listOf(ReverbIncidentGroup("topic", "Error", listOf(Row("today-1")))))
