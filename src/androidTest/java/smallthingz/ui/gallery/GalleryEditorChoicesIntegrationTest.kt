@@ -153,7 +153,7 @@ class GalleryEditorChoicesIntegrationTest {
                     group.bind(options, options.first().id)
                     assertEquals(if (kind == GalleryEditorChoiceKind.MENU) NativeChoiceSemantics.RADIO
                         else NativeChoiceSemantics.BUTTON, group.semantics)
-                    assertEquals(if (kind == GalleryEditorChoiceKind.MENU) 3 else null, group.fixedColumns)
+                    assertNull(group.fixedColumns)
                     assertEquals(if (kind == GalleryEditorChoiceKind.RETOUCH || kind == GalleryEditorChoiceKind.FINISH)
                         ChoiceArrangement.Wrap else ChoiceArrangement.EqualWidth, group.arrangement)
                     for (width in listOf(320, 220, 392)) {
@@ -161,7 +161,7 @@ class GalleryEditorChoicesIntegrationTest {
                         assertReadable(group, options)
                         assertGrid(group, options, if (kind == GalleryEditorChoiceKind.MENU) 8 else 4)
                         if (kind == GalleryEditorChoiceKind.MENU && font == 1f && width >= 320) {
-                            assertEquals("Ordinary menu retains three fixed columns", 1,
+                            assertEquals("Ordinary menu retains three columns", 1,
                                 chips(group, options).map { it.top }.distinct().size)
                         }
                     }
@@ -178,6 +178,57 @@ class GalleryEditorChoicesIntegrationTest {
                     }
                 } finally { group.close() }
             }
+        }
+    }
+
+    @Test fun menuTwoThreeTwoChoicesFillRowsAndRetainNodesWithoutActivating() = onMain {
+        for (dpi in listOf(160, 421)) for (font in listOf(1f, 2f)) for (rtl in listOf(false, true)) {
+            val context = context(font, dpi)
+            val group = GalleryEditorChoices(context, GalleryDesign.palette(context, true).pageControls,
+                GalleryEditorChoiceKind.MENU)
+            val three = options(GalleryEditorChoiceKind.MENU)
+            val two = listOf(three.first(), three.last()) // Looks / Crop; Adjust is inserted between them.
+            var requests = 0
+            var changes = 0
+            group.onSelectionRequest = { requests++; true }
+            group.onSelectionChange = { changes++ }
+            try {
+                group.layoutDirection = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+                group.bind(two, two.first().id)
+                val retained = chips(group, two)
+                val ids = retained.map { it.id }
+                val textSizes = retained.map { it.textSize }
+                for (width in listOf(320, 392, 320)) {
+                    var inserted: NativeChip? = null
+                    for ((step, choices) in listOf(two, three, two).withIndex()) {
+                        val selected = if (step == 1) two.last().id else two.first().id
+                        group.bind(choices.map { it.copy() }, selected)
+                        measure(group, width)
+                        assertReadable(group, choices)
+                        assertGrid(group, choices, 8)
+                        val cells = chips(group, choices)
+                        if (choices.size == 2 || font == 1f) {
+                            assertEquals("All ${choices.size} choices share one full row, font=$font width=$width",
+                                1, cells.map { it.top }.distinct().size)
+                        }
+                        retained.forEachIndexed { index, chip ->
+                            assertSame(chip, group.choiceView(two[index].id))
+                            assertSame(group, chip.parent)
+                            assertEquals(ids[index], chip.id)
+                            assertEquals("Do not shrink scaled typography", textSizes[index], chip.textSize, 0f)
+                            assertEquals(two[index].id == selected, chip.isChecked)
+                        }
+                        assertEquals(selected, group.selectedId)
+                        if (step == 1) inserted = checkNotNull(group.choiceView(three[1].id))
+                        if (step == 2) {
+                            assertNull(group.choiceView(three[1].id))
+                            assertNull(checkNotNull(inserted).parent)
+                        }
+                        assertEquals("Binding/layout must not request activation", 0, requests)
+                        assertEquals("Binding/layout must not publish user selection", 0, changes)
+                    }
+                }
+            } finally { group.close() }
         }
     }
 
