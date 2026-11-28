@@ -36,7 +36,10 @@ class ReverbIncidentsHeaderMotionHostTest {
     @Test fun standaloneHeaderDefersNonBackEffectsUntilMotionSettles() = verifyAdmission(false)
     @Test fun sourceBoundHeaderDefersNonBackEffectsUntilMotionSettles() = verifyAdmission(true)
 
-    private fun verifyAdmission(sourceBound: Boolean) {
+    @Test fun occurrenceEffectsWaitForMotionButBackRemainsAvailable() =
+        verifyAdmission(sourceBound = true, occurrences = true)
+
+    private fun verifyAdmission(sourceBound: Boolean, occurrences: Boolean = false) {
         val activity = Robolectric.buildActivity(Activity::class.java).setup().visible()
         val context = activity.get()
         val host = NativePageTransition.InputRoot(context)
@@ -52,12 +55,14 @@ class ReverbIncidentsHeaderMotionHostTest {
                 var lease: AutoCloseable? = null
                 var backs = 0
                 val deleted = mutableListOf<List<ReverbIncidentTarget>>()
+                val acknowledged = mutableListOf<ReverbIncidentTarget>()
+                val rowDeletes = mutableListOf<ReverbIncidentTarget>()
                 val history = history()
                 val modes = mutableListOf<Boolean>()
                 val panel = ReverbIncidentsContentView(context, ReverbDesign.theme(context, false),
                     texts(), ReverbIncidentActions(
-                        { fail("No row acknowledgement expected") },
-                        { fail("No row deletion expected") },
+                        { if (occurrences) acknowledged += it else fail("No row acknowledgement expected") },
+                        { if (occurrences) rowDeletes += it else fail("No row deletion expected") },
                         { deleted += it },
                         { fail("No copy expected") }),
                     {
@@ -106,6 +111,51 @@ class ReverbIncidentsHeaderMotionHostTest {
                         assertNull(lease)
                     }
                     fun clearSheet(): Any? = ReflectionHelpers.getField(panel, "clearSheet")
+
+                    if (occurrences) {
+                        val occurrence = history.rows.single().target
+                        val card = descendants(panel).filterIsInstance<ReverbIncidentCardView>().single()
+                        val body: View = ReflectionHelpers.getField(card, "body")
+                        val check: View = ReflectionHelpers.getField(body, "checkTarget")
+                        val heading = descendants(panel).filterIsInstance<ReverbIncidentGroupHeading>().single()
+                        assertTrue(check.getGlobalVisibleRect(Rect()))
+                        assertTrue(check.performClick())
+                        assertEquals(listOf(occurrence), acknowledged)
+
+                        assertTrue(body.performLongClick())
+                        val binding: Any = ReflectionHelpers.getField(card, "binding")
+                        val identity: IncidentCardMenuIdentity = ReflectionHelpers.getField(binding, "menuIdentity")
+                        // Keep the real row callback created for the already-open popup. The popup
+                        // has its own window, so a Main-only View admission check cannot gate it.
+                        val menuRequest = ReverbIncidentCardView::class.java.getDeclaredMethod("menuRequest",
+                            IncidentCardMenuIdentity::class.java, smallthingz.ui.components.NativeMenuOrigin::class.java)
+                            .apply { isAccessible = true }
+                            .invoke(card, identity, null) as IncidentCardMenuRequest
+                        assertTrue(menuRequest.canDelete)
+                        preview()
+                        menuRequest.delete()
+                        assertTrue("Already-open Delete must recheck admission", rowDeletes.isEmpty())
+                        assertTrue(check.getGlobalVisibleRect(Rect()))
+                        check.performClick()
+                        assertEquals(listOf(occurrence), acknowledged)
+                        assertFalse(body.performLongClick())
+                        assertFalse(heading.performLongClick())
+                        assertFalse(panel.selectionActive)
+                        click(back)
+                        assertEquals(1, backs)
+                        assertNotNull(lease)
+                        check.performClick()
+                        assertEquals(listOf(occurrence), acknowledged)
+                        settleCancellation()
+
+                        assertTrue(check.performClick())
+                        assertEquals(listOf(occurrence, occurrence), acknowledged)
+                        menuRequest.delete()
+                        assertEquals(listOf(occurrence), rowDeletes)
+                        assertTrue(heading.performLongClick())
+                        assertTrue(panel.selectionActive)
+                        return
+                    }
 
                     preview()
                     click(select)
@@ -165,6 +215,13 @@ class ReverbIncidentsHeaderMotionHostTest {
         } finally {
             activity.pause().stop().destroy()
             setScale(oldScale)
+        }
+    }
+
+    private fun descendants(view: View): Sequence<View> = sequence {
+        yield(view)
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) yieldAll(descendants(view.getChildAt(index)))
         }
     }
 

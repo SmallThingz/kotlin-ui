@@ -102,7 +102,8 @@ class ReverbIncidentsContentView(
             activateOccurrence(row, showOptions)
 
         override fun menuTarget(row: ReverbIncidentOccurrence, requiresMutation: Boolean): ReverbIncidentTarget? {
-            if (selecting || (requiresMutation && !history.canMutate)) return null
+            if (!nativeSurfaceInputAllowed(this@ReverbIncidentsContentView) || selecting ||
+                (requiresMutation && !history.canMutate)) return null
             return currentOccurrence(row)?.target
         }
     }
@@ -314,7 +315,7 @@ class ReverbIncidentsContentView(
 
     /** Snapshot-only, additive selection of the topic on the heading's displayed date. */
     private fun selectErrorOccurrences(epochDay: Long, groupKey: String): Boolean {
-        if (!history.canMutate) return false
+        if (!nativeSurfaceInputAllowed(this) || !history.canMutate) return false
         // An animating-out heading cannot act for a group that survives only on another day.
         val day = history.days.firstOrNull { it.epochDay == epochDay } ?: return false
         var found = false
@@ -336,6 +337,7 @@ class ReverbIncidentsContentView(
         adapter.occurrence(requested.key)?.takeIf { it.target.matches(requested.target) }
 
     private fun activateOccurrence(requested: ReverbIncidentOccurrence, showOptions: () -> Boolean): Boolean {
+        if (!nativeSurfaceInputAllowed(this)) return false
         val current = currentOccurrence(requested) ?: return false
         if (!history.canMutate) return !selecting && showOptions()
         if (selecting) {
