@@ -89,13 +89,22 @@ class NativeProgressSwitchIndicationHostTest {
         foreground(row).useBitmap { assertEquals(0, Color.alpha(it.getPixel(it.width / 2, it.height / 2))) }
     }
 
-    @Test fun pressedInkIsRoundedButCornerTapStillUsesTheFullTarget() = withRow { row, values ->
+    @Test fun pressedCornerKeepsTheFullInputAndSemanticTarget() = withRow { row, values ->
         assertTrue(row.width >= 48 && row.height >= 48)
         val down = SystemClock.uptimeMillis()
         event(MotionEvent.ACTION_DOWN, 1f, 1f, down) { assertTrue(row.onTouchEvent(it)) }
-        settleInk(row)
-        assertRoundedInk(row)
+        // API35 patterned ripple skips bitmap Canvas. The pressed pixel contract lives in
+        // NativeProgressSwitchPressedWindowIntegrationTest, with real hardware Window pixels.
+        advanceFrames(420) // Same held-press budget; no software foreground pixel qualification.
         assertTrue("A press does not dispatch before release", values.isEmpty())
+        val node = checkNotNull(row.createAccessibilityNodeInfo())
+        try {
+            assertTrue(node.isFocusable && node.isCheckable && !node.isChecked && node.isEnabled)
+            assertTrue(node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK })
+            val bounds = Rect().also(node::getBoundsInScreen)
+            assertEquals(row.width, bounds.width())
+            assertEquals(row.height, bounds.height())
+        } finally { node.recycle() }
         event(MotionEvent.ACTION_UP, 1f, 1f, down) { assertTrue(row.onTouchEvent(it)) }
         shadowOf(Looper.getMainLooper()).idle()
         assertEquals("Visually clipped corner remains an ordinary target", listOf(true), values)
