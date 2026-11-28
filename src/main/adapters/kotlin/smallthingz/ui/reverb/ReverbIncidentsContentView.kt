@@ -739,6 +739,18 @@ private class IncidentStatusIcon(context: Context, color: Int) : View(context) {
     init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
     fun setColor(color: Int) {colorMotion.retarget(color)}
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) { icon.setBounds(0, 0, w, h) }
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        icon.setVisible(isVisible, false)
+        invalidate()
+    }
+
+    override fun onDetachedFromWindow() {
+        icon.setVisible(false, false)
+        invalidate()
+        super.onDetachedFromWindow()
+    }
+
     override fun onDraw(canvas: Canvas) { icon.draw(canvas) }
 }
 

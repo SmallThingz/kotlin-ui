@@ -9,7 +9,10 @@ import smallthingz.ui.graphics.bindGrainLayer
 import smallthingz.ui.graphics.ViewGrain
 import kotlin.math.roundToInt
 
-/** Rounded leading slot that shows an icon or the caller's existing interactive content. */
+/**
+ * Rounded leading slot that shows an icon or the caller's existing interactive content.
+ * The disc exclusively owns each installed glyph and updates its bounds, tint, and visibility.
+ */
 class NativeLeadingDisc(
     context: Context,
     private var density: Float,
@@ -21,6 +24,7 @@ class NativeLeadingDisc(
         color = initialFill
     }
     private var grain: ViewGrain? = null
+    private var glyphHostVisible = false
 
     internal fun setSurfacePreset(preset: NativeSurfacePreset?) {
         grain = bindGrainLayer(grain, preset?.foregroundGrain ?: 0f)
@@ -39,6 +43,7 @@ class NativeLeadingDisc(
         content?.let(::removeView)
         content = view
         view?.let(::addView)
+        updateGlyphVisibility()
         requestLayout()
         invalidate()
     }
@@ -53,7 +58,11 @@ class NativeLeadingDisc(
         if (this.density == density && this.style == style && this.glyph === glyph) return
         this.density = density
         this.style = style
-        this.glyph = glyph
+        if (this.glyph !== glyph) {
+            this.glyph.setVisible(false, false)
+            this.glyph = glyph
+            updateGlyphVisibility()
+        }
         setClipRadiusPx(style.radiusDp * density)
         requestLayout()
         invalidate()
@@ -92,6 +101,24 @@ class NativeLeadingDisc(
             glyph.layoutDirection = layoutDirection
             glyph.draw(canvas)
         }
+    }
+
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        glyphHostVisible = isVisible
+        updateGlyphVisibility()
+        invalidate()
+    }
+
+    override fun onDetachedFromWindow() {
+        glyphHostVisible = false
+        updateGlyphVisibility()
+        invalidate()
+        super.onDetachedFromWindow()
+    }
+
+    private fun updateGlyphVisibility() {
+        glyph.setVisible(glyphHostVisible && content == null, false)
     }
 
     private fun exact(size: Int) = MeasureSpec.makeMeasureSpec(size, MeasureSpec.EXACTLY)

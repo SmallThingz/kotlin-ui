@@ -223,6 +223,18 @@ private class LibraryEmptySymbol(context: Context, private var environment: Reve
     private val glyph = object : View(context) {
         var icon = ReverbIconDrawable(ReverbIcon.Library, environment.textDensity.density,
             srgbColorWithAlpha(environment.palette.muted, .72f))
+        override fun onVisibilityAggregated(isVisible: Boolean) {
+            super.onVisibilityAggregated(isVisible)
+            icon.setVisible(isVisible, false)
+            invalidate()
+        }
+
+        override fun onDetachedFromWindow() {
+            icon.setVisible(false, false)
+            invalidate()
+            super.onDetachedFromWindow()
+        }
+
         override fun onDraw(canvas: Canvas) { icon.draw(canvas) }
         override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) = updateBounds(w, h)
         fun updateBounds(w: Int, h: Int) {

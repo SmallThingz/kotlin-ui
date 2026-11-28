@@ -188,6 +188,18 @@ private class PlayerGlyph(context: Context, private var environment: ReverbEnvir
     }
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) { drawable.setBounds(0, 0, w, h) }
     override fun onRtlPropertiesChanged(layoutDirection: Int) { super.onRtlPropertiesChanged(layoutDirection); drawable.layoutDirection = layoutDirection }
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        drawable.setVisible(isVisible, false)
+        invalidate()
+    }
+
+    override fun onDetachedFromWindow() {
+        drawable.setVisible(false, false)
+        invalidate()
+        super.onDetachedFromWindow()
+    }
+
     override fun onDraw(canvas: Canvas) { drawable.draw(canvas) }
 }
 
