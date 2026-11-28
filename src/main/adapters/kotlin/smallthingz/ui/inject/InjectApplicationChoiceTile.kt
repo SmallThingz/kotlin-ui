@@ -11,6 +11,7 @@ import android.widget.ImageView
 import androidx.core.view.ViewCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import smallthingz.ui.common.nativeSurfaceInputAllowed
 import smallthingz.ui.components.NativeChip
 import smallthingz.ui.components.NativeChoiceSemantics
 import smallthingz.ui.components.NativeCircularProgress
@@ -45,7 +46,9 @@ open class InjectApplicationChoiceTile(context: Context, ui: InjectAppearance) :
         maxLines = recipe.labelMaxLines
         minLines = recipe.labelMaxLines
         ellipsize = TextUtils.TruncateAt.END
-        onActivationRequest = { !closed && bound && onSelectionRequest?.invoke() == true }
+        onActivationRequest = {
+            !closed && bound && nativeSurfaceInputAllowed(this) && onSelectionRequest?.invoke() == true
+        }
     }
     private val icon = ImageView(context).apply {
         scaleType = ImageView.ScaleType.FIT_CENTER
@@ -67,7 +70,9 @@ open class InjectApplicationChoiceTile(context: Context, ui: InjectAppearance) :
     private val info = NativeChip(context, palette, recipe.choiceStyle, NativeChoiceSemantics.BUTTON).apply {
         bindButton("", enabled = false)
         visibility = GONE
-        onActivationRequest = { !closed && bound && onExplanationRequest?.invoke() == true }
+        onActivationRequest = {
+            !closed && bound && nativeSurfaceInputAllowed(this) && onExplanationRequest?.invoke() == true
+        }
     }
 
     init {

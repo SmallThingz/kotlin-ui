@@ -25,6 +25,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import smallthingz.ui.components.NativeChip
 import smallthingz.ui.components.NativeCircularProgress
+import smallthingz.ui.components.NativePageTransition
 import smallthingz.ui.components.NativeJoinedApplicationGridLayout
 import smallthingz.ui.components.applicationGrid
 
@@ -93,6 +94,59 @@ class InjectApplicationChoiceTileTest {
         assertEquals(1f, icon.alpha, 0f)
         assertEquals(View.GONE, info.visibility)
         assertTrue(choice.isFocusable)
+    }
+
+    @Test fun unselectedChoiceAndExplanationWaitForPageInputAdmission() = verifyPageInputAdmission(false)
+
+    @Test fun selectedChoiceAndExplanationWaitForPageInputAdmission() = verifyPageInputAdmission(true)
+
+    private fun verifyPageInputAdmission(selected: Boolean) = withTile(motionRoot = true) { tile, root ->
+        var selections = 0
+        var explanations = 0
+        tile.onSelectionRequest = { selections++; true }
+        tile.onExplanationRequest = { explanations++; true }
+        val choice = tile.getChildAt(0) as NativeChip
+        val info = tile.getChildAt(4) as NativeChip
+        for (unavailable in listOf(false, true)) {
+            tile.bindChoice("Mail", "Mail, example.mail", selected = selected,
+                unavailableDescription = if (unavailable) "Unavailable fixture" else null,
+                explanationDescription = "Mail, Why unavailable")
+            layout(root)
+            val target = if (unavailable) info else choice
+            assertTrue(target.isAttachedToWindow)
+            assertTrue(target.isShown)
+            assertTrue(target.isEnabled)
+            val node = target.createAccessibilityNodeInfo()
+            try {
+                assertTrue(node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_CLICK })
+                assertEquals(if (unavailable) "android.widget.Button" else "android.widget.CheckBox",
+                    node.className.toString())
+            } finally { node.recycle() }
+            // The actual page owner holds this lease during motion. Releasing it also models
+            // cancellation completion; this fixture does not claim animation timing coverage.
+            // Clearing an explicit description can expose CheckBox's platform default even
+            // when the info chip is hidden. Preserve the observed value, not an assumed null.
+            val beforeInfoDescription = ViewCompat.getStateDescription(info)?.toString()
+            if (unavailable) assertEquals("Unavailable fixture", beforeInfoDescription)
+            val lease = checkNotNull(NativePageTransition.InputRoot.blockFrom(target))
+            val beforeSelections = selections
+            val beforeExplanations = explanations
+            try {
+                assertFalse(target.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+                assertEquals(beforeSelections, selections)
+                assertEquals(beforeExplanations, explanations)
+                assertEquals(selected, choice.isChecked)
+                assertEquals(!unavailable, choice.isEnabled)
+                assertEquals(beforeInfoDescription, ViewCompat.getStateDescription(info)?.toString())
+            } finally { lease.close() }
+            assertTrue(target.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
+            assertEquals(beforeSelections + if (unavailable) 0 else 1, selections)
+            assertEquals(beforeExplanations + if (unavailable) 1 else 0, explanations)
+            assertEquals("Admitted requests still do not optimistically change selection", selected, choice.isChecked)
+            assertEquals(beforeInfoDescription, ViewCompat.getStateDescription(info)?.toString())
+        }
+        assertEquals(1, selections)
+        assertEquals(1, explanations)
     }
 
     @Test fun keyboardUsesControlledSelectionAndRecycleOrCloseRevokesActions() = withTile { tile, root ->
@@ -343,10 +397,10 @@ class InjectApplicationChoiceTileTest {
         assertSame("Focus belongs to the actual choice", choice, choice.rootView.findFocus())
     }
 
-    private fun withTile(dark: Boolean = false, block: (InjectApplicationChoiceTile, FrameLayout) -> Unit) {
+    private fun withTile(dark: Boolean = false, motionRoot: Boolean = false, block: (InjectApplicationChoiceTile, FrameLayout) -> Unit) {
         val controller = Robolectric.buildActivity(Activity::class.java).setup().visible().windowFocusChanged(true)
         val activity = controller.get()
-        val root = FrameLayout(activity)
+        val root = if (motionRoot) NativePageTransition.InputRoot(activity) else FrameLayout(activity)
         val tile = InjectApplicationChoiceTile(activity, InjectAppearance(activity, InjectDesign.theme(activity, dark)))
         root.addView(tile, FrameLayout.LayoutParams(90, 120))
         activity.setContentView(root)
