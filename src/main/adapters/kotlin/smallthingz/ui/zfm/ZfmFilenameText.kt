@@ -19,7 +19,8 @@ import smallthingz.ui.controls.ControlPalette
  * Overflowing files keep their final extension when it fits with an ellipsis on the last line.
  * A natural two-line break at or inside that extension first tries a meaningful basename
  * tail with the extension, then the extension alone, accepting only a measured two-line fit.
- * Other natural wrapping is unchanged. Explicit bidi embedding/override/isolate controls exclude
+ * A natural break inside a delimited dimension such as 600x1080 can move to the preceding
+ * separator when both lines still fit at their original height. Other natural wrapping is unchanged. Explicit bidi embedding/override/isolate controls exclude
  * this natural-break adjustment, since adding a paragraph can change their ordering.
  * Directories, dotfiles, names without an eligible extension and names with explicit line
  * separators keep ordinary END ellipsis. A row that supplies its own full-name semantics can
@@ -30,6 +31,10 @@ class ZfmFilenameText(
     palette: ControlPalette,
     style: NativeTextStyle,
 ) : NativeText(context, palette, style) {
+    private companion object {
+        val dimensionToken = Regex("""(?<=[_ -])[0-9]+[xX×][0-9]+(?=[._ -])""")
+    }
+
     private var name = ""
     private var directory = false
     private var fittedLayout: WeakReference<Layout>? = null
@@ -80,15 +85,16 @@ class ZfmFilenameText(
         val raw = layout ?: return
         // DynamicLayout can retain backing lines past TextView's two visible lines.
         val rawLineCount = raw.lineCount
+        if (directory || rawLineCount < 2) return
         val atomicExtension = atomicExtensionText(raw)
-        if (directory || rawLineCount < 2 ||
-            (rawLineCount == 2 && raw.getEllipsisCount(1) == 0 && atomicExtension == null)) return
-
-        // Snapshot candidates and direction before changing text: watched TextViews can
-        // reuse/mutate their DynamicLayout during the first candidate's measurement.
-        val candidates = if (atomicExtension != null) {
-            listOfNotNull(meaningfulTailText(raw), atomicExtension)
-        } else listOfNotNull(suffixText(raw))
+        val naturalWrap = rawLineCount == 2 && raw.getEllipsisCount(1) == 0
+        val originalHeight = measuredHeight
+        // Snapshot candidates before changing text: a watched TextView can reuse its layout.
+        val candidates = when {
+            atomicExtension != null -> listOfNotNull(meaningfulTailText(raw), atomicExtension)
+            naturalWrap -> listOf(dimensionWrapText(raw) ?: return)
+            else -> listOfNotNull(suffixText(raw))
+        }
         if (candidates.isNotEmpty()) {
             val direction = raw.getParagraphDirection(0)
             var accepted = false
@@ -97,7 +103,8 @@ class ZfmFilenameText(
             for (candidate in candidates) {
                 setDisplayText(candidate)
                 super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-                if (fitsTwoLines(candidate, direction)) {
+                if (fitsTwoLines(candidate, direction) &&
+                    (!naturalWrap || atomicExtension != null || measuredHeight == originalHeight)) {
                     accepted = true
                     break
                 }
@@ -151,12 +158,28 @@ class ZfmFilenameText(
         // Preserve the existing exclusion of all leading-dot names, not just extensionless ones.
         if (name.startsWith('.') || extension !in 1 until name.lastIndex ||
             split < extension || split >= name.length ||
-            name.any { it == '\n' || it == '\r' || it == '\u2028' || it == '\u2029' ||
-                it in '\u202a'..'\u202e' || it in '\u2066'..'\u2069' }) return null
+            excludesNaturalWrap()) return null
 
         val mark = if (raw.getParagraphDirection(0) == Layout.DIR_RIGHT_TO_LEFT) '\u200f' else '\u200e'
         // Unlike overflow fitting, natural wrapping must retain every basename character.
         return name.substring(0, extension) + "\n" + mark + name.substring(extension)
+    }
+
+    private fun excludesNaturalWrap() = name.any { it == '\n' || it == '\r' || it == '\u2028' || it == '\u2029' ||
+                it in '\u202a'..'\u202e' || it in '\u2066'..'\u2069' }
+
+    private fun dimensionWrapText(raw: Layout): String? {
+        val split = raw.getLineEnd(0)
+        if (name.startsWith('.') || split >= name.lastIndexOf('.') || raw.getEllipsisCount(0) != 0) return null
+        val token = dimensionToken.findAll(name).firstOrNull { split > it.range.first && split <= it.range.last }
+            ?: return null
+        if (name.lastIndexOf('.') == name.lastIndex || excludesNaturalWrap()) return null
+
+        // The inserted boundary is between an ASCII separator and an ASCII digit,
+        // never inside a combining sequence or a surrogate pair.
+        val start = token.range.first
+        val mark = if (raw.getParagraphDirection(0) == Layout.DIR_RIGHT_TO_LEFT) '\u200f' else '\u200e'
+        return name.substring(0, start) + "\n" + mark + name.substring(start)
     }
 
     // Called only after atomicExtensionText admits a natural extension orphan.
