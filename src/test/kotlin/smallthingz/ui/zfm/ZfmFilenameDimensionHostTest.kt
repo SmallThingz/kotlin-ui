@@ -2,10 +2,15 @@ package smallthingz.ui.zfm
 
 import android.app.Application
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.text.Layout
 import android.text.TextUtils
 import android.view.View
 import android.view.ViewGroup
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.nio.file.StandardOpenOption
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -17,12 +22,13 @@ import org.robolectric.annotation.GraphicsMode
 import smallthingz.ui.components.NativeText
 
 @RunWith(RobolectricTestRunner::class)
-@Config(application = Application::class, sdk = [35], qualifiers = "en-420dpi")
+@Config(application = Application::class, sdk = [35], qualifiers = "en-440dpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ZfmFilenameDimensionHostTest {
-    private val context = RuntimeEnvironment.getApplication().let { app ->
-        app.createConfigurationContext(Configuration(app.resources.configuration).apply { fontScale = 1f })
+    private fun scaledContext(scale: Float) = RuntimeEnvironment.getApplication().let { app ->
+        app.createConfigurationContext(Configuration(app.resources.configuration).apply { fontScale = scale })
     }
+    private val context = scaledContext(1f)
     private val theme = ZfmTheme.resolve(context, dark = true)
 
     private fun ordinary(name: String) = NativeText(context, theme.palette, theme.fileGrid.titleStyle).apply {
@@ -44,16 +50,36 @@ class ZfmFilenameDimensionHostTest {
         return checkNotNull(view.layout)
     }
 
+    private fun renderIfRequested(view: View, name: String) {
+        val directory = System.getProperty("zfm.filename.renderDir") ?: return
+        require(directory.isNotBlank())
+        val target = Files.createDirectories(Paths.get(directory)).resolve(name)
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        try {
+            val canvas = Canvas(bitmap)
+            canvas.drawColor(theme.surface)
+            view.draw(canvas)
+            Files.newOutputStream(target, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).use {
+                check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
     @Test fun capturedGridKeepsDimensionsTogetherAtSameHeight() {
         val name = "GalleryColorPortrait-600x1080-v1.png"
         val raw = ordinary(name)
         val before = place(raw, 318)
+        val view = filename(name)
+        val after = place(view, 318)
+        renderIfRequested(raw, "before-318.png")
+        renderIfRequested(view, "after-318.png")
+        assertEquals(440, context.resources.displayMetrics.densityDpi)
         assertEquals("Captured ordinary break", "GalleryColorPortrait-6", name.take(before.getLineEnd(0)))
         assertEquals(2, before.lineCount)
         assertEquals(0, before.getEllipsisCount(1))
 
-        val view = filename(name)
-        val after = place(view, 318)
         assertEquals(2, after.lineCount)
         assertEquals("GalleryColorPortrait-\n\u200e600x1080-v1.png", view.text.toString())
         assertEquals(view.text.indexOf('\n') + 1, after.getLineStart(1))
@@ -86,5 +112,20 @@ class ZfmFilenameDimensionHostTest {
         assertEquals(checkNotNull(raw.layout).getLineEnd(0), after.getLineEnd(0))
         assertEquals(0, after.getEllipsisCount(1))
         assertEquals(raw.height, view.height)
+
+        // At large font, the long sibling names need the existing overflow treatment.
+        // Rebind the same view, as a recycled grid cell would.
+        val large = scaledContext(2f)
+        val largeTheme = ZfmTheme.resolve(large, dark = true)
+        val reused = ZfmFilenameText(large, largeTheme.palette, largeTheme.fileGrid.titleStyle)
+        for (version in listOf(3, 4)) {
+            val original = "turnbull-heal-preview-861084e2_edited_${version}.jpg"
+            reused.bindName(original, directory = false)
+            val layout = place(reused, 318)
+            assertEquals(2, layout.lineCount)
+            assertEquals(0, layout.getEllipsisCount(1))
+            assertTrue(reused.text.contains('…') && reused.text.endsWith("_${version}.jpg"))
+            assertEquals(original, checkNotNull(reused.createAccessibilityNodeInfo()).contentDescription?.toString())
+        }
     }
 }
