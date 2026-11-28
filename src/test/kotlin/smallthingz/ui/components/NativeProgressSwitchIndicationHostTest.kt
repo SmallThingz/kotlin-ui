@@ -156,11 +156,21 @@ class NativeProgressSwitchIndicationHostTest {
 
     private fun settleInk(row: View) {
         recordInk(row, "before-settle")
-        shadowOf(Looper.getMainLooper()).idleFor(120, MILLISECONDS) // Deliver accepted interactions/delayed press.
+        advanceFrames(120) // Deliver accepted interactions/delayed press within the original budget.
         foreground(row).recycle() // Start the real RippleDrawable's software draw timeline if pressed.
         recordInk(row, "after-first-draw")
-        shadowOf(Looper.getMainLooper()).idleFor(300, MILLISECONDS)
+        advanceFrames(300)
         recordInk(row, "after-settle")
+    }
+
+    private fun advanceFrames(millis: Long) {
+        // Paused native vsync is clock-driven, not a queued Looper task: large jumps can coalesce it.
+        var remaining = millis
+        while (remaining > 0) {
+            val step = minOf(16L, remaining)
+            shadowOf(Looper.getMainLooper()).idleFor(step, MILLISECONDS)
+            remaining -= step
+        }
     }
 
     private fun assertRoundedInk(row: View) {
