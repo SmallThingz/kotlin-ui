@@ -60,9 +60,12 @@ abstract class NativeClickableRow(
     protected fun bindAction(enabled: Boolean, ink: Int) {
         rowEnabled = enabled
         indication.updateColor(ink)
+        val enabledChanged = isEnabled != enabled
         isEnabled = enabled
         isFocusable = enabled
-        bindInput()
+        // setEnabled already publishes the current input binding when the flag changes.
+        // Unchanged flags still need binding (including the first enabled bind).
+        if (!enabledChanged) bindInput()
     }
 
     /** Explicit secondary action; the native controller owns long-press consumption. */
