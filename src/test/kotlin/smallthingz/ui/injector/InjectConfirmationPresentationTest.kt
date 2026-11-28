@@ -3,6 +3,7 @@ package smallthingz.ui.injector
 import android.content.res.Configuration
 import android.graphics.Color
 import android.view.View
+import android.widget.ImageView
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,6 +21,59 @@ import smallthingz.ui.icons.MaterialRoundedIconDrawable
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class InjectConfirmationPresentationTest {
+    @Test fun permissionStatusTextDefersIconsAndVisibleRebindUsesTheCurrentGrant() {
+        val context = RuntimeEnvironment.getApplication()
+        for (dark in listOf(false, true)) {
+            val row = object : InjectPermissionRow(context, InjectDesign.theme(context, dark), android.R.drawable.sym_def_app_icon) {
+                val statusIcon get() = trailing as ImageView
+            }
+            fun iconInitialized(name: String) = (InjectPermissionRow::class.java
+                .getDeclaredField("${name}\$delegate").apply { isAccessible = true }.get(row) as Lazy<*>).isInitialized()
+            var calls = 0
+            fun bind(showStatus: Boolean, granted: Boolean) {
+                row.bindStatus("Root", if (showStatus) "Waiting…" else if (granted) "Allowed" else "Not allowed",
+                    showStatus, granted, enabled = true, requestEnabled = !showStatus,
+                    requestLabel = "Allow", onRequest = { calls++ })
+                assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO, row.statusIcon.importantForAccessibility)
+                assertEquals(!showStatus && !granted, row.canRequestNow)
+            }
+
+            bind(showStatus = true, granted = false)
+            assertEquals(View.GONE, row.statusIcon.visibility)
+            assertNull("Initial textual status must not construct the hidden icon", row.statusIcon.drawable)
+            bind(showStatus = true, granted = true)
+            assertNull("A hidden grant change must not construct the other icon either", row.statusIcon.drawable)
+            assertFalse(iconInitialized("ungrantedIcon"))
+            assertFalse(iconInitialized("grantedIcon"))
+
+            bind(showStatus = false, granted = false)
+            val ungranted = row.statusIcon.drawable as MaterialRoundedIconDrawable
+            assertEquals(View.VISIBLE, row.statusIcon.visibility)
+            assertEquals(MaterialRoundedIcon.RadioButtonUnchecked, ungranted.icon)
+            assertTrue(iconInitialized("ungrantedIcon"))
+            assertFalse(iconInitialized("grantedIcon"))
+
+            bind(showStatus = true, granted = true)
+            assertEquals(View.GONE, row.statusIcon.visibility)
+            assertSame("Hidden state does not replace the retained drawable", ungranted, row.statusIcon.drawable)
+            assertFalse(iconInitialized("grantedIcon"))
+            bind(showStatus = false, granted = true)
+            val granted = row.statusIcon.drawable as MaterialRoundedIconDrawable
+            assertEquals(View.VISIBLE, row.statusIcon.visibility)
+            assertEquals(MaterialRoundedIcon.CheckCircle, granted.icon)
+            assertTrue(iconInitialized("grantedIcon"))
+
+            bind(showStatus = true, granted = false)
+            assertSame(granted, row.statusIcon.drawable)
+            bind(showStatus = false, granted = false)
+            assertEquals(View.VISIBLE, row.statusIcon.visibility)
+            assertSame("Returning to an ungranted icon reuses its original drawable", ungranted, row.statusIcon.drawable)
+            bind(showStatus = false, granted = true)
+            assertSame("Returning to a granted icon reuses its original drawable", granted, row.statusIcon.drawable)
+            assertEquals(0, calls)
+        }
+    }
+
     @Test fun cancelIsTextOnlyWhileConfirmKeepsItsRequestedGlyphAndSemanticColors() {
         val context = RuntimeEnvironment.getApplication()
         for (dark in listOf(false, true)) for (destructive in listOf(false, true)) {
