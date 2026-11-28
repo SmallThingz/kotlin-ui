@@ -6,11 +6,14 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.text.Layout
 import android.text.TextUtils
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.nio.file.StandardOpenOption
+import kotlin.math.abs
+import kotlin.math.ceil
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -67,19 +70,39 @@ class ZfmFilenameDimensionHostTest {
         }
     }
 
-    @Test fun capturedGridKeepsDimensionsTogetherAtSameHeight() {
+    @Test fun nativeDimensionSplitKeepsTokenTogetherAtSameHeight() {
         val name = "GalleryColorPortrait-600x1080-v1.png"
-        val raw = ordinary(name)
-        val before = place(raw, 318)
-        val view = filename(name)
-        val after = place(view, 318)
-        renderIfRequested(raw, "before-318.png")
-        renderIfRequested(view, "after-318.png")
-        assertEquals(440, context.resources.displayMetrics.densityDpi)
-        assertEquals("Captured ordinary break", "GalleryColorPortrait-6", name.take(before.getLineEnd(0)))
-        assertEquals(2, before.lineCount)
-        assertEquals(0, before.getEllipsisCount(1))
+        val raw = ordinary(name).apply { gravity = Gravity.CENTER_VERTICAL }
+        val view = filename(name).apply { gravity = Gravity.CENTER_VERTICAL }
+        val tokenStart = name.indexOf("600x1080")
+        val tokenEnd = tokenStart + "600x1080".length
+        val capturedWidth = 318
+        val atCaptureWidth = place(raw, capturedWidth)
+        // The SDK 35 control previously wrapped before 600 at 318 px. The SDK 36
+        // phone showed a break after the 6. Record what this host actually shapes.
+        println("SDK 35 control at 318 px: first line=${name.take(atCaptureWidth.getLineEnd(0))}, " +
+            "textSizePx=${raw.paint.textSize}, densityDpi=${context.resources.displayMetrics.densityDpi}, " +
+            "padding=${raw.compoundPaddingLeft}+${raw.compoundPaddingRight}")
 
+        // Choose from ordinary native layouts alone. Both complete halves must
+        // fit at that width, but the actual native line break must divide the token.
+        val headWidth = Layout.getDesiredWidth(name.take(tokenStart), raw.paint)
+        val tailWidth = Layout.getDesiredWidth(name.drop(tokenStart), raw.paint)
+        val lastWidth = ceil(Layout.getDesiredWidth(name.take(tokenEnd), raw.paint).toDouble()).toInt() + 1
+        val firstWidth = ceil(maxOf(headWidth, tailWidth).toDouble()).toInt()
+        val width = (firstWidth..lastWidth).sortedBy { abs(it - capturedWidth) }.firstOrNull { w ->
+            val layout = place(raw, w)
+            layout.lineCount == 2 && layout.getEllipsisCount(0) == 0 &&
+                layout.getEllipsisCount(1) == 0 && layout.getLineEnd(1) == name.length &&
+                layout.getLineEnd(0) in (tokenStart + 1) until tokenEnd
+        } ?: error("SDK 35 native layout did not split this dimension at any viable width: $firstWidth..$lastWidth")
+        val before = place(raw, width)
+        val after = place(view, width)
+        println("Native dimension case: widthPx=$width, beforeFirstLine=${name.take(before.getLineEnd(0))}")
+        renderIfRequested(raw, "before-${width}px.png")
+        renderIfRequested(view, "after-${width}px.png")
+        assertEquals(440, context.resources.displayMetrics.densityDpi)
+        assertEquals(raw.width, view.width)
         assertEquals(2, after.lineCount)
         assertEquals("GalleryColorPortrait-\n\u200e600x1080-v1.png", view.text.toString())
         assertEquals(view.text.indexOf('\n') + 1, after.getLineStart(1))
