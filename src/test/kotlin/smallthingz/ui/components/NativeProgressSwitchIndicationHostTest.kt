@@ -128,7 +128,12 @@ class NativeProgressSwitchIndicationHostTest {
         setScale(1f)
         try {
             context.setContentView(root)
-            activity.visible().windowFocusChanged(true)
+            activity.visible()
+            // Paused 16ms vsync defers the first traversal; focus dispatch requires its ViewRoot.
+            shadowOf(Looper.getMainLooper()).idleFor(16, MILLISECONDS)
+            assertTrue("Real control must attach before window focus", row.isAttachedToWindow)
+            activity.windowFocusChanged(true)
+            assertTrue("Real window must own focus", row.hasWindowFocus())
             layout(root, 360, 640)
             assertTrue(parking.requestFocus())
             settleInk(row)
