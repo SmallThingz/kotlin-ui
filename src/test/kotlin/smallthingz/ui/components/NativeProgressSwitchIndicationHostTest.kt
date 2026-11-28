@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
+import android.graphics.drawable.DrawableWrapper
 import android.os.Looper
 import android.os.SystemClock
 import android.view.MotionEvent
@@ -27,6 +28,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowChoreographer
+import org.robolectric.util.ReflectionHelpers
+import smallthingz.ui.interaction.view.RowIndication
 
 /** Software/native-graphics foreground pixels, not a GPU ripple or physical focus qualification. */
 @RunWith(RobolectricTestRunner::class)
@@ -34,6 +37,7 @@ import org.robolectric.shadows.ShadowChoreographer
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class NativeProgressSwitchIndicationHostTest {
+    private val inkDiagnostics = mutableListOf<String>()
     private lateinit var frameDelay: Duration
     private var vsyncPaused = false
 
@@ -100,7 +104,7 @@ class NativeProgressSwitchIndicationHostTest {
         assertTrue(row.requestFocusFromTouch())
         settleInk(row)
         foreground(row).useBitmap {
-            assertTrue(Color.alpha(it.getPixel(1, 1)) > 0)
+            assertTrue("Grouped corner ink; $inkDiagnostics", Color.alpha(it.getPixel(1, 1)) > 0)
             assertTrue(Color.alpha(it.getPixel(it.width / 2, it.height / 2)) > 0)
         }
         assertTrue(row.performAccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null))
@@ -151,9 +155,12 @@ class NativeProgressSwitchIndicationHostTest {
     }
 
     private fun settleInk(row: View) {
+        recordInk(row, "before-settle")
         shadowOf(Looper.getMainLooper()).idleFor(120, MILLISECONDS) // Deliver accepted interactions/delayed press.
         foreground(row).recycle() // Start the real RippleDrawable's software draw timeline if pressed.
+        recordInk(row, "after-first-draw")
         shadowOf(Looper.getMainLooper()).idleFor(300, MILLISECONDS)
+        recordInk(row, "after-settle")
     }
 
     private fun assertRoundedInk(row: View) {
@@ -162,7 +169,7 @@ class NativeProgressSwitchIndicationHostTest {
                 1 to bitmap.height - 2, bitmap.width - 2 to bitmap.height - 2)) {
                 assertEquals("No square indication at $x,$y", 0, Color.alpha(bitmap.getPixel(x, y)))
             }
-            assertTrue("Focus/hover/press remains visible", Color.alpha(bitmap.getPixel(bitmap.width / 2, bitmap.height / 2)) > 0)
+            assertTrue("Focus/hover/press remains visible; $inkDiagnostics", Color.alpha(bitmap.getPixel(bitmap.width / 2, bitmap.height / 2)) > 0)
         }
         // Causal control: the very same live indication still paints the formerly rectangular corner.
         Bitmap.createBitmap(row.width, row.height, Bitmap.Config.ARGB_8888).useBitmap {
@@ -173,6 +180,31 @@ class NativeProgressSwitchIndicationHostTest {
 
     private fun foreground(row: View): Bitmap =
         Bitmap.createBitmap(row.width, row.height, Bitmap.Config.ARGB_8888).also { row.onDrawForeground(Canvas(it)) }
+
+    /** Read-only receipts: do not synthesize state, deliver callbacks, draw, or advance clocks. */
+    private fun recordInk(row: View, phase: String) {
+        fun field(owner: Any?, name: String): Any? = if (owner == null) null else
+            runCatching { ReflectionHelpers.getField<Any?>(owner, name) }.getOrElse { "unavailable:$name" }
+        val controller = field(row, "input")
+        var drawable = row.foreground
+        while (drawable is DrawableWrapper && drawable !is RowIndication) drawable = drawable.drawable
+        val indication = drawable as? RowIndication
+        val alpha = field(indication, "stateAlpha")
+        val ripple = field(indication, "ripple") as? android.graphics.drawable.Drawable
+        fun size(owner: Any?, name: String) = (field(owner, name) as? Collection<*>)?.size
+        inkDiagnostics += "$phase uptime=${SystemClock.uptimeMillis()} " +
+            "focus=${row.isFocused} window=${row.hasWindowFocus()} touchMode=${row.isInTouchMode} " +
+            "attached=${row.isAttachedToWindow} shown=${row.isShown} enabled=${row.isEnabled} " +
+            "size=${row.width}x${row.height} measured=${row.measuredWidth}x${row.measuredHeight} " +
+            "layoutRequested=${row.isLayoutRequested} foregroundBounds=${row.foreground.bounds} " +
+            "inputAttached=${field(controller, "attached")} bindingEnabled=${field(field(controller, "binding"), "enabled")} " +
+            "focusToken=${field(controller, "focus")} pending=${size(controller, "pendingInteractions")} " +
+            "deliveredStates=${size(controller, "deliveredStates")} deliveredPresses=${size(controller, "deliveredPresses")} " +
+            "inkMeasured=${field(indication, "measured")} inkSize=${field(indication, "widthPx")}x${field(indication, "heightPx")} " +
+            "states=${size(indication, "states")} alpha=${field(alpha, "value")} running=${field(alpha, "running")} " +
+            "framePosted=${field(indication, "framePosted")} lastFrame=${field(alpha, "lastFrame")} " +
+            "ripple=${ripple?.javaClass?.simpleName} visible=${ripple?.isVisible} bounds=${ripple?.bounds} state=${ripple?.state?.contentToString()}"
+    }
 
     private fun Bitmap.useBitmap(block: (Bitmap) -> Unit) { try { block(this) } finally { recycle() } }
 
