@@ -3,8 +3,12 @@ package smallthingz.ui.gallery
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Rect
+import android.os.SystemClock
 import android.view.ContextThemeWrapper
+import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -23,6 +27,134 @@ import kotlin.math.roundToInt
  * No Activity, settings or media mutation. */
 @RunWith(AndroidJUnit4::class)
 class GalleryHealReservedDecisionLayoutIntegrationTest {
+    @Test fun compactDecisionRetainsLegacyHeightAndTargetsAcrossResizeAndFallback() = onMain {
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        for (font in listOf(1f, 2f)) for (rtl in listOf(false, true)) {
+            val context = ContextThemeWrapper(target, android.R.style.Theme_Material_NoActionBar).apply {
+                applyOverrideConfiguration(Configuration(target.resources.configuration).apply {
+                    fontScale = font
+                    setLayoutDirection(if (rtl) Locale.forLanguageTag("ar") else Locale.US)
+                })
+            }
+            fun dp(value: Int) = (value * context.resources.displayMetrics.density).roundToInt()
+            fun button() = Button(context).apply {
+                minWidth = dp(48); minimumWidth = dp(48)
+                minHeight = dp(48); minimumHeight = dp(48)
+                setSingleLine(false); maxLines = Int.MAX_VALUE; ellipsize = null
+                isFocusableInTouchMode = true
+            }
+            val cancel = button(); val apply = button()
+            val row = GalleryHealDecisionRow(context, cancel, apply)
+            val oldCancel = button(); val oldApply = button()
+            // Independent Android framework reference: the original equal-half row.
+            val oldSlot = FrameLayout(context).apply {
+                addView(oldApply, FrameLayout.LayoutParams(-2, -2, Gravity.END or Gravity.CENTER_VERTICAL))
+            }
+            val legacy = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                addView(oldCancel, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(4) })
+                addView(oldSlot, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(4) })
+            }
+            val slot = apply.parent as FrameLayout
+            for (root in listOf(row, legacy)) {
+                root.layoutDirection = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+                root.setPadding(dp(7), dp(3), dp(11), dp(5))
+            }
+            fun layout(width: Int) {
+                fun dirty(view: View) {
+                    view.forceLayout()
+                    if (view is ViewGroup) repeat(view.childCount) { dirty(view.getChildAt(it)) }
+                }
+                for (root in listOf(row, legacy)) {
+                    dirty(root)
+                    root.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+                    root.layout(0, 0, width, root.measuredHeight)
+                }
+            }
+            fun bounds(root: ViewGroup, view: View) = Rect(0, 0, view.width, view.height).also {
+                root.offsetDescendantRectToMyCoords(view, it)
+            }
+            var cancelClicks = 0; var applyClicks = 0
+            cancel.setOnClickListener { cancelClicks++ }; apply.setOnClickListener { applyClicks++ }
+            // Detached hit-routing coverage: consume the routed gesture and activate its
+            // actual recipient, without relying on an unattached View's posted click queue.
+            val cancelEvents = mutableListOf<Int>(); val applyEvents = mutableListOf<Int>()
+            for ((view, events) in listOf(cancel to cancelEvents, apply to applyEvents)) {
+                view.setOnTouchListener { recipient, event ->
+                    events += event.actionMasked
+                    if (event.actionMasked == MotionEvent.ACTION_UP) recipient.performClick()
+                    true
+                }
+            }
+            fun touch(x: Float, y: Float) {
+                val time = SystemClock.uptimeMillis()
+                for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+                    val event = MotionEvent.obtain(time, time, action, x, y, 0)
+                    try { assertTrue(row.dispatchTouchEvent(event)) } finally { event.recycle() }
+                }
+            }
+            try {
+                // Re-enter compact after wrapping, too-small targets and GONE; no sticky mode.
+                for ((index, state) in listOf("compact", "invisible", "wrapped", "compactOdd", "tooSmall", "gone", "compact").withIndex()) {
+                    val wrapped = state == "wrapped"
+                    val tiny = state == "tooSmall"
+                    cancel.text = if (wrapped) "Discard preview without applying changes" else if (tiny) "X" else "Discard"
+                    apply.text = if (wrapped) "Apply this preview to the photo" else if (tiny) "Y" else "Apply"
+                    oldCancel.text = cancel.text; oldApply.text = apply.text
+                    apply.visibility = when (state) { "invisible" -> View.INVISIBLE; "gone" -> View.GONE; else -> View.VISIBLE }
+                    oldApply.visibility = apply.visibility
+                    val width = if (wrapped) dp(240) or 1 else if (tiny) dp(96) or 1
+                        else if (state == "compactOdd") dp(640) or 1 else dp(640)
+                    layout(width)
+                    assertSame(cancel, row.getChildAt(0)); assertSame(slot, row.getChildAt(1))
+                    assertSame(apply, slot.getChildAt(0))
+                    assertEquals("Never spend photo height: $state/$font/$rtl", legacy.height, row.height)
+                    assertEquals(oldCancel.height, cancel.height)
+                    assertEquals("Original Apply half-slot", bounds(legacy, oldSlot), bounds(row, slot))
+                    if (state != "gone") assertEquals(bounds(legacy, oldApply), bounds(row, apply))
+                    if (wrapped || tiny || state == "gone") {
+                        assertEquals("Exact legacy fallback", bounds(legacy, oldCancel), bounds(row, cancel))
+                        if (wrapped) assertTrue(oldCancel.lineCount > 1 || oldApply.lineCount > 1)
+                        if (tiny) assertTrue("Exercise a sub-48dp half", oldCancel.width < dp(48))
+                    } else {
+                        val c = bounds(row, cancel); val a = bounds(row, apply)
+                        assertEquals("Existing two rounded half-gaps", 2 * dp(4), if (rtl) c.left - a.right else a.left - c.right)
+                        assertFalse(Rect.intersects(c, a))
+                        val inside = Rect(row.paddingLeft, row.paddingTop, row.width - row.paddingRight, row.height - row.paddingBottom)
+                        assertTrue(inside.contains(c)); assertTrue(inside.contains(a))
+                        for (view in listOf(cancel, apply)) {
+                            assertTrue(view.width >= dp(48) && view.height >= dp(48))
+                            val text = checkNotNull(view.layout)
+                            assertEquals(1, text.lineCount); assertEquals(0, text.getEllipsisCount(0))
+                            assertEquals(view.text.length, text.getLineEnd(0))
+                        }
+                        // This coordinate lies in Apply's empty slot AND Cancel's live target.
+                        val overlap = Rect(c)
+                        assertTrue(overlap.intersect(bounds(row, slot)))
+                        assertFalse(Rect.intersects(overlap, a))
+                        assertFalse(slot.isClickable)
+                        cancelEvents.clear(); applyEvents.clear()
+                        val beforeCancel = cancelClicks; val beforeApply = applyClicks
+                        touch(overlap.exactCenterX(), overlap.exactCenterY())
+                        assertEquals(listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP), cancelEvents)
+                        assertTrue(applyEvents.isEmpty())
+                        assertEquals(beforeCancel + 1, cancelClicks); assertEquals(beforeApply, applyClicks)
+                        if (apply.visibility == View.VISIBLE) {
+                            touch(a.exactCenterX(), a.exactCenterY())
+                            assertEquals(beforeApply + 1, applyClicks)
+                        }
+                    }
+                    if (index == 0) assertTrue(cancel.requestFocus())
+                    assertSame("Resizing and visibility retain the focused button", cancel, row.findFocus())
+                }
+            } finally {
+                cancel.setOnTouchListener(null); apply.setOnTouchListener(null)
+                row.clearFocus(); row.removeAllViews(); legacy.removeAllViews()
+            }
+        }
+    }
+
     @Test fun reservedReadyDecisionUsesOnlyVisibleSlackAndRetainsChildren() =
         onMain {
             val target = InstrumentationRegistry.getInstrumentation().targetContext
@@ -299,15 +431,22 @@ class GalleryHealReservedDecisionLayoutIntegrationTest {
             val applyBounds = bounds(apply)
             val slot = bounds(apply.parent as View)
             assertTrue("Apply stays inside its reserved slot", slot.contains(applyBounds))
-            assertTrue("Both slots retain the original equal allocation",
-                kotlin.math.abs(cancelBounds.width() - slot.width()) <= 1)
-            assertFalse("Cancel/Discard can never overlap Apply", Rect.intersects(cancelBounds, slot))
+            assertFalse("Cancel/Discard can never overlap actual Apply", Rect.intersects(cancelBounds, applyBounds))
+            val compact = discard.layout?.lineCount == 1 && apply.layout?.lineCount == 1 &&
+                discard.width >= dp(48) && apply.width >= dp(48)
+            if (compact) assertEquals("Short actions share the original 8dp gap", 2 * dp(4),
+                if (decisions.layoutDirection == View.LAYOUT_DIRECTION_RTL) cancelBounds.left - applyBounds.right
+                else applyBounds.left - cancelBounds.right)
+            else {
+                assertTrue("Wrapped fallback retains equal halves", kotlin.math.abs(cancelBounds.width() - slot.width()) <= 1)
+                assertFalse(Rect.intersects(cancelBounds, slot))
+            }
             if (decisions.layoutDirection == View.LAYOUT_DIRECTION_RTL) {
                 assertEquals("Apply aligns to logical end", slot.left, applyBounds.left)
-                assertTrue(slot.right <= cancelBounds.left)
+                assertTrue(applyBounds.right <= cancelBounds.left)
             } else {
                 assertEquals("Apply aligns to logical end", slot.right, applyBounds.right)
-                assertTrue(cancelBounds.right <= slot.left)
+                assertTrue(cancelBounds.right <= applyBounds.left)
             }
             for (button in listOf(discard, apply)) {
                 assertTrue(button.width >= dp(48) && button.height >= dp(48))

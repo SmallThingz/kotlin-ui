@@ -102,23 +102,26 @@ object GalleryHealControlsStyle {
     }
 }
 
-/** Keeps Cancel/Discard in its existing half-row slot; Apply uses only its natural width.
- * Both slots remain allocated while Apply is INVISIBLE. This owns layout only: the caller
- * retains the native buttons, callbacks, focus, enabled state and input-owner guards.
+/** Reserves equal halves for complete labels, grouping short actions at logical end.
+ * The original half-row measurement remains the height and wrapped-label fallback.
+ * Invisible Apply still participates; the caller retains buttons, focus and input guards.
  */
-class GalleryHealDecisionRow(context: Context, cancelAction: Button, applyAction: Button) : LinearLayout(context) {
+class GalleryHealDecisionRow(context: Context, private val cancelAction: Button,
+    private val applyAction: Button) : LinearLayout(context) {
+    private val halfGap = (4f * resources.displayMetrics.density).roundToInt()
+    private val minimumTarget = (48f * resources.displayMetrics.density).roundToInt()
+    private val applySlot = FrameLayout(context)
+    private var compact = false
+
     init {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-        val density = resources.displayMetrics.density
-        val halfGap = (4f * density).roundToInt()
-        val target = (48f * density).roundToInt()
         for (button in listOf(cancelAction, applyAction)) {
-            button.minWidth = maxOf(button.minWidth, target)
-            button.minimumWidth = maxOf(button.minimumWidth, target)
-            button.minHeight = maxOf(button.minHeight, target)
-            button.minimumHeight = maxOf(button.minimumHeight, target)
+            button.minWidth = maxOf(button.minWidth, minimumTarget)
+            button.minimumWidth = maxOf(button.minimumWidth, minimumTarget)
+            button.minHeight = maxOf(button.minHeight, minimumTarget)
+            button.minimumHeight = maxOf(button.minimumHeight, minimumTarget)
             button.setSingleLine(false)
             button.maxLines = Int.MAX_VALUE
             button.ellipsize = null
@@ -126,7 +129,7 @@ class GalleryHealDecisionRow(context: Context, cancelAction: Button, applyAction
         addView(cancelAction, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply {
             marginEnd = halfGap
         })
-        val applySlot = FrameLayout(context).apply {
+        applySlot.apply {
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             addView(applyAction, FrameLayout.LayoutParams(
                 LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.END or Gravity.CENTER_VERTICAL))
@@ -134,6 +137,47 @@ class GalleryHealDecisionRow(context: Context, cancelAction: Button, applyAction
         addView(applySlot, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f).apply {
             marginStart = halfGap
         })
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        compact = false
+        // Measure the original equal halves first. Their height remains authoritative,
+        // including wrapped labels, so grouping never changes the photo allocation.
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        if (cancelAction.visibility == GONE || applyAction.visibility == GONE ||
+            MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED) return
+        val reservedWidth = cancelAction.measuredWidth
+        val reservedHeight = cancelAction.measuredHeight
+        if (cancelAction.layout?.lineCount != 1 || applyAction.layout?.lineCount != 1) return
+        cancelAction.measure(MeasureSpec.makeMeasureSpec(reservedWidth, MeasureSpec.AT_MOST),
+            MeasureSpec.makeMeasureSpec(reservedHeight, MeasureSpec.EXACTLY))
+        compact = cancelAction.layout?.lineCount == 1 &&
+            cancelAction.measuredWidth >= minimumTarget && cancelAction.measuredHeight >= minimumTarget &&
+            applyAction.measuredWidth >= minimumTarget && applyAction.measuredHeight >= minimumTarget &&
+            cancelAction.measuredWidth <= reservedWidth &&
+            applyAction.measuredWidth <= applySlot.measuredWidth
+        if (!compact) cancelAction.measure(
+            MeasureSpec.makeMeasureSpec(reservedWidth, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(reservedHeight, MeasureSpec.EXACTLY))
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        if (!compact) {
+            super.onLayout(changed, left, top, right, bottom)
+            return
+        }
+        // Keep Apply's full reserved slot at the same edge. Cancel is a direct child,
+        // so its compact target is never translated outside a clipping half-slot.
+        val rtl = layoutDirection == LAYOUT_DIRECTION_RTL
+        val slotLeft = if (rtl) paddingLeft else width - paddingRight - applySlot.measuredWidth
+        val slotTop = paddingTop + (height - paddingTop - paddingBottom - applySlot.measuredHeight) / 2
+        applySlot.layout(slotLeft, slotTop, slotLeft + applySlot.measuredWidth,
+            slotTop + applySlot.measuredHeight)
+        val cancelLeft = if (rtl) slotLeft + applyAction.right + 2 * halfGap
+            else slotLeft + applyAction.left - 2 * halfGap - cancelAction.measuredWidth
+        val cancelTop = paddingTop + (height - paddingTop - paddingBottom - cancelAction.measuredHeight) / 2
+        cancelAction.layout(cancelLeft, cancelTop, cancelLeft + cancelAction.measuredWidth,
+            cancelTop + cancelAction.measuredHeight)
     }
 }
 
