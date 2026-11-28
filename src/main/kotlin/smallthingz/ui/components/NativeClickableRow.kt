@@ -8,6 +8,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityEvent
+import smallthingz.ui.common.nativeSurfaceInputAllowed
 import smallthingz.ui.geometry.roundedGroupGeometry
 import smallthingz.ui.input.phase.NativeClickPhaseHost
 import smallthingz.ui.input.phase.ViewClickPhaseEndpoint
@@ -111,12 +112,13 @@ abstract class NativeClickableRow(
         input.bind(null)
     }
 
-    protected fun canActivate() = rowInputEnabled && hasRowAction && isAttachedToWindow && isShown
+    protected fun canActivate() = rowInputEnabled && hasRowAction && isAttachedToWindow && isShown &&
+        nativeSurfaceInputAllowed(this)
 
     override fun performClick() = canActivate() && super.performClick()
     override fun performLongClick(): Boolean {
         // Android's fallback may ask the parent to open a context menu.
-        if (!isAttachedToWindow) return false
+        if (!isAttachedToWindow || !nativeSurfaceInputAllowed(this)) return false
         val action = rowLongClick ?: return super.performLongClick()
         return rowInputEnabled && isShown && hasWindowFocus() && action()
     }
