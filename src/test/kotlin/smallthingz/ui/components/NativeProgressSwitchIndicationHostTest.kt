@@ -13,8 +13,11 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
+import java.time.Duration
 import java.util.concurrent.TimeUnit.MILLISECONDS
+import org.junit.After
 import org.junit.Assert.*
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -23,6 +26,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.LooperMode
+import org.robolectric.shadows.ShadowChoreographer
 
 /** Software/native-graphics foreground pixels, not a GPU ripple or physical focus qualification. */
 @RunWith(RobolectricTestRunner::class)
@@ -30,6 +34,22 @@ import org.robolectric.annotation.LooperMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class NativeProgressSwitchIndicationHostTest {
+    private lateinit var frameDelay: Duration
+    private var vsyncPaused = false
+
+    @Before fun finiteFrameClock() {
+        frameDelay = ShadowChoreographer.getFrameDelay()
+        vsyncPaused = ShadowChoreographer.isPaused()
+        // Match the existing SDK35 host fixtures: rescheduled vsync must be in the future.
+        ShadowChoreographer.setFrameDelay(Duration.ofMillis(16))
+        ShadowChoreographer.setPaused(true)
+    }
+
+    @After fun restoreFrameClock() {
+        ShadowChoreographer.setFrameDelay(frameDelay)
+        ShadowChoreographer.setPaused(vsyncPaused)
+    }
+
     @Test fun focusedStandaloneInkIsRoundedAfterResizeAndKeepsFullSemanticTarget() = withRow { row, values ->
         assertTrue(row.requestFocusFromTouch())
         settleInk(row)
